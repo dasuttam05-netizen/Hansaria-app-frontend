@@ -1,0 +1,541 @@
+import React, { useEffect, useMemo, useState } from "react";
+import axios from "axios";
+import { formatDisplayDate } from "../utils/date";
+
+export default function AdjustmentPage({ outward }) {
+  const [companyList, setCompanyList] = useState([]);
+  const [companyId, setCompanyId] = useState("");
+  const [sourceType, setSourceType] = useState("inward");
+  const [inwardList, setInwardList] = useState([]);
+  const [selectedInward, setSelectedInward] = useState(null);
+  const [adjustQty, setAdjustQty] = useState("");
+  const [adjustments, setAdjustments] = useState([]);
+  const [adjustmentLog, setAdjustmentLog] = useState([]);
+  const [alreadyAdjusted, setAlreadyAdjusted] = useState(0);
+  const [editingLogId, setEditingLogId] = useState(null);
+  const [editingQty, setEditingQty] = useState("");
+
+  const outwardQty = Number(outward?.quantity) || 0;
+
+  const totalDraftAdjusted = useMemo(
+    () => adjustments.reduce((sum, item) => sum + Number(item.qty || 0), 0),
+    [adjustments]
+  );
+
+  const currentRemaining = outwardQty - alreadyAdjusted;
+  const remainingQty = currentRemaining - totalDraftAdjusted;
+  const adjustmentTargetQty = currentRemaining;
+  const isDraftExactMatch =
+    totalDraftAdjusted > 0 && Math.abs(totalDraftAdjusted - adjustmentTargetQty) < 0.0001;
+
+  const cardStyle = {
+    background: "#fff",
+    border: "1px solid #e5e7eb",
+    borderRadius: 12,
+    padding: 16,
+    boxShadow: "0 6px 18px rgba(15, 23, 42, 0.06)",
+    marginTop: 16,
+  };
+
+  const sectionTitle = {
+    margin: "0 0 12px",
+    fontSize: 18,
+    fontWeight: 800,
+    color: "#14532d",
+  };
+
+  const tableStyle = {
+    width: "100%",
+    borderCollapse: "collapse",
+    fontSize: 14,
+  };
+
+  const thStyle = {
+    background: "#0f766e",
+    color: "#fff",
+    padding: "10px 12px",
+    textAlign: "left",
+    border: "1px solid #d1d5db",
+  };
+
+  const tdStyle = {
+    padding: "10px 12px",
+    border: "1px solid #e5e7eb",
+    background: "#fff",
+    color: "#166534",
+  };
+
+  const inputStyle = {
+    padding: "10px 12px",
+    border: "1px solid #cbd5e1",
+    borderRadius: 8,
+    fontSize: 14,
+  };
+
+  const buttonStyle = {
+    padding: "9px 14px",
+    border: "none",
+    borderRadius: 8,
+    color: "#fff",
+    cursor: "pointer",
+    fontWeight: 600,
+  };
+
+  const strongText = {
+    color: "#14532d",
+    fontWeight: 800,
+  };
+
+  const mutedText = {
+    color: "#166534",
+    fontWeight: 700,
+  };
+
+  const num = (val) => Number(val || 0).toFixed(4);
+  const isPaltiSource = sourceType === "palti_lorry";
+
+  const loadCompanyList = async () => {
+    if (!outward?.warehouse_id && !outward?.location_id) return setCompanyList([]);
+    try {
+      const res = await axios.get("/api/adjustment/parties", {
+        params: {
+          warehouse_id: outward.warehouse_id || "",
+          location_id: outward.location_id || "",
+          product_id: outward.product_id,
+        },
+      });
+      setCompanyList(Array.isArray(res.data) ? res.data : []);
+    } catch {
+      setCompanyList([]);
+      alert("Company load failed");
+    }
+  };
+
+  const loadInwardStock = async (selectedCompanyId, selectedSourceType = sourceType) => {
+    if (!outward || !selectedCompanyId) return setInwardList([]);
+    try {
+      const res = await axios.get("/api/adjustment/inward/report", {
+        params: {
+          warehouse_id: outward.warehouse_id || "",
+          location_id: outward.location_id || "",
+          company_id: selectedCompanyId,
+          outward_date: outward.date,
+          source_type: selectedSourceType,
+        },
+      });
+      setInwardList(Array.isArray(res.data) ? res.data : []);
+    } catch {
+      setInwardList([]);
+      alert("Inward load failed");
+    }
+  };
+
+  const loadAdjustmentLog = async () => {
+    if (!outward?.id) return;
+    try {
+      const res = await axios.get(`/api/adjustment/${outward.id}`);
+      const rows = Array.isArray(res.data) ? res.data : [];
+      setAdjustmentLog(rows);
+      setAlreadyAdjusted(rows.reduce((sum, item) => sum + Number(item.qty || 0), 0));
+    } catch {
+      setAdjustmentLog([]);
+      setAlreadyAdjusted(0);
+    }
+  };
+
+  useEffect(() => {
+    setCompanyId("");
+    setSourceType("inward");
+    setInwardList([]);
+    setSelectedInward(null);
+    setAdjustQty("");
+    setAdjustments([]);
+    setAdjustmentLog([]);
+    setAlreadyAdjusted(0);
+    setEditingLogId(null);
+    setEditingQty("");
+
+    if (outward) {
+      loadCompanyList();
+      loadAdjustmentLog();
+    }
+  }, [outward]);
+
+  const handleAddAdjustment = () => {
+    if (!companyId) return alert("Please select company first");
+    if (!selectedInward) return alert("Please select inward / lorry first");
+
+    const qty = Number(adjustQty);
+    if (!qty || qty <= 0) return alert("Enter valid qty");
+    if (qty > Number(selectedInward.available_qty)) {
+      return alert("Adjusted qty cannot be greater than the available qty");
+    }
+    if (qty > remainingQty) return alert(`Only ${remainingQty} qty remaining to adjust`);
+
+    const existingIndex = adjustments.findIndex(
+      (item) => item.inward_id === selectedInward.id
+    );
+
+    if (existingIndex !== -1) {
+      const updated = [...adjustments];
+      const nextQty = Number(updated[existingIndex].qty) + qty;
+
+      if (nextQty > Number(selectedInward.available_qty)) {
+        return alert("Total qty cannot be greater than the available qty");
+      }
+
+      updated[existingIndex].qty = nextQty;
+      setAdjustments(updated);
+    } else {
+      const selectedCompany = companyList.find((c) => String(c.id) === String(companyId));
+
+      setAdjustments((prev) => [
+        ...prev,
+        {
+          inward_id: isPaltiSource ? null : selectedInward.id,
+          palti_lorry_id: isPaltiSource ? selectedInward.id : null,
+          source_type: selectedInward.source_type || sourceType,
+          voucher_no: selectedInward.voucher_no,
+          lorry_no: selectedInward.lorry_no,
+          company_id: Number(companyId),
+          company_name: selectedCompany?.name || "",
+          qty,
+        },
+      ]);
+    }
+
+    setAdjustQty("");
+    setSelectedInward(null);
+  };
+
+  const handleSave = async () => {
+    if (totalDraftAdjusted <= 0) return alert("Please add adjustment first");
+    if (totalDraftAdjusted > currentRemaining) {
+      return alert(`Adjustment cannot exceed remaining ${currentRemaining}`);
+    }
+    if (!isDraftExactMatch) {
+      return alert(
+        `Draft Adjustment List total must be exactly ${num(adjustmentTargetQty)} before final save`
+      );
+    }
+
+    try {
+      await axios.post("/api/adjustment/final-save", {
+        outward_id: outward.id,
+        adjustments,
+      });
+
+      alert("Adjustment saved");
+      setAdjustments([]);
+      setCompanyId("");
+      setInwardList([]);
+      loadCompanyList();
+      loadAdjustmentLog();
+    } catch (err) {
+      alert(err?.response?.data?.error || "Save failed");
+    }
+  };
+
+  const handleDeleteLog = async (id) => {
+    if (!window.confirm("Delete this adjustment log?")) return;
+    try {
+      await axios.delete(`/api/adjustment/log/${id}`);
+      alert("Deleted successfully");
+      loadCompanyList();
+      loadAdjustmentLog();
+      if (companyId) loadInwardStock(companyId);
+    } catch (err) {
+      alert(err?.response?.data?.error || "Delete failed");
+    }
+  };
+
+  const handleEditLog = (row) => {
+    setEditingLogId(row.id);
+    setEditingQty(String(row.qty || ""));
+  };
+
+  const handleUpdateLog = async () => {
+    if (!editingLogId) return;
+    try {
+      await axios.put(`/api/adjustment/log/${editingLogId}`, {
+        qty: Number(editingQty),
+      });
+      alert("Updated successfully");
+      setEditingLogId(null);
+      setEditingQty("");
+      loadCompanyList();
+      loadAdjustmentLog();
+      if (companyId) loadInwardStock(companyId);
+    } catch (err) {
+      alert(err?.response?.data?.error || "Update failed");
+    }
+  };
+
+  return (
+    <div style={{ padding: 20, background: "#f8fafc", borderRadius: 16 }}>
+      <div style={cardStyle}>
+        <h2 style={{ margin: 0, color: "#14532d", fontWeight: 800 }}>Adjustment Entry</h2>
+        <p style={{ margin: "10px 0 0", color: "#166534", fontWeight: 700 }}>
+          Product: {outward?.product_name} | {outward?.warehouse_name ? `Warehouse: ${outward.warehouse_name}` : `Location: ${outward?.location_name || "-"}`}
+        </p>
+        <p style={{ margin: "6px 0 0", color: "#166534", fontWeight: 700 }}>
+          Outward Date: {formatDisplayDate(outward?.date)} | Outward Qty: <span style={strongText}>{num(outwardQty)}</span> | Already Adjusted: <span style={strongText}>{num(alreadyAdjusted)}</span> | Remaining: <span style={strongText}>{num(currentRemaining)}</span>
+        </p>
+      </div>
+
+      <div style={cardStyle}>
+        <h3 style={sectionTitle}>Select Company</h3>
+        <select
+          value={companyId ? `${sourceType}:${companyId}` : ""}
+          onChange={(e) => {
+            const [nextSourceType, nextCompanyId] = String(e.target.value || "").split(":");
+            setSourceType(nextSourceType || "inward");
+            setCompanyId(nextCompanyId || "");
+            setSelectedInward(null);
+            setAdjustQty("");
+            if (nextCompanyId) loadInwardStock(nextCompanyId, nextSourceType || "inward");
+            else setInwardList([]);
+          }}
+          style={{ ...inputStyle, minWidth: 280 }}
+        >
+          <option value="">Select Company</option>
+          {companyList.map((company) => (
+            <option
+              key={`${company.source_type}-${company.id}`}
+              value={`${company.source_type}:${company.id}`}
+            >
+              {company.name} {company.source_type === "palti_lorry" ? "(Palti Lorry)" : "(Inward)"}
+            </option>
+          ))}
+        </select>
+
+        <div style={{ marginTop: 14, fontWeight: 800, color: "#14532d" }}>
+          Draft Adjusted: <span style={strongText}>{num(totalDraftAdjusted)}</span> | Draft Remaining: <span style={strongText}>{num(remainingQty)}</span>
+        </div>
+        <div style={{ marginTop: 8, ...mutedText }}>
+          Final save condition: Draft Adjustment List must be exactly <span style={strongText}>{num(adjustmentTargetQty)}</span>
+        </div>
+      </div>
+
+      <div style={cardStyle}>
+        <h3 style={sectionTitle}>
+          {isPaltiSource ? "Available Palti Lorry List" : "Available Inward Lorry List"}
+        </h3>
+        <table style={tableStyle}>
+          <thead>
+            <tr>
+              <th style={thStyle}>Voucher</th>
+              <th style={thStyle}>Inward Date</th>
+              <th style={thStyle}>Outward Date</th>
+              <th style={thStyle}>Days Diff</th>
+              <th style={thStyle}>Months</th>
+              <th style={thStyle}>Lorry No</th>
+              <th style={thStyle}>Company</th>
+              <th style={thStyle}>Gross Qty</th>
+              <th style={thStyle}>Shortage</th>
+              <th style={thStyle}>Net Opening</th>
+              <th style={thStyle}>Already Adjusted</th>
+              <th style={thStyle}>Available Balance</th>
+            </tr>
+          </thead>
+          <tbody>
+            {inwardList.length > 0 ? (
+              inwardList.map((row) => (
+                <tr
+                  key={`${row.source_type || sourceType}-${row.id}`}
+                  onClick={() => {
+                    setSelectedInward(row);
+                    setAdjustQty("");
+                  }}
+                  style={{
+                    cursor: "pointer",
+                    background: selectedInward?.id === row.id ? "#dcfce7" : "#fff",
+                  }}
+                >
+                  <td style={tdStyle}>{row.voucher_no}</td>
+                  <td style={tdStyle}>{formatDisplayDate(row.date)}</td>
+                  <td style={tdStyle}>{formatDisplayDate(row.outward_date)}</td>
+                  <td style={tdStyle}>{row.days_diff}</td>
+                  <td style={tdStyle}>{row.months_diff}</td>
+                  <td style={tdStyle}>{row.lorry_no}</td>
+                  <td style={tdStyle}>{row.company_name}</td>
+                  <td style={tdStyle}>{num(row.gross_qty)}</td>
+                  <td style={tdStyle}>{num(row.shortage_qty)}</td>
+                  <td style={tdStyle}>{num(row.net_opening_qty)}</td>
+                  <td style={tdStyle}>{num(row.already_adjusted)}</td>
+                  <td style={tdStyle}>{num(row.available_qty)}</td>
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td style={tdStyle} colSpan="12">
+                  {isPaltiSource ? "No Palti Lorry found" : "No inward found"}
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+
+        {selectedInward && (
+          <div style={{ marginTop: 16, padding: 14, background: "#f8fafc", borderRadius: 10, border: "1px solid #e2e8f0" }}>
+            <div style={{ fontWeight: 800, color: "#14532d", marginBottom: 8 }}>
+              Selected Lorry: {selectedInward.lorry_no || "-"} | Voucher: {selectedInward.voucher_no}
+            </div>
+            <div style={{ marginBottom: 8, color: "#166534", fontWeight: 700 }}>
+              Days: {selectedInward.days_diff} | Months: {selectedInward.months_diff} | Gross: {num(selectedInward.gross_qty)} | Shortage: {num(selectedInward.shortage_qty)} | Net Opening: {num(selectedInward.net_opening_qty)} | Already Adjusted: {num(selectedInward.already_adjusted)} | Available: {num(selectedInward.available_qty)}
+            </div>
+            <input
+              type="number"
+              placeholder="Enter Qty"
+              value={adjustQty}
+              onChange={(e) => setAdjustQty(e.target.value)}
+              style={inputStyle}
+            />
+            <button
+              onClick={handleAddAdjustment}
+              style={{ ...buttonStyle, background: "#2563eb", marginLeft: 10 }}
+            >
+              Add Adjustment
+            </button>
+          </div>
+        )}
+      </div>
+
+      <div style={cardStyle}>
+        <h3 style={sectionTitle}>Draft Adjustment List</h3>
+        <div style={{ marginBottom: 10, color: isDraftExactMatch ? "#166534" : "#b45309", fontWeight: 800 }}>
+          Required: {num(adjustmentTargetQty)} | Current Draft Total: {num(totalDraftAdjusted)}
+        </div>
+        <table style={tableStyle}>
+          <thead>
+            <tr>
+              <th style={thStyle}>Voucher</th>
+              <th style={thStyle}>Lorry No</th>
+              <th style={thStyle}>Company</th>
+              <th style={thStyle}>Qty</th>
+              <th style={thStyle}>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {adjustments.length > 0 ? (
+              adjustments.map((a, i) => (
+                <tr key={i}>
+                  <td style={tdStyle}>{a.voucher_no}</td>
+                  <td style={tdStyle}>{a.lorry_no}</td>
+                  <td style={tdStyle}>{a.company_name} {a.source_type === "palti_lorry" ? "(Palti)" : ""}</td>
+                  <td style={tdStyle}>{num(a.qty)}</td>
+                  <td style={tdStyle}>
+                    <button
+                      onClick={() => setAdjustments((prev) => prev.filter((_, idx) => idx !== i))}
+                      style={{ ...buttonStyle, background: "#dc2626" }}
+                    >
+                      Remove
+                    </button>
+                  </td>
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td style={tdStyle} colSpan="5">No draft adjustment added</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+
+        <button
+          onClick={handleSave}
+          disabled={!isDraftExactMatch}
+          style={{
+            ...buttonStyle,
+            background: isDraftExactMatch ? "#16a34a" : "#94a3b8",
+            marginTop: 14,
+          }}
+        >
+          Final Save
+        </button>
+      </div>
+
+      <div style={cardStyle}>
+        <h3 style={sectionTitle}>Previous Adjustment Log</h3>
+        <table style={tableStyle}>
+          <thead>
+            <tr>
+              <th style={thStyle}>Voucher</th>
+              <th style={thStyle}>Lorry No</th>
+              <th style={thStyle}>Company</th>
+              <th style={thStyle}>Qty</th>
+              <th style={thStyle}>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {adjustmentLog.length > 0 ? (
+              adjustmentLog.map((row) => (
+                <tr key={row.id}>
+                  <td style={tdStyle}>{row.inward_voucher}</td>
+                  <td style={tdStyle}>{row.lorry_no}</td>
+                  <td style={tdStyle}>{row.company_name} {row.source_type === "palti_lorry" ? "(Palti)" : ""}</td>
+                  <td style={tdStyle}>
+                    {editingLogId === row.id ? (
+                      <input
+                        type="number"
+                        value={editingQty}
+                        onChange={(e) => setEditingQty(e.target.value)}
+                        style={{ ...inputStyle, width: 100 }}
+                      />
+                    ) : (
+                      num(row.qty)
+                    )}
+                  </td>
+                  <td style={tdStyle}>
+                    {editingLogId === row.id ? (
+                      <>
+                        <button
+                          onClick={handleUpdateLog}
+                          style={{ ...buttonStyle, background: "#2563eb", marginRight: 8 }}
+                        >
+                          Update
+                        </button>
+                        <button
+                          onClick={() => {
+                            setEditingLogId(null);
+                            setEditingQty("");
+                          }}
+                          style={{ ...buttonStyle, background: "#64748b" }}
+                        >
+                          Cancel
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => handleEditLog(row)}
+                          style={{ ...buttonStyle, background: "#f59e0b", marginRight: 8 }}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleDeleteLog(row.id)}
+                          style={{ ...buttonStyle, background: "#dc2626" }}
+                        >
+                          Delete
+                        </button>
+                      </>
+                    )}
+                  </td>
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td style={tdStyle} colSpan="5">No previous adjustment</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+
+
+
