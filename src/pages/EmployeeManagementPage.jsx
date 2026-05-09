@@ -398,12 +398,12 @@ export default function EmployeeManagementPage() {
               const canEditThisEmployee = canEditEmployee && (isAdminUser || !employeeIsAdmin);
               return (
                 <tr key={employee.id} style={{ background: index % 2 === 0 ? "#fff" : "#f8fafc" }}>
-                  <td style={tdStyle}>{employee.id}</td>
+                  <td style={tdStyle}>{index + 1}</td>
                   <td style={tdStyle}>{employee.name}</td>
                   <td style={tdStyle}>{employee.username}</td>
                   <td style={tdStyle}>{employee.role || "-"}</td>
                   <td style={tdStyle}>
-                    {locations.find((item) => String(item.id) === String(employee.location_id))?.name || "-"}
+                    {locations.find((item) => String(item._id || item.id) === String(employee.location_id))?.name || "-"}
                   </td>
                   <td style={tdStyle}>{assignedNames || "-"}</td>
                   <td style={tdStyle}>{Array.isArray(employee.permissions) ? employee.permissions.join(", ") : "-"}</td>
@@ -479,11 +479,14 @@ export default function EmployeeManagementPage() {
                   style={inputStyle}
                 >
                   <option value="">Select Location</option>
-                  {locations.map((location) => (
-                    <option key={location.id} value={String(location.id)}>
-                      {location.name}
-                    </option>
-                  ))}
+                  {locations.map((location) => {
+                    const locId = location._id || location.id;
+                    return (
+                      <option key={locId} value={String(locId)}>
+                        {location.name}
+                      </option>
+                    );
+                  })}
                 </select>
               </Field>
               <Field label="Opening Balance">
