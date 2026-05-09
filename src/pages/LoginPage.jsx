@@ -20,7 +20,48 @@ export default function LoginPage() {
 
       console.log("LOGIN SUCCESS:", res.data);
 
-      saveSession(res.data.token, res.data.user);
+      export function saveSession(
+  token,
+  user
+) {
+
+  localStorage.setItem(
+    "token",
+    token
+  );
+
+  localStorage.setItem(
+    "user",
+    JSON.stringify(user)
+  );
+}
+
+export function getToken() {
+  return localStorage.getItem(
+    "token"
+  );
+}
+
+export function getUser() {
+
+  const user =
+    localStorage.getItem("user");
+
+  return user
+    ? JSON.parse(user)
+    : null;
+}
+
+export function logout() {
+
+  localStorage.removeItem(
+    "token"
+  );
+
+  localStorage.removeItem(
+    "user"
+  );
+}
 
       navigate("/dashboard");
 
