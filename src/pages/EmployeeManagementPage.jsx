@@ -229,7 +229,7 @@ export default function EmployeeManagementPage() {
 
     // Check for duplicate username
     const isDuplicateUsername = employees.some(
-      (emp) => emp.username === payload.username && (!editId || emp.id !== editId)
+      (emp) => emp.username === payload.username && (!editId || String(emp.id) !== String(editId))
     );
     if (isDuplicateUsername) {
       alert("Username already exists. Please use a different username.");
@@ -311,8 +311,13 @@ export default function EmployeeManagementPage() {
 
   const handleDeleteEmployee = async (id) => {
     if (!window.confirm("Delete this employee?")) return;
-    await axios.delete(`/api/employees/${id}`);
-    await fetchEmployees();
+    try {
+      await axios.delete(`/api/employees/${id}`);
+      await fetchEmployees();
+    } catch (err) {
+      console.error(err);
+      alert(err.response?.data?.error || "Failed to delete employee");
+    }
   };
 
   const handleEditRole = (role) => {
@@ -327,8 +332,13 @@ export default function EmployeeManagementPage() {
 
   const handleDeleteRole = async (id) => {
     if (!window.confirm("Delete this role?")) return;
-    await axios.delete(`/api/roles/${id}`);
-    await fetchRoles();
+    try {
+      await axios.delete(`/api/roles/${id}`);
+      await fetchRoles();
+    } catch (err) {
+      console.error(err);
+      alert(err.response?.data?.error || "Failed to delete role");
+    }
   };
 
   return (
