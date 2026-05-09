@@ -364,7 +364,15 @@ export default function EmployeeManagementPage() {
       return;
     }
 
-    const assignedWarehouseIds = warehouses.filter((item) => Number(item.employee_id) === Number(employee.id)).map((item) => String(item.id));
+   const assignedWarehouseIds = warehouses
+  .filter(
+    (item) =>
+      String(item.employee_id) ===
+      String(employee.id || employee._id)
+  )
+  .map((item) =>
+    String(item._id || item.id)
+  );
     setFormData({
       name: employee.name || "",
       address: employee.address || "",
@@ -466,7 +474,14 @@ export default function EmployeeManagementPage() {
           </thead>
           <tbody>
             {employees.map((employee, index) => {
-              const assignedNames = warehouses.filter((item) => Number(item.employee_id) === Number(employee.id)).map((item) => item.name).join(", ");
+              const assignedNames = warehouses
+  .filter(
+    (item) =>
+      String(item.employee_id) ===
+      String(employee.id || employee._id)
+  )
+  .map((item) => item.name)
+  .join(", ");
               const employeeIsAdmin =
                 String(employee?.role || "").toLowerCase() === "admin" ||
                 (Array.isArray(employee?.permissions) && employee.permissions.includes("all"));
@@ -477,7 +492,15 @@ export default function EmployeeManagementPage() {
                   <td style={tdStyle}>{employee.name}</td>
                   <td style={tdStyle}>{employee.username}</td>
                   <td style={tdStyle}>{employee.role || "-"}</td>
-                  <td style={tdStyle}>{locations.find((item) => Number(item.id) === Number(employee.location_id))?.name || "-"}</td>
+                  <td style={tdStyle}>
+  {
+    locations.find(
+      (item) =>
+        String(item._id || item.id) ===
+        String(employee.location_id)
+    )?.name || "-"
+  }
+</td>
                   <td style={tdStyle}>{assignedNames || "-"}</td>
                   <td style={tdStyle}>{Array.isArray(employee.permissions) ? employee.permissions.join(", ") : "-"}</td>
                   <td style={tdStyle}>
