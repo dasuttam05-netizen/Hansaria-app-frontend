@@ -153,20 +153,36 @@ export default function EmployeeManagementPage() {
   const [isSubmittingRole, setIsSubmittingRole] = useState(false);
 
   const fetchEmployees = async () => {
-    const res = await axios.get("/api/employees");
-    setEmployees(res.data || []);
-  };
+  const res = await axios.get("/api/employees");
+
+  setEmployees(
+    normalizeArray(res.data || [])
+  );
+};
 
   const fetchRoles = async () => {
-    const res = await axios.get("/api/roles");
-    setRoles(res.data || []);
-  };
+  const res = await axios.get("/api/roles");
+
+  setRoles(
+    normalizeArray(res.data || [])
+  );
+};
 
   const fetchMeta = async () => {
-    const [locationRes, warehouseRes] = await Promise.all([axios.get("/api/locations"), axios.get("/api/warehouses")]);
-    setLocations(locationRes.data || []);
-    setWarehouses(warehouseRes.data || []);
-  };
+  const [locationRes, warehouseRes] =
+    await Promise.all([
+      axios.get("/api/locations"),
+      axios.get("/api/warehouses")
+    ]);
+
+  setLocations(
+    normalizeArray(locationRes.data || [])
+  );
+
+  setWarehouses(
+    normalizeArray(warehouseRes.data || [])
+  );
+};
 
   useEffect(() => {
     Promise.all([fetchEmployees(), fetchRoles(), fetchMeta()]).catch((err) => {
