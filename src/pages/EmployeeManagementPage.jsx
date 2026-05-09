@@ -547,7 +547,7 @@ export default function EmployeeManagementPage() {
                     <td style={tdStyle}>{(role.permissions || []).join(", ") || "-"}</td>
                     <td style={tdStyle}>
                       <button type="button" onClick={() => handleEditRole(role)} style={miniBlue}>Edit</button>
-                      <button type="button" onClick={() => handleDeleteRole(role.id)} style={miniRed}>Delete</button>
+                      {role.id ? <button type="button" onClick={() => handleDeleteRole(role.id)} style={miniRed}>Delete</button> : null}
                     </td>
                   </tr>
                 ))}
