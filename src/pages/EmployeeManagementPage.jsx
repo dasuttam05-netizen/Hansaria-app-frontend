@@ -227,6 +227,15 @@ export default function EmployeeManagementPage() {
       return;
     }
 
+    // Check for duplicate username
+    const isDuplicateUsername = employees.some(
+      (emp) => emp.username === payload.username && (!editId || emp.id !== editId)
+    );
+    if (isDuplicateUsername) {
+      alert("Username already exists. Please use a different username.");
+      return;
+    }
+
     setIsSubmittingEmployee(true);
     try {
       if (editId) {
