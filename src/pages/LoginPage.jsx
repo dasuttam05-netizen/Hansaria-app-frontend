@@ -1,101 +1,114 @@
 import React, { useState } from "react";
+
 import axios from "axios";
+
 import { useNavigate } from "react-router-dom";
+
 import { saveSession } from "../utils/auth";
-import { getApiOrigin } from "../utils/api";
 
 export default function LoginPage() {
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const navigate = useNavigate();
 
-  const handleLogin = async (e) => {
-    e.preventDefault();
+  const [username, setUsername] =
+    useState("");
 
-    try {
-      const res = await axios.post(`${getApiOrigin()}/auth/login`, {
-        username,
-        password,
-      });
+  const [password, setPassword] =
+    useState("");
 
-      console.log("LOGIN SUCCESS:", res.data);
+  const navigate =
+    useNavigate();
 
-      export function saveSession(
-  token,
-  user
-) {
+  const handleLogin =
+    async (e) => {
 
-  localStorage.setItem(
-    "token",
-    token
-  );
+      e.preventDefault();
 
-  localStorage.setItem(
-    "user",
-    JSON.stringify(user)
-  );
-}
+      try {
 
-export function getToken() {
-  return localStorage.getItem(
-    "token"
-  );
-}
+        const res =
+          await axios.post(
+            "https://hansaria-app-backend.onrender.com/auth/login",
+            {
+              username,
+              password,
+            }
+          );
 
-export function getUser() {
+        saveSession(
+          res.data.token,
+          res.data.user
+        );
 
-  const user =
-    localStorage.getItem("user");
+        navigate(
+          "/dashboard"
+        );
 
-  return user
-    ? JSON.parse(user)
-    : null;
-}
+      } catch (err) {
 
-export function logout() {
+        alert(
+          "Login failed: " +
+          (
+            err.response?.data
+              ?.error ||
+            "Please try again"
+          )
+        );
 
-  localStorage.removeItem(
-    "token"
-  );
+      }
 
-  localStorage.removeItem(
-    "user"
-  );
-}
-
-      navigate("/dashboard");
-
-    } catch (err) {
-      console.log("LOGIN ERROR:", err);
-      const status = err.response?.status;
-      const details = err.response?.data?.error || err.message || "Please try again";
-      alert(`Login failed${status ? ` (${status})` : ""}: ${details}`);
-    }
-  };
+    };
 
   return (
-    <div style={{ padding: "40px" }}>
-      <h2>Warehouse Login</h2>
 
-      <form onSubmit={handleLogin}>
+    <div
+      style={{
+        padding: "40px",
+      }}
+    >
+
+      <h2>
+        Warehouse Login
+      </h2>
+
+      <form
+        onSubmit={handleLogin}
+      >
+
         <input
           type="text"
           placeholder="Username"
           value={username}
-          onChange={(e) => setUsername(e.target.value)}
+          onChange={(e) =>
+            setUsername(
+              e.target.value
+            )
+          }
         />
+
+        <br />
         <br />
 
         <input
           type="password"
           placeholder="Password"
           value={password}
-          onChange={(e) => setPassword(e.target.value)}
+          onChange={(e) =>
+            setPassword(
+              e.target.value
+            )
+          }
         />
+
+        <br />
         <br />
 
-        <button type="submit">Login</button>
+        <button type="submit">
+          Login
+        </button>
+
       </form>
+
     </div>
+
   );
+
 }
