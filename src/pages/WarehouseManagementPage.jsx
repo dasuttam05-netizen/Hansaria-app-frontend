@@ -1,815 +1,199 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useState } from "react";
 import axios from "axios";
-import MultiSelectDropdown from "../components/MultiSelectDropdown";
-import { hasPermission, loadSession } from "../utils/auth";
 
-const PERMISSION_GROUPS = [
-  {
-    key: "operations",
-    title: "Operations",
-    items: [
-      { key: "inward_access", label: "Inward", permissions: ["inward.view", "inward.create", "inward.edit", "inward.delete"] },
-      { key: "outward_access", label: "Outward", permissions: ["outward.view", "outward.create", "outward.edit", "outward.delete"] },
-      { key: "adjustment_access", label: "Outward Adjustment", permissions: ["adjustment.manage"] },
-      { key: "settlement_access", label: "Settlement", permissions: ["settlement.view"] },
-      { key: "expense_access", label: "Expense Entry", permissions: ["expense.entry", "expense.create", "expense.edit", "expense.delete"] },
-      { key: "expense_posted_inward_access", label: "Expense to Inward Posted", permissions: ["expense.postedInward"] },
-      { key: "expense_palti_access", label: "Palti Lorry", permissions: ["expense.palti"] },
-      { key: "expense_self_loading_access", label: "Self Loading", permissions: ["expense.selfLoading"] },
-      { key: "expense_local_sale_access", label: "Local Sale", permissions: ["expense.localSale"] },
-      { key: "expense_pending_access", label: "Expenses Pending", permissions: ["expense.pending"] },
-      { key: "cash_access", label: "Cash Book", permissions: ["cash.view", "cash.create", "cash.edit", "cash.delete"] },
-      { key: "transport_access", label: "Transport", permissions: ["transport.manage"] },
-    ],
-  },
-  {
-    key: "reports",
-    title: "Reports",
-    items: [
-      { key: "report_inward", label: "Inward Report", permissions: ["report.inward"] },
-      { key: "report_erp", label: "ERP Report", permissions: ["report.erp"] },
-      { key: "report_party_ledger", label: "Party Ledger", permissions: ["report.partyLedger"] },
-      { key: "report_party_stock", label: "Party Stock", permissions: ["report.partyStock"] },
-      { key: "report_rent_ledger", label: "Warehouse Rent Ledger", permissions: ["report.warehouseRentLedger"] },
-      { key: "report_rent_month_end", label: "Month End Rent", permissions: ["report.warehouseRentMonthEnd"] },
-      { key: "report_settlement", label: "Settlement Report", permissions: ["report.outwardSettlement"] },
-      { key: "report_expense", label: "Expense Report", permissions: ["report.expense"] },
-      { key: "report_palti_adjustment", label: "Palti Lorry Adjustment", permissions: ["report.paltiLorryAdjustment"] },
-      { key: "report_cash", label: "Cash Report", permissions: ["report.cash"] },
-    ],
-  },
-  {
-    key: "masters",
-    title: "Masters and Admin",
-    items: [
-      { key: "employees_manage", label: "Employees", permissions: ["employees.view"] },
-      { key: "employees_non_admin_edit", label: "Employees Edit (Non-admin)", permissions: ["employees.edit.non_admin"] },
-      { key: "locations_manage", label: "Location", permissions: ["locations.manage"] },
-      { key: "warehouses_manage", label: "Warehouse", permissions: ["warehouses.manage"] },
-      { key: "companies_manage", label: "Companies", permissions: ["companies.manage"] },
-      { key: "accounts_manage", label: "Company Accounts", permissions: ["companyAccounts.manage"] },
-      { key: "products_manage", label: "Products", permissions: ["products.manage"] },
-      { key: "dashboard_view", label: "Dashboard", permissions: ["dashboard.view"] },
-    ],
-  },
-];
-
-const ALL_PERMISSION_ITEMS = PERMISSION_GROUPS.flatMap((group) => group.items);
-const ACTIONS = ["view", "create", "edit", "delete"];
-
-const getActionOptions = (groupKey, item) => {
-  if (groupKey === "operations") {
-    const options = ACTIONS.map((action) => {
-      const direct = item.permissions.find((permission) => permission.endsWith(`.${action}`));
-      return {
-        id: `${item.key}:${action}`,
-        label: action[0].toUpperCase() + action.slice(1),
-        permission: direct || item.permissions[0] || null,
-      };
-    }).filter((option, index, arr) => option.permission && arr.findIndex((x) => x.permission === option.permission) === index);
-
-    if (item.permissions.length > 1) {
-      return options;
-    }
-    return [{ id: `${item.key}:access`, label: "Access", permission: item.permissions[0] || null }];
-  }
-
-  if (groupKey === "masters") {
-    if (item.key === "employees_non_admin_edit") {
-      return [{ id: `${item.key}:edit`, label: "Edit", permission: item.permissions[0] || null }];
-    }
-    return [{ id: `${item.key}:view`, label: "View", permission: item.permissions[0] || null }];
-  }
-
-  return [{ id: item.key, label: item.label, permission: item.permissions[0] || null }];
-};
-
-const ALL_ACTION_OPTIONS = PERMISSION_GROUPS.flatMap((group) =>
-  group.items.flatMap((item) => getActionOptions(group.key, item))
-);
-
-const flattenPermissionsFromToggles = (toggles) =>
-  Array.from(
-    new Set(
-      ALL_ACTION_OPTIONS.flatMap((option) =>
-        toggles[option.id] && option.permission ? [option.permission] : []
-      )
-    )
-  );
-
-const togglesFromPermissions = (permissions = []) => {
-  const permissionSet = new Set(permissions || []);
-  return ALL_ACTION_OPTIONS.reduce((acc, option) => {
-    acc[option.id] = !!option.permission && permissionSet.has(option.permission);
-    return acc;
-  }, {});
-};
-
-const createDefaultFormData = () => ({
+const emptyForm = () => ({
   name: "",
   address: "",
-  username: "",
-  password: "",
   location_id: "",
-  role: "",
-  permissions: ["dashboard.view"],
-  opening_balance: "0",
-  opening_balance_type: "dr",
-  assigned_warehouse_ids: [],
+  employee_id: "",
 });
 
-const createRoleForm = () => ({
-  name: "",
-  toggles: togglesFromPermissions(["dashboard.view"]),
-  is_admin: false,
-});
-
-export default function EmployeeManagementPage() {
-  const { user: currentUser } = loadSession();
-  const isAdminUser = hasPermission(currentUser, "all");
-  const canCreateEmployee = isAdminUser;
-  const canEditEmployee =
-    isAdminUser ||
-    hasPermission(currentUser, "employees.edit.non_admin") ||
-    hasPermission(currentUser, "employees.edit");
-  const canDeleteEmployee = isAdminUser;
-  const canManageRoles = isAdminUser;
-
-  const [employees, setEmployees] = useState([]);
-  const [roles, setRoles] = useState([]);
-  const [locations, setLocations] = useState([]);
+export default function WarehouseManagementPage() {
   const [warehouses, setWarehouses] = useState([]);
-  const [showEmployeeForm, setShowEmployeeForm] = useState(false);
-  const [showRoleManager, setShowRoleManager] = useState(false);
-  const [showRoleEditor, setShowRoleEditor] = useState(false);
-  const [formData, setFormData] = useState(createDefaultFormData());
-  const [employeeToggles, setEmployeeToggles] = useState(togglesFromPermissions(["dashboard.view"]));
-  const [roleForm, setRoleForm] = useState(createRoleForm());
+  const [locations, setLocations] = useState([]);
+  const [employees, setEmployees] = useState([]);
+  const [showForm, setShowForm] = useState(false);
+  const [formData, setFormData] = useState(emptyForm);
   const [editId, setEditId] = useState(null);
-  const [editRoleId, setEditRoleId] = useState(null);
 
-  const fetchEmployees = async () => {
-    const res = await axios.get("/api/employees");
-    setEmployees(res.data || []);
-  };
+  const API_URL = "/api/warehouses";
 
-  const fetchRoles = async () => {
-    const res = await axios.get("/api/roles");
-    setRoles(res.data || []);
-  };
-
-  const fetchMeta = async () => {
-    const [locationRes, warehouseRes] = await Promise.all([
-      axios.get("/api/locations"),
-      axios.get("/api/warehouses"),
-    ]);
-    setLocations(locationRes.data || []);
-    setWarehouses(warehouseRes.data || []);
+  const fetchAll = async () => {
+    try {
+      const [wRes, lRes, eRes] = await Promise.all([
+        axios.get("/api/warehouses"),
+        axios.get("/api/locations"),
+        axios.get("/api/employees"),
+      ]);
+      setWarehouses(Array.isArray(wRes.data) ? wRes.data : []);
+      setLocations(Array.isArray(lRes.data) ? lRes.data : []);
+      setEmployees(Array.isArray(eRes.data) ? eRes.data : []);
+    } catch (err) {
+      console.error(err);
+      alert("Failed to fetch warehouse data");
+    }
   };
 
   useEffect(() => {
-    Promise.all([fetchEmployees(), fetchRoles(), fetchMeta()]).catch((err) => {
-      console.error(err);
-      alert("Failed to load users and security data");
-    });
+    fetchAll();
   }, []);
 
-  const warehouseOptions = useMemo(
-    () =>
-      warehouses.map((item) => ({
-        value: String(item.id),
-        label: item.location_name ? `${item.name} (${item.location_name})` : item.name,
-      })),
-    [warehouses]
-  );
+  const handleChange = (e) => setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
 
-  const roleOptions = useMemo(() => roles.map((role) => ({ value: String(role.id), label: role.name })), [roles]);
-
-  const permissionSummary = useMemo(() => {
-    const selected = flattenPermissionsFromToggles(employeeToggles);
-    return selected.length ? selected.join(", ") : "No access selected";
-  }, [employeeToggles]);
-
-  const resetEmployeeForm = () => {
-    setFormData(createDefaultFormData());
-    setEmployeeToggles(togglesFromPermissions(["dashboard.view"]));
+  const resetForm = () => {
+    setShowForm(false);
     setEditId(null);
-    setShowEmployeeForm(false);
+    setFormData(emptyForm());
   };
 
-  const resetRoleForm = () => {
-    setRoleForm(createRoleForm());
-    setEditRoleId(null);
-    setShowRoleEditor(false);
-  };
-
-  const handleEmployeeChange = (e) => {
-    const { name, value } = e.target;
-    if (name === "role") {
-      const selectedRole = roles.find((item) => String(item.id) === String(value));
-      if (selectedRole) {
-        const selectedPermissions = selectedRole.is_admin ? ["all"] : selectedRole.permissions || [];
-        setFormData((prev) => ({ ...prev, role: selectedRole.name }));
-        setEmployeeToggles(
-          togglesFromPermissions(
-            selectedPermissions.includes("all")
-              ? ALL_PERMISSION_ITEMS.flatMap((item) => item.permissions)
-              : selectedPermissions
-          )
-        );
-      } else {
-        setFormData((prev) => ({ ...prev, role: "" }));
-      }
-      return;
-    }
-    setFormData((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const handleEmployeeToggle = (key) => {
-    setEmployeeToggles((prev) => ({ ...prev, [key]: !prev[key] }));
-  };
-
-  const handleRoleToggle = (key) => {
-    setRoleForm((prev) => ({ ...prev, toggles: { ...prev.toggles, [key]: !prev.toggles[key] } }));
-  };
-
-  const handleSubmitEmployee = async (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    const permissions = flattenPermissionsFromToggles(employeeToggles);
-    const payload = {
-      ...formData,
-      role: formData.role || "Custom Role",
-      permissions,
-      assigned_warehouse_ids: (formData.assigned_warehouse_ids || []).map(Number),
-      location_id: String(formData.location_id).trim() || null,
-    };
-
-    if (!payload.name || !payload.username || (!editId && !payload.password)) {
-      alert("Name, username and password are required");
+    if (!formData.name || !formData.address) {
+      alert("Name and Address are required");
       return;
     }
-
     try {
       if (editId) {
-        await axios.put(`/api/employees/${editId}`, payload);
+        await axios.put(`${API_URL}/${editId}`, formData);
+        alert("Warehouse updated successfully");
       } else {
-        await axios.post("/api/employees", payload);
+        await axios.post(API_URL, formData);
+        alert("Warehouse added successfully");
       }
-      await Promise.all([fetchEmployees(), fetchMeta()]);
-      resetEmployeeForm();
+      resetForm();
+      fetchAll();
     } catch (err) {
       console.error(err);
-      alert(err.response?.data?.error || "Failed to save employee");
+      alert(err?.response?.data?.error || "Error saving warehouse");
     }
   };
 
-  const handleSubmitRole = async (e) => {
-    e.preventDefault();
-    const permissions = roleForm.is_admin ? ["all"] : flattenPermissionsFromToggles(roleForm.toggles);
-    const payload = { name: roleForm.name, permissions, is_admin: roleForm.is_admin };
-
-    if (!payload.name) {
-      alert("Role name is required");
-      return;
-    }
-
-    try {
-      if (editRoleId) {
-        await axios.put(`/api/roles/${editRoleId}`, payload);
-      } else {
-        await axios.post("/api/roles", payload);
-      }
-      await fetchRoles();
-      resetRoleForm();
-    } catch (err) {
-      console.error(err);
-      alert(err.response?.data?.error || "Failed to save role");
-    }
-  };
-
-  const handleEditEmployee = (employee) => {
-    const employeeIsAdmin =
-      String(employee?.role || "").toLowerCase() === "admin" ||
-      (Array.isArray(employee?.permissions) && employee.permissions.includes("all"));
-    if (!isAdminUser && employeeIsAdmin) {
-      alert("Only admin can edit admin account");
-      return;
-    }
-
-    const assignedWarehouseIds = warehouses
-      .filter((item) => Number(item.employee_id) === Number(employee.id))
-      .map((item) => String(item.id));
+  const handleEdit = (w) => {
     setFormData({
-      name: employee.name || "",
-      address: employee.address || "",
-      username: employee.username || "",
-      password: "",
-      location_id: String(employee.location_id || ""),
-      role: employee.role || "",
-      permissions: employee.permissions || [],
-      opening_balance: String(employee.opening_balance || 0),
-      opening_balance_type: employee.opening_balance_type || "dr",
-      assigned_warehouse_ids: assignedWarehouseIds,
+      name: w.name || "",
+      address: w.address || "",
+      location_id: w.location_id ? String(w.location_id) : "",
+      employee_id: w.employee_id ? String(w.employee_id) : "",
     });
-    setEmployeeToggles(togglesFromPermissions(employee.permissions || []));
-    setEditId(employee.id);
-    setShowEmployeeForm(true);
+    setEditId(w.id);
+    setShowForm(true);
   };
 
-  const handleDeleteEmployee = async (id) => {
-    if (!window.confirm("Delete this employee?")) return;
+  const handleDelete = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this warehouse?")) return;
     try {
-      await axios.delete(`/api/employees/${id}`);
-      await fetchEmployees();
+      await axios.delete(`${API_URL}/${id}`);
+      fetchAll();
     } catch (err) {
       console.error(err);
-      alert(err.response?.data?.error || "Failed to delete employee");
-    }
-  };
-
-  const handleEditRole = (role) => {
-    setRoleForm({
-      name: role.name || "",
-      is_admin: !!role.is_admin,
-      toggles: togglesFromPermissions(role.permissions || []),
-    });
-    setEditRoleId(role.id);
-    setShowRoleEditor(true);
-  };
-
-  const handleDeleteRole = async (id) => {
-    if (!window.confirm("Delete this role?")) return;
-    try {
-      await axios.delete(`/api/roles/${id}`);
-      await fetchRoles();
-    } catch (err) {
-      console.error(err);
-      alert(err.response?.data?.error || "Failed to delete role");
+      alert(err?.response?.data?.error || "Error deleting warehouse");
     }
   };
 
   return (
-    <div style={pageStyle}>
-      <div style={heroCard}>
-        <div>
-          <h2 style={{ margin: 0, color: "#0f172a" }}>Users and Security</h2>
-          <p style={{ margin: "8px 0 0", color: "#64748b" }}>
-            Create/edit employee users, define roles, and control access with checkboxes. Users will only have access to the items you tick.
-          </p>
-        </div>
-      </div>
-
-      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-        {canCreateEmployee ? (
-          <button type="button" onClick={() => setShowEmployeeForm(true)} style={primaryButton}>
-            New User
-          </button>
-        ) : null}
-        {canManageRoles ? (
-          <button type="button" onClick={() => setShowRoleManager(true)} style={secondaryButton}>
-            Roles
-          </button>
-        ) : null}
-      </div>
-
-      <div style={tableCardStyle}>
-        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-          <thead>
-            <tr style={{ background: "#0f766e", color: "#fff" }}>
-              <th style={thStyle}>ID</th>
-              <th style={thStyle}>Name</th>
-              <th style={thStyle}>Username</th>
-              <th style={thStyle}>Role</th>
-              <th style={thStyle}>Location</th>
-              <th style={thStyle}>Warehouse</th>
-              <th style={thStyle}>Access</th>
-              <th style={thStyle}>Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {employees.map((employee, index) => {
-              const assignedNames = warehouses
-                .filter((item) => Number(item.employee_id) === Number(employee.id))
-                .map((item) => item.name)
-                .join(", ");
-              const employeeIsAdmin =
-                String(employee?.role || "").toLowerCase() === "admin" ||
-                (Array.isArray(employee?.permissions) && employee.permissions.includes("all"));
-              const canEditThisEmployee = canEditEmployee && (isAdminUser || !employeeIsAdmin);
-              return (
-                <tr key={employee.id} style={{ background: index % 2 === 0 ? "#fff" : "#f8fafc" }}>
-                  <td style={tdStyle}>{index + 1}</td>
-                  <td style={tdStyle}>{employee.name}</td>
-                  <td style={tdStyle}>{employee.username}</td>
-                  <td style={tdStyle}>{employee.role || "-"}</td>
-                  <td style={tdStyle}>
-                    {locations.find((item) => String(item._id || item.id) === String(employee.location_id))?.name || "-"}
-                  </td>
-                  <td style={tdStyle}>{assignedNames || "-"}</td>
-                  <td style={tdStyle}>{Array.isArray(employee.permissions) ? employee.permissions.join(", ") : "-"}</td>
-                  <td style={tdStyle}>
-                    {canEditThisEmployee ? (
-                      <button type="button" onClick={() => handleEditEmployee(employee)} style={miniBlue}>
-                        Edit
-                      </button>
-                    ) : null}
-                    {canDeleteEmployee ? (
-                      <button type="button" onClick={() => handleDeleteEmployee(employee.id)} style={miniRed}>
-                        Delete
-                      </button>
-                    ) : null}
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-
-      {showEmployeeForm ? (
-        <Modal onClose={resetEmployeeForm} title={editId ? "Edit User" : "Create User"}>
-          <form onSubmit={handleSubmitEmployee}>
+    <div style={{ fontFamily: "Segoe UI, Arial, sans-serif", padding: "8px" }}>
+      {showForm ? (
+        <div style={card}>
+          <div style={headerRow}>
+            <h2 style={titleStyle}>{editId ? "Edit Warehouse" : "Add Warehouse"}</h2>
+            <button type="button" onClick={resetForm} style={btnPrimary}>Back To Warehouse List</button>
+          </div>
+          <form onSubmit={handleSubmit}>
             <div style={formGrid}>
-              <Field label="Name">
-                <input
-                  name="name"
-                  value={formData.name}
-                  onChange={handleEmployeeChange}
-                  style={inputStyle}
-                />
-              </Field>
-              <Field label="Username">
-                <input
-                  name="username"
-                  value={formData.username}
-                  onChange={handleEmployeeChange}
-                  style={inputStyle}
-                />
-              </Field>
-              <Field label="Password">
-                <input
-                  type="password"
-                  name="password"
-                  value={formData.password}
-                  onChange={handleEmployeeChange}
-                  style={inputStyle}
-                />
-              </Field>
-              <Field label="Role">
-                <select
-                  name="role"
-                  value={roleOptions.find((item) => item.label === formData.role)?.value || ""}
-                  onChange={handleEmployeeChange}
-                  style={inputStyle}
-                  disabled={!isAdminUser}
-                >
-                  <option value="">Custom</option>
-                  {roles.map((role) => (
-                    <option key={role.id} value={role.id}>
-                      {role.name}
-                    </option>
-                  ))}
-                </select>
+              <Field label="Warehouse Name">
+                <input name="name" value={formData.name} onChange={handleChange} placeholder="Warehouse Name *" style={inp} />
               </Field>
               <Field label="Location">
-                <select
-                  name="location_id"
-                  value={String(formData.location_id)}
-                  onChange={handleEmployeeChange}
-                  style={inputStyle}
-                >
+                <select name="location_id" value={formData.location_id} onChange={handleChange} style={inp}>
                   <option value="">Select Location</option>
-                  {locations.map((location) => {
-                    const locId = location._id || location.id;
+                  {locations.map((loc) => {
+                    const locId = loc._id || loc.id;
                     return (
-                      <option key={locId} value={String(locId)}>
-                        {location.name}
-                      </option>
+                      <option key={locId} value={String(locId)}>{loc.name}</option>
                     );
                   })}
                 </select>
               </Field>
-              <Field label="Opening Balance">
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 90px", gap: 10 }}>
-                  <input
-                    name="opening_balance"
-                    value={formData.opening_balance}
-                    onChange={handleEmployeeChange}
-                    style={inputStyle}
-                  />
-                  <select
-                    name="opening_balance_type"
-                    value={formData.opening_balance_type}
-                    onChange={handleEmployeeChange}
-                    style={inputStyle}
-                  >
-                    <option value="dr">Dr</option>
-                    <option value="cr">Cr</option>
-                  </select>
-                </div>
+              <Field label="Assign Employee">
+                <select name="employee_id" value={formData.employee_id} onChange={handleChange} style={inp}>
+                  <option value="">Select Employee</option>
+                  {employees.map((emp) => {
+                    const empId = emp._id || emp.id;
+                    return (
+                      <option key={empId} value={String(empId)}>{emp.name}</option>
+                    );
+                  })}
+                </select>
               </Field>
               <div style={{ gridColumn: "1 / -1" }}>
                 <Field label="Address">
-                  <textarea
-                    name="address"
-                    value={formData.address}
-                    onChange={handleEmployeeChange}
-                    rows={2}
-                    style={{ ...inputStyle, minHeight: 80 }}
-                  />
+                  <textarea name="address" value={formData.address} onChange={handleChange} rows={3} style={{ ...inp, minHeight: 72, resize: "vertical" }} />
                 </Field>
               </div>
-              <div style={{ gridColumn: "1 / -1" }}>
-                <MultiSelectDropdown
-                  label="Assigned Warehouses"
-                  options={warehouseOptions}
-                  value={formData.assigned_warehouse_ids}
-                  onChange={(next) =>
-                    setFormData((prev) => ({ ...prev, assigned_warehouse_ids: next }))
-                  }
-                  placeholder="Select Warehouses"
-                />
-              </div>
             </div>
-
-            <div style={securityCard}>
-              <div style={{ fontWeight: 800, marginBottom: 8 }}>Access Control List</div>
-              <div style={{ color: "#64748b", fontSize: 13, marginBottom: 12 }}>{permissionSummary}</div>
-              <div style={groupGrid}>
-                {PERMISSION_GROUPS.map((group) => (
-                  <div key={group.key} style={groupCard}>
-                    <div style={groupTitle}>{group.title}</div>
-                    {group.items.map((item) => (
-                      <div key={item.key} style={checkBlock}>
-                        <div style={checkLabel}>{item.label}</div>
-                        <div style={actionRowWrap}>
-                          {getActionOptions(group.key, item).map((option) => (
-                            <label key={option.id} style={checkRow}>
-                              <input
-                                type="checkbox"
-                                checked={!!employeeToggles[option.id]}
-                                onChange={() => handleEmployeeToggle(option.id)}
-                                disabled={!isAdminUser}
-                              />
-                              <span>{option.label}</span>
-                            </label>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                ))}
-              </div>
-            </div>
-
             <div style={actionRow}>
-              <button type="submit" style={primaryButton}>
-                Save User
-              </button>
-              <button type="button" onClick={resetEmployeeForm} style={dangerButton}>
-                Cancel
-              </button>
+              <button type="submit" style={btnPrimary}>Save</button>
+              <button type="button" onClick={resetForm} style={btnPrimary}>Back To Warehouse List</button>
             </div>
           </form>
-        </Modal>
-      ) : null}
-
-      {showRoleManager && canManageRoles ? (
-        <Modal
-          onClose={() => {
-            setShowRoleManager(false);
-            resetRoleForm();
-          }}
-          title="Roles"
-        >
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-            <div style={{ color: "#64748b" }}>
-              Create or edit roles. When employees are created, they can select a role to auto-fill their permissions.
-            </div>
-            <button type="button" onClick={() => setShowRoleEditor(true)} style={primaryButton}>
-              New Role
-            </button>
+        </div>
+      ) : (
+        <>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px", gap: 10, flexWrap: "wrap" }}>
+            <h2 style={titleStyle}>Warehouse Management</h2>
+            <button type="button" onClick={() => setShowForm(true)} style={{ ...btnPrimary, background: "#0f766e" }}>Add Warehouse</button>
           </div>
-          <div style={tableCardStyle}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+          <div style={tableCard}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
               <thead>
-                <tr style={{ background: "#0f172a", color: "#fff" }}>
-                  <th style={thStyle}>Name</th>
-                  <th style={thStyle}>Permissions</th>
-                  <th style={thStyle}>Actions</th>
+                <tr style={{ background: "#0f766e", color: "#fff" }}>
+                  <th style={th}>ID</th>
+                  <th style={th}>Name</th>
+                  <th style={th}>Address</th>
+                  <th style={th}>Location</th>
+                  <th style={th}>Employee</th>
+                  <th style={th}>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {roles.map((role, index) => (
-                  <tr key={role.id} style={{ background: index % 2 === 0 ? "#fff" : "#f8fafc" }}>
-                    <td style={tdStyle}>{role.name}</td>
-                    <td style={tdStyle}>{(role.permissions || []).join(", ") || "-"}</td>
-                    <td style={tdStyle}>
-                      <button type="button" onClick={() => handleEditRole(role)} style={miniBlue}>
-                        Edit
-                      </button>
-                      <button type="button" onClick={() => handleDeleteRole(role.id)} style={miniRed}>
-                        Delete
-                      </button>
+                {warehouses.map((w, i) => (
+                  <tr key={w.id} style={{ background: i % 2 ? "#f8fafc" : "#fff" }}>
+                    <td style={td}>{i + 1}</td>
+                    <td style={td}>{w.name || "-"}</td>
+                    <td style={td}>{w.address || "-"}</td>
+                    <td style={td}>{w.location_name || "-"}</td>
+                    <td style={td}>{w.employee_name || "-"}</td>
+                    <td style={td}>
+                      <button type="button" onClick={() => handleEdit(w)} style={{ ...mini, background: "#2563eb" }}>Edit</button>{" "}
+                      <button type="button" onClick={() => handleDelete(w.id)} style={{ ...mini, background: "#dc2626" }}>Delete</button>
                     </td>
                   </tr>
                 ))}
+                {warehouses.length === 0 ? (
+                  <tr><td colSpan={6} style={{ ...td, textAlign: "center", padding: "20px" }}>No warehouses found.</td></tr>
+                ) : null}
               </tbody>
             </table>
           </div>
-
-          {showRoleEditor ? (
-            <div style={{ ...securityCard, marginTop: 16 }}>
-              <form onSubmit={handleSubmitRole}>
-                <div style={formGrid}>
-                  <Field label="Role Name">
-                    <input
-                      value={roleForm.name}
-                      onChange={(e) =>
-                        setRoleForm((prev) => ({ ...prev, name: e.target.value }))
-                      }
-                      style={inputStyle}
-                    />
-                  </Field>
-                  <label style={{ ...checkRow, alignSelf: "end", paddingBottom: 10 }}>
-                    <input
-                      type="checkbox"
-                      checked={roleForm.is_admin}
-                      onChange={(e) =>
-                        setRoleForm((prev) => ({ ...prev, is_admin: e.target.checked }))
-                      }
-                    />
-                    <span>Administrator Role</span>
-                  </label>
-                </div>
-                {!roleForm.is_admin ? (
-                  <div style={groupGrid}>
-                    {PERMISSION_GROUPS.map((group) => (
-                      <div key={group.key} style={groupCard}>
-                        <div style={groupTitle}>{group.title}</div>
-                        {group.items.map((item) => (
-                          <div key={item.key} style={checkBlock}>
-                            <div style={checkLabel}>{item.label}</div>
-                            <div style={actionRowWrap}>
-                              {getActionOptions(group.key, item).map((option) => (
-                                <label key={option.id} style={checkRow}>
-                                  <input
-                                    type="checkbox"
-                                    checked={!!roleForm.toggles[option.id]}
-                                    onChange={() => handleRoleToggle(option.id)}
-                                  />
-                                  <span>{option.label}</span>
-                                </label>
-                              ))}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ))}
-                  </div>
-                ) : null}
-                <div style={actionRow}>
-                  <button type="submit" style={primaryButton}>
-                    Save Role
-                  </button>
-                  <button type="button" onClick={resetRoleForm} style={dangerButton}>
-                    Cancel
-                  </button>
-                </div>
-              </form>
-            </div>
-          ) : null}
-        </Modal>
-      ) : null}
-    </div>
-  );
-}
-
-function Modal({ title, onClose, children }) {
-  return (
-    <div style={modalCard}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 16 }}>
-        <h3 style={{ margin: 0, color: "#0f172a" }}>{title}</h3>
-        <button type="button" onClick={onClose} style={{ ...miniRed, marginRight: 0 }}>
-          Close
-        </button>
-      </div>
-      {children}
+        </>
+      )}
     </div>
   );
 }
 
 function Field({ label, children }) {
-  return (
-    <div>
-      <div style={{ fontSize: 12, fontWeight: 700, color: "#475569", marginBottom: 6 }}>
-        {label}
-      </div>
-      {children}
-    </div>
-  );
+  return <div><label style={lbl}>{label}</label>{children}</div>;
 }
 
-const pageStyle = { padding: 14, fontFamily: "Segoe UI, Arial, sans-serif" };
-const heroCard = {
-  background: "#fff",
-  border: "1px solid #e2e8f0",
-  borderRadius: 16,
-  padding: 18,
-  marginBottom: 16,
-  boxShadow: "0 10px 24px rgba(15,23,42,0.08)",
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  gap: 12,
-  flexWrap: "wrap",
-};
-const tableCardStyle = {
-  background: "#fff",
-  border: "1px solid #e2e8f0",
-  borderRadius: 16,
-  overflowX: "auto",
-  boxShadow: "0 10px 24px rgba(15,23,42,0.08)",
-  marginBottom: 16,
-};
-const thStyle = { padding: "10px 12px", textAlign: "left", whiteSpace: "nowrap" };
-const tdStyle = { padding: "10px 12px", borderTop: "1px solid #e2e8f0", verticalAlign: "top" };
-const primaryButton = {
-  border: "none",
-  background: "#0f766e",
-  color: "#fff",
-  borderRadius: 10,
-  padding: "10px 16px",
-  fontWeight: 700,
-  cursor: "pointer",
-};
-const secondaryButton = {
-  border: "none",
-  background: "#1e293b",
-  color: "#fff",
-  borderRadius: 10,
-  padding: "10px 16px",
-  fontWeight: 700,
-  cursor: "pointer",
-};
-const dangerButton = {
-  border: "none",
-  background: "#dc2626",
-  color: "#fff",
-  borderRadius: 10,
-  padding: "10px 16px",
-  fontWeight: 700,
-  cursor: "pointer",
-};
-const miniBlue = {
-  border: "none",
-  background: "#2563eb",
-  color: "#fff",
-  borderRadius: 8,
-  padding: "6px 10px",
-  marginRight: 8,
-  cursor: "pointer",
-};
-const miniRed = {
-  border: "none",
-  background: "#dc2626",
-  color: "#fff",
-  borderRadius: 8,
-  padding: "6px 10px",
-  cursor: "pointer",
-};
-const modalCard = {
-  width: "100%",
-  maxWidth: 1180,
-  overflowY: "auto",
-  background: "#f8fafc",
-  borderRadius: 18,
-  padding: 20,
-  boxShadow: "0 10px 24px rgba(15,23,42,0.08)",
-  border: "1px solid #e2e8f0",
-  marginTop: 16,
-};
-const formGrid = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16 };
-const inputStyle = {
-  width: "100%",
-  padding: "10px 12px",
-  borderRadius: 10,
-  border: "1px solid #cbd5e1",
-  fontSize: 14,
-  boxSizing: "border-box",
-};
-const securityCard = {
-  marginTop: 16,
-  background: "#fff",
-  border: "1px solid #e2e8f0",
-  borderRadius: 16,
-  padding: 16,
-};
-const groupGrid = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 14 };
-const groupCard = { border: "1px solid #dbe4ea", borderRadius: 14, padding: 14, background: "#fff" };
-const groupTitle = { fontWeight: 800, color: "#0f172a", marginBottom: 8, fontSize: 14 };
-const checkRow = { display: "flex", alignItems: "center", gap: 8, padding: "4px 0", fontSize: 13, color: "#334155" };
-const checkBlock = { padding: "4px 0 8px" };
-const checkLabel = { fontWeight: 700, color: "#0f172a", marginBottom: 4 };
-const actionRowWrap = { display: "flex", gap: 10, flexWrap: "wrap" };
-const actionRow = { display: "flex", justifyContent: "flex-end", gap: 12, marginTop: 16, flexWrap: "wrap" };
+const titleStyle = { margin: 0, fontSize: "18px", color: "#0f172a" };
+const card = { background: "#fff", border: "1px solid #e2e8f0", borderRadius: "12px", padding: "20px", maxWidth: "1000px", margin: "0 auto", boxShadow: "0 4px 14px rgba(15,23,42,0.06)" };
+const tableCard = { overflowX: "auto", border: "1px solid #e2e8f0", borderRadius: "10px", background: "#fff" };
+const headerRow = { display: "flex", flexWrap: "wrap", alignItems: "center", gap: "12px", marginBottom: "20px", justifyContent: "space-between" };
+const formGrid = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "16px", alignItems: "start" };
+const actionRow = { display: "flex", gap: "12px", marginTop: "22px", flexWrap: "wrap" };
+const inp = { width: "100%", padding: "10px 12px", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "14px", boxSizing: "border-box" };
+const lbl = { display: "block", marginBottom: "6px", fontWeight: 600, fontSize: "13px", color: "#334155" };
+const btnPrimary = { background: "#2563eb", color: "#fff", border: "none", padding: "10px 18px", borderRadius: "8px", cursor: "pointer", fontWeight: 600, fontSize: "14px" };
+const th = { padding: "10px 8px", textAlign: "left", borderBottom: "1px solid #0d5c56" };
+const td = { padding: "8px", borderBottom: "1px solid #e2e8f0" };
+const mini = { border: "none", color: "#fff", padding: "5px 10px", borderRadius: "6px", cursor: "pointer", fontSize: "12px", fontWeight: 600 };
