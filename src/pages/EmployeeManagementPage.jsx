@@ -214,8 +214,20 @@ export default function EmployeeManagementPage() {
     e.preventDefault();
     if (isSubmittingEmployee) return;
     
+    // Validate location_id first
+    if (!formData.location_id || formData.location_id === "") {
+      alert("Please select a location");
+      return;
+    }
+
     const permissions = flattenPermissionsFromToggles(employeeToggles);
-    const locationId = formData.location_id ? Number(formData.location_id) : null;
+    const locationId = Number(formData.location_id);
+    
+    if (isNaN(locationId) || locationId <= 0) {
+      alert("Please select a valid location");
+      return;
+    }
+
     const payload = {
       ...formData,
       location_id: locationId,
@@ -226,11 +238,6 @@ export default function EmployeeManagementPage() {
 
     if (!payload.name || !payload.username || (!editId && !payload.password)) {
       alert("Name, username and password are required");
-      return;
-    }
-
-    if (!locationId || locationId === 0) {
-      alert("Please select a valid location");
       return;
     }
 
