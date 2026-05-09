@@ -215,9 +215,10 @@ export default function EmployeeManagementPage() {
     if (isSubmittingEmployee) return;
     
     const permissions = flattenPermissionsFromToggles(employeeToggles);
+    const locationId = formData.location_id ? Number(formData.location_id) : null;
     const payload = {
       ...formData,
-      location_id: formData.location_id ? Number(formData.location_id) : null,
+      location_id: locationId,
       role: formData.role || "Custom Role",
       permissions,
       assigned_warehouse_ids: (formData.assigned_warehouse_ids || []).map(Number),
@@ -228,8 +229,8 @@ export default function EmployeeManagementPage() {
       return;
     }
 
-    if (!payload.location_id) {
-      alert("Please select a location");
+    if (!locationId || locationId === 0) {
+      alert("Please select a valid location");
       return;
     }
 
@@ -425,7 +426,7 @@ export default function EmployeeManagementPage() {
               <Field label="Location">
                 <select name="location_id" value={formData.location_id} onChange={handleEmployeeChange} style={inputStyle}>
                   <option value="">Select Location</option>
-                  {locations.map((location) => <option key={location.id} value={location.id}>{location.name}</option>)}
+                  {locations.map((location) => <option key={location.id} value={String(location.id)}>{location.name}</option>)}
                 </select>
               </Field>
               <Field label="Opening Balance">
