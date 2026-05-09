@@ -9,7 +9,9 @@ export default function LocationManagementPage() {
   const [formData, setFormData] = useState(emptyForm);
   const [editId, setEditId] = useState(null);
   const API_URL = "/api/locations";
-
+  const getId = (item) =>
+  item?._id || item?.id;
+  
   const fetchLocations = async () => {
     try {
       const res = await axios.get(API_URL);
@@ -56,7 +58,7 @@ export default function LocationManagementPage() {
 
   const handleEdit = (loc) => {
     setFormData({ name: loc.name || "", address: loc.address || "" });
-    setEditId(loc.id);
+    setEditId(getId(loc));
     setShowForm(true);
   };
 
@@ -112,13 +114,13 @@ export default function LocationManagementPage() {
               </thead>
               <tbody>
                 {locations.map((loc, i) => (
-                  <tr key={loc.id} style={{ background: i % 2 ? "#f8fafc" : "#fff" }}>
-                    <td style={td}>{loc.id}</td>
+                  <tr key={getId(loc)} style={{ background: i % 2 ? "#f8fafc" : "#fff" }}>
+                    <td style={td}>{getId(loc)}</td>
                     <td style={td}>{loc.name || "-"}</td>
                     <td style={td}>{loc.address || "-"}</td>
                     <td style={td}>
                       <button type="button" onClick={() => handleEdit(loc)} style={{ ...mini, background: "#2563eb" }}>Edit</button>{" "}
-                      <button type="button" onClick={() => handleDelete(loc.id)} style={{ ...mini, background: "#dc2626" }}>Delete</button>
+                      <button type="button" onClick={() => handleDelete(getId(loc))} style={{ ...mini, background: "#dc2626" }}>Delete</button>
                     </td>
                   </tr>
                 ))}
