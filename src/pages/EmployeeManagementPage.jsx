@@ -217,6 +217,7 @@ export default function EmployeeManagementPage() {
     const permissions = flattenPermissionsFromToggles(employeeToggles);
     const payload = {
       ...formData,
+      location_id: formData.location_id ? Number(formData.location_id) : null,
       role: formData.role || "Custom Role",
       permissions,
       assigned_warehouse_ids: (formData.assigned_warehouse_ids || []).map(Number),
@@ -224,6 +225,11 @@ export default function EmployeeManagementPage() {
 
     if (!payload.name || !payload.username || (!editId && !payload.password)) {
       alert("Name, username and password are required");
+      return;
+    }
+
+    if (!payload.location_id) {
+      alert("Please select a location");
       return;
     }
 
@@ -297,7 +303,7 @@ export default function EmployeeManagementPage() {
       address: employee.address || "",
       username: employee.username || "",
       password: "",
-      location_id: employee.location_id || "",
+      location_id: String(employee.location_id || ""),
       role: employee.role || "",
       permissions: employee.permissions || [],
       opening_balance: String(employee.opening_balance || 0),
