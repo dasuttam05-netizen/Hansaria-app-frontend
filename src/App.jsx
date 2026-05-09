@@ -1,5 +1,7 @@
 import React from "react";
+import axios from "axios";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+
 import LoginPage from "./pages/LoginPage";
 import DashboardPage from "./pages/DashboardPage";
 import LocationManagementPage from "./pages/LocationManagementPage";
@@ -19,6 +21,15 @@ import PaltiLorryPage from "./pages/PaltiLorryPage";
 import SelfLoadingPage from "./pages/SelfLoadingPage";
 import LocalSalePage from "./pages/LocalSalePage";
 import ExpenseManagementPage from "./pages/ExpenseManagementPage";
+
+const token = localStorage.getItem("token");
+
+if (token) {
+  axios.defaults.headers.common[
+    "Authorization"
+  ] = `Bearer ${token}`;
+}
+
 function App() {
   return (
     <Router>
