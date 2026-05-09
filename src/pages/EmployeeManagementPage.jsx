@@ -112,6 +112,20 @@ const createRoleForm = () => ({
   is_admin: false,
 });
 
+// Normalize data from backend - convert _id to id if needed
+const normalizeData = (data) => {
+  if (!data) return null;
+  return {
+    ...data,
+    id: data.id || data._id,
+  };
+};
+
+const normalizeArray = (arr) => {
+  if (!Array.isArray(arr)) return [];
+  return arr.map(normalizeData);
+};
+
 export default function EmployeeManagementPage() {
   const { user: currentUser } = loadSession();
   const isAdminUser = hasPermission(currentUser, "all");
