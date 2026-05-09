@@ -53,11 +53,17 @@ export default function WarehouseManagementPage() {
       return;
     }
     try {
+      const payload = {
+        name: formData.name,
+        address: formData.address,
+        location_id: formData.location_id || null,
+        employee_id: formData.employee_id || null,
+      };
       if (editId) {
-        await axios.put(`${API_URL}/${editId}`, formData);
+        await axios.put(`${API_URL}/${editId}`, payload);
         alert("Warehouse updated successfully");
       } else {
-        await axios.post(API_URL, formData);
+        await axios.post(API_URL, payload);
         alert("Warehouse added successfully");
       }
       resetForm();
