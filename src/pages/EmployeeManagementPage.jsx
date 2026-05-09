@@ -297,6 +297,13 @@ export default function EmployeeManagementPage() {
   };
 
   const handleEditEmployee = (employee) => {
+    // Validate employee object and ID
+    if (!employee || !employee.id) {
+      alert("Invalid employee data. Cannot edit.");
+      console.error("Edit attempted with invalid employee:", employee);
+      return;
+    }
+
     const employeeIsAdmin =
       String(employee?.role || "").toLowerCase() === "admin" ||
       (Array.isArray(employee?.permissions) && employee.permissions.includes("all"));
@@ -324,17 +331,31 @@ export default function EmployeeManagementPage() {
   };
 
   const handleDeleteEmployee = async (id) => {
+    // Validate ID before attempting delete
+    if (!id || id === undefined || id === null || id === "") {
+      alert("Invalid employee ID. Cannot delete.");
+      console.error("Delete attempted with invalid ID:", id);
+      return;
+    }
+    
     if (!window.confirm("Delete this employee?")) return;
     try {
       await axios.delete(`/api/employees/${id}`);
       await fetchEmployees();
     } catch (err) {
-      console.error(err);
+      console.error("Delete error:", err);
       alert(err.response?.data?.error || "Failed to delete employee");
     }
   };
 
   const handleEditRole = (role) => {
+    // Validate role object and ID
+    if (!role || !role.id) {
+      alert("Invalid role data. Cannot edit.");
+      console.error("Edit attempted with invalid role:", role);
+      return;
+    }
+
     setRoleForm({
       name: role.name || "",
       is_admin: !!role.is_admin,
@@ -345,12 +366,19 @@ export default function EmployeeManagementPage() {
   };
 
   const handleDeleteRole = async (id) => {
+    // Validate ID before attempting delete
+    if (!id || id === undefined || id === null || id === "") {
+      alert("Invalid role ID. Cannot delete.");
+      console.error("Delete attempted with invalid ID:", id);
+      return;
+    }
+    
     if (!window.confirm("Delete this role?")) return;
     try {
       await axios.delete(`/api/roles/${id}`);
       await fetchRoles();
     } catch (err) {
-      console.error(err);
+      console.error("Delete error:", err);
       alert(err.response?.data?.error || "Failed to delete role");
     }
   };
@@ -402,7 +430,7 @@ export default function EmployeeManagementPage() {
                   <td style={tdStyle}>{Array.isArray(employee.permissions) ? employee.permissions.join(", ") : "-"}</td>
                   <td style={tdStyle}>
                     {canEditThisEmployee ? <button type="button" onClick={() => handleEditEmployee(employee)} style={miniBlue}>Edit</button> : null}
-                    {canDeleteEmployee ? <button type="button" onClick={() => handleDeleteEmployee(employee.id)} style={miniRed}>Delete</button> : null}
+                    {canDeleteEmployee && employee.id ? <button type="button" onClick={() => handleDeleteEmployee(employee.id)} style={miniRed}>Delete</button> : null}
                   </td>
                 </tr>
               );
