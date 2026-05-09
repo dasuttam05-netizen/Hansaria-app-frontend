@@ -115,7 +115,7 @@ export default function LocationManagementPage() {
               <tbody>
                 {locations.map((loc, i) => (
                   <tr key={getId(loc)} style={{ background: i % 2 ? "#f8fafc" : "#fff" }}>
-                    <td style={td}>{getId(loc)}</td>
+                    <td style={td}>{i + 1}</td>
                     <td style={td}>{loc.name || "-"}</td>
                     <td style={td}>{loc.address || "-"}</td>
                     <td style={td}>
