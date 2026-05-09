@@ -176,9 +176,15 @@ export default function EmployeeManagementPage() {
   }, []);
 
   const warehouseOptions = useMemo(
-    () => warehouses.map((item) => ({ value: String(item.id), label: item.location_name ? `${item.name} (${item.location_name})` : item.name })),
-    [warehouses]
-  );
+  () =>
+    warehouses.map((item) => ({
+      value: String(item._id || item.id),
+      label: item.location_name
+        ? `${item.name} (${item.location_name})`
+        : item.name,
+    })),
+  [warehouses]
+);
 
   const roleOptions = useMemo(() => roles.map((role) => ({ value: String(role.id), label: role.name })), [roles]);
 
@@ -224,62 +230,94 @@ export default function EmployeeManagementPage() {
     setRoleForm((prev) => ({ ...prev, toggles: { ...prev.toggles, [key]: !prev.toggles[key] } }));
   };
 
-  const handleSubmitEmployee = async (e) => {
-    e.preventDefault();
-    if (isSubmittingEmployee) return;
-    
-    // Validate location_id first
-    if (!formData.location_id || formData.location_id === "") {
-      alert("Please select a location");
-      return;
-    }
+ const handleSubmitEmployee = async (e) => {
+  e.preventDefault();
 
-    const permissions = flattenPermissionsFromToggles(employeeToggles);
-    const locationId = Number(formData.location_id);
-    
-    if (isNaN(locationId) || locationId <= 0) {
-      alert("Please select a valid location");
-      return;
-    }
+  if (isSubmittingEmployee) return;
 
-    const payload = {
-      ...formData,
-      location_id: locationId,
-      role: formData.role || "Custom Role",
-      permissions,
-      assigned_warehouse_ids: (formData.assigned_warehouse_ids || []).map(Number),
-    };
+  // Validate location
+  if (!formData.location_id || formData.location_id === "") {
+    alert("Please select a location");
+    return;
+  }
 
-    if (!payload.name || !payload.username || (!editId && !payload.password)) {
-      alert("Name, username and password are required");
-      return;
-    }
+  const permissions =
+    flattenPermissionsFromToggles(employeeToggles);
 
-    // Check for duplicate username
-    const isDuplicateUsername = employees.some(
-      (emp) => emp.username === payload.username && (!editId || String(emp.id) !== String(editId))
-    );
-    if (isDuplicateUsername) {
-      alert("Username already exists. Please use a different username.");
-      return;
-    }
+  const payload = {
+    ...formData,
 
-    setIsSubmittingEmployee(true);
-    try {
-      if (editId) {
-        await axios.put(`/api/employees/${editId}`, payload);
-      } else {
-        await axios.post("/api/employees", payload);
-      }
-      await Promise.all([fetchEmployees(), fetchMeta()]);
-      resetEmployeeForm();
-    } catch (err) {
-      console.error(err);
-      alert(err.response?.data?.error || "Failed to save employee");
-    } finally {
-      setIsSubmittingEmployee(false);
-    }
+    // MongoDB ObjectId
+    location_id: formData.location_id,
+
+    role: formData.role || "Custom Role",
+
+    permissions,
+
+    // Keep ObjectId strings
+    assigned_warehouse_ids:
+      formData.assigned_warehouse_ids || [],
   };
+
+  // Required field validation
+  if (
+    !payload.name ||
+    !payload.username ||
+    (!editId && !payload.password)
+  ) {
+    alert("Name, username and password are required");
+    return;
+  }
+
+  // Duplicate username check
+  const isDuplicateUsername = employees.some(
+    (emp) =>
+      emp.username === payload.username &&
+      (!editId ||
+        String(emp.id || emp._id) !== String(editId))
+  );
+
+  if (isDuplicateUsername) {
+    alert(
+      "Username already exists. Please use a different username."
+    );
+    return;
+  }
+
+  setIsSubmittingEmployee(true);
+
+  try {
+    if (editId) {
+      await axios.put(
+        `/api/employees/${editId}`,
+        payload
+      );
+    } else {
+      await axios.post(
+        "/api/employees",
+        payload
+      );
+    }
+
+    await Promise.all([
+      fetchEmployees(),
+      fetchMeta(),
+    ]);
+
+    resetEmployeeForm();
+
+  } catch (err) {
+    console.error(err);
+
+    alert(
+      err.response?.data?.error ||
+      "Failed to save employee"
+    );
+
+  } finally {
+    setIsSubmittingEmployee(false);
+  }
+};
 
   const handleSubmitRole = async (e) => {
     e.preventDefault();
@@ -473,11 +511,26 @@ export default function EmployeeManagementPage() {
                 </select>
               </Field>
               <Field label="Location">
-                <select name="location_id" value={formData.location_id} onChange={handleEmployeeChange} style={inputStyle}>
-                  <option value="">Select Location</option>
-                  {locations.map((location) => <option key={location.id} value={String(location.id)}>{location.name}</option>)}
-                </select>
-              </Field>
+  <select
+    name="location_id"
+    value={formData.location_id}
+    onChange={handleEmployeeChange}
+    style={inputStyle}
+  >
+    <option value="">
+      Select Location
+    </option>
+
+    {locations.map((location) => (
+      <option
+        key={location._id || location.id}
+        value={location._id || location.id}
+      >
+        {location.name}
+      </option>
+    ))}
+  </select>
+</Field>
               <Field label="Opening Balance">
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 90px", gap: 10 }}>
                   <input name="opening_balance" value={formData.opening_balance} onChange={handleEmployeeChange} style={inputStyle} />
