@@ -162,19 +162,23 @@ export default function WarehouseManagementPage() {
                 </tr>
               </thead>
               <tbody>
-                {warehouses.map((w, i) => (
-                  <tr key={w.id} style={{ background: i % 2 ? "#f8fafc" : "#fff" }}>
-                    <td style={td}>{i + 1}</td>
-                    <td style={td}>{w.name || "-"}</td>
-                    <td style={td}>{w.address || "-"}</td>
-                    <td style={td}>{w.location_name || "-"}</td>
-                    <td style={td}>{w.employee_name || "-"}</td>
-                    <td style={td}>
-                      <button type="button" onClick={() => handleEdit(w)} style={{ ...mini, background: "#2563eb" }}>Edit</button>{" "}
-                      <button type="button" onClick={() => handleDelete(w.id)} style={{ ...mini, background: "#dc2626" }}>Delete</button>
-                    </td>
-                  </tr>
-                ))}
+                {warehouses.map((w, i) => {
+                  const locationName = locations.find(loc => (loc._id || loc.id) === w.location_id)?.name || "-";
+                  const employeeName = employees.find(emp => (emp._id || emp.id) === w.employee_id)?.name || "-";
+                  return (
+                    <tr key={w.id} style={{ background: i % 2 ? "#f8fafc" : "#fff" }}>
+                      <td style={td}>{i + 1}</td>
+                      <td style={td}>{w.name || "-"}</td>
+                      <td style={td}>{w.address || "-"}</td>
+                      <td style={td}>{locationName}</td>
+                      <td style={td}>{employeeName}</td>
+                      <td style={td}>
+                        <button type="button" onClick={() => handleEdit(w)} style={{ ...mini, background: "#2563eb" }}>Edit</button>{" "}
+                        <button type="button" onClick={() => handleDelete(w.id)} style={{ ...mini, background: "#dc2626" }}>Delete</button>
+                      </td>
+                    </tr>
+                  );
+                })}
                 {warehouses.length === 0 ? (
                   <tr><td colSpan={6} style={{ ...td, textAlign: "center", padding: "20px" }}>No warehouses found.</td></tr>
                 ) : null}
