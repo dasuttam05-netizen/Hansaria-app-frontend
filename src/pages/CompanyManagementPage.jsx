@@ -306,68 +306,62 @@ export default function CompanyManagementPage() {
 
               <tbody>
                 {companies.length > 0 ? (
-                  companies.map(
-                    (
-                      comp,
-                      index
-                    ) => (
-                      <tr
-                        key={comp.id}
-                        style={{
-                          background:
-                            index % 2 === 0
-                              ? "#fff"
-                              : "#f8fafc",
-                        }}
-                      >
-                        <td style={td}>
-                          {comp.id}
-                        </td>
+                   companies.map((comp, index) => (
+  <tr
+    key={comp.id}
+    style={{
+      background:
+        index % 2 === 0
+          ? "#fff"
+          : "#f8fafc",
+    }}
+  >
+    <td style={td}>
+      {index + 1}
+    </td>
 
-                        <td style={td}>
-                          {comp.name}
-                        </td>
+    <td style={td}>
+      {comp.name}
+    </td>
 
-                        <td style={td}>
-                          {comp.address}
-                        </td>
+    <td style={td}>
+      {comp.address}
+    </td>
 
-                        <td style={td}>
-                          {comp.mobile}
-                        </td>
+    <td style={td}>
+      {comp.mobile}
+    </td>
 
-                        <td style={td}>
-                          ₹
-                          {Number(
-                            comp.opening_balance || 0
-                          ).toFixed(2)}{" "}
-                          {String(
-                            comp.opening_balance_type || "dr"
-                          ).toUpperCase()}
-                        </td>
+    <td style={td}>
+      ₹
+      {Number(
+        comp.opening_balance || 0
+      ).toFixed(2)}{" "}
+      {String(
+        comp.opening_balance_type || "dr"
+      ).toUpperCase()}
+    </td>
 
-                        <td style={td}>
-                          <button
-                            onClick={() =>
-                              handleEdit(comp)
-                            }
-                            style={editBtn}
-                          >
-                            Edit
-                          </button>
+    <td style={td}>
+      <button
+        onClick={() =>
+          handleEdit(comp)
+        }
+        style={editBtn}
+      >
+        Edit
+      </button>
 
-                          <button
-                            onClick={() =>
-                              handleDelete(
-                                comp.id
-                              )
-                            }
-                            style={deleteBtn}
-                          >
-                            Delete
-                          </button>
-                        </td>
-                      </tr>
+      <button
+        onClick={() =>
+          handleDelete(comp.id)
+        }
+        style={deleteBtn}
+      >
+        Delete
+      </button>
+    </td>
+  </tr>
                     )
                   )
                 ) : (
