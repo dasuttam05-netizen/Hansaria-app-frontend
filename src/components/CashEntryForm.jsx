@@ -175,6 +175,12 @@ const cancelButtonStyle = {
   fontSize: 13,
 };
 
+const getRecordId = (record) => {
+  if (!record) return "";
+  if (typeof record === "string" || typeof record === "number") return String(record);
+  return String(record.id || record._id || "");
+};
+
 export default function CashEntryForm({
   isOpen,
   onClose,
@@ -192,8 +198,8 @@ export default function CashEntryForm({
 }) {
   if (!isOpen) return null;
   const journalNameOptions = [
-    ...companies.map((c) => ({ value: `party:${c.id}`, label: `Party: ${c.name}` })),
-    ...employees.map((e) => ({ value: `employee:${e.id}`, label: `Employee: ${e.name}` })),
+    ...companies.map((c) => ({ value: `party:${getRecordId(c)}`, label: `Party: ${c.name}` })),
+    ...employees.map((e) => ({ value: `employee:${getRecordId(e)}`, label: `Employee: ${e.name}` })),
   ];
 
   const selectedMode = formData.transaction_mode || "receipt";
@@ -202,7 +208,7 @@ export default function CashEntryForm({
   const isJournal = selectedMode === "journal";
   const isEmployeeTransfer = formData.journal_transfer_kind === "employee_to_employee";
   const effectiveJournalOptions = isEmployeeTransfer
-    ? employees.map((e) => ({ value: `employee:${e.id}`, label: `Employee: ${e.name}` }))
+    ? employees.map((e) => ({ value: `employee:${getRecordId(e)}`, label: `Employee: ${e.name}` }))
     : journalNameOptions;
   const employeeAccent =
     selectedMode === "journal"
@@ -335,7 +341,7 @@ export default function CashEntryForm({
               >
                 <option value="">Select Employee</option>
                 {employees.map((emp) => (
-                  <option key={emp.id} value={emp.id}>
+                  <option key={getRecordId(emp)} value={getRecordId(emp)}>
                     {emp.name}
                   </option>
                 ))}
@@ -498,7 +504,7 @@ export default function CashEntryForm({
                       >
                         <option value="">Select Company</option>
                         {companies.map((c) => (
-                          <option key={c.id} value={c.id}>
+                          <option key={getRecordId(c)} value={getRecordId(c)}>
                             {c.name}
                           </option>
                         ))}
@@ -528,7 +534,7 @@ export default function CashEntryForm({
                   >
                     <option value="">Select Warehouse</option>
                     {warehouses.map((w) => (
-                      <option key={w.id} value={w.id}>
+                      <option key={getRecordId(w)} value={getRecordId(w)}>
                         {w.name}
                       </option>
                     ))}
