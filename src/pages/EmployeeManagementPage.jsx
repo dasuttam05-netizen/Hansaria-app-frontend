@@ -94,6 +94,7 @@ const togglesFromPermissions = (permissions = []) => {
 };
 
 const createDefaultFormData = () => ({
+  employee_id: "",
   name: "",
   address: "",
   username: "",
@@ -482,7 +483,7 @@ export default function EmployeeManagementPage() {
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
           <thead>
             <tr style={{ background: "#0f766e", color: "#fff" }}>
-              <th style={thStyle}>Emp. code / Record ID</th>
+              <th style={thStyle}>Emp.code</th>
               <th style={thStyle}>Name</th>
               <th style={thStyle}>Username</th>
               <th style={thStyle}>Role</th>
