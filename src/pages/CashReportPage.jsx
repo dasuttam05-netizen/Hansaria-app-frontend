@@ -54,6 +54,12 @@ function toSignedEntry(entry) {
   return String(entry.entry_type || "").toLowerCase() === "income" ? amount : -amount;
 }
 
+const getRecordId = (record) => {
+  if (!record) return "";
+  if (typeof record === "string" || typeof record === "number") return String(record);
+  return String(record.id || record._id || "");
+};
+
 export default function CashReportPage() {
   const navigate = useNavigate();
   const [cashEntries, setCashEntries] = useState([]);
@@ -103,10 +109,30 @@ export default function CashReportPage() {
 
   const allLedgerOptions = useMemo(() => {
     const options = [{ value: "all", label: "All Ledger Accounts" }];
-    companies.forEach((c) => options.push({ value: `company:${c.id}`, label: `[Party] ${c.name || "Unknown"}` }));
-    employees.forEach((e) => options.push({ value: `employee:${e.id}`, label: `[Employee] ${e.name || "Unknown"}` }));
+    const companyMap = new Map();
+    const employeeMap = new Map();
+
+    companies.forEach((c) => {
+      const id = getRecordId(c);
+      if (id) companyMap.set(id, c.name || "Unknown");
+    });
+    employees.forEach((e) => {
+      const id = getRecordId(e);
+      if (id) employeeMap.set(id, e.name || "Unknown");
+    });
+    cashEntries.forEach((entry) => {
+      if (entry.company_id && !companyMap.has(String(entry.company_id))) {
+        companyMap.set(String(entry.company_id), entry.company_name || `Party ${entry.company_id}`);
+      }
+      if (entry.employee_id && !employeeMap.has(String(entry.employee_id))) {
+        employeeMap.set(String(entry.employee_id), entry.employee_name || `Employee ${entry.employee_id}`);
+      }
+    });
+
+    companyMap.forEach((label, id) => options.push({ value: `company:${id}`, label: `[Party] ${label}` }));
+    employeeMap.forEach((label, id) => options.push({ value: `employee:${id}`, label: `[Employee] ${label}` }));
     return options;
-  }, [companies, employees]);
+  }, [cashEntries, companies, employees]);
 
   const filteredRows = useMemo(() => {
     const rows = cashEntries
