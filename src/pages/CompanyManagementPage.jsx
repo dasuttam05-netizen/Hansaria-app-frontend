@@ -68,7 +68,7 @@ export default function CompanyManagementPage() {
       opening_balance: String(comp.opening_balance ?? 0),
       opening_balance_type: String(comp.opening_balance_type || "dr"),
     });
-    setEditId(comp.id);
+    setEditId(comp._id);
     setShowForm(true);
   };
 
@@ -140,15 +140,15 @@ export default function CompanyManagementPage() {
               </thead>
               <tbody>
                 {companies.map((comp, i) => (
-                  <tr key={comp.id} style={{ background: i % 2 ? "#f8fafc" : "#fff" }}>
-                    <td style={td}>{comp.id}</td>
+                  <tr key={comp._id} style={{ background: i % 2 ? "#f8fafc" : "#fff" }}>
+                    <td style={td}>{comp._id}</td>
                     <td style={td}>{comp.name || "-"}</td>
                     <td style={td}>{comp.address || "-"}</td>
                     <td style={td}>{comp.mobile || "-"}</td>
                     <td style={td}>{comp.opening_balance && comp.opening_balance != 0 ? `${Number(comp.opening_balance).toFixed(2)} ${String(comp.opening_balance_type || "dr").toUpperCase()}` : "-"}</td>
                     <td style={td}>
                       <button type="button" onClick={() => handleEdit(comp)} style={{ ...mini, background: "#2563eb" }}>Edit</button>{" "}
-                      <button type="button" onClick={() => handleDelete(comp.id)} style={{ ...mini, background: "#dc2626" }}>Delete</button>
+                      <button type="button" onClick={() => handleDelete(comp._id)} style={{ ...mini, background: "#dc2626" }}>Delete</button>
                     </td>
                   </tr>
                 ))}
