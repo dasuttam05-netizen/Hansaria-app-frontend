@@ -12,6 +12,7 @@ const emptyForm = () => ({
 });
 
 export default function CompanyManagementPage() {
+
   const [companies, setCompanies] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState(emptyForm());
@@ -19,7 +20,9 @@ export default function CompanyManagementPage() {
 
   // ================= FETCH =================
   const fetchCompanies = async () => {
+
     try {
+
       const res = await axios.get(API_URL);
 
       const normalized = Array.isArray(res.data)
@@ -32,7 +35,9 @@ export default function CompanyManagementPage() {
       setCompanies(normalized);
 
     } catch (err) {
+
       console.error(err);
+
       alert("Failed to fetch companies");
     }
   };
@@ -43,6 +48,7 @@ export default function CompanyManagementPage() {
 
   // ================= INPUT =================
   const handleChange = (e) => {
+
     const { name, value } = e.target;
 
     setFormData((prev) => ({
@@ -53,36 +59,54 @@ export default function CompanyManagementPage() {
 
   // ================= RESET =================
   const resetForm = () => {
+
     setFormData(emptyForm());
+
     setEditId(null);
+
     setShowForm(false);
   };
 
   // ================= SUBMIT =================
   const handleSubmit = async (e) => {
+
     e.preventDefault();
 
     if (!formData.name || !formData.mobile) {
+
       alert("Company Name and Mobile required");
+
       return;
     }
 
     const payload = {
+
       ...formData,
-      opening_balance: Number(
-        formData.opening_balance || 0
-      ),
+
+      opening_balance:
+        Number(formData.opening_balance ?? 0),
+
+      opening_balance_type:
+        String(
+          formData.opening_balance_type || "dr"
+        ).toLowerCase() === "cr"
+          ? "cr"
+          : "dr",
     };
 
     try {
+
       if (editId) {
+
         await axios.put(
           `${API_URL}/${editId}`,
           payload
         );
 
         alert("Company updated");
+
       } else {
+
         await axios.post(
           API_URL,
           payload
@@ -96,24 +120,30 @@ export default function CompanyManagementPage() {
       fetchCompanies();
 
     } catch (err) {
+
       console.error(err);
 
       alert(
         err?.response?.data?.error ||
-          "Error saving company"
+        "Error saving company"
       );
     }
   };
 
   // ================= EDIT =================
   const handleEdit = (comp) => {
+
     setFormData({
+
       name: comp.name || "",
+
       address: comp.address || "",
+
       mobile: comp.mobile || "",
-      opening_balance: String(
-        comp.opening_balance || 0
-      ),
+
+      opening_balance:
+        String(comp.opening_balance ?? 0),
+
       opening_balance_type:
         comp.opening_balance_type || "dr",
     });
@@ -125,11 +155,13 @@ export default function CompanyManagementPage() {
 
   // ================= DELETE =================
   const handleDelete = async (id) => {
+
     if (!window.confirm("Delete company?")) {
       return;
     }
 
     try {
+
       await axios.delete(
         `${API_URL}/${id}`
       );
@@ -137,20 +169,26 @@ export default function CompanyManagementPage() {
       fetchCompanies();
 
     } catch (err) {
+
       console.error(err);
 
       alert(
         err?.response?.data?.error ||
-          "Delete failed"
+        "Delete failed"
       );
     }
   };
 
   return (
+
     <div style={pageStyle}>
+
       {showForm ? (
+
         <div style={card}>
+
           <div style={topBar}>
+
             <h2 style={title}>
               {editId
                 ? "Edit Company"
@@ -163,39 +201,54 @@ export default function CompanyManagementPage() {
             >
               Back
             </button>
+
           </div>
 
           <form onSubmit={handleSubmit}>
+
             <div style={formGrid}>
+
+              {/* COMPANY NAME */}
               <Field label="Company Name">
+
                 <input
                   name="name"
                   value={formData.name}
                   onChange={handleChange}
                   style={input}
                 />
+
               </Field>
 
+              {/* MOBILE */}
               <Field label="Mobile">
+
                 <input
                   name="mobile"
                   value={formData.mobile}
                   onChange={handleChange}
                   style={input}
                 />
+
               </Field>
 
+              {/* OPENING BALANCE */}
               <Field label="Opening Balance">
+
                 <input
                   type="number"
+                  step="0.01"
                   name="opening_balance"
                   value={formData.opening_balance}
                   onChange={handleChange}
                   style={input}
                 />
+
               </Field>
 
+              {/* BALANCE TYPE */}
               <Field label="Balance Type">
+
                 <select
                   name="opening_balance_type"
                   value={
@@ -211,27 +264,39 @@ export default function CompanyManagementPage() {
                   <option value="cr">
                     CR
                   </option>
+
                 </select>
+
               </Field>
 
+              {/* ADDRESS */}
               <div
                 style={{
                   gridColumn: "1 / -1",
                 }}
               >
+
                 <Field label="Address">
+
                   <textarea
                     name="address"
                     value={formData.address}
                     onChange={handleChange}
                     rows={3}
-                    style={input}
+                    style={{
+                      ...input,
+                      resize: "vertical",
+                    }}
                   />
+
                 </Field>
+
               </div>
+
             </div>
 
             <div style={actionRow}>
+
               <button
                 type="submit"
                 style={btnPrimary}
@@ -248,12 +313,19 @@ export default function CompanyManagementPage() {
               >
                 Cancel
               </button>
+
             </div>
+
           </form>
+
         </div>
+
       ) : (
+
         <>
+
           <div style={topBar}>
+
             <h2 style={title}>
               Company Management
             </h2>
@@ -266,9 +338,11 @@ export default function CompanyManagementPage() {
             >
               Add Company
             </button>
+
           </div>
 
           <div style={tableCard}>
+
             <table
               style={{
                 width: "100%",
@@ -276,10 +350,13 @@ export default function CompanyManagementPage() {
                   "collapse",
               }}
             >
+
               <thead>
+
                 <tr style={thead}>
+
                   <th style={th}>
-                    Company ID
+                    S.L No
                   </th>
 
                   <th style={th}>
@@ -301,84 +378,121 @@ export default function CompanyManagementPage() {
                   <th style={th}>
                     Actions
                   </th>
+
                 </tr>
+
               </thead>
 
               <tbody>
+
                 {companies.length > 0 ? (
-                   companies.map((comp, index) => (
-  <tr
-    key={comp.id}
-    style={{
-      background:
-        index % 2 === 0
-          ? "#fff"
-          : "#f8fafc",
-    }}
-  >
-    <td style={td}>
-      {index + 1}
-    </td>
 
-    <td style={td}>
-      {comp.name}
-    </td>
+                  companies.map(
+                    (
+                      comp,
+                      index
+                    ) => (
 
-    <td style={td}>
-      {comp.address}
-    </td>
+                      <tr
+                        key={comp.id}
+                        style={{
+                          background:
+                            index % 2 === 0
+                              ? "#fff"
+                              : "#f8fafc",
+                        }}
+                      >
 
-    <td style={td}>
-      {comp.mobile}
-    </td>
+                        {/* S.L NO */}
+                        <td style={td}>
+                          {index + 1}
+                        </td>
 
-    <td style={td}>
-      ₹
-      {Number(
-        comp.opening_balance || 0
-      ).toFixed(2)}{" "}
-      {String(
-        comp.opening_balance_type || "dr"
-      ).toUpperCase()}
-    </td>
+                        {/* NAME */}
+                        <td style={td}>
+                          {comp.name || "-"}
+                        </td>
 
-    <td style={td}>
-      <button
-        onClick={() =>
-          handleEdit(comp)
-        }
-        style={editBtn}
-      >
-        Edit
-      </button>
+                        {/* ADDRESS */}
+                        <td style={td}>
+                          {comp.address || "-"}
+                        </td>
 
-      <button
-        onClick={() =>
-          handleDelete(comp.id)
-        }
-        style={deleteBtn}
-      >
-        Delete
-      </button>
-    </td>
-  </tr>
+                        {/* MOBILE */}
+                        <td style={td}>
+                          {comp.mobile || "-"}
+                        </td>
+
+                        {/* OPENING BALANCE */}
+                        <td style={td}>
+
+                          ₹
+                          {Number(
+                            comp.opening_balance ?? 0
+                          ).toFixed(2)}{" "}
+
+                          {String(
+                            comp.opening_balance_type ?? "dr"
+                          ).toUpperCase()}
+
+                        </td>
+
+                        {/* ACTION */}
+                        <td style={td}>
+
+                          <button
+                            onClick={() =>
+                              handleEdit(comp)
+                            }
+                            style={editBtn}
+                          >
+                            Edit
+                          </button>
+
+                          <button
+                            onClick={() =>
+                              handleDelete(
+                                comp.id
+                              )
+                            }
+                            style={deleteBtn}
+                          >
+                            Delete
+                          </button>
+
+                        </td>
+
+                      </tr>
                     )
                   )
+
                 ) : (
+
                   <tr>
+
                     <td
                       colSpan={6}
-                      style={td}
+                      style={{
+                        ...td,
+                        textAlign:
+                          "center",
+                      }}
                     >
                       No companies found
                     </td>
+
                   </tr>
                 )}
+
               </tbody>
+
             </table>
+
           </div>
+
         </>
       )}
+
     </div>
   );
 }
@@ -387,13 +501,17 @@ function Field({
   label,
   children,
 }) {
+
   return (
+
     <div>
+
       <div style={labelStyle}>
         {label}
       </div>
 
       {children}
+
     </div>
   );
 }
