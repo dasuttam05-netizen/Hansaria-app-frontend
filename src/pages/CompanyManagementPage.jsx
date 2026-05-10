@@ -57,21 +57,27 @@ export default function CompanyManagementPage() {
     e.preventDefault();
 
     if (!formData.name || !formData.mobile) {
-      alert("Company Name and Mobile are required");
+      alert("Company Name and Mobile No are required");
       return;
     }
 
     try {
       // ===== UPDATE =====
       if (editId) {
-        await axios.put(`${API_URL}/${editId}`, formData);
+        await axios.put(`${API_URL}/${editId}`, {
+          ...formData,
+          opening_balance: Number(formData.opening_balance || 0),
+        });
 
         alert("Company updated successfully");
       }
 
       // ===== ADD =====
       else {
-        await axios.post(API_URL, formData);
+        await axios.post(API_URL, {
+          ...formData,
+          opening_balance: Number(formData.opening_balance || 0),
+        });
 
         alert("Company added successfully");
       }
@@ -95,7 +101,6 @@ export default function CompanyManagementPage() {
       opening_balance_type: comp.opening_balance_type || "dr",
     });
 
-    // IMPORTANT FIX
     setEditId(comp._id || comp.id);
 
     setShowForm(true);
@@ -140,7 +145,7 @@ export default function CompanyManagementPage() {
             <button
               type="button"
               onClick={resetForm}
-              style={btnPrimary}
+              style={btnGray}
             >
               Back To List
             </button>
@@ -148,7 +153,7 @@ export default function CompanyManagementPage() {
 
           <form onSubmit={handleSubmit}>
             <div style={formGrid}>
-              {/* NAME */}
+              {/* COMPANY NAME */}
               <Field label="Company Name">
                 <input
                   type="text"
@@ -167,7 +172,7 @@ export default function CompanyManagementPage() {
                   name="mobile"
                   value={formData.mobile}
                   onChange={handleChange}
-                  placeholder="Mobile No"
+                  placeholder="Mobile Number"
                   style={inp}
                 />
               </Field>
@@ -180,11 +185,12 @@ export default function CompanyManagementPage() {
                   name="opening_balance"
                   value={formData.opening_balance}
                   onChange={handleChange}
+                  placeholder="0.00"
                   style={inp}
                 />
               </Field>
 
-              {/* TYPE */}
+              {/* BALANCE TYPE */}
               <Field label="Balance Type">
                 <select
                   name="opening_balance_type"
@@ -192,8 +198,8 @@ export default function CompanyManagementPage() {
                   onChange={handleChange}
                   style={inp}
                 >
-                  <option value="dr">Dr</option>
-                  <option value="cr">Cr</option>
+                  <option value="dr">DR</option>
+                  <option value="cr">CR</option>
                 </select>
               </Field>
 
@@ -215,6 +221,7 @@ export default function CompanyManagementPage() {
               </div>
             </div>
 
+            {/* BUTTONS */}
             <div style={actionRow}>
               <button type="submit" style={btnPrimary}>
                 {editId ? "Update Company" : "Save Company"}
@@ -223,10 +230,7 @@ export default function CompanyManagementPage() {
               <button
                 type="button"
                 onClick={resetForm}
-                style={{
-                  ...btnPrimary,
-                  background: "#64748b",
-                }}
+                style={btnGray}
               >
                 Cancel
               </button>
@@ -236,16 +240,7 @@ export default function CompanyManagementPage() {
       ) : (
         <>
           {/* ================= HEADER ================= */}
-          <div
-            style={{
-              display: "flex",
-              justifyContent: "space-between",
-              alignItems: "center",
-              marginBottom: "15px",
-              gap: "10px",
-              flexWrap: "wrap",
-            }}
-          >
+          <div style={topBar}>
             <h2 style={titleStyle}>Company Management</h2>
 
             <button
@@ -273,13 +268,8 @@ export default function CompanyManagementPage() {
               }}
             >
               <thead>
-                <tr
-                  style={{
-                    background: "#0f766e",
-                    color: "#fff",
-                  }}
-                >
-                  <th style={th}>ID</th>
+                <tr style={theadRow}>
+                  <th style={th}>Company ID</th>
                   <th style={th}>Company Name</th>
                   <th style={th}>Address</th>
                   <th style={th}>Mobile</th>
@@ -291,17 +281,22 @@ export default function CompanyManagementPage() {
               <tbody>
                 {companies.length > 0 ? (
                   companies.map((comp, index) => {
-                    const companyId = comp._id || comp.id;
+                    const mongoId = comp._id || comp.id;
 
                     return (
                       <tr
-                        key={companyId}
+                        key={mongoId}
                         style={{
                           background:
-                            index % 2 === 0 ? "#fff" : "#f8fafc",
+                            index % 2 === 0
+                              ? "#fff"
+                              : "#f8fafc",
                         }}
                       >
-                        <td style={td}>{companyId}</td>
+                        {/* CUSTOM COMPANY ID */}
+                        <td style={td}>
+                          {comp.company_id || "-"}
+                        </td>
 
                         <td style={td}>
                           {comp.name || "-"}
@@ -316,6 +311,7 @@ export default function CompanyManagementPage() {
                         </td>
 
                         <td style={td}>
+                          ₹
                           {Number(
                             comp.opening_balance || 0
                           ).toFixed(2)}{" "}
@@ -325,31 +321,39 @@ export default function CompanyManagementPage() {
                         </td>
 
                         <td style={td}>
-                          <button
-                            type="button"
-                            onClick={() => handleEdit(comp)}
+                          <div
                             style={{
-                              ...mini,
-                              background: "#2563eb",
+                              display: "flex",
+                              gap: "6px",
+                              flexWrap: "wrap",
                             }}
                           >
-                            Edit
-                          </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleEdit(comp)
+                              }
+                              style={{
+                                ...miniBtn,
+                                background: "#2563eb",
+                              }}
+                            >
+                              Edit
+                            </button>
 
-                          {"  "}
-
-                          <button
-                            type="button"
-                            onClick={() =>
-                              handleDelete(companyId)
-                            }
-                            style={{
-                              ...mini,
-                              background: "#dc2626",
-                            }}
-                          >
-                            Delete
-                          </button>
+                            <button
+                              type="button"
+                              onClick={() =>
+                                handleDelete(mongoId)
+                              }
+                              style={{
+                                ...miniBtn,
+                                background: "#dc2626",
+                              }}
+                            >
+                              Delete
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     );
@@ -377,12 +381,11 @@ export default function CompanyManagementPage() {
   );
 }
 
-// ================= FIELD COMPONENT =================
+// ================= FIELD =================
 function Field({ label, children }) {
   return (
     <div>
       <label style={lbl}>{label}</label>
-
       {children}
     </div>
   );
@@ -391,39 +394,43 @@ function Field({ label, children }) {
 // ================= STYLES =================
 const titleStyle = {
   margin: 0,
-  fontSize: "18px",
+  fontSize: "20px",
   color: "#0f172a",
+  fontWeight: "700",
 };
 
 const card = {
   background: "#fff",
   border: "1px solid #e2e8f0",
-  borderRadius: "12px",
+  borderRadius: "14px",
   padding: "20px",
   maxWidth: "1000px",
   margin: "0 auto",
   boxShadow: "0 4px 14px rgba(15,23,42,0.06)",
 };
 
-const tableCard = {
-  overflowX: "auto",
-  border: "1px solid #e2e8f0",
-  borderRadius: "10px",
-  background: "#fff",
+const topBar = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  marginBottom: "15px",
+  gap: "10px",
+  flexWrap: "wrap",
 };
 
 const headerRow = {
   display: "flex",
   justifyContent: "space-between",
   alignItems: "center",
-  gap: "10px",
   marginBottom: "20px",
+  gap: "10px",
   flexWrap: "wrap",
 };
 
 const formGrid = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+  gridTemplateColumns:
+    "repeat(auto-fit, minmax(220px, 1fr))",
   gap: "16px",
 };
 
@@ -434,11 +441,23 @@ const actionRow = {
   flexWrap: "wrap",
 };
 
+const tableCard = {
+  overflowX: "auto",
+  border: "1px solid #e2e8f0",
+  borderRadius: "12px",
+  background: "#fff",
+};
+
+const theadRow = {
+  background: "#0f766e",
+  color: "#fff",
+};
+
 const inp = {
   width: "100%",
   padding: "10px 12px",
-  border: "1px solid #cbd5e1",
   borderRadius: "8px",
+  border: "1px solid #cbd5e1",
   fontSize: "14px",
   boxSizing: "border-box",
 };
@@ -446,7 +465,7 @@ const inp = {
 const lbl = {
   display: "block",
   marginBottom: "6px",
-  fontWeight: 600,
+  fontWeight: "600",
   fontSize: "13px",
   color: "#334155",
 };
@@ -458,27 +477,40 @@ const btnPrimary = {
   padding: "10px 18px",
   borderRadius: "8px",
   cursor: "pointer",
-  fontWeight: 600,
+  fontWeight: "600",
+  fontSize: "14px",
+};
+
+const btnGray = {
+  background: "#64748b",
+  color: "#fff",
+  border: "none",
+  padding: "10px 18px",
+  borderRadius: "8px",
+  cursor: "pointer",
+  fontWeight: "600",
   fontSize: "14px",
 };
 
 const th = {
-  padding: "10px",
+  padding: "12px 10px",
   textAlign: "left",
   borderBottom: "1px solid #0d5c56",
+  whiteSpace: "nowrap",
 };
 
 const td = {
   padding: "10px",
   borderBottom: "1px solid #e2e8f0",
+  verticalAlign: "top",
 };
 
-const mini = {
+const miniBtn = {
   border: "none",
   color: "#fff",
-  padding: "5px 10px",
+  padding: "6px 10px",
   borderRadius: "6px",
   cursor: "pointer",
   fontSize: "12px",
-  fontWeight: 600,
+  fontWeight: "600",
 };
