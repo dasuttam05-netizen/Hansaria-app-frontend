@@ -107,7 +107,7 @@ const MainCashBookPage = () => {
   const emptyForm = () => ({
     entry_date: new Date().toISOString().split("T")[0],
     transaction_mode: "receipt",
-    entry_type: "expense",
+    entry_type: "income",
     warehouse_id: "",
     company_id: "",
     company_account_id: "",
