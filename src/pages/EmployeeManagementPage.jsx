@@ -507,15 +507,11 @@ export default function EmployeeManagementPage() {
                 (Array.isArray(employee?.permissions) && employee.permissions.includes("all"));
               const canEditThisEmployee = canEditEmployee && (isAdminUser || !employeeIsAdmin);
               return (
-                <tr key={String(employeeRecordId(employee))} style={{ background: index % 2 === 0 ? "#fff" : "#f8fafc" }}>
-                  <td style={tdStyle}>
-                    <div style={{ fontWeight: 700 }}>
-                      {(employee.employee_id && String(employee.employee_id).trim()) || "—"}
-                    </div>
-                    <div style={{ fontSize: 11, color: "#64748b", wordBreak: "break-all", marginTop: 4 }}>
-                      {String(employeeRecordId(employee))}
-                    </div>
-                  </td>
+               <td style={tdStyle}>
+  <div style={{ fontWeight: 700 }}>
+    {employee.employee_id || "-"}
+  </div>
+</td>
                   <td style={tdStyle}>{employee.name}</td>
                   <td style={tdStyle}>{employee.username}</td>
                   <td style={tdStyle}>{employee.role || "-"}</td>
