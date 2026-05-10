@@ -506,34 +506,81 @@ export default function EmployeeManagementPage() {
                 String(employee?.role || "").toLowerCase() === "admin" ||
                 (Array.isArray(employee?.permissions) && employee.permissions.includes("all"));
               const canEditThisEmployee = canEditEmployee && (isAdminUser || !employeeIsAdmin);
-              return (
-               <td style={tdStyle}>
-  <div style={{ fontWeight: 700 }}>
-    {employee.employee_id || "-"}
-  </div>
-</td>
-                  <td style={tdStyle}>{employee.name}</td>
-                  <td style={tdStyle}>{employee.username}</td>
-                  <td style={tdStyle}>{employee.role || "-"}</td>
-                  <td style={tdStyle}>
-  {
-    locations.find(
-      (item) =>
-        String(item._id || item.id) ===
-        String(employee.location_id)
-    )?.name || "-"
-  }
-</td>
-                  <td style={tdStyle}>{assignedNames || "-"}</td>
-                  <td style={tdStyle}>{Array.isArray(employee.permissions) ? employee.permissions.join(", ") : "-"}</td>
-                  <td style={tdStyle}>
-                    {canEditThisEmployee ? <button type="button" onClick={() => handleEditEmployee(employee)} style={miniBlue}>Edit</button> : null}
-                    {canDeleteEmployee && employeeRecordId(employee) ? (
-                      <button type="button" onClick={() => handleDeleteEmployee(String(employeeRecordId(employee)))} style={miniRed}>Delete</button>
-                    ) : null}
-                  </td>
-                </tr>
-              );
+return (
+  <tr
+    key={String(employeeRecordId(employee))}
+    style={{
+      background: index % 2 === 0 ? "#fff" : "#f8fafc",
+    }}
+  >
+    <td style={tdStyle}>
+      <div style={{ fontWeight: 700 }}>
+        {employee.employee_id || "-"}
+      </div>
+    </td>
+
+    <td style={tdStyle}>
+      {employee.name}
+    </td>
+
+    <td style={tdStyle}>
+      {employee.username}
+    </td>
+
+    <td style={tdStyle}>
+      {employee.role || "-"}
+    </td>
+
+    <td style={tdStyle}>
+      {
+        locations.find(
+          (item) =>
+            String(item._id || item.id) ===
+            String(employee.location_id)
+        )?.name || "-"
+      }
+    </td>
+
+    <td style={tdStyle}>
+      {assignedNames || "-"}
+    </td>
+
+    <td style={tdStyle}>
+      {
+        Array.isArray(employee.permissions)
+          ? employee.permissions.join(", ")
+          : "-"
+      }
+    </td>
+
+    <td style={tdStyle}>
+      {canEditThisEmployee ? (
+        <button
+          type="button"
+          onClick={() => handleEditEmployee(employee)}
+          style={miniBlue}
+        >
+          Edit
+        </button>
+      ) : null}
+
+      {canDeleteEmployee &&
+      employeeRecordId(employee) ? (
+        <button
+          type="button"
+          onClick={() =>
+            handleDeleteEmployee(
+              String(employeeRecordId(employee))
+            )
+          }
+          style={miniRed}
+        >
+          Delete
+        </button>
+      ) : null}
+    </td>
+  </tr>
+);
             })}
           </tbody>
         </table>
