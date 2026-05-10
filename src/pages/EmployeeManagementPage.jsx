@@ -3,6 +3,10 @@ import axios from "axios";
 import MultiSelectDropdown from "../components/MultiSelectDropdown";
 import { hasPermission, loadSession } from "../utils/auth";
 
+/* =========================
+   PERMISSIONS
+========================= */
+
 const PERMISSION_GROUPS = [
   {
     key: "operations",
@@ -58,16 +62,74 @@ const PERMISSION_GROUPS = [
           "cash.delete",
         ],
       },
+      {
+        key: "transport_access",
+        label: "Transport",
+        permissions: ["transport.manage"],
+      },
     ],
   },
+
+  {
+    key: "reports",
+    title: "Reports",
+    items: [
+      {
+        key: "report_inward",
+        label: "Inward Report",
+        permissions: ["report.inward"],
+      },
+      {
+        key: "report_erp",
+        label: "ERP Report",
+        permissions: ["report.erp"],
+      },
+      {
+        key: "report_party_ledger",
+        label: "Party Ledger",
+        permissions: ["report.partyLedger"],
+      },
+      {
+        key: "report_expense",
+        label: "Expense Report",
+        permissions: ["report.expense"],
+      },
+      {
+        key: "report_cash",
+        label: "Cash Report",
+        permissions: ["report.cash"],
+      },
+    ],
+  },
+
   {
     key: "masters",
-    title: "Masters",
+    title: "Masters & Admin",
     items: [
       {
         key: "employees_manage",
         label: "Employees",
         permissions: ["employees.view"],
+      },
+      {
+        key: "locations_manage",
+        label: "Locations",
+        permissions: ["locations.manage"],
+      },
+      {
+        key: "warehouses_manage",
+        label: "Warehouses",
+        permissions: ["warehouses.manage"],
+      },
+      {
+        key: "companies_manage",
+        label: "Companies",
+        permissions: ["companies.manage"],
+      },
+      {
+        key: "products_manage",
+        label: "Products",
+        permissions: ["products.manage"],
       },
       {
         key: "dashboard_view",
@@ -78,282 +140,237 @@ const PERMISSION_GROUPS = [
   },
 ];
 
-const ALL_PERMISSION_ITEMS = PERMISSION_GROUPS.flatMap(
-  (group) => group.items
-);
-
 const ACTIONS = ["view", "create", "edit", "delete"];
 
 const getActionOptions = (groupKey, item) => {
   if (groupKey === "operations") {
     const options = ACTIONS.map((action) => {
-      const direct = item.permissions.find((permission) =>
-        permission.endsWith(`.${action}`)
+      const direct = item.permissions.find((p) =>
+        p.endsWith(`.${action}`)
       );
 
       return {
         id: `${item.key}:${action}`,
-        label:
-          action.charAt(0).toUpperCase() + action.slice(1),
-        permission:
-          direct || item.permissions[0] || null,
+        label: action.toUpperCase(),
+        permission: direct || null,
       };
-    }).filter(
-      (option, index, arr) =>
-        option.permission &&
-        arr.findIndex(
-          (x) => x.permission === option.permission
-        ) === index
-    );
+    }).filter((x) => x.permission);
 
-    if (item.permissions.length > 1) {
-      return options;
-    }
-
-    return [
-      {
-        id: `${item.key}:access`,
-        label: "Access",
-        permission: item.permissions[0] || null,
-      },
-    ];
+    if (options.length) return options;
   }
 
   return [
     {
-      id: item.key,
-      label: item.label,
-      permission: item.permissions[0] || null,
+      id: `${item.key}:access`,
+      label: "ACCESS",
+      permission: item.permissions[0],
     },
   ];
 };
 
-const ALL_ACTION_OPTIONS =
-  PERMISSION_GROUPS.flatMap((group) =>
-    group.items.flatMap((item) =>
-      getActionOptions(group.key, item)
-    )
-  );
+const ALL_ACTION_OPTIONS = PERMISSION_GROUPS.flatMap((group) =>
+  group.items.flatMap((item) =>
+    getActionOptions(group.key, item)
+  )
+);
 
-const flattenPermissionsFromToggles = (toggles) =>
-  Array.from(
+const togglesFromPermissions = (permissions = []) => {
+  const permissionSet = new Set(permissions);
+
+  return ALL_ACTION_OPTIONS.reduce((acc, option) => {
+    acc[option.id] = permissionSet.has(option.permission);
+    return acc;
+  }, {});
+};
+
+const flattenPermissions = (toggles) => {
+  return Array.from(
     new Set(
       ALL_ACTION_OPTIONS.flatMap((option) =>
-        toggles[option.id] && option.permission
-          ? [option.permission]
-          : []
+        toggles[option.id] ? [option.permission] : []
       )
     )
   );
-
-const togglesFromPermissions = (
-  permissions = []
-) => {
-  const permissionSet = new Set(permissions || []);
-
-  return ALL_ACTION_OPTIONS.reduce(
-    (acc, option) => {
-      acc[option.id] =
-        !!option.permission &&
-        permissionSet.has(option.permission);
-
-      return acc;
-    },
-    {}
-  );
 };
 
-const createDefaultFormData = () => ({
-  employee_id: "",
+/* =========================
+   DEFAULT FORMS
+========================= */
+
+const createEmployeeForm = () => ({
   name: "",
-  address: "",
   username: "",
   password: "",
+  address: "",
   location_id: "",
-  role: "",
-  permissions: ["dashboard.view"],
+  role_id: "",
   opening_balance: "0",
   opening_balance_type: "dr",
   assigned_warehouse_ids: [],
 });
 
+const createRoleForm = () => ({
+  name: "",
+  is_admin: false,
+  toggles: togglesFromPermissions(["dashboard.view"]),
+});
+
+/* =========================
+   MAIN COMPONENT
+========================= */
+
 export default function EmployeeManagementPage() {
   const { user: currentUser } = loadSession();
 
-  const isAdminUser =
-    hasPermission(currentUser, "all");
+  const isAdminUser = hasPermission(currentUser, "all");
 
   const [employees, setEmployees] = useState([]);
   const [roles, setRoles] = useState([]);
   const [locations, setLocations] = useState([]);
-  const [warehouses, setWarehouses] =
-    useState([]);
+  const [warehouses, setWarehouses] = useState([]);
 
   const [showEmployeeForm, setShowEmployeeForm] =
     useState(false);
 
-  const [formData, setFormData] = useState(
-    createDefaultFormData()
-  );
+  const [showRoleModal, setShowRoleModal] =
+    useState(false);
 
-  const [employeeToggles, setEmployeeToggles] =
+  const [showRoleEditor, setShowRoleEditor] =
+    useState(false);
+
+  const [employeeForm, setEmployeeForm] =
+    useState(createEmployeeForm());
+
+  const [roleForm, setRoleForm] =
+    useState(createRoleForm());
+
+  const [employeePermissions, setEmployeePermissions] =
     useState(
       togglesFromPermissions(["dashboard.view"])
     );
 
-  const [editId, setEditId] = useState(null);
+  const [editEmployeeId, setEditEmployeeId] =
+    useState(null);
 
-  // ========================
-  // FETCH FUNCTIONS
-  // ========================
+  const [editRoleId, setEditRoleId] =
+    useState(null);
+
+  /* =========================
+     LOAD DATA
+  ========================= */
 
   const fetchEmployees = async () => {
-    try {
-      const res = await axios.get(
-        "/api/employees"
-      );
-
-      setEmployees(res.data || []);
-    } catch (err) {
-      console.error(err);
-    }
+    const res = await axios.get("/api/employees");
+    setEmployees(res.data || []);
   };
 
   const fetchRoles = async () => {
-    try {
-      const res = await axios.get("/api/roles");
-
-      setRoles(res.data || []);
-    } catch (err) {
-      console.error(err);
-    }
+    const res = await axios.get("/api/roles");
+    setRoles(res.data || []);
   };
 
   const fetchMeta = async () => {
-    try {
-      const [locationRes, warehouseRes] =
-        await Promise.all([
-          axios.get("/api/locations"),
-          axios.get("/api/warehouses"),
-        ]);
+    const [locationRes, warehouseRes] =
+      await Promise.all([
+        axios.get("/api/locations"),
+        axios.get("/api/warehouses"),
+      ]);
 
-      setLocations(locationRes.data || []);
-      setWarehouses(warehouseRes.data || []);
-    } catch (err) {
-      console.error(err);
-    }
+    setLocations(locationRes.data || []);
+    setWarehouses(warehouseRes.data || []);
   };
 
   useEffect(() => {
-    fetchEmployees();
-    fetchRoles();
-    fetchMeta();
+    Promise.all([
+      fetchEmployees(),
+      fetchRoles(),
+      fetchMeta(),
+    ]).catch(console.error);
   }, []);
 
-  // ========================
-  // OPTIONS
-  // ========================
+  /* =========================
+     OPTIONS
+  ========================= */
 
-  const warehouseOptions = useMemo(
-    () =>
-      warehouses.map((item) => ({
-        value: String(item._id || item.id),
-        label: item.name,
-      })),
-    [warehouses]
-  );
+  const warehouseOptions = useMemo(() => {
+    return warehouses.map((item) => ({
+      value: String(item.id),
+      label: item.name,
+    }));
+  }, [warehouses]);
 
-  // ========================
-  // HANDLE CHANGE
-  // ========================
+  /* =========================
+     EMPLOYEE FORM
+  ========================= */
 
   const handleEmployeeChange = (e) => {
     const { name, value } = e.target;
 
-    if (name === "role") {
+    if (name === "role_id") {
       const selectedRole = roles.find(
-        (item) =>
-          String(item._id || item.id) ===
-          String(value)
+        (x) => String(x.id) === String(value)
       );
 
       if (selectedRole) {
-        const selectedPermissions =
-          selectedRole.permissions || [];
+        const perms = selectedRole.is_admin
+          ? ALL_ACTION_OPTIONS.map(
+              (x) => x.permission
+            )
+          : selectedRole.permissions || [];
 
-        setFormData((prev) => ({
-          ...prev,
-          role: selectedRole.name,
-        }));
-
-        setEmployeeToggles(
-          togglesFromPermissions(
-            selectedPermissions
-          )
+        setEmployeePermissions(
+          togglesFromPermissions(perms)
         );
       }
+
+      setEmployeeForm((prev) => ({
+        ...prev,
+        role_id: value,
+      }));
 
       return;
     }
 
-    setFormData((prev) => ({
+    setEmployeeForm((prev) => ({
       ...prev,
       [name]: value,
     }));
   };
 
   const handleEmployeeToggle = (key) => {
-    setEmployeeToggles((prev) => ({
+    setEmployeePermissions((prev) => ({
       ...prev,
       [key]: !prev[key],
     }));
   };
 
-  // ========================
-  // SAVE EMPLOYEE
-  // ========================
-
-  const handleSubmitEmployee = async (e) => {
+  const saveEmployee = async (e) => {
     e.preventDefault();
 
-    const permissions =
-      flattenPermissionsFromToggles(
-        employeeToggles
-      );
+    const selectedRole = roles.find(
+      (x) =>
+        String(x.id) ===
+        String(employeeForm.role_id)
+    );
+
+    const permissions = selectedRole?.is_admin
+      ? ["all"]
+      : flattenPermissions(employeePermissions);
 
     const payload = {
-      employee_id: formData.employee_id,
-      name: formData.name,
-      address: formData.address,
-      username: formData.username,
-      password: formData.password,
-      location_id: formData.location_id,
-      role: formData.role || "Custom",
+      ...employeeForm,
       permissions,
-      opening_balance:
-        Number(formData.opening_balance) || 0,
-      opening_balance_type:
-        formData.opening_balance_type,
+      role: selectedRole?.name || "",
       assigned_warehouse_ids:
-        formData.assigned_warehouse_ids || [],
+        employeeForm.assigned_warehouse_ids.map(
+          Number
+        ),
     };
 
-    if (
-      !payload.employee_id ||
-      !payload.name ||
-      !payload.username
-    ) {
-      alert(
-        "Employee Code, Name & Username required"
-      );
-
-      return;
-    }
-
     try {
-      if (editId) {
+      if (editEmployeeId) {
         await axios.put(
-          `/api/employees/${editId}`,
+          `/api/employees/${editEmployeeId}`,
           payload
         );
       } else {
@@ -363,14 +380,19 @@ export default function EmployeeManagementPage() {
         );
       }
 
-      alert("Employee saved successfully");
+      await fetchEmployees();
 
-      fetchEmployees();
+      setShowEmployeeForm(false);
+      setEditEmployeeId(null);
+      setEmployeeForm(createEmployeeForm());
 
-      resetEmployeeForm();
+      setEmployeePermissions(
+        togglesFromPermissions([
+          "dashboard.view",
+        ])
+      );
     } catch (err) {
       console.error(err);
-
       alert(
         err.response?.data?.error ||
           "Failed to save employee"
@@ -378,116 +400,169 @@ export default function EmployeeManagementPage() {
     }
   };
 
-  // ========================
-  // EDIT
-  // ========================
+  const editEmployee = (employee) => {
+    setEditEmployeeId(employee.id);
 
-  const handleEditEmployee = (employee) => {
-    const assignedWarehouseIds = warehouses
-      .filter(
-        (item) =>
-          String(item.employee_id) ===
-          String(employee._id || employee.id)
-      )
-      .map((item) =>
-        String(item._id || item.id)
-      );
-
-    setFormData({
-      employee_id:
-        employee.employee_id || "",
+    setEmployeeForm({
       name: employee.name || "",
-      address: employee.address || "",
       username: employee.username || "",
       password: "",
+      address: employee.address || "",
       location_id:
         employee.location_id || "",
-      role: employee.role || "",
-      permissions:
-        employee.permissions || [],
+      role_id: employee.role_id || "",
       opening_balance: String(
         employee.opening_balance || 0
       ),
       opening_balance_type:
         employee.opening_balance_type ||
         "dr",
-      assigned_warehouse_ids:
-        assignedWarehouseIds,
+      assigned_warehouse_ids: [],
     });
 
-    setEmployeeToggles(
+    setEmployeePermissions(
       togglesFromPermissions(
         employee.permissions || []
       )
     );
 
-    setEditId(
-      String(employee._id || employee.id)
-    );
-
     setShowEmployeeForm(true);
   };
 
-  // ========================
-  // DELETE
-  // ========================
-
-  const handleDeleteEmployee = async (id) => {
+  const deleteEmployee = async (id) => {
     if (!window.confirm("Delete employee?"))
       return;
 
-    try {
-      await axios.delete(
-        `/api/employees/${id}`
-      );
+    await axios.delete(
+      `/api/employees/${id}`
+    );
 
-      fetchEmployees();
+    fetchEmployees();
+  };
+
+  /* =========================
+     ROLE SECTION
+  ========================= */
+
+  const handleRoleToggle = (key) => {
+    setRoleForm((prev) => ({
+      ...prev,
+      toggles: {
+        ...prev.toggles,
+        [key]: !prev.toggles[key],
+      },
+    }));
+  };
+
+  const saveRole = async (e) => {
+    e.preventDefault();
+
+    const permissions = roleForm.is_admin
+      ? ["all"]
+      : flattenPermissions(roleForm.toggles);
+
+    const payload = {
+      name: roleForm.name,
+      permissions,
+      is_admin: roleForm.is_admin,
+    };
+
+    try {
+      if (editRoleId) {
+        await axios.put(
+          `/api/roles/${editRoleId}`,
+          payload
+        );
+      } else {
+        await axios.post(
+          "/api/roles",
+          payload
+        );
+      }
+
+      fetchRoles();
+
+      setRoleForm(createRoleForm());
+      setEditRoleId(null);
+      setShowRoleEditor(false);
     } catch (err) {
       console.error(err);
-
-      alert("Delete failed");
+      alert(
+        err.response?.data?.error ||
+          "Failed to save role"
+      );
     }
   };
 
-  // ========================
-  // RESET
-  // ========================
+  const editRole = (role) => {
+    setEditRoleId(role.id);
 
-  const resetEmployeeForm = () => {
-    setFormData(createDefaultFormData());
+    setRoleForm({
+      name: role.name || "",
+      is_admin: role.is_admin || false,
+      toggles: togglesFromPermissions(
+        role.permissions || []
+      ),
+    });
 
-    setEmployeeToggles(
-      togglesFromPermissions([
-        "dashboard.view",
-      ])
-    );
-
-    setEditId(null);
-
-    setShowEmployeeForm(false);
+    setShowRoleEditor(true);
   };
 
-  // ========================
-  // UI
-  // ========================
+  const deleteRole = async (id) => {
+    if (!window.confirm("Delete role?"))
+      return;
+
+    await axios.delete(`/api/roles/${id}`);
+
+    fetchRoles();
+  };
+
+  /* =========================
+     UI
+  ========================= */
 
   return (
     <div style={pageStyle}>
       <div style={heroCard}>
-        <h2>User Management</h2>
+        <div>
+          <h2>User Management</h2>
+          <p>
+            Create employee and assign role
+            based access.
+          </p>
+        </div>
 
-        <button
-          type="button"
-          onClick={() =>
-            setShowEmployeeForm(true)
-          }
-          style={primaryButton}
+        <div
+          style={{
+            display: "flex",
+            gap: 10,
+          }}
         >
-          New User
-        </button>
+          <button
+            style={primaryButton}
+            onClick={() =>
+              setShowEmployeeForm(true)
+            }
+          >
+            New Employee
+          </button>
+
+          {isAdminUser && (
+            <button
+              style={secondaryButton}
+              onClick={() =>
+                setShowRoleModal(true)
+              }
+            >
+              Manage Roles
+            </button>
+          )}
+        </div>
       </div>
 
-      {/* TABLE */}
+      {/* =======================
+          EMPLOYEE TABLE
+      ======================== */}
 
       <div style={tableCardStyle}>
         <table
@@ -503,33 +578,17 @@ export default function EmployeeManagementPage() {
                 color: "#fff",
               }}
             >
-              <th style={thStyle}>Emp.Code</th>
               <th style={thStyle}>Name</th>
               <th style={thStyle}>Username</th>
               <th style={thStyle}>Role</th>
-              <th style={thStyle}>Location</th>
+              <th style={thStyle}>Permissions</th>
               <th style={thStyle}>Actions</th>
             </tr>
           </thead>
 
           <tbody>
-            {employees.map((employee, index) => (
-              <tr
-                key={
-                  employee._id || employee.id
-                }
-                style={{
-                  background:
-                    index % 2 === 0
-                      ? "#fff"
-                      : "#f8fafc",
-                }}
-              >
-                <td style={tdStyle}>
-                  {employee.employee_id ||
-                    "-"}
-                </td>
-
+            {employees.map((employee) => (
+              <tr key={employee.id}>
                 <td style={tdStyle}>
                   {employee.name}
                 </td>
@@ -543,37 +602,30 @@ export default function EmployeeManagementPage() {
                 </td>
 
                 <td style={tdStyle}>
-                  {locations.find(
-                    (item) =>
-                      String(
-                        item._id || item.id
-                      ) ===
-                      String(
-                        employee.location_id
+                  {Array.isArray(
+                    employee.permissions
+                  )
+                    ? employee.permissions.join(
+                        ", "
                       )
-                  )?.name || "-"}
+                    : "-"}
                 </td>
 
                 <td style={tdStyle}>
                   <button
-                    onClick={() =>
-                      handleEditEmployee(
-                        employee
-                      )
-                    }
                     style={miniBlue}
+                    onClick={() =>
+                      editEmployee(employee)
+                    }
                   >
                     Edit
                   </button>
 
                   <button
-                    onClick={() =>
-                      handleDeleteEmployee(
-                        employee._id ||
-                          employee.id
-                      )
-                    }
                     style={miniRed}
+                    onClick={() =>
+                      deleteEmployee(employee.id)
+                    }
                   >
                     Delete
                   </button>
@@ -584,37 +636,27 @@ export default function EmployeeManagementPage() {
         </table>
       </div>
 
-      {/* FORM */}
+      {/* =======================
+          EMPLOYEE FORM
+      ======================== */}
 
       {showEmployeeForm && (
-        <div style={modalCard}>
-          <h3>
-            {editId
-              ? "Edit User"
-              : "Create User"}
-          </h3>
-
-          <form
-            onSubmit={handleSubmitEmployee}
-          >
+        <Modal
+          title={
+            editEmployeeId
+              ? "Edit Employee"
+              : "Create Employee"
+          }
+          onClose={() =>
+            setShowEmployeeForm(false)
+          }
+        >
+          <form onSubmit={saveEmployee}>
             <div style={formGrid}>
-              <Field label="Employee Code">
-                <input
-                  name="employee_id"
-                  value={
-                    formData.employee_id
-                  }
-                  onChange={
-                    handleEmployeeChange
-                  }
-                  style={inputStyle}
-                />
-              </Field>
-
               <Field label="Name">
                 <input
                   name="name"
-                  value={formData.name}
+                  value={employeeForm.name}
                   onChange={
                     handleEmployeeChange
                   }
@@ -626,7 +668,7 @@ export default function EmployeeManagementPage() {
                 <input
                   name="username"
                   value={
-                    formData.username
+                    employeeForm.username
                   }
                   onChange={
                     handleEmployeeChange
@@ -640,7 +682,7 @@ export default function EmployeeManagementPage() {
                   type="password"
                   name="password"
                   value={
-                    formData.password
+                    employeeForm.password
                   }
                   onChange={
                     handleEmployeeChange
@@ -651,8 +693,10 @@ export default function EmployeeManagementPage() {
 
               <Field label="Role">
                 <select
-                  name="role"
-                  value={formData.role}
+                  name="role_id"
+                  value={
+                    employeeForm.role_id
+                  }
                   onChange={
                     handleEmployeeChange
                   }
@@ -664,12 +708,8 @@ export default function EmployeeManagementPage() {
 
                   {roles.map((role) => (
                     <option
-                      key={
-                        role._id || role.id
-                      }
-                      value={
-                        role._id || role.id
-                      }
+                      key={role.id}
+                      value={role.id}
                     >
                       {role.name}
                     </option>
@@ -681,7 +721,7 @@ export default function EmployeeManagementPage() {
                 <select
                   name="location_id"
                   value={
-                    formData.location_id
+                    employeeForm.location_id
                   }
                   onChange={
                     handleEmployeeChange
@@ -695,14 +735,8 @@ export default function EmployeeManagementPage() {
                   {locations.map(
                     (location) => (
                       <option
-                        key={
-                          location._id ||
-                          location.id
-                        }
-                        value={
-                          location._id ||
-                          location.id
-                        }
+                        key={location.id}
+                        value={location.id}
                       >
                         {location.name}
                       </option>
@@ -711,95 +745,33 @@ export default function EmployeeManagementPage() {
                 </select>
               </Field>
 
-              <Field label="Opening Balance">
-                <input
-                  name="opening_balance"
-                  value={
-                    formData.opening_balance
-                  }
-                  onChange={
-                    handleEmployeeChange
-                  }
-                  style={inputStyle}
-                />
-              </Field>
-
-              <Field label="Balance Type">
-                <select
-                  name="opening_balance_type"
-                  value={
-                    formData.opening_balance_type
-                  }
-                  onChange={
-                    handleEmployeeChange
-                  }
-                  style={inputStyle}
-                >
-                  <option value="dr">
-                    Dr
-                  </option>
-
-                  <option value="cr">
-                    Cr
-                  </option>
-                </select>
-              </Field>
-
-              <div
-                style={{
-                  gridColumn: "1 / -1",
-                }}
-              >
-                <Field label="Address">
-                  <textarea
-                    name="address"
-                    value={
-                      formData.address
-                    }
-                    onChange={
-                      handleEmployeeChange
-                    }
-                    rows={3}
-                    style={inputStyle}
-                  />
-                </Field>
-              </div>
-
-              <div
-                style={{
-                  gridColumn: "1 / -1",
-                }}
-              >
+              <Field label="Warehouse">
                 <MultiSelectDropdown
-                  label="Assigned Warehouses"
+                  label=""
                   options={
                     warehouseOptions
                   }
                   value={
-                    formData.assigned_warehouse_ids
+                    employeeForm.assigned_warehouse_ids
                   }
                   onChange={(next) =>
-                    setFormData((prev) => ({
-                      ...prev,
-                      assigned_warehouse_ids:
-                        next,
-                    }))
+                    setEmployeeForm(
+                      (prev) => ({
+                        ...prev,
+                        assigned_warehouse_ids:
+                          next,
+                      })
+                    )
                   }
-                  placeholder="Select Warehouses"
                 />
-              </div>
+              </Field>
             </div>
 
-            {/* ACCESS */}
+            {/* ROLE BASED ACCESS */}
 
             <div style={securityCard}>
-              <div
-                style={{
-                  fontWeight: 700,
-                  marginBottom: 10,
-                }}
-              >
-                Access Control
+              <div style={groupTitle}>
+                Role Permissions
               </div>
 
               <div style={groupGrid}>
@@ -809,7 +781,11 @@ export default function EmployeeManagementPage() {
                       key={group.key}
                       style={groupCard}
                     >
-                      <div style={groupTitle}>
+                      <div
+                        style={
+                          groupTitle
+                        }
+                      >
                         {group.title}
                       </div>
 
@@ -817,14 +793,18 @@ export default function EmployeeManagementPage() {
                         (item) => (
                           <div
                             key={item.key}
-                            style={checkBlock}
+                            style={
+                              checkBlock
+                            }
                           >
                             <div
                               style={
                                 checkLabel
                               }
                             >
-                              {item.label}
+                              {
+                                item.label
+                              }
                             </div>
 
                             <div
@@ -850,7 +830,7 @@ export default function EmployeeManagementPage() {
                                     <input
                                       type="checkbox"
                                       checked={
-                                        !!employeeToggles[
+                                        !!employeePermissions[
                                           option
                                             .id
                                         ]
@@ -885,30 +865,357 @@ export default function EmployeeManagementPage() {
                 type="submit"
                 style={primaryButton}
               >
-                Save User
+                Save Employee
               </button>
 
               <button
                 type="button"
-                onClick={resetEmployeeForm}
                 style={dangerButton}
+                onClick={() =>
+                  setShowEmployeeForm(
+                    false
+                  )
+                }
               >
                 Cancel
               </button>
             </div>
           </form>
-        </div>
+        </Modal>
+      )}
+
+      {/* =======================
+          ROLE MODAL
+      ======================== */}
+
+      {showRoleModal && (
+        <Modal
+          title="Role Management"
+          onClose={() =>
+            setShowRoleModal(false)
+          }
+        >
+          <div
+            style={{
+              marginBottom: 20,
+            }}
+          >
+            <button
+              style={primaryButton}
+              onClick={() =>
+                setShowRoleEditor(true)
+              }
+            >
+              Create Role
+            </button>
+          </div>
+
+          <div style={tableCardStyle}>
+            <table
+              style={{
+                width: "100%",
+                borderCollapse:
+                  "collapse",
+              }}
+            >
+              <thead>
+                <tr>
+                  <th style={thStyle}>
+                    Role
+                  </th>
+
+                  <th style={thStyle}>
+                    Permissions
+                  </th>
+
+                  <th style={thStyle}>
+                    Actions
+                  </th>
+                </tr>
+              </thead>
+
+              <tbody>
+                {roles.map((role) => (
+                  <tr key={role.id}>
+                    <td style={tdStyle}>
+                      {role.name}
+                    </td>
+
+                    <td style={tdStyle}>
+                      {role.permissions?.join(
+                        ", "
+                      )}
+                    </td>
+
+                    <td style={tdStyle}>
+                      <button
+                        style={
+                          miniBlue
+                        }
+                        onClick={() =>
+                          editRole(
+                            role
+                          )
+                        }
+                      >
+                        Edit
+                      </button>
+
+                      <button
+                        style={
+                          miniRed
+                        }
+                        onClick={() =>
+                          deleteRole(
+                            role.id
+                          )
+                        }
+                      >
+                        Delete
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+
+          {/* ROLE FORM */}
+
+          {showRoleEditor && (
+            <div
+              style={{
+                ...securityCard,
+                marginTop: 20,
+              }}
+            >
+              <form onSubmit={saveRole}>
+                <div style={formGrid}>
+                  <Field label="Role Name">
+                    <input
+                      value={
+                        roleForm.name
+                      }
+                      onChange={(
+                        e
+                      ) =>
+                        setRoleForm(
+                          (
+                            prev
+                          ) => ({
+                            ...prev,
+                            name: e
+                              .target
+                              .value,
+                          })
+                        )
+                      }
+                      style={
+                        inputStyle
+                      }
+                    />
+                  </Field>
+
+                  <label
+                    style={
+                      checkRow
+                    }
+                  >
+                    <input
+                      type="checkbox"
+                      checked={
+                        roleForm.is_admin
+                      }
+                      onChange={(
+                        e
+                      ) =>
+                        setRoleForm(
+                          (
+                            prev
+                          ) => ({
+                            ...prev,
+                            is_admin:
+                              e
+                                .target
+                                .checked,
+                          })
+                        )
+                      }
+                    />
+
+                    <span>
+                      Admin Role
+                    </span>
+                  </label>
+                </div>
+
+                {!roleForm.is_admin && (
+                  <div
+                    style={
+                      groupGrid
+                    }
+                  >
+                    {PERMISSION_GROUPS.map(
+                      (
+                        group
+                      ) => (
+                        <div
+                          key={
+                            group.key
+                          }
+                          style={
+                            groupCard
+                          }
+                        >
+                          <div
+                            style={
+                              groupTitle
+                            }
+                          >
+                            {
+                              group.title
+                            }
+                          </div>
+
+                          {group.items.map(
+                            (
+                              item
+                            ) => (
+                              <div
+                                key={
+                                  item.key
+                                }
+                                style={
+                                  checkBlock
+                                }
+                              >
+                                <div
+                                  style={
+                                    checkLabel
+                                  }
+                                >
+                                  {
+                                    item.label
+                                  }
+                                </div>
+
+                                <div
+                                  style={
+                                    actionRowWrap
+                                  }
+                                >
+                                  {getActionOptions(
+                                    group.key,
+                                    item
+                                  ).map(
+                                    (
+                                      option
+                                    ) => (
+                                      <label
+                                        key={
+                                          option.id
+                                        }
+                                        style={
+                                          checkRow
+                                        }
+                                      >
+                                        <input
+                                          type="checkbox"
+                                          checked={
+                                            !!roleForm
+                                              .toggles[
+                                              option
+                                                .id
+                                            ]
+                                          }
+                                          onChange={() =>
+                                            handleRoleToggle(
+                                              option.id
+                                            )
+                                          }
+                                        />
+
+                                        <span>
+                                          {
+                                            option.label
+                                          }
+                                        </span>
+                                      </label>
+                                    )
+                                  )}
+                                </div>
+                              </div>
+                            )
+                          )}
+                        </div>
+                      )
+                    )}
+                  </div>
+                )}
+
+                <div style={actionRow}>
+                  <button
+                    type="submit"
+                    style={
+                      primaryButton
+                    }
+                  >
+                    Save Role
+                  </button>
+                </div>
+              </form>
+            </div>
+          )}
+        </Modal>
       )}
     </div>
   );
 }
 
-function Field({ label, children }) {
+/* =========================
+   COMPONENTS
+========================= */
+
+function Modal({
+  title,
+  children,
+  onClose,
+}) {
+  return (
+    <div style={inlineCardWrap}>
+      <div style={modalCard}>
+        <div
+          style={{
+            display: "flex",
+            justifyContent:
+              "space-between",
+            marginBottom: 20,
+          }}
+        >
+          <h2>{title}</h2>
+
+          <button
+            style={secondaryButton}
+            onClick={onClose}
+          >
+            Close
+          </button>
+        </div>
+
+        {children}
+      </div>
+    </div>
+  );
+}
+
+function Field({
+  label,
+  children,
+}) {
   return (
     <div>
       <div
         style={{
-          fontSize: 12,
           fontWeight: 700,
           marginBottom: 6,
         }}
@@ -921,50 +1228,57 @@ function Field({ label, children }) {
   );
 }
 
-// ========================
-// STYLES
-// ========================
+/* =========================
+   STYLES
+========================= */
 
 const pageStyle = {
-  padding: 14,
-  fontFamily: "Segoe UI",
+  padding: 20,
+  fontFamily: "Arial",
 };
 
 const heroCard = {
   background: "#fff",
-  border: "1px solid #e2e8f0",
+  padding: 20,
   borderRadius: 16,
-  padding: 18,
-  marginBottom: 16,
+  marginBottom: 20,
   display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
+  justifyContent:
+    "space-between",
 };
 
 const tableCardStyle = {
   background: "#fff",
-  border: "1px solid #e2e8f0",
   borderRadius: 16,
   overflowX: "auto",
 };
 
 const thStyle = {
-  padding: "10px 12px",
+  padding: 12,
   textAlign: "left",
 };
 
 const tdStyle = {
-  padding: "10px 12px",
-  borderTop: "1px solid #e2e8f0",
+  padding: 12,
+  borderTop:
+    "1px solid #e2e8f0",
 };
 
 const primaryButton = {
   border: "none",
   background: "#0f766e",
   color: "#fff",
-  borderRadius: 10,
   padding: "10px 16px",
-  fontWeight: 700,
+  borderRadius: 8,
+  cursor: "pointer",
+};
+
+const secondaryButton = {
+  border: "none",
+  background: "#334155",
+  color: "#fff",
+  padding: "10px 16px",
+  borderRadius: 8,
   cursor: "pointer",
 };
 
@@ -972,9 +1286,8 @@ const dangerButton = {
   border: "none",
   background: "#dc2626",
   color: "#fff",
-  borderRadius: 10,
   padding: "10px 16px",
-  fontWeight: 700,
+  borderRadius: 8,
   cursor: "pointer",
 };
 
@@ -982,25 +1295,29 @@ const miniBlue = {
   border: "none",
   background: "#2563eb",
   color: "#fff",
-  borderRadius: 8,
   padding: "6px 10px",
+  borderRadius: 6,
   marginRight: 8,
+  cursor: "pointer",
 };
 
 const miniRed = {
   border: "none",
   background: "#dc2626",
   color: "#fff",
-  borderRadius: 8,
   padding: "6px 10px",
+  borderRadius: 6,
+  cursor: "pointer",
+};
+
+const inlineCardWrap = {
+  marginTop: 20,
 };
 
 const modalCard = {
-  marginTop: 20,
   background: "#f8fafc",
-  borderRadius: 18,
   padding: 20,
-  border: "1px solid #e2e8f0",
+  borderRadius: 16,
 };
 
 const formGrid = {
@@ -1013,50 +1330,50 @@ const formGrid = {
 const inputStyle = {
   width: "100%",
   padding: "10px 12px",
-  borderRadius: 10,
-  border: "1px solid #cbd5e1",
-  fontSize: 14,
-  boxSizing: "border-box",
+  border:
+    "1px solid #cbd5e1",
+  borderRadius: 8,
 };
 
 const securityCard = {
-  marginTop: 16,
+  marginTop: 20,
   background: "#fff",
-  border: "1px solid #e2e8f0",
-  borderRadius: 16,
   padding: 16,
+  borderRadius: 16,
 };
 
 const groupGrid = {
   display: "grid",
   gridTemplateColumns:
     "repeat(auto-fit,minmax(240px,1fr))",
-  gap: 14,
+  gap: 16,
 };
 
 const groupCard = {
-  border: "1px solid #dbe4ea",
-  borderRadius: 14,
+  border:
+    "1px solid #dbe4ea",
+  borderRadius: 12,
   padding: 14,
 };
 
 const groupTitle = {
-  fontWeight: 800,
-  marginBottom: 8,
+  fontWeight: 700,
+  marginBottom: 10,
 };
 
 const checkRow = {
   display: "flex",
-  alignItems: "center",
   gap: 8,
+  alignItems: "center",
+  marginBottom: 6,
 };
 
 const checkBlock = {
-  padding: "4px 0 8px",
+  marginBottom: 12,
 };
 
 const checkLabel = {
-  fontWeight: 700,
+  fontWeight: 600,
   marginBottom: 4,
 };
 
@@ -1070,5 +1387,5 @@ const actionRow = {
   display: "flex",
   justifyContent: "flex-end",
   gap: 12,
-  marginTop: 16,
+  marginTop: 20,
 };
