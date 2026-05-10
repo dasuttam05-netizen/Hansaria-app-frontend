@@ -210,8 +210,16 @@ export default function CashEntriesPage() {
         await axios.post(`${API_BASE}/cash-entries`, drPayload);
         await axios.post(`${API_BASE}/cash-entries`, crPayload);
       } else {
+        const normalizedMode = String(formData.transaction_mode || "receipt").toLowerCase();
+        const entryType =
+          normalizedMode === "payment"
+            ? "expense"
+            : normalizedMode === "receipt"
+            ? "income"
+            : formData.entry_type;
         await axios.post(`${API_BASE}/cash-entries`, {
           ...formData,
+          entry_type: entryType,
           voucher_no: formData.voucher_no || null,
           transaction_mode: formData.transaction_mode,
           adjustments: adjustmentRows,
