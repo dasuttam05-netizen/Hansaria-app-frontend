@@ -139,19 +139,23 @@ export default function CompanyManagementPage() {
                 </tr>
               </thead>
               <tbody>
-                {companies.map((comp, i) => (
-                  <tr key={comp._id} style={{ background: i % 2 ? "#f8fafc" : "#fff" }}>
-                    <td style={td}>{comp._id}</td>
-                    <td style={td}>{comp.name || "-"}</td>
-                    <td style={td}>{comp.address || "-"}</td>
-                    <td style={td}>{comp.mobile || "-"}</td>
-                    <td style={td}>{comp.opening_balance && comp.opening_balance != 0 ? `${Number(comp.opening_balance).toFixed(2)} ${String(comp.opening_balance_type || "dr").toUpperCase()}` : "-"}</td>
-                    <td style={td}>
-                      <button type="button" onClick={() => handleEdit(comp)} style={{ ...mini, background: "#2563eb" }}>Edit</button>{" "}
-                      <button type="button" onClick={() => handleDelete(comp._id)} style={{ ...mini, background: "#dc2626" }}>Delete</button>
-                    </td>
-                  </tr>
-                ))}
+                {companies.map((comp, i) => {
+                  const openingBalance = Number(comp.opening_balance ?? 0);
+                  const openingType = String(comp.opening_balance_type || "dr").toUpperCase();
+                  return (
+                    <tr key={comp._id} style={{ background: i % 2 ? "#f8fafc" : "#fff" }}>
+                      <td style={td}>{String(i + 1).padStart(2, "0")}</td>
+                      <td style={td}>{comp.name || "-"}</td>
+                      <td style={td}>{comp.address || "-"}</td>
+                      <td style={td}>{comp.mobile || "-"}</td>
+                      <td style={td}>{comp.opening_balance != null ? `${openingBalance.toFixed(2)} ${openingType}` : "-"}</td>
+                      <td style={td}>
+                        <button type="button" onClick={() => handleEdit(comp)} style={{ ...mini, background: "#2563eb" }}>Edit</button>{" "}
+                        <button type="button" onClick={() => handleDelete(comp._id)} style={{ ...mini, background: "#dc2626" }}>Delete</button>
+                      </td>
+                    </tr>
+                  );
+                })}
                 {companies.length === 0 ? (
                   <tr><td colSpan={6} style={{ ...td, textAlign: "center", padding: "20px" }}>No companies found.</td></tr>
                 ) : null}
