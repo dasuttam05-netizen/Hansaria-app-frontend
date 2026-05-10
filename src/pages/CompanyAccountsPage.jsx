@@ -94,7 +94,7 @@ export default function CompanyAccountsPage() {
       pan_no: acc.pan_no || "",
       mobile: acc.mobile || "",
     });
-    setEditId(acc.id);
+    setEditId(acc._id);
     setView("form");
   };
 
@@ -260,7 +260,7 @@ export default function CompanyAccountsPage() {
                 <select name="company_id" value={formData.company_id} onChange={handleChange} style={inp}>
                   <option value="">Select Company *</option>
                   {companies.map((c) => (
-                    <option key={c.id} value={c.id}>
+                    <option key={c._id} value={c._id}>
                       {c.name}
                     </option>
                   ))}
@@ -346,8 +346,8 @@ export default function CompanyAccountsPage() {
           </thead>
           <tbody>
             {accounts.map((acc, i) => (
-              <tr key={acc.id} style={{ background: i % 2 ? "#f8fafc" : "#fff" }}>
-                <td style={td}>{acc.id}</td>
+              <tr key={acc._id} style={{ background: i % 2 ? "#f8fafc" : "#fff" }}>
+                <td style={td}>{String(i + 1).padStart(2, "0")}</td>
                 <td style={td}>{acc.account_name || "-"}</td>
                 <td style={td}>{acc.company_name || "-"}</td>
                 <td style={td}>{acc.pan_no || "-"}</td>
@@ -356,7 +356,7 @@ export default function CompanyAccountsPage() {
                   <button type="button" onClick={() => handleEdit(acc)} style={{ ...mini, background: "#2563eb" }}>
                     Edit
                   </button>{" "}
-                  <button type="button" onClick={() => handleDelete(acc.id)} style={{ ...mini, background: "#dc2626" }}>
+                  <button type="button" onClick={() => handleDelete(acc._id)} style={{ ...mini, background: "#dc2626" }}>
                     Delete
                   </button>
                 </td>
