@@ -170,6 +170,14 @@ export default function CashEntriesPage() {
           setFormLoading(false);
           return;
         }
+        if (
+          isEmployeeTransfer &&
+          String(debitTarget.employee_id) === String(creditTarget.employee_id)
+        ) {
+          alert("Debit and credit employees must be different for an Employee to Employee transfer.");
+          setFormLoading(false);
+          return;
+        }
 
         const journalGroupNo =
           String(formData.voucher_no || "").trim() ||
@@ -184,25 +192,26 @@ export default function CashEntriesPage() {
           company_account_id: formData.company_account_id || null,
           amount: formData.amount,
           payment_method: formData.payment_method || "Cash",
-          fund_source: formData.fund_source || "main_cash",
+          fund_source: isEmployeeTransfer ? "employee_cash" : formData.fund_source || "main_cash",
           reference_no: formData.reference_no || null,
           narration: formData.narration || null,
-          employee_id: formData.employee_id || null,
+          employee_id: null,
           status: formData.status || "posted",
+          auto_staff_entry: false,
           adjustments: [],
         };
 
         const drPayload = {
           ...basePayload,
           entry_type: "expense",
-          company_id: debitTarget.company_id || formData.company_id || null,
+          company_id: isEmployeeTransfer ? null : debitTarget.company_id || formData.company_id || null,
           employee_id: debitTarget.employee_id || null,
           description: `${formData.description} | Journal DR`,
         };
         const crPayload = {
           ...basePayload,
           entry_type: "income",
-          company_id: creditTarget.company_id || formData.company_id || null,
+          company_id: isEmployeeTransfer ? null : creditTarget.company_id || formData.company_id || null,
           employee_id: creditTarget.employee_id || null,
           description: `${formData.description} | Journal CR`,
         };
