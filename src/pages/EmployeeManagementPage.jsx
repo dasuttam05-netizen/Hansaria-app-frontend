@@ -10,7 +10,7 @@ const PERMISSION_GROUPS = [
     items: [
       { key: "inward_access", label: "Inward", permissions: ["inward.view", "inward.create", "inward.edit", "inward.delete"] },
       { key: "outward_access", label: "Outward", permissions: ["outward.view", "outward.create", "outward.edit", "outward.delete"] },
-      { keay: "adjustment_access", label: "Outward Adjustment", permissions: ["adjustment.manage"] },
+      { key: "adjustment_access", label: "Outward Adjustment", permissions: ["adjustment.manage"] },
       { key: "settlement_access", label: "Settlement", permissions: ["settlement.view"] },
       { key: "expense_access", label: "Expense Entry", permissions: ["expense.entry", "expense.create", "expense.edit", "expense.delete"] },
       { key: "expense_posted_inward_access", label: "Expense to Inward Posted", permissions: ["expense.postedInward"] },
@@ -115,11 +115,15 @@ const createRoleForm = () => ({
 // Normalize data from backend - convert _id to id if needed
 const normalizeData = (data) => {
   if (!data) return null;
+  const id = data.id ?? data._id;
   return {
     ...data,
-    id: data.id || data._id,
+    id,
   };
 };
+
+const employeeRecordId = (employee) =>
+  employee?.id ?? employee?._id ?? "";
 
 const normalizeArray = (arr) => {
   if (!Array.isArray(arr)) return [];
@@ -365,8 +369,8 @@ export default function EmployeeManagementPage() {
   };
 
   const handleEditEmployee = (employee) => {
-    // Validate employee object and ID
-    if (!employee || !employee.id) {
+    const recordId = employeeRecordId(employee);
+    if (!employee || recordId === "" || recordId == null) {
       alert("Invalid employee data. Cannot edit.");
       console.error("Edit attempted with invalid employee:", employee);
       return;
@@ -384,7 +388,7 @@ export default function EmployeeManagementPage() {
   .filter(
     (item) =>
       String(item.employee_id) ===
-      String(employee.id || employee._id)
+      String(recordId)
   )
   .map((item) =>
     String(item._id || item.id)
@@ -402,7 +406,7 @@ export default function EmployeeManagementPage() {
       assigned_warehouse_ids: assignedWarehouseIds,
     });
     setEmployeeToggles(togglesFromPermissions(employee.permissions || []));
-    setEditId(employee.id);
+    setEditId(String(recordId));
     setShowEmployeeForm(true);
   };
 
@@ -478,7 +482,7 @@ export default function EmployeeManagementPage() {
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
           <thead>
             <tr style={{ background: "#0f766e", color: "#fff" }}>
-              <th style={thStyle}>ID</th>
+              <th style={thStyle}>Emp. code / Record ID</th>
               <th style={thStyle}>Name</th>
               <th style={thStyle}>Username</th>
               <th style={thStyle}>Role</th>
@@ -503,8 +507,15 @@ export default function EmployeeManagementPage() {
                 (Array.isArray(employee?.permissions) && employee.permissions.includes("all"));
               const canEditThisEmployee = canEditEmployee && (isAdminUser || !employeeIsAdmin);
               return (
-                <tr key={employee.id} style={{ background: index % 2 === 0 ? "#fff" : "#f8fafc" }}>
-                  <td style={tdStyle}>{employee.id}</td>
+                <tr key={String(employeeRecordId(employee))} style={{ background: index % 2 === 0 ? "#fff" : "#f8fafc" }}>
+                  <td style={tdStyle}>
+                    <div style={{ fontWeight: 700 }}>
+                      {(employee.employee_id && String(employee.employee_id).trim()) || "—"}
+                    </div>
+                    <div style={{ fontSize: 11, color: "#64748b", wordBreak: "break-all", marginTop: 4 }}>
+                      {String(employeeRecordId(employee))}
+                    </div>
+                  </td>
                   <td style={tdStyle}>{employee.name}</td>
                   <td style={tdStyle}>{employee.username}</td>
                   <td style={tdStyle}>{employee.role || "-"}</td>
@@ -521,7 +532,9 @@ export default function EmployeeManagementPage() {
                   <td style={tdStyle}>{Array.isArray(employee.permissions) ? employee.permissions.join(", ") : "-"}</td>
                   <td style={tdStyle}>
                     {canEditThisEmployee ? <button type="button" onClick={() => handleEditEmployee(employee)} style={miniBlue}>Edit</button> : null}
-                    {canDeleteEmployee && employee.id ? <button type="button" onClick={() => handleDeleteEmployee(employee.id)} style={miniRed}>Delete</button> : null}
+                    {canDeleteEmployee && employeeRecordId(employee) ? (
+                      <button type="button" onClick={() => handleDeleteEmployee(String(employeeRecordId(employee)))} style={miniRed}>Delete</button>
+                    ) : null}
                   </td>
                 </tr>
               );
