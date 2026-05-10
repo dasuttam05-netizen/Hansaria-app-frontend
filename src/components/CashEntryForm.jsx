@@ -235,6 +235,11 @@ export default function CashEntryForm({
     if (mode === "receipt") setFieldValue("entry_type", "income");
     if (mode === "payment") setFieldValue("entry_type", "expense");
     if (mode === "journal") setFieldValue("entry_type", "journal");
+    if (mode !== "journal") {
+      setFieldValue("journal_transfer_kind", "");
+      setFieldValue("journal_debit_name", "");
+      setFieldValue("journal_credit_name", "");
+    }
   };
   const handleEmployeeTransferMode = () => {
     setFieldValue("transaction_mode", "journal");
