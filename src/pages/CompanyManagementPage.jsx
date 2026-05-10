@@ -148,7 +148,7 @@ export default function CompanyManagementPage() {
                       <td style={td}>{comp.name || "-"}</td>
                       <td style={td}>{comp.address || "-"}</td>
                       <td style={td}>{comp.mobile || "-"}</td>
-                      <td style={td}>{openingBalance.toFixed(2)} {openingType}</td>
+                      <td style={td}>{openingBalance === 0 ? "-" : `${openingBalance.toFixed(2)} ${openingType}`}</td>
                       <td style={td}>
                         <button type="button" onClick={() => handleEdit(comp)} style={{ ...mini, background: "#2563eb" }}>Edit</button>{" "}
                         <button type="button" onClick={() => handleDelete(comp._id)} style={{ ...mini, background: "#dc2626" }}>Delete</button>
