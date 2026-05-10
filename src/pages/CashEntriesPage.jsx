@@ -156,8 +156,8 @@ export default function CashEntriesPage() {
       } else if (isJournal) {
         const parseJournalName = (value) => {
           const [kind, rawId] = String(value || "").split(":");
-          const id = Number(rawId);
-          if (!Number.isFinite(id) || id <= 0) return { company_id: null, employee_id: null };
+          const id = String(rawId || "").trim();
+          if (!id) return { company_id: null, employee_id: null };
           if (kind === "party") return { company_id: id, employee_id: null };
           if (kind === "employee") return { company_id: null, employee_id: id };
           return { company_id: null, employee_id: null };
@@ -166,7 +166,7 @@ export default function CashEntriesPage() {
         const creditTarget = parseJournalName(formData.journal_credit_name);
         const isEmployeeTransfer = formData.journal_transfer_kind === "employee_to_employee";
         if (isEmployeeTransfer && (!debitTarget.employee_id || !creditTarget.employee_id)) {
-          alert("Employee to Employee transfer er jonno duijon employee select korte hobe");
+          alert("Please select both debit and credit employees for an Employee to Employee transfer.");
           setFormLoading(false);
           return;
         }
