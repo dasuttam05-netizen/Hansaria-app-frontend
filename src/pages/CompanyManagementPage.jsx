@@ -1,6 +1,8 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 
+const API_URL = "/api/companies";
+
 const emptyForm = () => ({
   name: "",
   address: "",
@@ -10,136 +12,83 @@ const emptyForm = () => ({
 });
 
 export default function CompanyManagementPage() {
-
   const [companies, setCompanies] = useState([]);
-
   const [showForm, setShowForm] = useState(false);
-
-  const [formData, setFormData] =
-    useState(emptyForm());
-
-  const [editId, setEditId] =
-    useState(null);
-
-  const API_URL = "/api/companies";
-
+  const [formData, setFormData] = useState(emptyForm());
+  const [editId, setEditId] = useState(null);
 
   // ================= FETCH =================
   const fetchCompanies = async () => {
-
     try {
+      const res = await axios.get(API_URL);
 
-      const res =
-        await axios.get(API_URL);
+      const normalized = Array.isArray(res.data)
+        ? res.data.map((item) => ({
+            ...item,
+            id: item._id || item.id,
+          }))
+        : [];
 
-      if (Array.isArray(res.data)) {
-
-        setCompanies(res.data);
-
-      } else {
-
-        setCompanies([]);
-      }
+      setCompanies(normalized);
 
     } catch (err) {
-
       console.error(err);
-
-      alert(
-        "Failed to fetch companies"
-      );
+      alert("Failed to fetch companies");
     }
   };
-
 
   useEffect(() => {
     fetchCompanies();
   }, []);
 
-
-  // ================= INPUT CHANGE =================
+  // ================= INPUT =================
   const handleChange = (e) => {
+    const { name, value } = e.target;
 
     setFormData((prev) => ({
-
       ...prev,
-
-      [e.target.name]:
-        e.target.value,
+      [name]: value,
     }));
   };
 
-
   // ================= RESET =================
   const resetForm = () => {
-
     setFormData(emptyForm());
-
     setEditId(null);
-
     setShowForm(false);
   };
 
-
   // ================= SUBMIT =================
   const handleSubmit = async (e) => {
-
     e.preventDefault();
 
-    if (
-      !formData.name ||
-      !formData.mobile
-    ) {
-
-      alert(
-        "Company Name and Mobile No are required"
-      );
-
+    if (!formData.name || !formData.mobile) {
+      alert("Company Name and Mobile required");
       return;
     }
 
+    const payload = {
+      ...formData,
+      opening_balance: Number(
+        formData.opening_balance || 0
+      ),
+    };
+
     try {
-
-      // ===== UPDATE =====
       if (editId) {
-
         await axios.put(
           `${API_URL}/${editId}`,
-          {
-
-            ...formData,
-
-            opening_balance:
-              Number(
-                formData.opening_balance || 0
-              ),
-          }
+          payload
         );
 
-        alert(
-          "Company updated successfully"
-        );
-      }
-
-      // ===== ADD =====
-      else {
-
+        alert("Company updated");
+      } else {
         await axios.post(
           API_URL,
-          {
-
-            ...formData,
-
-            opening_balance:
-              Number(
-                formData.opening_balance || 0
-              ),
-          }
+          payload
         );
 
-        alert(
-          "Company added successfully"
-        );
+        alert("Company added");
       }
 
       resetForm();
@@ -147,177 +96,113 @@ export default function CompanyManagementPage() {
       fetchCompanies();
 
     } catch (err) {
-
       console.error(err);
 
       alert(
         err?.response?.data?.error ||
-        "Error saving company"
+          "Error saving company"
       );
     }
   };
 
-
   // ================= EDIT =================
   const handleEdit = (comp) => {
-
     setFormData({
-
-      name:
-        comp.name || "",
-
-      address:
-        comp.address || "",
-
-      mobile:
-        comp.mobile || "",
-
-      opening_balance:
-        String(
-          comp.opening_balance || 0
-        ),
-
+      name: comp.name || "",
+      address: comp.address || "",
+      mobile: comp.mobile || "",
+      opening_balance: String(
+        comp.opening_balance || 0
+      ),
       opening_balance_type:
-        comp.opening_balance_type ||
-        "dr",
+        comp.opening_balance_type || "dr",
     });
 
-    setEditId(
-      comp._id || comp.id
-    );
+    setEditId(comp.id);
 
     setShowForm(true);
   };
 
-
   // ================= DELETE =================
   const handleDelete = async (id) => {
-
-    const confirmDelete =
-      window.confirm(
-        "Are you sure you want to delete this company?"
-      );
-
-    if (!confirmDelete) return;
+    if (!window.confirm("Delete company?")) {
+      return;
+    }
 
     try {
-
       await axios.delete(
         `${API_URL}/${id}`
-      );
-
-      alert(
-        "Company deleted successfully"
       );
 
       fetchCompanies();
 
     } catch (err) {
-
       console.error(err);
 
       alert(
         err?.response?.data?.error ||
-        "Error deleting company"
+          "Delete failed"
       );
     }
   };
 
-
   return (
-
-    <div
-      style={{
-        fontFamily:
-          "Segoe UI, Arial, sans-serif",
-
-        padding: "10px",
-      }}
-    >
-
-      {/* ================= FORM ================= */}
+    <div style={pageStyle}>
       {showForm ? (
-
         <div style={card}>
-
-          <div style={headerRow}>
-
-            <h2 style={titleStyle}>
+          <div style={topBar}>
+            <h2 style={title}>
               {editId
                 ? "Edit Company"
                 : "Add Company"}
             </h2>
 
             <button
-              type="button"
               onClick={resetForm}
               style={btnGray}
             >
-              Back To List
+              Back
             </button>
-
           </div>
 
           <form onSubmit={handleSubmit}>
-
             <div style={formGrid}>
-
-              {/* COMPANY NAME */}
               <Field label="Company Name">
-
                 <input
-                  type="text"
                   name="name"
                   value={formData.name}
                   onChange={handleChange}
-                  placeholder="Company Name"
-                  style={inp}
+                  style={input}
                 />
-
               </Field>
 
-
-              {/* MOBILE */}
               <Field label="Mobile">
-
                 <input
-                  type="text"
                   name="mobile"
                   value={formData.mobile}
                   onChange={handleChange}
-                  placeholder="Mobile Number"
-                  style={inp}
+                  style={input}
                 />
-
               </Field>
 
-
-              {/* OPENING BALANCE */}
               <Field label="Opening Balance">
-
                 <input
                   type="number"
-                  step="0.01"
                   name="opening_balance"
                   value={formData.opening_balance}
                   onChange={handleChange}
-                  placeholder="0.00"
-                  style={inp}
+                  style={input}
                 />
-
               </Field>
 
-
-              {/* BALANCE TYPE */}
               <Field label="Balance Type">
-
                 <select
                   name="opening_balance_type"
                   value={
                     formData.opening_balance_type
                   }
                   onChange={handleChange}
-                  style={inp}
+                  style={input}
                 >
                   <option value="dr">
                     DR
@@ -327,51 +212,33 @@ export default function CompanyManagementPage() {
                     CR
                   </option>
                 </select>
-
               </Field>
 
-
-              {/* ADDRESS */}
               <div
                 style={{
-                  gridColumn:
-                    "1 / -1",
+                  gridColumn: "1 / -1",
                 }}
               >
-
                 <Field label="Address">
-
                   <textarea
                     name="address"
                     value={formData.address}
                     onChange={handleChange}
                     rows={3}
-                    style={{
-                      ...inp,
-                      resize:
-                        "vertical",
-                      minHeight:
-                        "80px",
-                    }}
+                    style={input}
                   />
-
                 </Field>
-
               </div>
-
             </div>
 
-
-            {/* BUTTONS */}
             <div style={actionRow}>
-
               <button
                 type="submit"
                 style={btnPrimary}
               >
                 {editId
-                  ? "Update Company"
-                  : "Save Company"}
+                  ? "Update"
+                  : "Save"}
               </button>
 
               <button
@@ -381,60 +248,36 @@ export default function CompanyManagementPage() {
               >
                 Cancel
               </button>
-
             </div>
-
           </form>
-
         </div>
-
       ) : (
-
         <>
-
-          {/* ================= HEADER ================= */}
           <div style={topBar}>
-
-            <h2 style={titleStyle}>
+            <h2 style={title}>
               Company Management
             </h2>
 
             <button
-              type="button"
-              onClick={() => {
-
-                resetForm();
-
-                setShowForm(true);
-              }}
-              style={{
-                ...btnPrimary,
-                background:
-                  "#0f766e",
-              }}
+              onClick={() =>
+                setShowForm(true)
+              }
+              style={btnPrimary}
             >
               Add Company
             </button>
-
           </div>
 
-
-          {/* ================= TABLE ================= */}
           <div style={tableCard}>
-
             <table
               style={{
                 width: "100%",
                 borderCollapse:
                   "collapse",
-                fontSize: "13px",
               }}
             >
-
               <thead>
-
-                <tr style={theadRow}>
-
+                <tr style={thead}>
                   <th style={th}>
                     Company ID
                   </th>
@@ -458,395 +301,217 @@ export default function CompanyManagementPage() {
                   <th style={th}>
                     Actions
                   </th>
-
                 </tr>
-
               </thead>
 
-
               <tbody>
-
                 {companies.length > 0 ? (
-
                   companies.map(
                     (
                       comp,
                       index
-                    ) => {
+                    ) => (
+                      <tr
+                        key={comp.id}
+                        style={{
+                          background:
+                            index % 2 === 0
+                              ? "#fff"
+                              : "#f8fafc",
+                        }}
+                      >
+                        <td style={td}>
+                          {comp.id}
+                        </td>
 
-                      const mongoId =
-                        comp._id ||
-                        comp.id;
+                        <td style={td}>
+                          {comp.name}
+                        </td>
 
-                      return (
+                        <td style={td}>
+                          {comp.address}
+                        </td>
 
-                        <tr
-                          key={mongoId}
-                          style={{
-                            background:
-                              index % 2 === 0
-                                ? "#fff"
-                                : "#f8fafc",
-                          }}
-                        >
+                        <td style={td}>
+                          {comp.mobile}
+                        </td>
 
-                          {/* COMPANY ID */}
-                          <td style={td}>
-                            {comp.company_id ||
-                              "-"}
-                          </td>
+                        <td style={td}>
+                          ₹
+                          {Number(
+                            comp.opening_balance || 0
+                          ).toFixed(2)}{" "}
+                          {String(
+                            comp.opening_balance_type || "dr"
+                          ).toUpperCase()}
+                        </td>
 
+                        <td style={td}>
+                          <button
+                            onClick={() =>
+                              handleEdit(comp)
+                            }
+                            style={editBtn}
+                          >
+                            Edit
+                          </button>
 
-                          {/* COMPANY NAME */}
-                          <td style={td}>
-                            {comp.name ||
-                              "-"}
-                          </td>
-
-
-                          {/* ADDRESS */}
-                          <td style={td}>
-                            {comp.address ||
-                              "-"}
-                          </td>
-
-
-                          {/* MOBILE */}
-                          <td style={td}>
-                            {comp.mobile ||
-                              "-"}
-                          </td>
-
-
-                          {/* OPENING BALANCE */}
-                          <td style={td}>
-
-                            ₹
-                            {Number(
-                              comp.opening_balance || 0
-                            ).toFixed(2)}{" "}
-
-                            {String(
-                              comp.opening_balance_type || "dr"
-                            ).toUpperCase()}
-
-                          </td>
-
-
-                          {/* ACTIONS */}
-                          <td style={td}>
-
-                            <div
-                              style={{
-                                display:
-                                  "flex",
-                                gap: "6px",
-                                flexWrap:
-                                  "wrap",
-                              }}
-                            >
-
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  handleEdit(comp)
-                                }
-                                style={{
-                                  ...miniBtn,
-                                  background:
-                                    "#2563eb",
-                                }}
-                              >
-                                Edit
-                              </button>
-
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  handleDelete(
-                                    mongoId
-                                  )
-                                }
-                                style={{
-                                  ...miniBtn,
-                                  background:
-                                    "#dc2626",
-                                }}
-                              >
-                                Delete
-                              </button>
-
-                            </div>
-
-                          </td>
-
-                        </tr>
-                      );
-                    }
+                          <button
+                            onClick={() =>
+                              handleDelete(
+                                comp.id
+                              )
+                            }
+                            style={deleteBtn}
+                          >
+                            Delete
+                          </button>
+                        </td>
+                      </tr>
+                    )
                   )
-
                 ) : (
-
                   <tr>
-
                     <td
                       colSpan={6}
-                      style={{
-                        ...td,
-                        textAlign:
-                          "center",
-                        padding:
-                          "20px",
-                      }}
+                      style={td}
                     >
                       No companies found
                     </td>
-
                   </tr>
                 )}
-
               </tbody>
-
             </table>
-
           </div>
-
         </>
       )}
-
     </div>
   );
 }
 
-
-// ================= FIELD =================
 function Field({
   label,
   children,
 }) {
-
   return (
-
     <div>
-
-      <label style={lbl}>
+      <div style={labelStyle}>
         {label}
-      </label>
+      </div>
 
       {children}
-
     </div>
   );
 }
 
-
-// ================= STYLES =================
-const titleStyle = {
-
-  margin: 0,
-
-  fontSize: "20px",
-
-  color: "#0f172a",
-
-  fontWeight: "700",
+const pageStyle = {
+  padding: 14,
+  fontFamily:
+    "Segoe UI, sans-serif",
 };
 
 const card = {
-
   background: "#fff",
-
   border:
     "1px solid #e2e8f0",
-
-  borderRadius: "14px",
-
-  padding: "20px",
-
-  maxWidth: "1000px",
-
-  margin: "0 auto",
-
-  boxShadow:
-    "0 4px 14px rgba(15,23,42,0.06)",
+  borderRadius: 12,
+  padding: 20,
 };
 
 const topBar = {
-
   display: "flex",
-
   justifyContent:
     "space-between",
-
   alignItems: "center",
-
-  marginBottom: "15px",
-
-  gap: "10px",
-
-  flexWrap: "wrap",
+  marginBottom: 16,
 };
 
-const headerRow = {
-
-  display: "flex",
-
-  justifyContent:
-    "space-between",
-
-  alignItems: "center",
-
-  marginBottom: "20px",
-
-  gap: "10px",
-
-  flexWrap: "wrap",
+const title = {
+  margin: 0,
 };
 
 const formGrid = {
-
   display: "grid",
-
   gridTemplateColumns:
-    "repeat(auto-fit, minmax(220px, 1fr))",
+    "repeat(auto-fit,minmax(220px,1fr))",
+  gap: 16,
+};
 
-  gap: "16px",
+const input = {
+  width: "100%",
+  padding: 10,
+  border:
+    "1px solid #cbd5e1",
+  borderRadius: 8,
+};
+
+const labelStyle = {
+  marginBottom: 6,
+  fontWeight: 600,
 };
 
 const actionRow = {
-
   display: "flex",
-
-  gap: "10px",
-
-  marginTop: "20px",
-
-  flexWrap: "wrap",
-};
-
-const tableCard = {
-
-  overflowX: "auto",
-
-  border:
-    "1px solid #e2e8f0",
-
-  borderRadius: "12px",
-
-  background: "#fff",
-};
-
-const theadRow = {
-
-  background: "#0f766e",
-
-  color: "#fff",
-};
-
-const inp = {
-
-  width: "100%",
-
-  padding: "10px 12px",
-
-  borderRadius: "8px",
-
-  border:
-    "1px solid #cbd5e1",
-
-  fontSize: "14px",
-
-  boxSizing:
-    "border-box",
-};
-
-const lbl = {
-
-  display: "block",
-
-  marginBottom: "6px",
-
-  fontWeight: "600",
-
-  fontSize: "13px",
-
-  color: "#334155",
+  gap: 10,
+  marginTop: 20,
 };
 
 const btnPrimary = {
-
-  background: "#2563eb",
-
+  background: "#0f766e",
   color: "#fff",
-
   border: "none",
-
-  padding: "10px 18px",
-
-  borderRadius: "8px",
-
+  padding: "10px 16px",
+  borderRadius: 8,
   cursor: "pointer",
-
-  fontWeight: "600",
-
-  fontSize: "14px",
 };
 
 const btnGray = {
-
   background: "#64748b",
-
   color: "#fff",
-
   border: "none",
-
-  padding: "10px 18px",
-
-  borderRadius: "8px",
-
+  padding: "10px 16px",
+  borderRadius: 8,
   cursor: "pointer",
+};
 
-  fontWeight: "600",
+const tableCard = {
+  overflowX: "auto",
+  border:
+    "1px solid #e2e8f0",
+  borderRadius: 12,
+};
 
-  fontSize: "14px",
+const thead = {
+  background: "#0f766e",
+  color: "#fff",
 };
 
 const th = {
-
-  padding: "12px 10px",
-
+  padding: 12,
   textAlign: "left",
-
-  borderBottom:
-    "1px solid #0d5c56",
-
-  whiteSpace:
-    "nowrap",
 };
 
 const td = {
-
-  padding: "10px",
-
+  padding: 10,
   borderBottom:
     "1px solid #e2e8f0",
-
-  verticalAlign: "top",
 };
 
-const miniBtn = {
-
-  border: "none",
-
+const editBtn = {
+  background: "#2563eb",
   color: "#fff",
-
+  border: "none",
   padding: "6px 10px",
-
-  borderRadius: "6px",
-
+  borderRadius: 6,
+  marginRight: 6,
   cursor: "pointer",
+};
 
-  fontSize: "12px",
-
-  fontWeight: "600",
+const deleteBtn = {
+  background: "#dc2626",
+  color: "#fff",
+  border: "none",
+  padding: "6px 10px",
+  borderRadius: 6,
+  cursor: "pointer",
 };
