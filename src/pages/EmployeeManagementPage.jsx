@@ -395,6 +395,7 @@ export default function EmployeeManagementPage() {
     String(item._id || item.id)
   );
     setFormData({
+      employee_id: employee.employee_id || "",
       name: employee.name || "",
       address: employee.address || "",
       username: employee.username || "",
@@ -591,6 +592,23 @@ return (
         <Modal onClose={resetEmployeeForm} title={editId ? "Edit User" : "Create User"}>
           <form onSubmit={handleSubmitEmployee}>
             <div style={formGrid}>
+        <Field label="Employee Code">
+    <input
+      name="employee_id"
+      value={formData.employee_id}
+      onChange={handleEmployeeChange}
+      style={inputStyle}
+    />
+  </Field>
+
+  <Field label="Name">
+    <input
+      name="name"
+      value={formData.name}
+      onChange={handleEmployeeChange}
+      style={inputStyle}
+    />
+  </Field>
               <Field label="Name"><input name="name" value={formData.name} onChange={handleEmployeeChange} style={inputStyle} /></Field>
               <Field label="Username"><input name="username" value={formData.username} onChange={handleEmployeeChange} style={inputStyle} /></Field>
               <Field label="Password"><input type="password" name="password" value={formData.password} onChange={handleEmployeeChange} style={inputStyle} /></Field>
@@ -722,6 +740,23 @@ return (
             <div style={{ ...securityCard, marginTop: 16 }}>
               <form onSubmit={handleSubmitRole}>
                 <div style={formGrid}>
+                  <Field label="Employee Code">
+    <input
+      name="employee_id"
+      value={formData.employee_id}
+      onChange={handleEmployeeChange}
+      style={inputStyle}
+    />
+  </Field>
+
+  <Field label="Name">
+    <input
+      name="name"
+      value={formData.name}
+      onChange={handleEmployeeChange}
+      style={inputStyle}
+    />
+  </Field>
                   <Field label="Role Name"><input value={roleForm.name} onChange={(e) => setRoleForm((prev) => ({ ...prev, name: e.target.value }))} style={inputStyle} /></Field>
                   <label style={{ ...checkRow, alignSelf: "end", paddingBottom: 10 }}>
                     <input type="checkbox" checked={roleForm.is_admin} onChange={(e) => setRoleForm((prev) => ({ ...prev, is_admin: e.target.checked }))} />
