@@ -79,7 +79,7 @@ const EmployeeCashBookPage = () => {
   const [filters, setFilters] = useState({
     warehouse_id: "",
     employee_id: "",
-    fund_source: "employee_cash",
+    fund_source: "all",
     start_date: "",
     end_date: "",
   });
@@ -137,10 +137,10 @@ const EmployeeCashBookPage = () => {
   }, [fetchData]);
 
   const filteredRows = useMemo(() => {
-    const selectedFundSource = String(appliedFilters.fund_source || "employee_cash");
+    const selectedFundSource = String(appliedFilters.fund_source || "all");
     return entries
       .filter((e) => e.employee_id)
-      .filter((e) => selectedFundSource === "all" ? true : String(e.fund_source || "") === selectedFundSource)
+      .filter((e) => selectedFundSource === "all" ? true : String(e.fund_source || "main_cash") === selectedFundSource)
       .filter((e) => e.status === (showDeleted ? "cancelled" : "posted"))
       .filter((e) => !appliedFilters.warehouse_id || String(e.warehouse_id || "") === String(appliedFilters.warehouse_id))
       .filter((e) => !appliedFilters.employee_id || String(e.employee_id || "") === String(appliedFilters.employee_id))
@@ -161,10 +161,10 @@ const EmployeeCashBookPage = () => {
 
     if (!appliedFilters.start_date) return masterOpening;
     const from = new Date(appliedFilters.start_date);
-    const selectedFundSource = String(appliedFilters.fund_source || "employee_cash");
+    const selectedFundSource = String(appliedFilters.fund_source || "all");
     const entryOpening = entries
       .filter((e) => e.employee_id)
-      .filter((e) => selectedFundSource === "all" ? true : String(e.fund_source || "") === selectedFundSource)
+      .filter((e) => selectedFundSource === "all" ? true : String(e.fund_source || "main_cash") === selectedFundSource)
       .filter((e) => e.status === "posted")
       .filter((e) => !appliedFilters.warehouse_id || String(e.warehouse_id || "") === String(appliedFilters.warehouse_id))
       .filter((e) => !appliedFilters.employee_id || String(e.employee_id || "") === String(appliedFilters.employee_id))
@@ -316,7 +316,7 @@ const EmployeeCashBookPage = () => {
     const reset = {
       warehouse_id: "",
       employee_id: "",
-      fund_source: "employee_cash",
+      fund_source: "all",
       start_date: "",
       end_date: "",
     };
@@ -422,10 +422,10 @@ const EmployeeCashBookPage = () => {
           <div>
             <label style={label}>Fund Source</label>
             <select value={filters.fund_source} onChange={(e) => setFilters((p) => ({ ...p, fund_source: e.target.value }))} style={input}>
+              <option value="all">All Sources</option>
               <option value="employee_cash">Employee Cash</option>
               <option value="main_cash">Main Cash</option>
               <option value="party_cash">Party Cash</option>
-              <option value="all">All Sources</option>
             </select>
           </div>
           <div>
