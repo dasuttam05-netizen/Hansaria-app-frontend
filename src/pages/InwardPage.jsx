@@ -77,11 +77,17 @@ export default function InwardPage() {
         (w) => Number(w.employee_id) === employeeId
       );
 
+      const currentWarehouseIsValid = assignedWarehouses.some(
+        (w) => String(w.id) === formData.warehouse_id
+      );
+
       setFormData((prev) => ({
         ...prev,
         location_id: emp?.location_id || "",
         warehouse_id:
-          assignedWarehouses.length > 0
+          currentWarehouseIsValid
+            ? prev.warehouse_id
+            : assignedWarehouses.length > 0
             ? String(assignedWarehouses[0].id)
             : "",
       }));
@@ -191,7 +197,7 @@ export default function InwardPage() {
       date: row.date || "",
       employee_id: row.employee_id || "",
       location_id: "",
-      warehouse_id: "",
+      warehouse_id: row.warehouse_id || "",
       product_id: row.product_id || "",
       company_id: row.company_id || "",
       company_account_id: row.company_account_id || "",
