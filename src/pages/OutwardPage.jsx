@@ -111,7 +111,7 @@ export default function OutwardPage() {
             : "",
       }));
     }
-  }, [formData.employee_id, employees, warehouses]);
+  }, [formData.employee_id, employees, warehouses, editData]);
 
   useEffect(() => {
     const loadWarehouseStock = async () => {
@@ -768,7 +768,7 @@ Consignee: ${row.consignee_name}`;
                     style={inp}
                   >
                     <option value="">Select Account</option>
-                    {companyAccounts
+                    {formData.company_id && companyAccounts
                       .filter((acc) => acc.company_id === Number(formData.company_id))
                       .map((acc) => (
                         <option key={acc.id} value={acc.id}>
