@@ -86,7 +86,7 @@ export default function InwardPage() {
             : "",
       }));
     }
-  }, [formData.employee_id, employees, warehouses]);
+  }, [formData.employee_id, employees, warehouses, editData]);
 
   const fetchDropdowns = async () => {
     try {
@@ -595,7 +595,7 @@ Weight: ${row.weight}`;
                     style={inp}
                   >
                     <option value="">Select Account</option>
-                    {companyAccounts
+                    {formData.company_id && companyAccounts
                       .filter((acc) => acc.company_id === Number(formData.company_id))
                       .map((acc) => (
                         <option key={acc.id} value={acc.id}>
