@@ -190,8 +190,8 @@ export default function InwardPage() {
     setFormData({
       date: row.date || "",
       employee_id: row.employee_id || "",
-      location_id: row.location_id || "",
-      warehouse_id: row.warehouse_id || "",
+      location_id: "",
+      warehouse_id: "",
       product_id: row.product_id || "",
       company_id: row.company_id || "",
       company_account_id: row.company_account_id || "",
