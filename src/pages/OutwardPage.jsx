@@ -33,6 +33,15 @@ function Field({ label, children }) {
   );
 }
 
+const getRecordId = (record) => {
+  if (!record) return "";
+  if (typeof record === "string" || typeof record === "number") return String(record);
+  return String(record.id || record._id || "");
+};
+
+const sameId = (left, right) =>
+  String(left || "") !== "" && String(left || "") === String(right || "");
+
 export default function OutwardPage() {
   const API_BASE = "/api";
   const { user } = loadSession();
@@ -75,12 +84,13 @@ export default function OutwardPage() {
 
   const consigneesForBuyer = useMemo(() => {
     if (!formData.buyer_id) return [];
-    return consigneeNames.filter((c) => String(c.buyer_id || "") === String(formData.buyer_id));
+    return consigneeNames.filter((c) => sameId(getRecordId(c.buyer_id), formData.buyer_id));
   }, [formData.buyer_id, consigneeNames]);
   const canCreate = hasPermission(user, "outward.create");
   const canEdit = hasPermission(user, "outward.edit");
   const canDelete = hasPermission(user, "outward.delete");
   const canAdjust = hasPermission(user, "adjustment.manage");
+  const canViewEmployees = hasPermission(user, "employees.view");
   const canAccessPage =
     canCreate || canEdit || canDelete || canAdjust || hasPermission(user, "outward.view");
   const isSelfLoading = String(formData.self_loading || "No").trim().toLowerCase() === "yes";
@@ -96,10 +106,10 @@ export default function OutwardPage() {
 
   useEffect(() => {
     if (formData.employee_id) {
-      const employeeId = Number(formData.employee_id);
-      const emp = employees.find((e) => e.id === employeeId);
+      const employeeId = String(formData.employee_id);
+      const emp = employees.find((e) => sameId(getRecordId(e), employeeId));
       const assignedWarehouses = warehouses.filter(
-        (w) => Number(w.employee_id) === employeeId
+        (w) => sameId(getRecordId(w.employee_id), employeeId)
       );
 
       const currentWarehouseIsValid = assignedWarehouses.some(
@@ -108,7 +118,7 @@ export default function OutwardPage() {
 
       setFormData((prev) => ({
         ...prev,
-        location_id: emp?.location_id || "",
+        location_id: getRecordId(emp?.location_id),
         warehouse_id:
           currentWarehouseIsValid
             ? prev.warehouse_id
@@ -161,7 +171,13 @@ export default function OutwardPage() {
   const fetchDropdowns = async () => {
     try {
       const [empRes, locRes, whRes, prodRes, compRes, accRes, consigneeRes, buyerRes] = await Promise.all([
-        axios.get(`${API_BASE}/employees`),
+        canViewEmployees
+          ? axios.get(`${API_BASE}/employees`)
+          : Promise.resolve({
+              data: user
+                ? [{ id: getRecordId(user), name: user.name || user.username || "Current User", location_id: user.location_id }]
+                : [],
+            }),
         axios.get(`${API_BASE}/locations`),
         axios.get(`${API_BASE}/warehouses`),
         axios.get(`${API_BASE}/products`),
@@ -199,7 +215,7 @@ export default function OutwardPage() {
     const { name, value } = e.target;
 
     if (name === "buyer_id") {
-      const b = buyerNames.find((x) => String(x.id) === String(value));
+      const b = buyerNames.find((x) => sameId(getRecordId(x), value));
       setFormData((prev) => ({
         ...prev,
         buyer_id: value,
@@ -211,7 +227,7 @@ export default function OutwardPage() {
     }
 
     if (name === "consignee_id") {
-      const c = consigneeNames.find((x) => String(x.id) === String(value));
+      const c = consigneeNames.find((x) => sameId(getRecordId(x), value));
       setFormData((prev) => ({
         ...prev,
         consignee_id: value,
@@ -252,6 +268,7 @@ export default function OutwardPage() {
       buyer_name: "",
       consignee_id: "",
       consignee_name: "",
+      self_loading: "No",
     });
 
   const handleSubmit = async (e) => {
@@ -260,12 +277,12 @@ export default function OutwardPage() {
     try {
       const payload = {
         ...formData,
-        employee_id: Number(formData.employee_id) || null,
-        location_id: Number(formData.location_id) || null,
-        warehouse_id: Number(formData.warehouse_id) || null,
-        product_id: Number(formData.product_id) || null,
-        company_id: Number(formData.company_id) || null,
-        company_account_id: Number(formData.company_account_id) || null,
+        employee_id: formData.employee_id || null,
+        location_id: formData.location_id || null,
+        warehouse_id: formData.warehouse_id || null,
+        product_id: formData.product_id || null,
+        company_id: formData.company_id || null,
+        company_account_id: formData.company_account_id || null,
         lorry_no: formData.lorry_no || "",
         weight: Number(formData.weight) || 0,
         quantity: Number(formData.weight) || 0,
@@ -312,20 +329,20 @@ export default function OutwardPage() {
     setEditData(row);
     const bName = (row.buyer_name || "").trim();
     const cName = (row.consignee_name || "").trim();
-    const consigneeRow = consigneeNames.find((c) => (c.name || "").trim() === cName);
+      const consigneeRow = consigneeNames.find((c) => (c.name || "").trim() === cName);
     let buyer_id = "";
     let consignee_id = "";
     if (consigneeRow && consigneeRow.buyer_id) {
-      buyer_id = String(consigneeRow.buyer_id);
-      consignee_id = String(consigneeRow.id);
+      buyer_id = getRecordId(consigneeRow.buyer_id);
+      consignee_id = getRecordId(consigneeRow);
     } else {
       const buyerRow = buyerNames.find((b) => (b.name || "").trim() === bName);
       if (buyerRow) {
-        buyer_id = String(buyerRow.id);
+        buyer_id = getRecordId(buyerRow);
         const cg = consigneeNames.find(
-          (c) => (c.name || "").trim() === cName && String(c.buyer_id || "") === buyer_id
+          (c) => (c.name || "").trim() === cName && sameId(getRecordId(c.buyer_id), buyer_id)
         );
-        if (cg) consignee_id = String(cg.id);
+        if (cg) consignee_id = getRecordId(cg);
       }
     }
     setFormData({
@@ -715,7 +732,7 @@ Consignee: ${row.consignee_name}`;
                   <select name="employee_id" value={formData.employee_id} onChange={handleChange} required style={inp}>
                     <option value="">Select Employee</option>
                     {employees.map((e) => (
-                      <option key={e.id} value={e.id}>
+                      <option key={getRecordId(e)} value={getRecordId(e)}>
                         {e.name}
                       </option>
                     ))}
@@ -726,7 +743,7 @@ Consignee: ${row.consignee_name}`;
                   <select name="location_id" value={formData.location_id} disabled style={{ ...inp, background: "#f8fafc" }}>
                     <option value="">Location</option>
                     {locations.map((l) => (
-                      <option key={l.id} value={l.id}>
+                      <option key={getRecordId(l)} value={getRecordId(l)}>
                         {l.name}
                       </option>
                     ))}
@@ -737,7 +754,7 @@ Consignee: ${row.consignee_name}`;
                   <select name="warehouse_id" value={formData.warehouse_id} onChange={handleChange} disabled={isSelfLoading} style={{ ...inp, background: isSelfLoading ? "#f8fafc" : "#fff" }}>
                     <option value="">{isSelfLoading ? "Self Loading - Warehouse Not Required" : "Select Warehouse"}</option>
                     {warehouses.map((w) => (
-                      <option key={w.id} value={w.id}>
+                      <option key={getRecordId(w)} value={getRecordId(w)}>
                         {w.name}
                       </option>
                     ))}
@@ -748,7 +765,7 @@ Consignee: ${row.consignee_name}`;
                   <select name="product_id" value={formData.product_id} onChange={handleChange} style={inp}>
                     <option value="">Select Product</option>
                     {products.map((p) => (
-                      <option key={p.id} value={p.id}>
+                      <option key={getRecordId(p)} value={getRecordId(p)}>
                         {p.name}
                       </option>
                     ))}
@@ -759,7 +776,7 @@ Consignee: ${row.consignee_name}`;
                   <select name="company_id" value={formData.company_id} onChange={handleChange} style={inp}>
                     <option value="">Select Company</option>
                     {companies.map((c) => (
-                      <option key={c.id} value={c.id}>
+                      <option key={getRecordId(c)} value={getRecordId(c)}>
                         {c.name}
                       </option>
                     ))}
@@ -775,9 +792,9 @@ Consignee: ${row.consignee_name}`;
                   >
                     <option value="">Select Account</option>
                     {formData.company_id && companyAccounts
-                      .filter((acc) => acc.company_id === Number(formData.company_id))
+                      .filter((acc) => sameId(getRecordId(acc.company_id), formData.company_id))
                       .map((acc) => (
-                        <option key={acc.id} value={acc.id}>
+                        <option key={getRecordId(acc)} value={getRecordId(acc)}>
                           {acc.account_name}
                         </option>
                       ))}
@@ -843,7 +860,7 @@ Consignee: ${row.consignee_name}`;
                   <select name="buyer_id" value={formData.buyer_id} onChange={handleChange} style={inp}>
                     <option value="">Select buyer name</option>
                     {buyerNames.map((b) => (
-                      <option key={b.id} value={b.id}>
+                      <option key={getRecordId(b)} value={getRecordId(b)}>
                         {b.name}
                       </option>
                     ))}
@@ -865,7 +882,7 @@ Consignee: ${row.consignee_name}`;
                       {formData.buyer_id ? "Select consignee name" : "Select buyer first"}
                     </option>
                     {consigneesForBuyer.map((c) => (
-                      <option key={c.id} value={c.id}>
+                      <option key={getRecordId(c)} value={getRecordId(c)}>
                         {c.name}
                       </option>
                     ))}
