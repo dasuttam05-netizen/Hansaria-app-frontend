@@ -88,6 +88,13 @@ export default function DashboardPage() {
 
   const fetchData = async (currentUser) => {
     try {
+      const canLoadStockInsights = hasAnyPermission(currentUser, [
+        "report.partyStock",
+        "report.warehouseRentLedger",
+        "report.warehouseRentMonthEnd",
+        "warehouses.manage",
+      ]);
+
       const requests = [
         hasPermission(currentUser, "locations.manage")
           ? axios.get(`${API_BASE}/locations`)
@@ -113,16 +120,16 @@ export default function DashboardPage() {
         hasPermission(currentUser, "outward.manage")
           ? axios.get(`${API_BASE}/outward`)
           : Promise.resolve({ data: [] }),
-        hasPermission(currentUser, "dashboard.view")
+        canLoadStockInsights
           ? axios.get(`${API_BASE}/reports/party-stock`)
           : Promise.resolve({ data: { summary: [] } }),
-        hasPermission(currentUser, "dashboard.view")
+        canLoadStockInsights
           ? axios.get(`${API_BASE}/reports/warehouse-stock`)
           : Promise.resolve({ data: [] }),
-        hasPermission(currentUser, "dashboard.view")
+        canLoadStockInsights
           ? axios.get(`${API_BASE}/reports/total-stock`)
           : Promise.resolve({ data: { total: 0 } }),
-        hasPermission(currentUser, "dashboard.view")
+        canLoadStockInsights
           ? axios.get(`${API_BASE}/reports/warehouse-rent-month-end`, {
               params: { month: currentMonth },
             })
@@ -471,7 +478,7 @@ export default function DashboardPage() {
     },
     {
       title: "Names",
-      permission: ["outward.view", "outward.create", "outward.edit", "outward.delete", "expense.entry", "expense.create", "expense.view"],
+      permission: ["outward.view", "outward.create", "outward.edit", "outward.delete"],
       icon: <FaUserTag />,
       submenu: [
         {
@@ -481,7 +488,7 @@ export default function DashboardPage() {
         },
         {
           label: "Consignee Names",
-          permission: ["outward.view", "outward.create", "outward.edit", "outward.delete", "expense.entry", "expense.create", "expense.view"],
+          permission: ["outward.view", "outward.create", "outward.edit", "outward.delete"],
           action: () => setShowConsigneeNamesPopup(true),
         },
       ],
@@ -726,6 +733,24 @@ export default function DashboardPage() {
         : hasPermission(user, item.permission))
   );
 
+  const canViewResourceOverview = hasAnyPermission(user, [
+    "warehouses.manage",
+    "companies.manage",
+    "employees.view",
+    "locations.manage",
+    "inward.view",
+    "outward.view",
+  ]);
+
+  const canViewStockReport = hasAnyPermission(user, [
+    "report.partyStock",
+    "report.warehouseRentLedger",
+    "report.warehouseRentMonthEnd",
+    "warehouses.manage",
+  ]);
+
+  const canViewDashboardOverview = canViewResourceOverview || canViewStockReport;
+
   const settingsItems = [
     {
       label: "Profile Summary",
@@ -955,6 +980,7 @@ export default function DashboardPage() {
         </div>
 
         <div className="dashboard-content">
+          {canViewDashboardOverview ? (
           <section className="dashboard-panel hero-panel">
             <div>
               <span className="eyebrow">Dashboard</span>
@@ -976,7 +1002,17 @@ export default function DashboardPage() {
               </div>
             </div>
           </section>
+          ) : (
+          <section className="dashboard-panel hero-panel">
+            <div>
+              <span className="eyebrow">Workspace</span>
+              <h1>Expense Workspace</h1>
+              <p>You can use only the modules granted in your access list.</p>
+            </div>
+          </section>
+          )}
 
+          {canViewResourceOverview ? (
           <section className="dashboard-section">
             <div className="section-header">
               <div>
@@ -1016,7 +1052,9 @@ export default function DashboardPage() {
               ))}
             </div>
           </section>
+          ) : null}
 
+          {canViewStockReport ? (
           <section className="dashboard-section">
             <div className="section-header">
               <div>
@@ -1233,6 +1271,7 @@ export default function DashboardPage() {
               ) : null}
             </div>
           </section>
+          ) : null}
         </div>
       </main>
 
