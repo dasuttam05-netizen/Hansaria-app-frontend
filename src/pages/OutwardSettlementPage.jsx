@@ -25,6 +25,11 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
     return Number.isFinite(n) ? n : 0;
   };
 
+  const getLoadingTypeLabel = (sourceType) => {
+    const normalized = String(sourceType || "").trim().toLowerCase();
+    return normalized === "palti_lorry" ? "Palti Lorry" : "Warehouse Loading";
+  };
+
   const fetchSettlement = async () => {
     if (!outward?.id) {
       return;
@@ -299,6 +304,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
     <th style={tableHeaderStyle}>Company Name</th>
     <th style={tableHeaderStyle}>Lorry No</th>
     <th style={tableHeaderStyle}>Inward Voucher</th>
+    <th style={tableHeaderStyle}>Loading Type</th>
     <th style={tableHeaderStyle}>Settlement Weight</th>
     <th style={tableHeaderStyle}>Short Qnt</th>
     <th style={tableHeaderStyle}>S.Amount</th> {/* NEW */}
@@ -341,6 +347,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
           <td style={tableCellStyle}>{item.company_name || "-"}</td>
           <td style={tableCellStyle}>{item.lorry_no || "-"}</td>
           <td style={tableCellStyle}>{item.inward_voucher_no || "-"}</td>
+          <td style={tableCellStyle}>{getLoadingTypeLabel(item.source_type)}</td>
           <td style={tableCellStyle}>{num(item.settlement_weight).toFixed(2)}</td>
           <td style={tableCellStyle}>{shortQtyPerLine.toFixed(2)}</td>
           <td style={tableCellStyle}>{shortageAmount.toFixed(2)}</td> {/* NEW */}
@@ -355,7 +362,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
                 })
               ) : (
                 <tr>
-                  <td style={tableCellStyle} colSpan="12">No adjustment found for this outward.</td>
+                  <td style={tableCellStyle} colSpan="14">No adjustment found for this outward.</td>
                 </tr>
               )}
             </tbody>
@@ -583,7 +590,6 @@ const statBodyStyle = {
   textAlign: "center",
   background: "#dbeafe",
 };
-
 
 
 
