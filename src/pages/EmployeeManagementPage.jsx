@@ -100,7 +100,7 @@ const createDefaultFormData = () => ({
   password: "",
   location_id: "",
   role: "",
-  permissions: ["dashboard.view"],
+  permissions: [],
   opening_balance: "0",
   opening_balance_type: "dr",
   assigned_warehouse_ids: [],
@@ -108,7 +108,7 @@ const createDefaultFormData = () => ({
 
 const createRoleForm = () => ({
   name: "",
-  toggles: togglesFromPermissions(["dashboard.view"]),
+  toggles: togglesFromPermissions([]),
   is_admin: false,
 });
 
@@ -149,7 +149,7 @@ export default function EmployeeManagementPage() {
   const [showRoleManager, setShowRoleManager] = useState(false);
   const [showRoleEditor, setShowRoleEditor] = useState(false);
   const [formData, setFormData] = useState(createDefaultFormData());
-  const [employeeToggles, setEmployeeToggles] = useState(togglesFromPermissions(["dashboard.view"]));
+  const [employeeToggles, setEmployeeToggles] = useState(togglesFromPermissions([]));
   const [roleForm, setRoleForm] = useState(createRoleForm());
   const [editId, setEditId] = useState(null);
   const [editRoleId, setEditRoleId] = useState(null);
@@ -215,7 +215,7 @@ export default function EmployeeManagementPage() {
 
   const resetEmployeeForm = () => {
     setFormData(createDefaultFormData());
-    setEmployeeToggles(togglesFromPermissions(["dashboard.view"]));
+    setEmployeeToggles(togglesFromPermissions([]));
     setEditId(null);
     setShowEmployeeForm(false);
   };
