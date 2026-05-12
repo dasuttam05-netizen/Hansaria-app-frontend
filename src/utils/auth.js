@@ -80,8 +80,8 @@ const LEGACY_PERMISSION_MAP = {
   "outward.create": ["outward.manage"],
   "outward.edit": ["outward.manage"],
   "outward.delete": ["outward.manage"],
-  "expense.view": ["expense.manage"],
-  "expense.create": ["expense.manage"],
+  "expense.view": ["expense.manage", "expense.entry"],
+  "expense.create": ["expense.manage", "expense.entry"],
   "expense.edit": ["expense.manage"],
   "expense.delete": ["expense.manage"],
   "expense.entry": ["expense.view", "expense.manage"],
@@ -121,6 +121,37 @@ function expandPermissions(permissions = []) {
   return [...expanded];
 }
 
+function sanitizePermissionList(list = []) {
+  if (!Array.isArray(list)) return [];
+  return list
+    .map((item) => String(item || "").trim())
+    .filter(Boolean);
+}
+
+function parsePermissionInput(permissions) {
+  if (Array.isArray(permissions)) {
+    return sanitizePermissionList(permissions);
+  }
+
+  if (typeof permissions === "string") {
+    const raw = permissions.trim();
+    if (!raw) return [];
+
+    try {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) {
+        return sanitizePermissionList(parsed);
+      }
+    } catch (_err) {
+      // Fall back to comma-separated values.
+    }
+
+    return sanitizePermissionList(raw.split(","));
+  }
+
+  return null;
+}
+
 const TOKEN_KEY = "token";
 const USER_KEY = "authUser";
 
@@ -131,11 +162,9 @@ export function normalizePermissions(role = "staff", permissions = []) {
     return ["all"];
   }
 
-  if (Array.isArray(permissions) && permissions.length > 0) {
-    const safePermissions = permissions
-      .map((item) => String(item || "").trim())
-      .filter(Boolean);
-    return expandPermissions([...new Set(safePermissions)]);
+  const parsedPermissions = parsePermissionInput(permissions);
+  if (parsedPermissions !== null) {
+    return expandPermissions([...new Set(parsedPermissions)]);
   }
 
   return expandPermissions(ROLE_PERMISSION_PRESETS[normalizedRole] || ROLE_PERMISSION_PRESETS.staff);
