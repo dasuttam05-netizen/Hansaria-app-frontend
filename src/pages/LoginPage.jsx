@@ -4,7 +4,53 @@ import axios from "axios";
 
 import { useNavigate } from "react-router-dom";
 
-import { saveSession } from "../utils/auth";
+import { hasAnyPermission, hasPermission, saveSession } from "../utils/auth";
+
+function resolveLandingPath(user) {
+  if (hasPermission(user, "dashboard.view")) {
+    return "/dashboard";
+  }
+
+  if (
+    hasAnyPermission(user, [
+      "expense.entry",
+      "expense.view",
+      "expense.create",
+      "expense.edit",
+      "expense.delete",
+    ])
+  ) {
+    return "/expenses";
+  }
+
+  if (
+    hasAnyPermission(user, [
+      "inward.view",
+      "inward.create",
+      "inward.edit",
+      "inward.delete",
+    ])
+  ) {
+    return "/inward";
+  }
+
+  if (
+    hasAnyPermission(user, [
+      "outward.view",
+      "outward.create",
+      "outward.edit",
+      "outward.delete",
+    ])
+  ) {
+    return "/outward";
+  }
+
+  if (hasPermission(user, "report.inward")) {
+    return "/inward-report";
+  }
+
+  return "/dashboard";
+}
 
 export default function LoginPage() {
 
@@ -33,13 +79,13 @@ export default function LoginPage() {
             }
           );
 
-        saveSession(
+        const savedUser = saveSession(
           res.data.token,
           res.data.user
         );
 
         navigate(
-          "/dashboard"
+          resolveLandingPath(savedUser)
         );
 
       } catch (err) {
