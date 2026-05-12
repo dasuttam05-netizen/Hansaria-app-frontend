@@ -2,6 +2,23 @@ import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { formatDisplayDate } from "../utils/date";
 
+const BASE_FONT = "'Trebuchet MS', 'Segoe UI', Tahoma, sans-serif";
+const PALETTE = {
+  ink: "#0f172a",
+  muted: "#475569",
+  border: "#d5e0ea",
+  borderStrong: "#b8c8d8",
+  panel: "#ffffff",
+  header: "#0f766e",
+  headerDark: "#115e59",
+  headerSoft: "#e8f6f3",
+  rowAlt: "#f8fbff",
+  tile: "#eef4ff",
+  tileBorder: "#c8d7ee",
+  tileValue: "#0d3b7a",
+  divider: "#d4dee8",
+};
+
 export default function OutwardSettlementPage({ outward, onSaved }) {
   const API_BASE = "/api";
 
@@ -178,41 +195,62 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
   };
 
   const card = {
-    background: "#ffffff",
-    border: "1px solid #b8c4cf",
-    borderRadius: 4,
-    padding: 12,
-    boxShadow: "none",
+    background: PALETTE.panel,
+    border: `1px solid ${PALETTE.border}`,
+    borderRadius: 14,
+    padding: 16,
+    boxShadow: "0 10px 24px rgba(15, 23, 42, 0.06)",
   };
 
   const input = {
-    padding: "8px 10px",
-    border: "1px solid #aebdca",
-    borderRadius: 4,
+    padding: "10px 12px",
+    border: `1px solid ${PALETTE.border}`,
+    borderRadius: 10,
     fontSize: 13,
     width: "100%",
     background: "#ffffff",
-    color: "#000000",
+    color: PALETTE.ink,
+    fontFamily: BASE_FONT,
   };
 
   const label = {
     fontSize: 12,
-    color: "#000000",
-    marginBottom: 4,
+    color: PALETTE.muted,
+    marginBottom: 6,
     display: "block",
-    fontWeight: 600,
-    letterSpacing: "0.1px",
+    fontWeight: 700,
+    letterSpacing: "0.2px",
   };
 
   if (loading) {
-    return <div style={card}>Loading settlement...</div>;
+    return <div style={{ ...card, fontFamily: BASE_FONT, color: PALETTE.muted }}>Loading settlement...</div>;
   }
 
   return (
-    <div style={{ padding: 10, background: "#e9eef3", borderRadius: 4, border: "1px solid #c5d0da" }}>
+    <div
+      style={{
+        padding: 16,
+        background: "linear-gradient(180deg, #f8fbff 0%, #edf3f9 100%)",
+        borderRadius: 18,
+        border: `1px solid ${PALETTE.border}`,
+        fontFamily: BASE_FONT,
+      }}
+    >
       <div style={{ ...card, marginBottom: 10 }}>
-        <h2 style={{ margin: 0, color: "#000000", fontWeight: 700, fontSize: 20, letterSpacing: "0.2px", borderBottom: "1px solid #c6d2dc", paddingBottom: 8 }}>Outward Settlement</h2>
-        <div style={{ display: "grid", gap: 18, marginTop: 14 }}>
+        <h2
+          style={{
+            margin: 0,
+            color: PALETTE.ink,
+            fontWeight: 800,
+            fontSize: 24,
+            letterSpacing: "0.3px",
+            borderBottom: `1px solid ${PALETTE.border}`,
+            paddingBottom: 10,
+          }}
+        >
+          Outward Settlement
+        </h2>
+        <div style={{ display: "grid", gap: 14, marginTop: 14 }}>
           <div style={compactGridStyle}>
             <div style={miniCardStyle("92px")}>
               <div style={miniHeadStyle}>Voucher No</div>
@@ -295,8 +333,8 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
       </div>
 
       <div style={{ ...card, marginBottom: 10 }}>
-        <h3 style={{ marginTop: 0, color: "#000000" }}>Adjusted Company Details</h3>
-        <div style={{ overflowX: "auto" }}>
+        <h3 style={{ marginTop: 0, marginBottom: 12, color: PALETTE.ink, fontWeight: 800 }}>Adjusted Company Details</h3>
+        <div style={{ overflowX: "auto", border: `1px solid ${PALETTE.border}`, borderRadius: 10, background: "#fff" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                   <thead>
   <tr>
@@ -342,7 +380,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
         amount - freightPerLine - labourPerLine - otherPerLine;
 
       return (
-        <tr key={item.id} style={{ background: index % 2 === 0 ? "#ffffff" : "#f8fafc" }}>
+        <tr key={item.id} style={{ background: index % 2 === 0 ? "#ffffff" : PALETTE.rowAlt }}>
           <td style={tableCellStyle}>{index + 1}</td>
           <td style={tableCellStyle}>{item.company_name || "-"}</td>
           <td style={tableCellStyle}>{item.lorry_no || "-"}</td>
@@ -380,7 +418,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
         >
           <div>
             <label style={label}>Dispatch Qty</label>
-            <input name="dispatch_qty" type="number" value={formData.dispatch_qty} onChange={handleChange} readOnly style={{ ...input, background: "#e5e7eb", cursor: "not-allowed" }} />
+            <input name="dispatch_qty" type="number" value={formData.dispatch_qty} onChange={handleChange} readOnly style={{ ...input, background: "#f3f8ff", cursor: "not-allowed", color: PALETTE.muted }} />
           </div>
 
           <div>
@@ -390,7 +428,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
 
           <div>
             <label style={label}>Sale Rate</label>
-            <input name="sale_rate" type="number" value={formData.sale_rate} onChange={handleChange} readOnly style={{ ...input, background: "#e5e7eb", cursor: "not-allowed" }} />
+            <input name="sale_rate" type="number" value={formData.sale_rate} onChange={handleChange} readOnly style={{ ...input, background: "#f3f8ff", cursor: "not-allowed", color: PALETTE.muted }} />
           </div>
 
           <div>
@@ -406,9 +444,9 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
               value={formData.freight}
               onChange={handleChange}
               readOnly={isFreightAutoLocked}
-              style={{ ...input, background: isFreightAutoLocked ? "#f8fafc" : "#fff" }}
+              style={{ ...input, background: isFreightAutoLocked ? "#f3f8ff" : "#fff", color: isFreightAutoLocked ? PALETTE.muted : PALETTE.ink }}
             />
-            <div style={{ marginTop: 6, fontSize: 12, color: isFreightAutoLocked ? "#0f766e" : "#64748b" }}>
+            <div style={{ marginTop: 6, fontSize: 12, color: isFreightAutoLocked ? PALETTE.headerDark : PALETTE.muted, fontWeight: 600 }}>
               {isFreightAutoLocked ? "Auto from transport payment (locked)" : "Manual entry"}
             </div>
           </div>
@@ -448,13 +486,15 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
         <button
           onClick={handleSave}
           style={{
-            padding: "10px 18px",
+            padding: "11px 20px",
             border: "none",
-            borderRadius: 8,
-            background: "#16a34a",
-            color: "#000000",
-            fontWeight: 700,
+            borderRadius: 10,
+            background: "linear-gradient(135deg, #15803d 0%, #22c55e 100%)",
+            color: "#ffffff",
+            fontWeight: 800,
+            letterSpacing: "0.2px",
             cursor: "pointer",
+            boxShadow: "0 10px 20px rgba(21, 128, 61, 0.28)",
           }}
         >
           Save Settlement
@@ -465,31 +505,31 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
 }
 
 const tableHeaderStyle = {
-  background: "#177b79",
+  background: PALETTE.header,
   color: "#ffffff",
-  padding: "4px 6px",
-  border: "1px solid #b8c4cf",
+  padding: "8px 10px",
+  border: `1px solid ${PALETTE.borderStrong}`,
   textAlign: "left",
-  fontWeight: 700,
+  fontWeight: 800,
   whiteSpace: "nowrap",
-  fontSize: 12,
-  lineHeight: 1.1,
+  fontSize: 12.5,
+  lineHeight: 1.2,
 };
 
 const tableCellStyle = {
-  padding: "4px 6px",
-  border: "1px solid #c6d1db",
-  color: "#000000",
+  padding: "8px 10px",
+  border: `1px solid ${PALETTE.border}`,
+  color: PALETTE.ink,
   whiteSpace: "nowrap",
-  fontSize: 12,
-  lineHeight: 1.15,
+  fontSize: 12.5,
+  lineHeight: 1.2,
   background: "#ffffff",
 };
 
 const summaryHeadStyle = {
   padding: "10px 12px",
-  border: "1px solid #dbe4ea",
-  background: "#0f766e",
+  border: `1px solid ${PALETTE.border}`,
+  background: PALETTE.header,
   fontWeight: 700,
   color: "#ffffff",
   whiteSpace: "nowrap",
@@ -497,104 +537,101 @@ const summaryHeadStyle = {
 
 const summaryCellStyle = {
   padding: "10px 12px",
-  border: "1px solid #dbe4ea",
+  border: `1px solid ${PALETTE.border}`,
   background: "#fff",
-  color: "#000000",
+  color: PALETTE.ink,
 };
 
 const summaryBoxStyle = {
-  border: "1px solid #cbd5e1",
+  border: `1px solid ${PALETTE.border}`,
   borderRadius: 12,
   overflow: "hidden",
   background: "#fff",
-  boxShadow: "0 4px 14px rgba(15, 23, 42, 0.05)",
+  boxShadow: "0 8px 20px rgba(15, 23, 42, 0.06)",
 };
 
 const compactGridStyle = {
   display: "grid",
-  gridTemplateColumns: "repeat(6, minmax(0, 1fr))",
-  gap: 4,
+  gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))",
+  gap: 10,
   alignItems: "stretch",
-  border: "1px solid #c2ced8",
-  borderRight: "none",
-  borderBottom: "none",
 };
 
 const miniCardStyle = (minWidth) => ({
   minWidth,
-  borderRight: "1px solid #c2ced8",
-  borderBottom: "1px solid #c2ced8",
+  border: `1px solid ${PALETTE.border}`,
+  borderRadius: 10,
+  overflow: "hidden",
   background: "#ffffff",
+  boxShadow: "0 4px 10px rgba(15, 23, 42, 0.04)",
 });
 
 const miniHeadStyle = {
-  background: "#177b79",
-  color: "#ffffff",
+  background: PALETTE.headerSoft,
+  color: PALETTE.headerDark,
   fontWeight: 700,
-  fontSize: 12,
-  padding: "4px 6px",
-  lineHeight: 1.05,
-  borderBottom: "1px solid #b8c4cf",
+  fontSize: 11.5,
+  padding: "7px 9px",
+  lineHeight: 1.15,
+  borderBottom: `1px solid ${PALETTE.border}`,
   whiteSpace: "nowrap",
+  textTransform: "uppercase",
+  letterSpacing: "0.25px",
 };
 
 const miniBodyStyle = {
-  color: "#000000",
-  fontSize: 12,
-  padding: "8px",
+  color: PALETTE.ink,
+  fontSize: 13,
+  fontWeight: 600,
+  padding: "10px 10px",
   lineHeight: 1.25,
-  minHeight: 40,
+  minHeight: 44,
   display: "flex",
   alignItems: "center",
 };
 
 const summaryDividerStyle = {
   height: 1,
-  background: "#2f3e4f",
+  background: PALETTE.divider,
   opacity: 1,
 };
 
 const statsGridStyle = {
   display: "grid",
-  gridTemplateColumns: "repeat(4, minmax(140px, 1fr))",
-  gap: 4,
+  gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+  gap: 10,
   alignItems: "stretch",
 };
 
 const statTileStyle = (minWidth) => ({
   minWidth: "auto",
-  border: "1px solid #1e3a8a",
-  background: "#dbeafe",
-  borderRadius: 4,
+  border: `1px solid ${PALETTE.tileBorder}`,
+  background: PALETTE.tile,
+  borderRadius: 10,
   overflow: "hidden",
+  boxShadow: "0 4px 12px rgba(15, 23, 42, 0.05)",
 });
 
 const statHeadStyle = {
   textAlign: "center",
-  background: "#177b79",
+  background: PALETTE.header,
   color: "#ffffff",
-  fontWeight: 700,
+  fontWeight: 800,
   fontSize: 12,
-  padding: "4px 6px",
-  lineHeight: 1.1,
+  padding: "7px 8px",
+  lineHeight: 1.2,
   whiteSpace: "nowrap",
 };
 
 const statBodyStyle = {
   textAlign: "center",
-  color: "#000000",
-  fontSize: 12,
-  fontWeight: 700,
-  padding: "6px 6px",
+  color: PALETTE.tileValue,
+  fontSize: 13,
+  fontWeight: 800,
+  padding: "9px 8px",
   lineHeight: 1.2,
-  textAlign: "center",
-  background: "#dbeafe",
+  background: PALETTE.tile,
 };
-
-
-
-
-
 
 
 
