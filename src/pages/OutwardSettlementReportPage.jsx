@@ -244,7 +244,7 @@ export default function OutwardSettlementReportPage() {
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
     doc.text(
-      `Date: ${formatDate(row.date)} | Warehouse: ${row.warehouse_name || "-"} | Lorry: ${row.lorry_no || "-"}`,
+      `Date: ${formatDate(row.date)} | Warehouse: ${row.warehouse_name || "-"} | Location: ${row.location_name || "-"} | Lorry: ${row.lorry_no || "-"}`,
       14,
       34
     );
@@ -262,6 +262,7 @@ export default function OutwardSettlementReportPage() {
       head: [[
         "Date",
         "Warehouse",
+        "Location",
         "Lorry No",
         "Buyer",
         "Consignee",
@@ -274,6 +275,7 @@ export default function OutwardSettlementReportPage() {
       body: [[
         formatDate(row.date),
         row.warehouse_name || "-",
+        row.location_name || "-",
         row.lorry_no || "-",
         row.buyer_name || "-",
         row.consignee_name || "-",
@@ -550,6 +552,7 @@ export default function OutwardSettlementReportPage() {
         "Voucher",
         "Outward Company",
         "Warehouse",
+        "Location",
         "Lorry",
         "Dispatch Qty",
         "Unloading Qty",
@@ -565,6 +568,7 @@ export default function OutwardSettlementReportPage() {
         row.voucher_no || `OUT-${row.outward_id}`,
         row.company_name || "-",
         row.warehouse_name || "-",
+        row.location_name || "-",
         row.lorry_no || "-",
         num(row.dispatch_qty),
         num(row.unloading_qty),
@@ -576,6 +580,7 @@ export default function OutwardSettlementReportPage() {
         num(row.receivable_amount),
       ]),
       foot: [[
+        "",
         "",
         "",
         "",
@@ -602,7 +607,7 @@ export default function OutwardSettlementReportPage() {
 
       doc.setFontSize(11);
       doc.text(
-        `${row.voucher_no || `OUT-${row.outward_id}`} | ${row.company_name || "-"} | ${row.lorry_no || "-"}`,
+        `${row.voucher_no || `OUT-${row.outward_id}`} | ${row.company_name || "-"} | ${row.location_name || "-"} | ${row.lorry_no || "-"}`,
         14,
         startY
       );
@@ -821,7 +826,7 @@ export default function OutwardSettlementReportPage() {
                     {displayInvNo(row)} | {displayAccountName(row)}
                   </h3>
                   <div style={{ color: "#0f172a", marginTop: 6 }}>
-                    Date: {formatDate(row.date)} | Warehouse: {row.warehouse_name || "-"} | Lorry: {row.lorry_no || "-"}
+                    Date: {formatDate(row.date)} | Warehouse: {row.warehouse_name || "-"} | Location: {row.location_name || "-"} | Lorry: {row.lorry_no || "-"}
                   </div>
                   <div style={{ color: "#0f172a", marginTop: 4 }}>
                     Buyer: {row.buyer_name || "-"} | Consignee: {row.consignee_name || "-"} | Product: {row.product_name || "-"}
