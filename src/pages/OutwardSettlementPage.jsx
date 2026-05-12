@@ -225,6 +225,10 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
               <div style={miniHeadStyle}>Warehouse</div>
               <div style={miniBodyStyle}>{meta?.warehouse_name || "-"}</div>
             </div>
+            <div style={miniCardStyle("100px")}>
+              <div style={miniHeadStyle}>Location</div>
+              <div style={miniBodyStyle}>{meta?.location_name || outward?.location_name || "-"}</div>
+            </div>
             <div style={miniCardStyle("98px")}>
               <div style={miniHeadStyle}>Lorry No</div>
               <div style={miniBodyStyle}>{meta?.lorry_no || "-"}</div>
@@ -579,7 +583,6 @@ const statBodyStyle = {
   textAlign: "center",
   background: "#dbeafe",
 };
-
 
 
 
