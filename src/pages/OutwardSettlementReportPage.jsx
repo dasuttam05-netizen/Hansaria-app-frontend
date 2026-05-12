@@ -220,6 +220,10 @@ export default function OutwardSettlementReportPage() {
   };
 
   const displayAccountName = (row) => row.account_name || row.company_name || "-";
+  const getLoadingTypeLabel = (sourceType) => {
+    const normalized = String(sourceType || "").trim().toLowerCase();
+    return normalized === "palti_lorry" ? "Palti Lorry" : "Warehouse Loading";
+  };
 
   const createSinglePdf = (row) => {
     const doc = new jsPDF("l", "mm", "a4");
@@ -304,6 +308,7 @@ export default function OutwardSettlementReportPage() {
         "Adjusted Company",
         "Lorry No",
         "Inward Voucher",
+        "Loading Type",
         "Settlement Weight",
         "Short Qnt",
         "Company Rate",
@@ -321,6 +326,7 @@ export default function OutwardSettlementReportPage() {
               item.company_name || "-",
               item.lorry_no || "-",
               item.inward_voucher_no || "-",
+              getLoadingTypeLabel(item.source_type),
               num(item.settlement_weight),
               num((Number(row.dispatch_qty) || 0) > 0 ? ((Number(item.settlement_weight) || 0) / (Number(row.dispatch_qty) || 0)) * (Number(row.shortage_qty) || 0) : 0),
               num(item.company_rate),
@@ -339,7 +345,7 @@ export default function OutwardSettlementReportPage() {
                   : 0)
               ),
             ])
-          : [["", "No adjusted inward details found.", "", "", "", "", "", "", "", "", "", "", ""]],
+          : [["", "No adjusted inward details found.", "", "", "", "", "", "", "", "", "", "", "", ""]],
     });
 
     const {
@@ -623,6 +629,7 @@ export default function OutwardSettlementReportPage() {
           "Adjusted Company",
           "Lorry No",
           "Inward Voucher",
+          "Loading Type",
           "Settlement Weight",
         "Short Qnt",
         "Company Rate",
@@ -640,6 +647,7 @@ export default function OutwardSettlementReportPage() {
                 item.company_name || "-",
                 item.lorry_no || "-",
                 item.inward_voucher_no || "-",
+                getLoadingTypeLabel(item.source_type),
                 num(item.settlement_weight),
               num((Number(row.dispatch_qty) || 0) > 0 ? ((Number(item.settlement_weight) || 0) / (Number(row.dispatch_qty) || 0)) * (Number(row.shortage_qty) || 0) : 0),
               num(item.company_rate),
@@ -658,7 +666,7 @@ export default function OutwardSettlementReportPage() {
                     : 0)
                 ),
               ])
-            : [["", "No adjusted inward details found.", "", "", "", "", "", "", "", "", "", "", ""]],
+            : [["", "No adjusted inward details found.", "", "", "", "", "", "", "", "", "", "", "", ""]],
       });
 
       const {
@@ -874,6 +882,7 @@ export default function OutwardSettlementReportPage() {
                       <th style={{ ...hardHeaderCell, width: "138px" }}>Company Name</th>
                       <th style={{ ...hardHeaderCell, width: "118px" }}>Lorry No</th>
                       <th style={{ ...hardHeaderCell, width: "118px" }}>Inward Voucher</th>
+                      <th style={{ ...hardHeaderCell, width: "128px" }}>Loading Type</th>
                       <th style={{ ...hardHeaderCell, width: "118px" }}>Settlement Weight</th>
                       <th style={{ ...hardHeaderCell, width: "92px" }}>Short Qnt</th>
                       <th style={{ ...hardHeaderCell, width: "96px" }}>S.Amount</th>
@@ -893,6 +902,7 @@ export default function OutwardSettlementReportPage() {
                           <td style={hardBodyCell}>{item.company_name || "-"}</td>
                           <td style={hardBodyCell}>{item.lorry_no || "-"}</td>
                           <td style={hardBodyCell}>{item.inward_voucher_no || "-"}</td>
+                          <td style={hardBodyCell}>{getLoadingTypeLabel(item.source_type)}</td>
                           <td style={hardBodyCell}>{num(item.settlement_weight)}</td>
                           <td style={hardBodyCell}>{num(item.shortQtyPerLine)}</td>
                           <td style={hardBodyCell}>{num(item.shortAmount)}</td>
@@ -906,7 +916,7 @@ export default function OutwardSettlementReportPage() {
                       ))
                     ) : (
                       <tr>
-                        <td style={hardBodyCell} colSpan="13">No adjusted inward details found.</td>
+                        <td style={hardBodyCell} colSpan="14">No adjusted inward details found.</td>
                       </tr>
                     )}
                   </tbody>
