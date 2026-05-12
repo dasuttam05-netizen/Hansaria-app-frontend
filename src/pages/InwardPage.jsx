@@ -31,6 +31,15 @@ function Field({ label, children }) {
   );
 }
 
+const getRecordId = (record) => {
+  if (!record) return "";
+  if (typeof record === "string" || typeof record === "number") return String(record);
+  return String(record.id || record._id || "");
+};
+
+const sameId = (left, right) =>
+  String(left || "") !== "" && String(left || "") === String(right || "");
+
 export default function InwardPage() {
   const API_BASE = "/api";
   const { user } = loadSession();
@@ -61,6 +70,7 @@ export default function InwardPage() {
   const canCreate = hasPermission(user, "inward.create");
   const canEdit = hasPermission(user, "inward.edit");
   const canDelete = hasPermission(user, "inward.delete");
+  const canViewEmployees = hasPermission(user, "employees.view");
   const canAccessPage = canCreate || canEdit || canDelete || hasPermission(user, "inward.view");
   const assignedWarehouseIds = user?.assigned_warehouse_ids || [];
 
@@ -71,10 +81,10 @@ export default function InwardPage() {
 
   useEffect(() => {
     if (formData.employee_id) {
-      const employeeId = Number(formData.employee_id);
-      const emp = employees.find((e) => e.id === employeeId);
+      const employeeId = String(formData.employee_id);
+      const emp = employees.find((e) => sameId(getRecordId(e), employeeId));
       const assignedWarehouses = warehouses.filter(
-        (w) => Number(w.employee_id) === employeeId
+        (w) => sameId(getRecordId(w.employee_id), employeeId)
       );
 
       const currentWarehouseIsValid = assignedWarehouses.some(
@@ -83,7 +93,7 @@ export default function InwardPage() {
 
       setFormData((prev) => ({
         ...prev,
-        location_id: emp?.location_id || "",
+        location_id: getRecordId(emp?.location_id),
         warehouse_id:
           currentWarehouseIsValid
             ? prev.warehouse_id
@@ -97,7 +107,13 @@ export default function InwardPage() {
   const fetchDropdowns = async () => {
     try {
       const [empRes, locRes, whRes, prodRes, compRes, accRes] = await Promise.all([
-        axios.get(`${API_BASE}/employees`),
+        canViewEmployees
+          ? axios.get(`${API_BASE}/employees`)
+          : Promise.resolve({
+              data: user
+                ? [{ id: getRecordId(user), name: user.name || user.username || "Current User", location_id: user.location_id }]
+                : [],
+            }),
         axios.get(`${API_BASE}/locations`),
         axios.get(`${API_BASE}/warehouses`),
         axios.get(`${API_BASE}/products`),
@@ -159,14 +175,12 @@ export default function InwardPage() {
     try {
       const payload = {
         ...formData,
-        employee_id: formData.employee_id ? Number(formData.employee_id) : null,
-        location_id: formData.location_id ? Number(formData.location_id) : null,
-        warehouse_id: formData.warehouse_id ? Number(formData.warehouse_id) : null,
-        product_id: formData.product_id ? Number(formData.product_id) : null,
-        company_id: formData.company_id ? Number(formData.company_id) : null,
-        company_account_id: formData.company_account_id
-          ? Number(formData.company_account_id)
-          : null,
+        employee_id: formData.employee_id || null,
+        location_id: formData.location_id || null,
+        warehouse_id: formData.warehouse_id || null,
+        product_id: formData.product_id || null,
+        company_id: formData.company_id || null,
+        company_account_id: formData.company_account_id || null,
         weight: Number(formData.weight) || 0,
       };
 
@@ -542,7 +556,7 @@ Weight: ${row.weight}`;
                   <select name="employee_id" value={formData.employee_id} onChange={handleChange} required style={inp}>
                     <option value="">Select Employee</option>
                     {employees.map((e) => (
-                      <option key={e.id} value={e.id}>
+                      <option key={getRecordId(e)} value={getRecordId(e)}>
                         {e.name}
                       </option>
                     ))}
@@ -553,7 +567,7 @@ Weight: ${row.weight}`;
                   <select name="location_id" value={formData.location_id} disabled style={{ ...inp, background: "#f8fafc" }}>
                     <option value="">Location</option>
                     {locations.map((l) => (
-                      <option key={l.id} value={l.id}>
+                      <option key={getRecordId(l)} value={getRecordId(l)}>
                         {l.name}
                       </option>
                     ))}
@@ -564,7 +578,7 @@ Weight: ${row.weight}`;
                   <select name="warehouse_id" value={formData.warehouse_id} onChange={handleChange} style={inp}>
                     <option value="">Select Warehouse</option>
                     {warehouses.map((w) => (
-                      <option key={w.id} value={w.id}>
+                      <option key={getRecordId(w)} value={getRecordId(w)}>
                         {w.name}
                       </option>
                     ))}
@@ -575,7 +589,7 @@ Weight: ${row.weight}`;
                   <select name="product_id" value={formData.product_id} onChange={handleChange} style={inp}>
                     <option value="">Select Product</option>
                     {products.map((p) => (
-                      <option key={p.id} value={p.id}>
+                      <option key={getRecordId(p)} value={getRecordId(p)}>
                         {p.name}
                       </option>
                     ))}
@@ -586,7 +600,7 @@ Weight: ${row.weight}`;
                   <select name="company_id" value={formData.company_id} onChange={handleChange} style={inp}>
                     <option value="">Select Company</option>
                     {companies.map((c) => (
-                      <option key={c.id} value={c.id}>
+                      <option key={getRecordId(c)} value={getRecordId(c)}>
                         {c.name}
                       </option>
                     ))}
@@ -602,9 +616,9 @@ Weight: ${row.weight}`;
                   >
                     <option value="">Select Account</option>
                     {formData.company_id && companyAccounts
-                      .filter((acc) => acc.company_id === Number(formData.company_id))
+                      .filter((acc) => sameId(getRecordId(acc.company_id), formData.company_id))
                       .map((acc) => (
-                        <option key={acc.id} value={acc.id}>
+                        <option key={getRecordId(acc)} value={getRecordId(acc)}>
                           {acc.account_name}
                         </option>
                       ))}
