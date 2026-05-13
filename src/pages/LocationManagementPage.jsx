@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 
-const emptyForm = () => ({ name: "", address: "" });
+const emptyForm = () => ({ name: "", address: "", abbr: "" });
 
 export default function LocationManagementPage() {
   const [locations, setLocations] = useState([]);
@@ -57,7 +57,7 @@ export default function LocationManagementPage() {
   };
 
   const handleEdit = (loc) => {
-    setFormData({ name: loc.name || "", address: loc.address || "" });
+    setFormData({ name: loc.name || "", address: loc.address || "", abbr: loc.abbr || "" });
     setEditId(getId(loc));
     setShowForm(true);
   };
@@ -86,6 +86,9 @@ export default function LocationManagementPage() {
               <Field label="Location Name">
                 <input name="name" value={formData.name} onChange={handleChange} placeholder="Location Name *" style={inp} />
               </Field>
+              <Field label="Location Abbreviation">
+                <input name="abbr" value={formData.abbr} onChange={handleChange} placeholder="e.g., S.L, NA, TA (used for employee ID format)" style={inp} />
+              </Field>
               <Field label="Address">
                 <input name="address" value={formData.address} onChange={handleChange} placeholder="Address *" style={inp} />
               </Field>
@@ -108,6 +111,7 @@ export default function LocationManagementPage() {
                 <tr style={{ background: "#0f766e", color: "#fff" }}>
                   <th style={th}>ID</th>
                   <th style={th}>Name</th>
+                  <th style={th}>Abbreviation</th>
                   <th style={th}>Address</th>
                   <th style={th}>Actions</th>
                 </tr>
@@ -117,6 +121,7 @@ export default function LocationManagementPage() {
                   <tr key={getId(loc)} style={{ background: i % 2 ? "#f8fafc" : "#fff" }}>
                     <td style={td}>{i + 1}</td>
                     <td style={td}>{loc.name || "-"}</td>
+                    <td style={td}><strong>{loc.abbr || "-"}</strong></td>
                     <td style={td}>{loc.address || "-"}</td>
                     <td style={td}>
                       <button type="button" onClick={() => handleEdit(loc)} style={{ ...mini, background: "#2563eb" }}>Edit</button>{" "}
@@ -125,7 +130,7 @@ export default function LocationManagementPage() {
                   </tr>
                 ))}
                 {locations.length === 0 ? (
-                  <tr><td colSpan={4} style={{ ...td, textAlign: "center", padding: "20px" }}>No locations found.</td></tr>
+                  <tr><td colSpan={5} style={{ ...td, textAlign: "center", padding: "20px" }}>No locations found.</td></tr>
                 ) : null}
               </tbody>
             </table>
