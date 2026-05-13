@@ -138,6 +138,45 @@ export default function ExpenseManagementPage() {
     [companyAccounts, formData.company_id]
   );
 
+  const accessibleLocations = useMemo(() => {
+    const allowedIds = new Set(
+      [
+        getRecordId(user?.location_id),
+        ...(Array.isArray(user?.location_ids) ? user.location_ids.map(getRecordId) : []),
+      ].filter(Boolean)
+    );
+
+    if (!user || user.role === "admin" || hasPermission(user, "locations.manage") || allowedIds.size === 0) {
+      return locations;
+    }
+
+    return locations.filter((location) => allowedIds.has(getRecordId(location)));
+  }, [locations, user]);
+
+  const filteredWarehouses = useMemo(() => {
+    if (!formData.location_id) return warehouses;
+    return warehouses.filter((warehouse) =>
+      sameId(getRecordId(warehouse.location_id), formData.location_id)
+    );
+  }, [warehouses, formData.location_id]);
+
+  const filteredEmployees = useMemo(() => {
+    if (!formData.location_id) {
+      return employees;
+    }
+
+    return employees.filter((employee) => {
+      const employeeLocationIds = [
+        getRecordId(employee.location_id),
+        ...(Array.isArray(employee.location_ids) ? employee.location_ids.map(getRecordId) : []),
+      ].filter(Boolean);
+
+      return employeeLocationIds.some((locationId) =>
+        sameId(locationId, formData.location_id)
+      );
+    });
+  }, [employees, formData.location_id]);
+
   useEffect(() => {
     initializeData();
   }, []);
@@ -181,7 +220,12 @@ export default function ExpenseManagementPage() {
 
   const fetchDropdowns = async () => {
     const currentUserOption = user
-      ? [{ id: user.id, name: user.name || user.username || "Current User" }]
+      ? [{
+          id: user.id,
+          name: user.name || user.username || "Current User",
+          location_id: user.location_id,
+          location_ids: user.location_ids || [],
+        }]
       : [];
     const dropdownRequests = [
       ["locations", axios.get(`${API_BASE}/locations`)],
@@ -322,6 +366,7 @@ export default function ExpenseManagementPage() {
         ...prev,
         [name]: value,
         balance: nextBalance,
+        ...(name === "location_id" ? { employee_id: "", send_to_unified: "" } : {}),
         ...(name === "company_id" ? { company_account_id: "" } : {}),
       };
       if (name === "reg_from_consignee_id" && value) {
@@ -633,7 +678,7 @@ export default function ExpenseManagementPage() {
                     required
                   >
                     <option value="">Select location</option>
-                    {locations.map((location) => (
+                    {accessibleLocations.map((location) => (
                       <option key={getRecordId(location)} value={getRecordId(location)}>
                         {location.name}
                       </option>
@@ -649,7 +694,7 @@ export default function ExpenseManagementPage() {
                     style={inputStyle}
                   >
                     <option value="">Select Employee</option>
-                    {employees.map((employee) => (
+                    {filteredEmployees.map((employee) => (
                       <option key={getRecordId(employee)} value={getRecordId(employee)}>
                         {employee.name}
                       </option>
@@ -795,7 +840,7 @@ export default function ExpenseManagementPage() {
                     >
                       <option value="">Select Warehouse</option>
                       <optgroup label="Warehouse name">
-                        {warehouses.map((w) => (
+                        {filteredWarehouses.map((w) => (
                           <option key={`wh-${getRecordId(w)}`} value={`warehouse:${getRecordId(w)}`}>
                             {w.name}
                           </option>
@@ -830,7 +875,7 @@ export default function ExpenseManagementPage() {
                         ))}
                       </optgroup>
                       <optgroup label="Warehouse name">
-                        {warehouses.map((w) => (
+                        {filteredWarehouses.map((w) => (
                           <option key={`wh-${getRecordId(w)}`} value={`warehouse:${getRecordId(w)}`}>
                             {w.name}
                           </option>
