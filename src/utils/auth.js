@@ -63,7 +63,7 @@ export const ROLE_PERMISSION_PRESETS = {
 
 export function normalizeRole(role = "staff") {
   const normalized = String(role || "").trim().toLowerCase();
-  return ROLE_PERMISSION_PRESETS[normalized] ? normalized : "staff";
+  return ROLE_PERMISSION_PRESETS[normalized] ? normalized : String(role || "staff").trim() || "staff";
 }
 
 const PERMISSION_DEPENDENCIES = {};
