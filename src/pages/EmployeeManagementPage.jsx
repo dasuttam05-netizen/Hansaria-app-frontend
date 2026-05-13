@@ -18,7 +18,9 @@ const PERMISSION_GROUPS = [
       { key: "expense_self_loading_access", label: "Self Loading", permissions: ["expense.selfLoading"] },
       { key: "expense_local_sale_access", label: "Local Sale", permissions: ["expense.localSale"] },
       { key: "expense_pending_access", label: "Expenses Pending", permissions: ["expense.pending"] },
-      { key: "cash_access", label: "Cash Book", permissions: ["cash.view", "cash.create", "cash.edit", "cash.delete"] },
+      { key: "cash_main_book", label: "Main Cash Book", permissions: ["cash.mainBook.view", "cash.mainBook.create", "cash.mainBook.edit", "cash.mainBook.delete"] },
+      { key: "cash_parties_book", label: "Parties Cash Book", permissions: ["cash.partiesBook.view", "cash.partiesBook.create", "cash.partiesBook.edit", "cash.partiesBook.delete"] },
+      { key: "cash_employee_book", label: "Employee Cash Book", permissions: ["cash.employeeBook.view", "cash.employeeBook.create", "cash.employeeBook.edit", "cash.employeeBook.delete"] },
       { key: "transport_access", label: "Transport", permissions: ["transport.manage"] },
     ],
   },
@@ -99,6 +101,7 @@ const createDefaultFormData = () => ({
   username: "",
   password: "",
   location_id: "",
+  location_ids: [],
   role: "",
   permissions: [],
   opening_balance: "0",
@@ -432,6 +435,9 @@ export default function EmployeeManagementPage() {
       username: employee.username || "",
       password: "",
       location_id: getRecordId(employee.location_id),
+      location_ids: Array.isArray(employee.location_ids)
+        ? employee.location_ids.map(getRecordId)
+        : [],
       role: employee.role || "",
       permissions: employee.permissions || [],
       opening_balance: String(employee.opening_balance || 0),
@@ -613,6 +619,18 @@ export default function EmployeeManagementPage() {
     ))}
   </select>
 </Field>
+              <div style={{ gridColumn: "1 / -1" }}>
+                <MultiSelectDropdown
+                  label="Additional Locations (Multi-location Access)"
+                  options={locations.map((location) => ({
+                    value: getRecordId(location),
+                    label: location.name,
+                  }))}
+                  value={formData.location_ids}
+                  onChange={(next) => setFormData((prev) => ({ ...prev, location_ids: next }))}
+                  placeholder="Select locations for multi-access"
+                />
+              </div>
               <Field label="Opening Balance">
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 90px", gap: 10 }}>
                   <input name="opening_balance" value={formData.opening_balance} onChange={handleEmployeeChange} style={inputStyle} />
