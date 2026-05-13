@@ -105,6 +105,13 @@ export default function InwardPage() {
     }
   }, [formData.employee_id, employees, warehouses, editData]);
 
+  // Filter warehouses by selected location
+  const warehousesForLocation = formData.location_id
+    ? warehouses.filter((w) => sameId(getRecordId(w.location_id), formData.location_id))
+    : warehouses;
+
+  const noWarehousesAvailable = formData.location_id && warehousesForLocation.length === 0;
+
   const fetchDropdowns = async () => {
     try {
       const [empRes, locRes, whRes, prodRes, compRes, accRes] = await Promise.all([
@@ -588,9 +595,20 @@ Weight: ${row.weight}`;
                 </Field>
 
                 <Field label="Select Warehouse">
-                  <select name="warehouse_id" value={formData.warehouse_id} onChange={handleChange} style={inp}>
+                  {noWarehousesAvailable && (
+                    <div style={{ padding: "8px 12px", marginBottom: "8px", background: "#fef3c7", border: "1px solid #fcd34d", borderRadius: "6px", color: "#92400e", fontSize: "13px" }}>
+                      ⚠️ No warehouse is mapped to the selected location. Please map a warehouse first or select a different location.
+                    </div>
+                  )}
+                  <select 
+                    name="warehouse_id" 
+                    value={formData.warehouse_id} 
+                    onChange={handleChange} 
+                    style={{...inp, borderColor: noWarehousesAvailable ? "#ef4444" : "#cbd5e1"}}
+                    disabled={noWarehousesAvailable}
+                  >
                     <option value="">Select Warehouse</option>
-                    {warehouses
+                    {warehousesForLocation
                       .filter((w) => !formData.employee_id || sameId(getRecordId(w.employee_id), formData.employee_id))
                       .map((w) => (
                       <option key={getRecordId(w)} value={getRecordId(w)}>
