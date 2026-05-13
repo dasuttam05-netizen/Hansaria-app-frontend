@@ -130,6 +130,13 @@ export default function OutwardPage() {
     }
   }, [formData.employee_id, employees, warehouses, editData]);
 
+  // Filter warehouses by selected location
+  const warehousesForLocation = formData.location_id
+    ? warehouses.filter((w) => sameId(getRecordId(w.location_id), formData.location_id))
+    : warehouses;
+
+  const noWarehousesAvailable = formData.location_id && warehousesForLocation.length === 0;
+
   useEffect(() => {
     const loadWarehouseStock = async () => {
       if (isSelfLoading || !formData.warehouse_id || !formData.product_id) {
@@ -762,9 +769,20 @@ Consignee: ${row.consignee_name}`;
                 </Field>
 
                 <Field label="Select Warehouse">
-                  <select name="warehouse_id" value={formData.warehouse_id} onChange={handleChange} disabled={isSelfLoading} style={{ ...inp, background: isSelfLoading ? "#f8fafc" : "#fff" }}>
+                  {noWarehousesAvailable && !isSelfLoading && (
+                    <div style={{ padding: "8px 12px", marginBottom: "8px", background: "#fef3c7", border: "1px solid #fcd34d", borderRadius: "6px", color: "#92400e", fontSize: "13px" }}>
+                      ⚠️ No warehouse is mapped to the selected location. Please map a warehouse first or select a different location.
+                    </div>
+                  )}
+                  <select 
+                    name="warehouse_id" 
+                    value={formData.warehouse_id} 
+                    onChange={handleChange} 
+                    disabled={isSelfLoading || noWarehousesAvailable} 
+                    style={{ ...inp, background: isSelfLoading || noWarehousesAvailable ? "#f8fafc" : "#fff", borderColor: noWarehousesAvailable && !isSelfLoading ? "#ef4444" : "#cbd5e1" }}
+                  >
                     <option value="">{isSelfLoading ? "Self Loading - Warehouse Not Required" : "Select Warehouse"}</option>
-                    {warehouses
+                    {warehousesForLocation
                       .filter((w) => !formData.employee_id || sameId(getRecordId(w.employee_id), formData.employee_id))
                       .map((w) => (
                       <option key={getRecordId(w)} value={getRecordId(w)}>
