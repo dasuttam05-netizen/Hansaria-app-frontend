@@ -220,13 +220,20 @@ export default function EmployeeManagementPage() {
 );
 
   const filteredWarehouseOptions = useMemo(
-    () =>
-      warehouseOptions.filter(
-        (item) =>
-          !formData.location_id ||
-          sameId(item.location_id, formData.location_id)
-      ),
-    [warehouseOptions, formData.location_id]
+    () => {
+      const selectedLocationIds = new Set(
+        [formData.location_id, ...(formData.location_ids || [])]
+          .map(String)
+          .filter(Boolean)
+      );
+
+      if (selectedLocationIds.size === 0) return warehouseOptions;
+
+      return warehouseOptions.filter((item) =>
+        selectedLocationIds.has(String(item.location_id))
+      );
+    },
+    [warehouseOptions, formData.location_id, formData.location_ids]
   );
 
   const roleOptions = useMemo(() => roles.map((role) => ({ value: String(role.id), label: role.name })), [roles]);
@@ -265,7 +272,14 @@ export default function EmployeeManagementPage() {
     if (name === "location_id") {
       const validWarehouseIds = new Set(
         warehouseOptions
-          .filter((item) => !value || sameId(item.location_id, value))
+          .filter((item) => {
+            const selectedLocationIds = new Set(
+              [value, ...(formData.location_ids || [])]
+                .map(String)
+                .filter(Boolean)
+            );
+            return selectedLocationIds.size === 0 || selectedLocationIds.has(String(item.location_id));
+          })
           .map((item) => String(item.value))
       );
       setFormData((prev) => ({
@@ -277,6 +291,26 @@ export default function EmployeeManagementPage() {
       return;
     }
     setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleEmployeeLocationsChange = (nextLocationIds) => {
+    const selectedLocationIds = new Set(
+      [formData.location_id, ...(nextLocationIds || [])]
+        .map(String)
+        .filter(Boolean)
+    );
+    const validWarehouseIds = new Set(
+      warehouseOptions
+        .filter((item) => selectedLocationIds.size === 0 || selectedLocationIds.has(String(item.location_id)))
+        .map((item) => String(item.value))
+    );
+
+    setFormData((prev) => ({
+      ...prev,
+      location_ids: nextLocationIds,
+      assigned_warehouse_ids: (prev.assigned_warehouse_ids || [])
+        .filter((item) => validWarehouseIds.has(String(item))),
+    }));
   };
 
   const handleEmployeeToggle = (key) => {
@@ -627,7 +661,7 @@ export default function EmployeeManagementPage() {
                     label: location.name,
                   }))}
                   value={formData.location_ids}
-                  onChange={(next) => setFormData((prev) => ({ ...prev, location_ids: next }))}
+                  onChange={handleEmployeeLocationsChange}
                   placeholder="Select locations for multi-access"
                 />
               </div>
