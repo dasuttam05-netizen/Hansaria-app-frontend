@@ -86,19 +86,20 @@ export default function InwardPage() {
       const assignedWarehouses = warehouses.filter(
         (w) => sameId(getRecordId(w.employee_id), employeeId)
       );
+      const fallbackLocationId = getRecordId(assignedWarehouses[0]?.location_id);
 
       const currentWarehouseIsValid = assignedWarehouses.some(
-        (w) => String(w.id) === formData.warehouse_id
+        (w) => sameId(getRecordId(w), formData.warehouse_id)
       );
 
       setFormData((prev) => ({
         ...prev,
-        location_id: getRecordId(emp?.location_id),
+        location_id: getRecordId(emp?.location_id) || fallbackLocationId,
         warehouse_id:
           currentWarehouseIsValid
             ? prev.warehouse_id
             : assignedWarehouses.length > 0
-            ? String(assignedWarehouses[0].id)
+            ? getRecordId(assignedWarehouses[0])
             : "",
       }));
     }
@@ -144,12 +145,24 @@ export default function InwardPage() {
   };
 
   const handleChange = (e) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+
+    if (name === "warehouse_id") {
+      const selectedWarehouse = warehouses.find((item) => sameId(getRecordId(item), value));
+      setFormData((prev) => ({
+        ...prev,
+        warehouse_id: value,
+        location_id: getRecordId(selectedWarehouse?.location_id) || prev.location_id,
+      }));
+      return;
+    }
+
+    setFormData({ ...formData, [name]: value });
   };
 
   const resetForm = () => {
     const defaultWarehouseId =
-      assignedWarehouseIds.length === 1 ? String(assignedWarehouseIds[0]) : "";
+      assignedWarehouseIds.length === 1 ? getRecordId(assignedWarehouseIds[0]) : "";
 
     setFormData({
       date: "",
@@ -577,9 +590,11 @@ Weight: ${row.weight}`;
                 <Field label="Select Warehouse">
                   <select name="warehouse_id" value={formData.warehouse_id} onChange={handleChange} style={inp}>
                     <option value="">Select Warehouse</option>
-                    {warehouses.map((w) => (
+                    {warehouses
+                      .filter((w) => !formData.employee_id || sameId(getRecordId(w.employee_id), formData.employee_id))
+                      .map((w) => (
                       <option key={getRecordId(w)} value={getRecordId(w)}>
-                        {w.name}
+                        {w.location_name ? `${w.name} (${w.location_name})` : w.name}
                       </option>
                     ))}
                   </select>
