@@ -483,7 +483,8 @@ export default function ExpenseManagementPage() {
     }
   };
 
-  const handleEdit = (row) => {
+  const populateEditForm = (row) => {
+    const existingItems = Array.isArray(row.items) ? row.items : [];
     if (!canEdit) {
       toast.error("You only have create access. Edit is not allowed.", { theme: "colored" });
       return;
@@ -530,8 +531,8 @@ export default function ExpenseManagementPage() {
       total_expense_amount: Number(row.total_expense_amount || 0),
       narration: row.narration || "",
       items:
-        row.items?.length > 0
-          ? row.items.map((item, index) => ({
+        existingItems.length > 0
+          ? existingItems.map((item, index) => ({
               line_no: index + 1,
               particular_name: item.particular_name || "",
               bags: item.bags || "",
@@ -543,37 +544,37 @@ export default function ExpenseManagementPage() {
     setShowForm(true);
   };
 
-  const openExpenseById = async (expenseId) => {
+  const openExpenseById = async (expenseId, clearEditParam = true) => {
     if (!canEdit) {
-      return;
-    }
-
-    const localMatch = expenses.find((row) => Number(row.id) === Number(expenseId));
-    if (localMatch) {
-      handleEdit(localMatch);
-      setSearchParams((prev) => {
-        const next = new URLSearchParams(prev);
-        next.delete("edit");
-        return next;
-      }, { replace: true });
       return;
     }
 
     try {
       const res = await axios.get(`${API_BASE}/expenses/${expenseId}`);
-      handleEdit(res.data);
+      populateEditForm(res.data);
     } catch (error) {
       console.error(error);
       toast.error(error?.response?.data?.error || "Failed to open expense entry", {
         theme: "colored",
       });
     } finally {
-      setSearchParams((prev) => {
-        const next = new URLSearchParams(prev);
-        next.delete("edit");
-        return next;
-      }, { replace: true });
+      if (clearEditParam) {
+        setSearchParams((prev) => {
+          const next = new URLSearchParams(prev);
+          next.delete("edit");
+          return next;
+        }, { replace: true });
+      }
     }
+  };
+
+  const handleEdit = (row) => {
+    if (!canEdit) {
+      toast.error("You only have create access. Edit is not allowed.", { theme: "colored" });
+      return;
+    }
+
+    openExpenseById(row.id, false);
   };
 
   const handleDelete = async (id) => {
