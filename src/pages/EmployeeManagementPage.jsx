@@ -122,8 +122,17 @@ const normalizeData = (data) => {
   };
 };
 
+const getRecordId = (record) => {
+  if (!record) return "";
+  if (typeof record === "string" || typeof record === "number") return String(record);
+  return String(record.id || record._id || "");
+};
+
+const sameId = (left, right) =>
+  String(left || "") !== "" && String(left || "") === String(right || "");
+
 const employeeRecordId = (employee) =>
-  employee?.id ?? employee?._id ?? "";
+  getRecordId(employee);
 
 const normalizeArray = (arr) => {
   if (!Array.isArray(arr)) return [];
@@ -198,13 +207,24 @@ export default function EmployeeManagementPage() {
   const warehouseOptions = useMemo(
   () =>
     warehouses.map((item) => ({
-      value: String(item._id || item.id),
+      value: getRecordId(item),
       label: item.location_name
         ? `${item.name} (${item.location_name})`
         : item.name,
+      location_id: getRecordId(item.location_id),
     })),
   [warehouses]
 );
+
+  const filteredWarehouseOptions = useMemo(
+    () =>
+      warehouseOptions.filter(
+        (item) =>
+          !formData.location_id ||
+          sameId(item.location_id, formData.location_id)
+      ),
+    [warehouseOptions, formData.location_id]
+  );
 
   const roleOptions = useMemo(() => roles.map((role) => ({ value: String(role.id), label: role.name })), [roles]);
 
@@ -237,6 +257,20 @@ export default function EmployeeManagementPage() {
       } else {
         setFormData((prev) => ({ ...prev, role: "" }));
       }
+      return;
+    }
+    if (name === "location_id") {
+      const validWarehouseIds = new Set(
+        warehouseOptions
+          .filter((item) => !value || sameId(item.location_id, value))
+          .map((item) => String(item.value))
+      );
+      setFormData((prev) => ({
+        ...prev,
+        location_id: value,
+        assigned_warehouse_ids: (prev.assigned_warehouse_ids || [])
+          .filter((item) => validWarehouseIds.has(String(item))),
+      }));
       return;
     }
     setFormData((prev) => ({ ...prev, [name]: value }));
@@ -387,18 +421,17 @@ export default function EmployeeManagementPage() {
    const assignedWarehouseIds = warehouses
   .filter(
     (item) =>
-      String(item.employee_id) ===
-      String(recordId)
+      sameId(getRecordId(item.employee_id), recordId)
   )
   .map((item) =>
-    String(item._id || item.id)
+    getRecordId(item)
   );
     setFormData({
       name: employee.name || "",
       address: employee.address || "",
       username: employee.username || "",
       password: "",
-      location_id: String(employee.location_id || ""),
+      location_id: getRecordId(employee.location_id),
       role: employee.role || "",
       permissions: employee.permissions || [],
       opening_balance: String(employee.opening_balance || 0),
@@ -497,8 +530,7 @@ export default function EmployeeManagementPage() {
               const assignedNames = warehouses
   .filter(
     (item) =>
-      String(item.employee_id) ===
-      String(employeeRecordId(employee))
+      sameId(getRecordId(item.employee_id), employeeRecordId(employee))
   )
   .map((item) => item.name)
   .join(", ");
@@ -521,11 +553,9 @@ export default function EmployeeManagementPage() {
                   <td style={tdStyle}>{employee.role || "-"}</td>
                   <td style={tdStyle}>
   {
-    locations.find(
-      (item) =>
-        String(item._id || item.id) ===
-        String(employee.location_id)
-    )?.name || "-"
+    employee.location_name ||
+    locations.find((item) => sameId(getRecordId(item), getRecordId(employee.location_id)))?.name ||
+    "-"
   }
 </td>
                   <td style={tdStyle}>{assignedNames || "-"}</td>
@@ -576,7 +606,7 @@ export default function EmployeeManagementPage() {
     {locations.map((location) => (
       <option
         key={location._id || location.id}
-        value={location._id || location.id}
+        value={getRecordId(location)}
       >
         {location.name}
       </option>
@@ -598,7 +628,7 @@ export default function EmployeeManagementPage() {
               <div style={{ gridColumn: "1 / -1" }}>
                 <MultiSelectDropdown
                   label="Assigned Warehouses"
-                  options={warehouseOptions}
+                  options={filteredWarehouseOptions}
                   value={formData.assigned_warehouse_ids}
                   onChange={(next) => setFormData((prev) => ({ ...prev, assigned_warehouse_ids: next }))}
                   placeholder="Select Warehouses"
