@@ -180,33 +180,51 @@ export default function ExpenseManagementPage() {
   };
 
   const fetchDropdowns = async () => {
-    try {
-      const [locationRes, warehouseRes, employeeRes, productRes, companyRes, accountRes, consigneeRes] =
-        await Promise.all([
-          axios.get(`${API_BASE}/locations`),
-          axios.get(`${API_BASE}/warehouses`),
-          canViewEmployees
-            ? axios.get(`${API_BASE}/employees`)
-            : Promise.resolve({
-                data: user
-                  ? [{ id: user.id, name: user.name || user.username || "Current User" }]
-                  : [],
-              }),
-          axios.get(`${API_BASE}/products`),
-          axios.get(`${API_BASE}/companies`),
-          axios.get(`${API_BASE}/company-accounts`),
-          axios.get(`${API_BASE}/consignee-names`).catch(() => ({ data: [] })),
-        ]);
+    const currentUserOption = user
+      ? [{ id: user.id, name: user.name || user.username || "Current User" }]
+      : [];
+    const dropdownRequests = [
+      ["locations", axios.get(`${API_BASE}/locations`)],
+      ["warehouses", axios.get(`${API_BASE}/warehouses`)],
+      [
+        "employees",
+        canViewEmployees
+          ? axios.get(`${API_BASE}/employees`)
+          : Promise.resolve({ data: currentUserOption }),
+      ],
+      ["products", axios.get(`${API_BASE}/products`)],
+      ["companies", axios.get(`${API_BASE}/companies`)],
+      ["company accounts", axios.get(`${API_BASE}/company-accounts`)],
+      ["consignee names", axios.get(`${API_BASE}/consignee-names`)],
+    ];
 
-      const nextLocations = Array.isArray(locationRes.data) ? locationRes.data : [];
-      const nextWarehouses = Array.isArray(warehouseRes.data) ? warehouseRes.data : [];
+    const settled = await Promise.allSettled(
+      dropdownRequests.map(([, request]) => request)
+    );
+
+    const dataByName = dropdownRequests.reduce((acc, [name], index) => {
+      const result = settled[index];
+      if (result.status === "fulfilled") {
+        acc[name] = result.value?.data;
+      } else {
+        console.error(`Failed to load expense dropdown: ${name}`, result.reason);
+        acc[name] = [];
+      }
+      return acc;
+    }, {});
+
+    const nextLocations = Array.isArray(dataByName.locations) ? dataByName.locations : [];
+    const nextWarehouses = Array.isArray(dataByName.warehouses) ? dataByName.warehouses : [];
+    const nextEmployees = Array.isArray(dataByName.employees) ? dataByName.employees : currentUserOption;
+
+    try {
       setLocations(nextLocations);
       setWarehouses(nextWarehouses);
-      setEmployees(Array.isArray(employeeRes.data) ? employeeRes.data : []);
-      setProducts(productRes.data || []);
-      setCompanies(companyRes.data || []);
-      setCompanyAccounts(accountRes.data || []);
-      setConsigneeNames(Array.isArray(consigneeRes.data) ? consigneeRes.data : []);
+      setEmployees(nextEmployees);
+      setProducts(Array.isArray(dataByName.products) ? dataByName.products : []);
+      setCompanies(Array.isArray(dataByName.companies) ? dataByName.companies : []);
+      setCompanyAccounts(Array.isArray(dataByName["company accounts"]) ? dataByName["company accounts"] : []);
+      setConsigneeNames(Array.isArray(dataByName["consignee names"]) ? dataByName["consignee names"] : []);
 
       if ((user?.assigned_warehouse_ids || []).length === 1) {
         const assignedWarehouseId = String(user.assigned_warehouse_ids[0]);
