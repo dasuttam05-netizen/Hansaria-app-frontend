@@ -87,6 +87,13 @@ export default function InwardManagementPage() {
     }
   }, [formData.employee_id, employees, warehouses]);
 
+  // Filter warehouses by selected location
+  const warehousesForLocation = formData.location_id
+    ? warehouses.filter((w) => String(w.location_id) === String(formData.location_id))
+    : warehouses;
+
+  const noWarehousesAvailable = formData.location_id && warehousesForLocation.length === 0;
+
   const handleChange = (e) => setFormData({ ...formData, [e.target.name]: e.target.value });
 
   const handleSubmit = async (e) => {
@@ -247,10 +254,16 @@ export default function InwardManagementPage() {
               </select>
 
               <select name="warehouse_id" value={formData.warehouse_id} onChange={handleChange}
-                style={{ padding:"12px", fontSize:"16px", borderRadius:"6px", border:"1px solid #ccc" }}>
+                disabled={noWarehousesAvailable}
+                style={{ padding:"12px", fontSize:"16px", borderRadius:"6px", border: noWarehousesAvailable ? "2px solid #ef4444" : "1px solid #ccc", background: noWarehousesAvailable ? "#fef2f2" : "#fff" }}>
                 <option value="">Select Warehouse</option>
-                {warehouses.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+                {warehousesForLocation.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
               </select>
+              {noWarehousesAvailable && (
+                <div style={{ color: "#dc2626", fontSize: "12px", marginTop: "4px", padding: "6px 8px", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "4px" }}>
+                  ⚠️ No warehouse mapped to this location. Please map a warehouse first.
+                </div>
+              )}
 
               <select name="product_id" value={formData.product_id} onChange={handleChange}
                 style={{ padding:"12px", fontSize:"16px", borderRadius:"6px", border:"1px solid #ccc" }}>
