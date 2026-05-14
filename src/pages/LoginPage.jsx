@@ -3,6 +3,7 @@ import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { hasAnyPermission, hasPermission, saveSession } from "../utils/auth";
 import logo from "./logo.png";
+import heroBg from "../assets/login-corn-jute-warehouse.png";
 
 function resolveLandingPath(user) {
   if (hasPermission(user, "dashboard.view")) return "/dashboard";
@@ -85,24 +86,30 @@ export default function LoginPage() {
               <img src={logo} alt="Hansaria" style={logoStyle} />
             </div>
             <div>
-              <div style={eyebrowStyle}>Hansaria Stock Management</div>
-              <h1 style={titleStyle}>Warehouse Operations</h1>
+              <div style={eyebrowStyle}>Warehouse Management System</div>
+              <div style={brandNameStyle}>Hansaria Food Warehouse</div>
             </div>
           </div>
 
+          <h1 style={titleStyle}>
+            Smart <span style={accentTextStyle}>Stock</span>
+            <br />
+            Management System
+          </h1>
+
           <p style={introStyle}>
-            Track stock movement, expenses, parties, warehouses, and reports from one secure workspace.
+            Keep corn stock, jute bag inventory, expenses, parties, cash books, and reports organized in one secure workspace.
           </p>
 
-          <div style={featureGridStyle}>
+          <div style={featureListStyle}>
             {[
-              ["Stock", "Inward, outward, party stock, and warehouse movement."],
-              ["Expense", "Entry, approval, palti lorry, self loading, and local sale."],
-              ["Parties", "Manage company accounts, parties, consignees, and buyers."],
-              ["Reports", "Ledger, rent, settlement, ERP, transport, and activity logs."],
-            ].map(([label, text]) => (
+              ["ST", "Stock Maintain", "Inward, outward, party stock, and warehouse movement."],
+              ["EX", "Expense Approval", "HO/BM approval, palti lorry, self loading, and local sale."],
+              ["RP", "Real-time Reports", "Ledger, rent, settlement, ERP, transport, and activity logs."],
+              ["SC", "Secure Access", "Admin, HO, BM, and employee permissions with location control."],
+            ].map(([code, label, text]) => (
               <div key={label} style={featureItemStyle}>
-                <div style={featureBadgeStyle}>{label.slice(0, 2).toUpperCase()}</div>
+                <div style={featureBadgeStyle}>{code}</div>
                 <div>
                   <div style={featureTitleStyle}>{label}</div>
                   <div style={featureTextStyle}>{text}</div>
@@ -113,14 +120,13 @@ export default function LoginPage() {
         </section>
 
         <section style={loginPanelStyle} className="login-form-panel">
-          <div style={mobileLogoStyle} className="login-mobile-logo">
-            <img src={logo} alt="Hansaria" style={mobileLogoImageStyle} />
-          </div>
           <div style={formCardStyle}>
+            <div style={cardIconStyle}>
+              <img src={logo} alt="Hansaria" style={cardLogoStyle} />
+            </div>
             <div style={formHeaderStyle}>
-              <div style={formKickerStyle}>Secure Login</div>
-              <h2 style={formTitleStyle}>Sign in to continue</h2>
-              <p style={formTextStyle}>Use your admin, HO, BM, or employee credentials.</p>
+              <h2 style={formTitleStyle}>Welcome Back!</h2>
+              <p style={formTextStyle}>Sign in to continue to your account</p>
             </div>
 
             <form onSubmit={handleLogin} style={formStyle}>
@@ -156,6 +162,12 @@ export default function LoginPage() {
                 {loading ? "Signing in..." : "Login"}
               </button>
             </form>
+
+            <div style={poweredStyle}>
+              <span style={poweredLineStyle} />
+              <span>Powered by Hansaria Food Warehouse System</span>
+              <span style={poweredLineStyle} />
+            </div>
           </div>
         </section>
       </main>
@@ -167,7 +179,9 @@ const pageStyle = {
   minHeight: "100vh",
   display: "grid",
   gridTemplateColumns: "minmax(360px, 1.08fr) minmax(340px, 0.92fr)",
-  background: "linear-gradient(160deg, #eef3f7 0%, #dde8f2 100%)",
+  backgroundImage: `linear-gradient(90deg, rgba(2, 20, 32, 0.88) 0%, rgba(2, 20, 32, 0.72) 47%, rgba(2, 20, 32, 0.34) 100%), url(${heroBg})`,
+  backgroundSize: "cover",
+  backgroundPosition: "center",
   fontFamily: "Segoe UI, Arial, sans-serif",
   color: "#0f172a",
 };
@@ -177,7 +191,7 @@ const brandPanelStyle = {
   display: "flex",
   flexDirection: "column",
   justifyContent: "center",
-  background: "linear-gradient(135deg, #0f766e 0%, #134e4a 58%, #172554 100%)",
+  background: "transparent",
   color: "#fff",
   minHeight: "100vh",
 };
@@ -190,9 +204,9 @@ const brandTopStyle = {
 };
 
 const logoWrapStyle = {
-  width: 82,
-  height: 82,
-  borderRadius: 18,
+  width: 58,
+  height: 58,
+  borderRadius: 14,
   background: "#ffffff",
   display: "flex",
   alignItems: "center",
@@ -208,41 +222,51 @@ const logoStyle = {
 };
 
 const eyebrowStyle = {
-  fontSize: 14,
+  fontSize: 13,
   fontWeight: 800,
-  color: "#b6f3e8",
+  color: "#a7f3d0",
   textTransform: "uppercase",
 };
 
+const brandNameStyle = {
+  fontSize: 22,
+  fontWeight: 900,
+  color: "#ffffff",
+  marginTop: 3,
+};
+
 const titleStyle = {
-  margin: "4px 0 0",
-  fontSize: 46,
+  margin: "22px 0 0",
+  fontSize: 52,
   lineHeight: 1.05,
   letterSpacing: 0,
 };
 
-const introStyle = {
-  maxWidth: 700,
-  fontSize: 19,
-  lineHeight: 1.65,
-  color: "#e6fffb",
-  margin: "0 0 34px",
+const accentTextStyle = {
+  color: "#f6c343",
 };
 
-const featureGridStyle = {
+const introStyle = {
+  maxWidth: 700,
+  fontSize: 18,
+  lineHeight: 1.65,
+  color: "#e6fffb",
+  margin: "20px 0 32px",
+};
+
+const featureListStyle = {
   display: "grid",
-  gridTemplateColumns: "repeat(2, minmax(220px, 1fr))",
   gap: 14,
-  maxWidth: 760,
+  maxWidth: 560,
 };
 
 const featureItemStyle = {
   display: "flex",
   gap: 12,
   alignItems: "flex-start",
-  padding: 16,
-  border: "1px solid rgba(255,255,255,0.18)",
-  background: "rgba(255,255,255,0.09)",
+  padding: 0,
+  border: "none",
+  background: "transparent",
   borderRadius: 8,
 };
 
@@ -250,8 +274,8 @@ const featureBadgeStyle = {
   width: 38,
   height: 38,
   borderRadius: 8,
-  background: "#ffffff",
-  color: "#0f766e",
+  background: "rgba(15, 118, 110, 0.88)",
+  color: "#ffffff",
   fontWeight: 900,
   display: "flex",
   alignItems: "center",
@@ -276,45 +300,48 @@ const loginPanelStyle = {
   display: "flex",
   flexDirection: "column",
   justifyContent: "center",
-  padding: "48px",
-  background: "rgba(248, 250, 252, 0.82)",
-  backdropFilter: "blur(4px)",
+  alignItems: "center",
+  padding: "48px 56px 48px 20px",
+  background: "transparent",
 };
 
 const formCardStyle = {
   width: "100%",
-  maxWidth: 470,
-  padding: "34px",
-  borderRadius: 18,
-  border: "1px solid #dbe5ef",
-  background: "#ffffff",
-  boxShadow: "0 24px 50px rgba(15, 23, 42, 0.12)",
-};
-
-const mobileLogoStyle = {
-  display: "none",
-};
-
-const mobileLogoImageStyle = {
-  width: 70,
-  height: 70,
-  objectFit: "contain",
+  maxWidth: 430,
+  padding: "38px 34px",
+  borderRadius: 22,
+  border: "1px solid rgba(219, 229, 239, 0.95)",
+  background: "rgba(255, 255, 255, 0.96)",
+  boxShadow: "0 26px 70px rgba(2, 20, 32, 0.28)",
 };
 
 const formHeaderStyle = {
+  textAlign: "center",
   marginBottom: 26,
 };
 
-const formKickerStyle = {
-  color: "#0f766e",
-  fontWeight: 850,
-  fontSize: 13,
-  textTransform: "uppercase",
+const cardIconStyle = {
+  width: 82,
+  height: 82,
+  borderRadius: "50%",
+  background: "#0b355d",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  margin: "0 auto 18px",
+  boxShadow: "0 16px 30px rgba(11, 53, 93, 0.22)",
+};
+
+const cardLogoStyle = {
+  width: 56,
+  height: 56,
+  objectFit: "contain",
+  filter: "brightness(0) invert(1)",
 };
 
 const formTitleStyle = {
-  margin: "6px 0 6px",
-  fontSize: 34,
+  margin: "0 0 8px",
+  fontSize: 28,
   lineHeight: 1.15,
   letterSpacing: 0,
 };
@@ -373,6 +400,23 @@ const buttonStyle = {
   boxShadow: "0 14px 28px rgba(15, 118, 110, 0.24)",
 };
 
+const poweredStyle = {
+  display: "flex",
+  alignItems: "center",
+  gap: 10,
+  color: "#475569",
+  fontSize: 12,
+  fontWeight: 750,
+  marginTop: 24,
+  textAlign: "center",
+};
+
+const poweredLineStyle = {
+  height: 1,
+  background: "#e2e8f0",
+  flex: 1,
+};
+
 const responsiveCss = `
   @media (max-width: 1024px) {
     .login-brand-panel {
@@ -395,13 +439,7 @@ const responsiveCss = `
     .login-form-panel {
       min-height: 100vh !important;
       justify-content: center !important;
-      background: transparent !important;
-      backdrop-filter: none !important;
       padding: 22px !important;
-    }
-    .login-mobile-logo {
-      display: block !important;
-      margin-bottom: 14px !important;
     }
   }
 `;
