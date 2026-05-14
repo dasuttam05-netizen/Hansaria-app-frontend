@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { formatDisplayDate } from "../utils/date";
@@ -179,6 +179,7 @@ export default function ExpenseManagementPage() {
   const [editId, setEditId] = useState(null);
   const [formData, setFormData] = useState(() => createEmptyForm(user));
   const [editLabels, setEditLabels] = useState({});
+  const activeEditRequestRef = useRef(0);
 
   const filteredAccounts = useMemo(
     () =>
@@ -265,14 +266,16 @@ export default function ExpenseManagementPage() {
     initializeData();
   }, []);
 
+  const editParam = searchParams.get("edit");
+
   useEffect(() => {
-    const editExpenseId = Number(searchParams.get("edit"));
+    const editExpenseId = Number(editParam);
     if (!Number.isFinite(editExpenseId) || editExpenseId <= 0) {
       return;
     }
 
     openExpenseById(editExpenseId);
-  }, [searchParams]);
+  }, [editParam]);
 
   const initializeData = async () => {
     await fetchDropdowns();
@@ -375,6 +378,7 @@ export default function ExpenseManagementPage() {
   };
 
   const resetForm = () => {
+    activeEditRequestRef.current += 1;
     setFormData(createEmptyForm(user));
     setEditId(null);
     setEditLabels({});
@@ -675,10 +679,19 @@ export default function ExpenseManagementPage() {
       return;
     }
 
+    const requestId = activeEditRequestRef.current + 1;
+    activeEditRequestRef.current = requestId;
+
     try {
       const res = await axios.get(`${API_BASE}/expenses/${expenseId}`);
+      if (requestId !== activeEditRequestRef.current) {
+        return;
+      }
       populateEditForm(res.data);
     } catch (error) {
+      if (requestId !== activeEditRequestRef.current) {
+        return;
+      }
       console.error(error);
       toast.error(error?.response?.data?.error || "Failed to open expense entry", {
         theme: "colored",
