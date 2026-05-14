@@ -61,6 +61,8 @@ const normalizeDecimalInput = (value) => {
   );
 };
 
+const asTextValue = (value) => String(value ?? "");
+
 const WORK_DESCRIPTION_OPTIONS = [
   "Palti Lorry",
   "Self Loading",
@@ -1368,21 +1370,37 @@ function Field({ label, children }) {
   );
 }
 
-const ExpenseItemRow = React.memo(function ExpenseItemRow({
-  item,
-  index,
-  onItemChange,
-}) {
+const ExpenseItemRow = React.memo(function ExpenseItemRow({ item, index, onItemChange }) {
+  const [localParticularName, setLocalParticularName] = useState(() =>
+    asTextValue(item.particular_name)
+  );
+  const [localBags, setLocalBags] = useState(() => asTextValue(item.bags));
+  const [localRate, setLocalRate] = useState(() => asTextValue(item.rate));
+
+  useEffect(() => {
+    setLocalParticularName(asTextValue(item.particular_name));
+  }, [item.row_key, item.particular_name]);
+
+  useEffect(() => {
+    setLocalBags(asTextValue(item.bags));
+  }, [item.row_key, item.bags]);
+
+  useEffect(() => {
+    setLocalRate(asTextValue(item.rate));
+  }, [item.row_key, item.rate]);
+
   return (
     <tr>
       <td style={compactIndexStyle}>{index + 1}</td>
       <td style={compactCellStyle}>
         <input
           type="text"
-          value={item.particular_name}
-          onChange={(e) =>
-            onItemChange(item.row_key, "particular_name", e.target.value)
-          }
+          value={localParticularName}
+          onChange={(e) => {
+            const next = e.target.value;
+            setLocalParticularName(next);
+            onItemChange(item.row_key, "particular_name", next);
+          }}
           style={compactInputStyle}
         />
       </td>
@@ -1390,8 +1408,12 @@ const ExpenseItemRow = React.memo(function ExpenseItemRow({
         <input
           type="text"
           inputMode="decimal"
-          value={item.bags}
-          onChange={(e) => onItemChange(item.row_key, "bags", e.target.value)}
+          value={localBags}
+          onChange={(e) => {
+            const next = normalizeDecimalInput(e.target.value);
+            setLocalBags(next);
+            onItemChange(item.row_key, "bags", next);
+          }}
           style={compactInputStyle}
           placeholder="Bags"
         />
@@ -1400,8 +1422,12 @@ const ExpenseItemRow = React.memo(function ExpenseItemRow({
         <input
           type="text"
           inputMode="decimal"
-          value={item.rate}
-          onChange={(e) => onItemChange(item.row_key, "rate", e.target.value)}
+          value={localRate}
+          onChange={(e) => {
+            const next = normalizeDecimalInput(e.target.value);
+            setLocalRate(next);
+            onItemChange(item.row_key, "rate", next);
+          }}
           style={compactInputStyle}
           placeholder="Rate"
         />
