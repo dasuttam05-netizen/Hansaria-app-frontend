@@ -76,85 +76,90 @@ export default function LoginPage() {
   };
 
   return (
-    <main style={pageStyle}>
-      <section style={brandPanelStyle}>
-        <div style={brandTopStyle}>
-          <div style={logoWrapStyle}>
-            <img src={logo} alt="Hansaria" style={logoStyle} />
-          </div>
-          <div>
-            <div style={eyebrowStyle}>Hansaria Stock Management</div>
-            <h1 style={titleStyle}>Warehouse Operations</h1>
-          </div>
-        </div>
-
-        <p style={introStyle}>
-          Track stock movement, expenses, cash books, parties, warehouses, and reports from one secure workspace.
-        </p>
-
-        <div style={featureGridStyle}>
-          {[
-            ["Stock", "Inward, outward, party stock, and warehouse movement."],
-            ["Expense", "Entry, approval, palti lorry, self loading, and local sale."],
-            ["Cash", "Main cash, party cash, employee cash, and pending entries."],
-            ["Reports", "Ledger, rent, settlement, ERP, transport, and activity logs."],
-          ].map(([label, text]) => (
-            <div key={label} style={featureItemStyle}>
-              <div style={featureBadgeStyle}>{label.slice(0, 2).toUpperCase()}</div>
-              <div>
-                <div style={featureTitleStyle}>{label}</div>
-                <div style={featureTextStyle}>{text}</div>
-              </div>
+    <>
+      <style>{responsiveCss}</style>
+      <main style={pageStyle}>
+        <section style={brandPanelStyle} className="login-brand-panel">
+          <div style={brandTopStyle}>
+            <div style={logoWrapStyle}>
+              <img src={logo} alt="Hansaria" style={logoStyle} />
             </div>
-          ))}
-        </div>
-      </section>
+            <div>
+              <div style={eyebrowStyle}>Hansaria Stock Management</div>
+              <h1 style={titleStyle}>Warehouse Operations</h1>
+            </div>
+          </div>
 
-      <section style={loginPanelStyle}>
-        <div style={mobileLogoStyle}>
-          <img src={logo} alt="Hansaria" style={mobileLogoImageStyle} />
-        </div>
-        <div style={formHeaderStyle}>
-          <div style={formKickerStyle}>Secure Login</div>
-          <h2 style={formTitleStyle}>Sign in to continue</h2>
-          <p style={formTextStyle}>Use your admin, HO, BM, or employee credentials.</p>
-        </div>
+          <p style={introStyle}>
+            Track stock movement, expenses, parties, warehouses, and reports from one secure workspace.
+          </p>
 
-        <form onSubmit={handleLogin} style={formStyle}>
-          <label style={labelStyle}>
-            Username
-            <input
-              type="text"
-              placeholder="Enter username"
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              style={inputStyle}
-              autoComplete="username"
-              required
-            />
-          </label>
+          <div style={featureGridStyle}>
+            {[
+              ["Stock", "Inward, outward, party stock, and warehouse movement."],
+              ["Expense", "Entry, approval, palti lorry, self loading, and local sale."],
+              ["Parties", "Manage company accounts, parties, consignees, and buyers."],
+              ["Reports", "Ledger, rent, settlement, ERP, transport, and activity logs."],
+            ].map(([label, text]) => (
+              <div key={label} style={featureItemStyle}>
+                <div style={featureBadgeStyle}>{label.slice(0, 2).toUpperCase()}</div>
+                <div>
+                  <div style={featureTitleStyle}>{label}</div>
+                  <div style={featureTextStyle}>{text}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
 
-          <label style={labelStyle}>
-            Password
-            <input
-              type="password"
-              placeholder="Enter password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              style={inputStyle}
-              autoComplete="current-password"
-              required
-            />
-          </label>
+        <section style={loginPanelStyle} className="login-form-panel">
+          <div style={mobileLogoStyle} className="login-mobile-logo">
+            <img src={logo} alt="Hansaria" style={mobileLogoImageStyle} />
+          </div>
+          <div style={formCardStyle}>
+            <div style={formHeaderStyle}>
+              <div style={formKickerStyle}>Secure Login</div>
+              <h2 style={formTitleStyle}>Sign in to continue</h2>
+              <p style={formTextStyle}>Use your admin, HO, BM, or employee credentials.</p>
+            </div>
 
-          {error ? <div style={errorStyle}>{error}</div> : null}
+            <form onSubmit={handleLogin} style={formStyle}>
+              <label style={labelStyle}>
+                Username
+                <input
+                  type="text"
+                  placeholder="Enter username"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
+                  style={inputStyle}
+                  autoComplete="username"
+                  required
+                />
+              </label>
 
-          <button type="submit" disabled={loading} style={{ ...buttonStyle, opacity: loading ? 0.72 : 1 }}>
-            {loading ? "Signing in..." : "Login"}
-          </button>
-        </form>
-      </section>
-    </main>
+              <label style={labelStyle}>
+                Password
+                <input
+                  type="password"
+                  placeholder="Enter password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  style={inputStyle}
+                  autoComplete="current-password"
+                  required
+                />
+              </label>
+
+              {error ? <div style={errorStyle}>{error}</div> : null}
+
+              <button type="submit" disabled={loading} style={{ ...buttonStyle, opacity: loading ? 0.72 : 1 }}>
+                {loading ? "Signing in..." : "Login"}
+              </button>
+            </form>
+          </div>
+        </section>
+      </main>
+    </>
   );
 }
 
@@ -162,7 +167,7 @@ const pageStyle = {
   minHeight: "100vh",
   display: "grid",
   gridTemplateColumns: "minmax(360px, 1.08fr) minmax(340px, 0.92fr)",
-  background: "#eef3f7",
+  background: "linear-gradient(160deg, #eef3f7 0%, #dde8f2 100%)",
   fontFamily: "Segoe UI, Arial, sans-serif",
   color: "#0f172a",
 };
@@ -272,7 +277,18 @@ const loginPanelStyle = {
   flexDirection: "column",
   justifyContent: "center",
   padding: "48px",
-  background: "#f8fafc",
+  background: "rgba(248, 250, 252, 0.82)",
+  backdropFilter: "blur(4px)",
+};
+
+const formCardStyle = {
+  width: "100%",
+  maxWidth: 470,
+  padding: "34px",
+  borderRadius: 18,
+  border: "1px solid #dbe5ef",
+  background: "#ffffff",
+  boxShadow: "0 24px 50px rgba(15, 23, 42, 0.12)",
 };
 
 const mobileLogoStyle = {
@@ -356,3 +372,36 @@ const buttonStyle = {
   cursor: "pointer",
   boxShadow: "0 14px 28px rgba(15, 118, 110, 0.24)",
 };
+
+const responsiveCss = `
+  @media (max-width: 1024px) {
+    .login-brand-panel {
+      min-height: auto !important;
+      padding: 38px !important;
+    }
+    .login-form-panel {
+      min-height: auto !important;
+      padding: 32px !important;
+    }
+  }
+
+  @media (max-width: 860px) {
+    main {
+      grid-template-columns: 1fr !important;
+    }
+    .login-brand-panel {
+      display: none !important;
+    }
+    .login-form-panel {
+      min-height: 100vh !important;
+      justify-content: center !important;
+      background: transparent !important;
+      backdrop-filter: none !important;
+      padding: 22px !important;
+    }
+    .login-mobile-logo {
+      display: block !important;
+      margin-bottom: 14px !important;
+    }
+  }
+`;
