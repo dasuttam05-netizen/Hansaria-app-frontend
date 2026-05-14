@@ -45,6 +45,22 @@ const createExpenseItem = (item = {}, fallbackLineNo = 1) => ({
   amount: item.amount ?? "",
 });
 
+const normalizeDecimalInput = (value) => {
+  const raw = String(value ?? "");
+  if (!raw) return "";
+
+  const cleaned = raw.replace(/[^\d.]/g, "");
+  const dotIndex = cleaned.indexOf(".");
+  if (dotIndex === -1) {
+    return cleaned;
+  }
+
+  return (
+    cleaned.slice(0, dotIndex + 1) +
+    cleaned.slice(dotIndex + 1).replace(/\./g, "")
+  );
+};
+
 const WORK_DESCRIPTION_OPTIONS = [
   "Palti Lorry",
   "Self Loading",
@@ -379,11 +395,15 @@ export default function ExpenseManagementPage() {
 
   const handleItemChange = (rowKey, field, value) => {
     setFormData((prev) => {
+      const normalizedValue =
+        field === "bags" || field === "rate"
+          ? normalizeDecimalInput(value)
+          : value;
       const nextItems = prev.items.map((item) =>
         item.row_key === rowKey
           ? {
               ...item,
-              [field]: value,
+              [field]: normalizedValue,
             }
           : item
       );
@@ -1144,7 +1164,8 @@ export default function ExpenseManagementPage() {
                           </td>
                           <td style={compactCellStyle}>
                             <input
-                              type="number"
+                              type="text"
+                              inputMode="decimal"
                               value={item.bags}
                               onChange={(e) => handleItemChange(item.row_key, "bags", e.target.value)}
                               style={compactInputStyle}
@@ -1153,7 +1174,8 @@ export default function ExpenseManagementPage() {
                           </td>
                           <td style={compactCellStyle}>
                             <input
-                              type="number"
+                              type="text"
+                              inputMode="decimal"
                               value={item.rate}
                               onChange={(e) => handleItemChange(item.row_key, "rate", e.target.value)}
                               style={compactInputStyle}
@@ -1249,6 +1271,7 @@ export default function ExpenseManagementPage() {
         </div>
       )}
 
+      {!showForm && (
       <div style={listCardStyle}>
         <div style={{ overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
@@ -1363,6 +1386,7 @@ export default function ExpenseManagementPage() {
           </table>
         </div>
       </div>
+      )}
         </>
       )}
     </div>
