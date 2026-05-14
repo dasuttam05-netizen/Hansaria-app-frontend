@@ -58,6 +58,21 @@ const getRecordId = (record) => {
 const sameId = (left, right) =>
   String(left || "") !== "" && String(left || "") === String(right || "");
 
+const withSelectedRecord = (records, selectedId, selectedLabel, labelField = "name") => {
+  const value = String(selectedId || "");
+  if (!value || records.some((record) => sameId(getRecordId(record), value))) {
+    return records;
+  }
+
+  return [
+    {
+      id: value,
+      [labelField]: selectedLabel || "Selected value",
+    },
+    ...records,
+  ];
+};
+
 const createEmptyForm = (user) => ({
   expense_date: new Date().toISOString().slice(0, 10),
   location_id: getRecordId(user?.location_id),
@@ -111,7 +126,8 @@ export default function ExpenseManagementPage() {
   const canOpenLocalSale = hasPermission(user, "expense.localSale");
   const canViewEmployees = hasPermission(user, "employees.view");
   const canViewCashEntries = hasPermission(user, "cash.view");
-  const canApproveToCashBook = canEdit && hasPermission(user, "cash.create");
+  const isHoOrBm = ["ho", "bm"].includes(String(user?.role || "").trim().toLowerCase());
+  const canApproveToCashBook = canEdit && (hasPermission(user, "cash.create") || isHoOrBm);
   const canAccessPage =
     canCreate || canEdit || canDelete || canExpenseEntryAccess;
 
@@ -127,6 +143,7 @@ export default function ExpenseManagementPage() {
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState(null);
   const [formData, setFormData] = useState(() => createEmptyForm(user));
+  const [editLabels, setEditLabels] = useState({});
 
   const filteredAccounts = useMemo(
     () =>
@@ -176,6 +193,38 @@ export default function ExpenseManagementPage() {
       );
     });
   }, [employees, formData.location_id]);
+
+  const locationOptions = useMemo(
+    () => withSelectedRecord(accessibleLocations, formData.location_id, editLabels.location_name),
+    [accessibleLocations, formData.location_id, editLabels.location_name]
+  );
+
+  const employeeOptions = useMemo(
+    () => withSelectedRecord(filteredEmployees, formData.employee_id, editLabels.employee_name),
+    [filteredEmployees, formData.employee_id, editLabels.employee_name]
+  );
+
+  const productOptions = useMemo(
+    () => withSelectedRecord(products, formData.product_id, editLabels.product_name),
+    [products, formData.product_id, editLabels.product_name]
+  );
+
+  const companyOptions = useMemo(
+    () => withSelectedRecord(companies, formData.company_id, editLabels.company_name),
+    [companies, formData.company_id, editLabels.company_name]
+  );
+
+  const accountOptions = useMemo(
+    () => withSelectedRecord(filteredAccounts, formData.company_account_id, editLabels.company_account_name, "account_name"),
+    [filteredAccounts, formData.company_account_id, editLabels.company_account_name]
+  );
+
+  const warehouseOptions = useMemo(() => {
+    const selectedWarehouseId = String(formData.send_to_unified || "").startsWith("warehouse:")
+      ? String(formData.send_to_unified).split(":")[1]
+      : "";
+    return withSelectedRecord(filteredWarehouses, selectedWarehouseId, editLabels.send_to_company_name);
+  }, [filteredWarehouses, formData.send_to_unified, editLabels.send_to_company_name]);
 
   useEffect(() => {
     initializeData();
@@ -293,6 +342,7 @@ export default function ExpenseManagementPage() {
   const resetForm = () => {
     setFormData(createEmptyForm(user));
     setEditId(null);
+    setEditLabels({});
     setShowForm(false);
   };
 
@@ -490,6 +540,14 @@ export default function ExpenseManagementPage() {
       return;
     }
     setEditId(row.id);
+    setEditLabels({
+      location_name: row.location_name || row.warehouse_name || "",
+      employee_name: row.employee_name || "",
+      product_name: row.product_name || "",
+      company_name: row.company_name || "",
+      company_account_name: row.company_account_name || "",
+      send_to_company_name: row.send_to_company_name || row.warehouse_name || "",
+    });
     setFormData({
       expense_date: row.expense_date || new Date().toISOString().slice(0, 10),
       location_id: row.effective_location_id ? String(row.effective_location_id) : "",
@@ -679,7 +737,7 @@ export default function ExpenseManagementPage() {
                     required
                   >
                     <option value="">Select location</option>
-                    {accessibleLocations.map((location) => (
+                    {locationOptions.map((location) => (
                       <option key={getRecordId(location)} value={getRecordId(location)}>
                         {location.name}
                       </option>
@@ -695,7 +753,7 @@ export default function ExpenseManagementPage() {
                     style={inputStyle}
                   >
                     <option value="">Select Employee</option>
-                    {filteredEmployees.map((employee) => (
+                    {employeeOptions.map((employee) => (
                       <option key={getRecordId(employee)} value={getRecordId(employee)}>
                         {employee.name}
                       </option>
@@ -722,7 +780,7 @@ export default function ExpenseManagementPage() {
                     style={inputStyle}
                   >
                     <option value="">Select Product</option>
-                    {products.map((product) => (
+                    {productOptions.map((product) => (
                       <option key={getRecordId(product)} value={getRecordId(product)}>
                         {product.name}
                       </option>
@@ -738,7 +796,7 @@ export default function ExpenseManagementPage() {
                     style={inputStyle}
                   >
                     <option value="">Select company party</option>
-                    {companies.map((company) => (
+                    {companyOptions.map((company) => (
                       <option key={getRecordId(company)} value={getRecordId(company)}>
                         {company.name}
                       </option>
@@ -754,7 +812,7 @@ export default function ExpenseManagementPage() {
                     style={inputStyle}
                   >
                     <option value="">Select Account</option>
-                    {filteredAccounts.map((account) => (
+                    {accountOptions.map((account) => (
                       <option key={getRecordId(account)} value={getRecordId(account)}>
                         {account.account_name}
                       </option>
@@ -806,7 +864,7 @@ export default function ExpenseManagementPage() {
                           style={inputStyle}
                         >
                           <option value="">Select Party</option>
-                          {companies.map((company) => (
+                          {companyOptions.map((company) => (
                             <option key={getRecordId(company)} value={getRecordId(company)}>
                               {company.name}
                             </option>
@@ -841,7 +899,7 @@ export default function ExpenseManagementPage() {
                     >
                       <option value="">Select Warehouse</option>
                       <optgroup label="Warehouse name">
-                        {filteredWarehouses.map((w) => (
+                        {warehouseOptions.map((w) => (
                           <option key={`wh-${getRecordId(w)}`} value={`warehouse:${getRecordId(w)}`}>
                             {w.name}
                           </option>
@@ -869,14 +927,14 @@ export default function ExpenseManagementPage() {
                         ))}
                       </optgroup>
                       <optgroup label="Party (Company)">
-                        {companies.map((co) => (
+                        {companyOptions.map((co) => (
                           <option key={`co-${getRecordId(co)}`} value={`company:${getRecordId(co)}`}>
                             {co.name}
                           </option>
                         ))}
                       </optgroup>
                       <optgroup label="Warehouse name">
-                        {filteredWarehouses.map((w) => (
+                        {warehouseOptions.map((w) => (
                           <option key={`wh-${getRecordId(w)}`} value={`warehouse:${getRecordId(w)}`}>
                             {w.name}
                           </option>
