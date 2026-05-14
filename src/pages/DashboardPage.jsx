@@ -409,7 +409,7 @@ export default function DashboardPage() {
         {
           label: "Expense Entry",
           permission: ["expense.entry", "expense.view", "expense.create", "expense.edit", "expense.delete"],
-          action: () => setShowExpensePopup(true),
+          action: () => navigate("/expenses"),
         },
         {
           label: "Expense Page",
@@ -564,7 +564,7 @@ export default function DashboardPage() {
       title: "Expense Entry",
       icon: <FaMoneyBillWave />,
       subtitle: "Log a new expense",
-      action: () => setShowExpensePopup(true),
+      action: () => navigate("/expenses"),
       permission: ["expense.entry", "expense.view", "expense.create", "expense.edit", "expense.delete"],
     },
     {
