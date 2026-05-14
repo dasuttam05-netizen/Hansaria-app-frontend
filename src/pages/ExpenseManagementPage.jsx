@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { formatDisplayDate } from "../utils/date";
@@ -393,7 +393,7 @@ export default function ExpenseManagementPage() {
     };
   };
 
-  const handleItemChange = (rowKey, field, value) => {
+  const handleItemChange = useCallback((rowKey, field, value) => {
     setFormData((prev) => {
       const normalizedValue =
         field === "bags" || field === "rate"
@@ -427,7 +427,7 @@ export default function ExpenseManagementPage() {
         ...totals,
       };
     });
-  };
+  }, []);
 
   const handleFieldChange = (e) => {
     const { name, value } = e.target;
@@ -1152,46 +1152,12 @@ export default function ExpenseManagementPage() {
                     </thead>
                     <tbody>
                       {formData.items.map((item, index) => (
-                        <tr key={item.row_key}>
-                          <td style={compactIndexStyle}>{index + 1}</td>
-                          <td style={compactCellStyle}>
-                            <input
-                              type="text"
-                              value={item.particular_name}
-                              onChange={(e) => handleItemChange(item.row_key, "particular_name", e.target.value)}
-                              style={compactInputStyle}
-                            />
-                          </td>
-                          <td style={compactCellStyle}>
-                            <input
-                              type="text"
-                              inputMode="decimal"
-                              value={item.bags}
-                              onChange={(e) => handleItemChange(item.row_key, "bags", e.target.value)}
-                              style={compactInputStyle}
-                              placeholder="Bags"
-                            />
-                          </td>
-                          <td style={compactCellStyle}>
-                            <input
-                              type="text"
-                              inputMode="decimal"
-                              value={item.rate}
-                              onChange={(e) => handleItemChange(item.row_key, "rate", e.target.value)}
-                              style={compactInputStyle}
-                              placeholder="Rate"
-                            />
-                          </td>
-                          <td style={compactCellStyle}>
-                            <input
-                              type="number"
-                              value={item.amount}
-                              readOnly
-                              style={{ ...compactInputStyle, background: "#ffffff", fontWeight: 400 }}
-                              placeholder="Amount"
-                            />
-                          </td>
-                        </tr>
+                        <ExpenseItemRow
+                          key={item.row_key}
+                          item={item}
+                          index={index}
+                          onItemChange={handleItemChange}
+                        />
                       ))}
                     </tbody>
                   </table>
@@ -1401,6 +1367,57 @@ function Field({ label, children }) {
     </div>
   );
 }
+
+const ExpenseItemRow = React.memo(function ExpenseItemRow({
+  item,
+  index,
+  onItemChange,
+}) {
+  return (
+    <tr>
+      <td style={compactIndexStyle}>{index + 1}</td>
+      <td style={compactCellStyle}>
+        <input
+          type="text"
+          value={item.particular_name}
+          onChange={(e) =>
+            onItemChange(item.row_key, "particular_name", e.target.value)
+          }
+          style={compactInputStyle}
+        />
+      </td>
+      <td style={compactCellStyle}>
+        <input
+          type="text"
+          inputMode="decimal"
+          value={item.bags}
+          onChange={(e) => onItemChange(item.row_key, "bags", e.target.value)}
+          style={compactInputStyle}
+          placeholder="Bags"
+        />
+      </td>
+      <td style={compactCellStyle}>
+        <input
+          type="text"
+          inputMode="decimal"
+          value={item.rate}
+          onChange={(e) => onItemChange(item.row_key, "rate", e.target.value)}
+          style={compactInputStyle}
+          placeholder="Rate"
+        />
+      </td>
+      <td style={compactCellStyle}>
+        <input
+          type="number"
+          value={item.amount}
+          readOnly
+          style={{ ...compactInputStyle, background: "#ffffff", fontWeight: 400 }}
+          placeholder="Amount"
+        />
+      </td>
+    </tr>
+  );
+});
 
 const pageStyle = {
   padding: "20px",
