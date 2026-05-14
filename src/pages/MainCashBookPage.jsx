@@ -3,7 +3,7 @@ import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { formatDisplayDate } from "../utils/date";
 import CashEntryForm from "../components/CashEntryForm";
-import { hasPermission, loadSession } from "../utils/auth";
+import { hasPermission, hasAnyPermission, loadSession } from "../utils/auth";
 import PageBackCloseActions from "../components/PageBackCloseActions";
 import { exportLedgerExcel, exportLedgerPDF } from "../utils/ledgerExport";
 
@@ -78,7 +78,15 @@ const getSignedOpening = (row) => {
 const MainCashBookPage = () => {
   const navigate = useNavigate();
   const { user: currentUser } = loadSession();
-  const canEditMainOpening = hasPermission(currentUser, "all");
+  const canViewMainOpening = hasAnyPermission(currentUser, [
+    "cash.mainBook.view",
+    "cash.mainBook.create",
+    "cash.mainBook.edit",
+    "cash.mainBook.delete",
+    "all",
+  ]);
+  const canEditMainOpening = hasAnyPermission(currentUser, ["cash.mainBook.edit", "all"]);
+  const [showOpeningSettings, setShowOpeningSettings] = useState(false);
 
   const [entries, setEntries] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
@@ -562,51 +570,104 @@ const MainCashBookPage = () => {
       </div>
 
       <div style={{ ...panel, marginBottom: 14 }}>
-        <div style={{ fontSize: 18, fontWeight: 700, color: "#1f2937", marginBottom: 10 }}>Main Cash Opening</div>
-        <div style={{ display: "grid", gridTemplateColumns: "220px 120px 180px 1fr", gap: 10, alignItems: "end" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 12, marginBottom: 10 }}>
           <div>
-            <label style={label}>Opening Amount</label>
-            <input
-              type="number"
-              step="0.01"
-              value={mainOpeningForm.main_opening_balance}
-              onChange={(e) => setMainOpeningForm((prev) => ({ ...prev, main_opening_balance: e.target.value }))}
-              style={input}
-              disabled={!canEditMainOpening}
-            />
+            <div style={{ fontSize: 18, fontWeight: 700, color: "#1f2937" }}>Main Cash Opening</div>
+            <div style={{ color: "#475569", fontSize: 14, marginTop: 4 }}>
+              Opening balance is now separated from the ledger entries. Use the button to show or hide the opening settings.
+            </div>
           </div>
-          <div>
-            <label style={label}>Type</label>
-            <select
-              value={mainOpeningForm.main_opening_type}
-              onChange={(e) => setMainOpeningForm((prev) => ({ ...prev, main_opening_type: e.target.value }))}
-              style={input}
-              disabled={!canEditMainOpening}
+          {canEditMainOpening ? (
+            <button
+              type="button"
+              onClick={() => setShowOpeningSettings((prev) => !prev)}
+              style={{
+                border: "none",
+                borderRadius: 6,
+                background: "#2563eb",
+                color: "#fff",
+                padding: "10px 14px",
+                fontWeight: 700,
+                cursor: "pointer",
+              }}
             >
-              <option value="dr">Dr</option>
-              <option value="cr">Cr</option>
-            </select>
+              {showOpeningSettings ? "Hide Opening Settings" : "Show Opening Settings"}
+            </button>
+          ) : (
+            <div style={{ color: "#6b7280", fontSize: 14, fontStyle: "italic", alignSelf: "center" }}>
+              Only authorized users can edit opening settings.
+            </div>
+          )}
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "220px 120px 180px 1fr", gap: 10, alignItems: "center" }}>
+          <div>
+            <label style={label}>Current Opening Amount</label>
+            <div style={{ padding: "10px 12px", border: "1px solid #cfd4dc", borderRadius: 4, background: "#f8fafc", fontSize: 16, color: "#0f172a" }}>
+              {Number(mainOpening.main_opening_balance || 0).toFixed(2)}
+            </div>
           </div>
-          <button
-            type="button"
-            onClick={handleSaveMainOpening}
-            disabled={!canEditMainOpening || mainOpeningSaving}
-            style={{
-              border: "none",
-              borderRadius: 6,
-              background: canEditMainOpening ? "#2563eb" : "#94a3b8",
-              color: "#fff",
-              padding: "10px 14px",
-              fontWeight: 700,
-              cursor: canEditMainOpening ? "pointer" : "not-allowed",
-            }}
-          >
-            {mainOpeningSaving ? "Saving..." : "Save Opening"}
-          </button>
-          <div style={{ color: "#475569", fontSize: 14, paddingBottom: 8 }}>
-            Current: {mainOpening.main_opening_type.toUpperCase()} {Number(mainOpening.main_opening_balance || 0).toFixed(2)}
+          <div>
+            <label style={label}>Current Type</label>
+            <div style={{ padding: "10px 12px", border: "1px solid #cfd4dc", borderRadius: 4, background: "#f8fafc", fontSize: 16, color: "#0f172a" }}>
+              {String(mainOpening.main_opening_type || "dr").toUpperCase()}
+            </div>
+          </div>
+          <div>
+            <label style={label}>Last Updated</label>
+            <div style={{ padding: "10px 12px", border: "1px solid #cfd4dc", borderRadius: 4, background: "#f8fafc", fontSize: 16, color: "#0f172a" }}>
+              {mainOpening.updated_at ? new Date(mainOpening.updated_at).toLocaleString() : "Not set"}
+            </div>
+          </div>
+          <div style={{ color: "#475569", fontSize: 14 }}>
+            {canViewMainOpening ? "Opening balance is used in ledger calculations." : "Opening details are restricted to authorized users."}
           </div>
         </div>
+
+        {showOpeningSettings && canEditMainOpening && (
+          <div style={{ display: "grid", gridTemplateColumns: "220px 120px 180px 1fr", gap: 10, alignItems: "end", marginTop: 14 }}>
+            <div>
+              <label style={label}>Edit Opening Amount</label>
+              <input
+                type="number"
+                step="0.01"
+                value={mainOpeningForm.main_opening_balance}
+                onChange={(e) => setMainOpeningForm((prev) => ({ ...prev, main_opening_balance: e.target.value }))}
+                style={input}
+              />
+            </div>
+            <div>
+              <label style={label}>Type</label>
+              <select
+                value={mainOpeningForm.main_opening_type}
+                onChange={(e) => setMainOpeningForm((prev) => ({ ...prev, main_opening_type: e.target.value }))}
+                style={input}
+              >
+                <option value="dr">Dr</option>
+                <option value="cr">Cr</option>
+              </select>
+            </div>
+            <button
+              type="button"
+              onClick={handleSaveMainOpening}
+              disabled={mainOpeningSaving}
+              style={{
+                border: "none",
+                borderRadius: 6,
+                background: "#2563eb",
+                color: "#fff",
+                padding: "10px 14px",
+                fontWeight: 700,
+                cursor: mainOpeningSaving ? "not-allowed" : "pointer",
+              }}
+            >
+              {mainOpeningSaving ? "Saving..." : "Save Opening"}
+            </button>
+            <div style={{ color: "#475569", fontSize: 14, paddingBottom: 8 }}>
+              Changes will update the opening used for ledger totals.
+            </div>
+          </div>
+        )}
       </div>
 
       <div style={panel}>
