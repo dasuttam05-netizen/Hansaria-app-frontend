@@ -30,6 +30,21 @@ const defaultItems = [
   "BIKE KM",
 ];
 
+let expenseItemRowCounter = 0;
+const nextExpenseItemRowKey = () => {
+  expenseItemRowCounter += 1;
+  return `expense-item-${expenseItemRowCounter}`;
+};
+
+const createExpenseItem = (item = {}, fallbackLineNo = 1) => ({
+  row_key: nextExpenseItemRowKey(),
+  line_no: Number(item.line_no) || fallbackLineNo,
+  particular_name: item.particular_name ?? "",
+  bags: item.bags ?? "",
+  rate: item.rate ?? "",
+  amount: item.amount ?? "",
+});
+
 const WORK_DESCRIPTION_OPTIONS = [
   "Palti Lorry",
   "Self Loading",
@@ -103,13 +118,15 @@ const createEmptyForm = (user) => ({
   grand_total: 0,
   total_expense_amount: 0,
   narration: "",
-  items: defaultItems.map((name, index) => ({
-    line_no: index + 1,
-    particular_name: name,
-    bags: "",
-    rate: "",
-    amount: "",
-  })),
+  items: defaultItems.map((name, index) =>
+    createExpenseItem(
+      {
+        line_no: index + 1,
+        particular_name: name,
+      },
+      index + 1
+    )
+  ),
 });
 
 export default function ExpenseManagementPage() {
@@ -360,44 +377,56 @@ export default function ExpenseManagementPage() {
     };
   };
 
-  const updateFormTotals = (nextItems, nextParty, nextDriver) => {
-    const totals = recalculateTotals(nextItems, nextParty, nextDriver);
-    setFormData((prev) => ({
-      ...prev,
-      items: nextItems,
-      receive_cash_from_party: nextParty,
-      receive_cash_from_driver: nextDriver,
-      ...totals,
-    }));
-  };
+  const handleItemChange = (rowKey, field, value) => {
+    setFormData((prev) => {
+      const nextItems = prev.items.map((item) =>
+        item.row_key === rowKey
+          ? {
+              ...item,
+              [field]: value,
+            }
+          : item
+      );
 
-  const handleItemChange = (index, field, value) => {
-    const nextItems = [...formData.items];
-    nextItems[index] = {
-      ...nextItems[index],
-      [field]: value,
-    };
+      const updatedItem = nextItems.find((item) => item.row_key === rowKey);
+      if (updatedItem) {
+        const bags = Number(updatedItem.bags) || 0;
+        const rate = Number(updatedItem.rate) || 0;
+        updatedItem.amount = Number((bags * rate).toFixed(2));
+      }
 
-    const bags = Number(nextItems[index].bags) || 0;
-    const rate = Number(nextItems[index].rate) || 0;
-    nextItems[index].amount = Number((bags * rate).toFixed(2));
+      const totals = recalculateTotals(
+        nextItems,
+        prev.receive_cash_from_party,
+        prev.receive_cash_from_driver
+      );
 
-    updateFormTotals(
-      nextItems,
-      formData.receive_cash_from_party,
-      formData.receive_cash_from_driver
-    );
+      return {
+        ...prev,
+        items: nextItems,
+        ...totals,
+      };
+    });
   };
 
   const handleFieldChange = (e) => {
     const { name, value } = e.target;
 
     if (name === "receive_cash_from_party" || name === "receive_cash_from_driver") {
-      updateFormTotals(
-        formData.items,
-        name === "receive_cash_from_party" ? value : formData.receive_cash_from_party,
-        name === "receive_cash_from_driver" ? value : formData.receive_cash_from_driver
-      );
+      setFormData((prev) => {
+        const nextParty =
+          name === "receive_cash_from_party" ? value : prev.receive_cash_from_party;
+        const nextDriver =
+          name === "receive_cash_from_driver" ? value : prev.receive_cash_from_driver;
+        const totals = recalculateTotals(prev.items, nextParty, nextDriver);
+
+        return {
+          ...prev,
+          receive_cash_from_party: nextParty,
+          receive_cash_from_driver: nextDriver,
+          ...totals,
+        };
+      });
       return;
     }
 
@@ -590,13 +619,18 @@ export default function ExpenseManagementPage() {
       narration: row.narration || "",
       items:
         existingItems.length > 0
-          ? existingItems.map((item, index) => ({
-              line_no: index + 1,
-              particular_name: item.particular_name || "",
-              bags: item.bags || "",
-              rate: item.rate || "",
-              amount: item.amount || "",
-            }))
+          ? existingItems.map((item, index) =>
+              createExpenseItem(
+                {
+                  line_no: item.line_no || index + 1,
+                  particular_name: item.particular_name,
+                  bags: item.bags,
+                  rate: item.rate,
+                  amount: item.amount,
+                },
+                index + 1
+              )
+            )
           : createEmptyForm(user).items,
     });
     setShowForm(true);
@@ -1098,13 +1132,13 @@ export default function ExpenseManagementPage() {
                     </thead>
                     <tbody>
                       {formData.items.map((item, index) => (
-                        <tr key={index}>
+                        <tr key={item.row_key}>
                           <td style={compactIndexStyle}>{index + 1}</td>
                           <td style={compactCellStyle}>
                             <input
                               type="text"
                               value={item.particular_name}
-                              onChange={(e) => handleItemChange(index, "particular_name", e.target.value)}
+                              onChange={(e) => handleItemChange(item.row_key, "particular_name", e.target.value)}
                               style={compactInputStyle}
                             />
                           </td>
@@ -1112,7 +1146,7 @@ export default function ExpenseManagementPage() {
                             <input
                               type="number"
                               value={item.bags}
-                              onChange={(e) => handleItemChange(index, "bags", e.target.value)}
+                              onChange={(e) => handleItemChange(item.row_key, "bags", e.target.value)}
                               style={compactInputStyle}
                               placeholder="Bags"
                             />
@@ -1121,7 +1155,7 @@ export default function ExpenseManagementPage() {
                             <input
                               type="number"
                               value={item.rate}
-                              onChange={(e) => handleItemChange(index, "rate", e.target.value)}
+                              onChange={(e) => handleItemChange(item.row_key, "rate", e.target.value)}
                               style={compactInputStyle}
                               placeholder="Rate"
                             />
