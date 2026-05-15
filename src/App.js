@@ -34,6 +34,8 @@ import CashEntriesPage from "./pages/CashEntriesPage";
 import MainCashBookPage from "./pages/MainCashBookPage";
 import PartiesCashBookPage from "./pages/PartiesCashBookPage";
 import EmployeeCashBookPage from "./pages/EmployeeCashBookPage";
+import FarmerManagementPage from "./pages/FarmerManagementPage";
+import WarehouseTradingPage from "./pages/WarehouseTradingPage";
 import ExpensesPendingPage from "./pages/ExpensesPendingPage";
 import CashActivityLogPage from "./pages/CashActivityLogPage";
 
@@ -99,10 +101,28 @@ function AppRoutes() {
       />
 
       <Route
+        path="/farmers"
+        element={
+          <ProtectedRoute permission={["farmers.view", "farmers.create", "farmers.edit", "farmers.delete"]}>
+            <FarmerManagementPage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
         path="/warehouses"
         element={
           <ProtectedRoute permission="warehouses.manage">
             <WarehouseManagementPage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/warehouse-trading"
+        element={
+          <ProtectedRoute permission={["warehouse.trading.view", "warehouse.trading.manage"]}>
+            <WarehouseTradingPage />
           </ProtectedRoute>
         }
       />
