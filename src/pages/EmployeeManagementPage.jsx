@@ -18,10 +18,17 @@ const PERMISSION_GROUPS = [
       { key: "expense_self_loading_access", label: "Self Loading", permissions: ["expense.selfLoading"] },
       { key: "expense_local_sale_access", label: "Local Sale", permissions: ["expense.localSale"] },
       { key: "expense_pending_access", label: "Expenses Pending", permissions: ["expense.pending"] },
-      { key: "cash_main_book", label: "Main Cash Book", permissions: ["cash.mainBook.view", "cash.mainBook.create", "cash.mainBook.edit", "cash.mainBook.delete"] },
-      { key: "cash_parties_book", label: "Parties Cash Book", permissions: ["cash.partiesBook.view", "cash.partiesBook.create", "cash.partiesBook.edit", "cash.partiesBook.delete"] },
-      { key: "cash_employee_book", label: "Employee Cash Book", permissions: ["cash.employeeBook.view", "cash.employeeBook.create", "cash.employeeBook.edit", "cash.employeeBook.delete"] },
+      { key: "cash_access", label: "Cash Book", permissions: ["cash.view", "cash.create", "cash.edit", "cash.delete"] },
       { key: "transport_access", label: "Transport", permissions: ["transport.manage"] },
+    ],
+  },
+  {
+    key: "warehouse",
+    title: "Warehouse Module",
+    items: [
+      { key: "warehouse_setup", label: "Warehouse Setup", permissions: ["warehouses.manage"] },
+      { key: "warehouse_farmers", label: "Farmers", permissions: ["farmers.view", "farmers.create", "farmers.edit", "farmers.delete"] },
+      { key: "warehouse_trading", label: "Sales / Purchase / Payment / Receipt / Profit Loss", permissions: ["warehouse.trading.view", "warehouse.trading.manage"] },
     ],
   },
   {
@@ -71,6 +78,21 @@ const getActionOptions = (groupKey, item) => {
     }
     return [{ id: `${item.key}:access`, label: "Access", permission: item.permissions[0] || null }];
   }
+  if (groupKey === "warehouse") {
+    if (item.key === "warehouse_trading") {
+      return [
+        { id: `${item.key}:view`, label: "View", permission: "warehouse.trading.view" },
+        { id: `${item.key}:manage`, label: "Create/Edit", permission: "warehouse.trading.manage" },
+      ];
+    }
+    if (item.key === "warehouse_farmers") {
+      return ACTIONS.map((action) => {
+        const direct = item.permissions.find((permission) => permission.endsWith(`.${action}`));
+        return { id: `${item.key}:${action}`, label: action[0].toUpperCase() + action.slice(1), permission: direct || item.permissions[0] || null };
+      }).filter((option, index, arr) => option.permission && arr.findIndex((x) => x.permission === option.permission) === index);
+    }
+    return [{ id: `${item.key}:access`, label: "Access", permission: item.permissions[0] || null }];
+  }
   if (groupKey === "masters") {
     if (item.key === "employees_non_admin_edit") {
       return [{ id: `${item.key}:edit`, label: "Edit", permission: item.permissions[0] || null }];
@@ -87,6 +109,12 @@ const ALL_ACTION_OPTIONS = PERMISSION_GROUPS.flatMap((group) =>
 const flattenPermissionsFromToggles = (toggles) =>
   Array.from(new Set(ALL_ACTION_OPTIONS.flatMap((option) => (toggles[option.id] && option.permission ? [option.permission] : []))));
 
+const countEnabledToggles = (toggles = {}) =>
+  Object.values(toggles || {}).filter(Boolean).length;
+
+const formatSerial = (index) =>
+  String(index + 1).padStart(2, "0");
+
 const togglesFromPermissions = (permissions = []) => {
   const permissionSet = new Set(permissions || []);
   return ALL_ACTION_OPTIONS.reduce((acc, option) => {
@@ -95,15 +123,24 @@ const togglesFromPermissions = (permissions = []) => {
   }, {});
 };
 
+const summarizeRoleAccess = (role) => {
+  if (role?.is_admin || (role?.permissions || []).includes("all")) {
+    return "Full access";
+  }
+
+  const toggles = togglesFromPermissions(role?.permissions || []);
+  const count = countEnabledToggles(toggles);
+  return count ? `${count} access selected` : "No access";
+};
+
 const createDefaultFormData = () => ({
   name: "",
   address: "",
   username: "",
   password: "",
   location_id: "",
-  location_ids: [],
   role: "",
-  permissions: [],
+  permissions: ["dashboard.view"],
   opening_balance: "0",
   opening_balance_type: "dr",
   assigned_warehouse_ids: [],
@@ -111,7 +148,7 @@ const createDefaultFormData = () => ({
 
 const createRoleForm = () => ({
   name: "",
-  toggles: togglesFromPermissions([]),
+  toggles: togglesFromPermissions(["dashboard.view"]),
   is_admin: false,
 });
 
@@ -125,17 +162,8 @@ const normalizeData = (data) => {
   };
 };
 
-const getRecordId = (record) => {
-  if (!record) return "";
-  if (typeof record === "string" || typeof record === "number") return String(record);
-  return String(record.id || record._id || "");
-};
-
-const sameId = (left, right) =>
-  String(left || "") !== "" && String(left || "") === String(right || "");
-
 const employeeRecordId = (employee) =>
-  getRecordId(employee);
+  employee?.id ?? employee?._id ?? "";
 
 const normalizeArray = (arr) => {
   if (!Array.isArray(arr)) return [];
@@ -161,7 +189,7 @@ export default function EmployeeManagementPage() {
   const [showRoleManager, setShowRoleManager] = useState(false);
   const [showRoleEditor, setShowRoleEditor] = useState(false);
   const [formData, setFormData] = useState(createDefaultFormData());
-  const [employeeToggles, setEmployeeToggles] = useState(togglesFromPermissions([]));
+  const [employeeToggles, setEmployeeToggles] = useState(togglesFromPermissions(["dashboard.view"]));
   const [roleForm, setRoleForm] = useState(createRoleForm());
   const [editId, setEditId] = useState(null);
   const [editRoleId, setEditRoleId] = useState(null);
@@ -210,42 +238,24 @@ export default function EmployeeManagementPage() {
   const warehouseOptions = useMemo(
   () =>
     warehouses.map((item) => ({
-      value: getRecordId(item),
+      value: String(item._id || item.id),
       label: item.location_name
         ? `${item.name} (${item.location_name})`
         : item.name,
-      location_id: getRecordId(item.location_id),
     })),
   [warehouses]
 );
-
-  const filteredWarehouseOptions = useMemo(
-    () => {
-      const selectedLocationIds = new Set(
-        [formData.location_id, ...(formData.location_ids || [])]
-          .map(String)
-          .filter(Boolean)
-      );
-
-      if (selectedLocationIds.size === 0) return warehouseOptions;
-
-      return warehouseOptions.filter((item) =>
-        selectedLocationIds.has(String(item.location_id))
-      );
-    },
-    [warehouseOptions, formData.location_id, formData.location_ids]
-  );
 
   const roleOptions = useMemo(() => roles.map((role) => ({ value: String(role.id), label: role.name })), [roles]);
 
   const permissionSummary = useMemo(() => {
     const selected = flattenPermissionsFromToggles(employeeToggles);
-    return selected.length ? selected.join(", ") : "No access selected";
+    return selected.length ? `${countEnabledToggles(employeeToggles)} access selected` : "No access selected";
   }, [employeeToggles]);
 
   const resetEmployeeForm = () => {
     setFormData(createDefaultFormData());
-    setEmployeeToggles(togglesFromPermissions([]));
+    setEmployeeToggles(togglesFromPermissions(["dashboard.view"]));
     setEditId(null);
     setShowEmployeeForm(false);
   };
@@ -269,48 +279,7 @@ export default function EmployeeManagementPage() {
       }
       return;
     }
-    if (name === "location_id") {
-      const validWarehouseIds = new Set(
-        warehouseOptions
-          .filter((item) => {
-            const selectedLocationIds = new Set(
-              [value, ...(formData.location_ids || [])]
-                .map(String)
-                .filter(Boolean)
-            );
-            return selectedLocationIds.size === 0 || selectedLocationIds.has(String(item.location_id));
-          })
-          .map((item) => String(item.value))
-      );
-      setFormData((prev) => ({
-        ...prev,
-        location_id: value,
-        assigned_warehouse_ids: (prev.assigned_warehouse_ids || [])
-          .filter((item) => validWarehouseIds.has(String(item))),
-      }));
-      return;
-    }
     setFormData((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const handleEmployeeLocationsChange = (nextLocationIds) => {
-    const selectedLocationIds = new Set(
-      [formData.location_id, ...(nextLocationIds || [])]
-        .map(String)
-        .filter(Boolean)
-    );
-    const validWarehouseIds = new Set(
-      warehouseOptions
-        .filter((item) => selectedLocationIds.size === 0 || selectedLocationIds.has(String(item.location_id)))
-        .map((item) => String(item.value))
-    );
-
-    setFormData((prev) => ({
-      ...prev,
-      location_ids: nextLocationIds,
-      assigned_warehouse_ids: (prev.assigned_warehouse_ids || [])
-        .filter((item) => validWarehouseIds.has(String(item))),
-    }));
   };
 
   const handleEmployeeToggle = (key) => {
@@ -338,7 +307,6 @@ export default function EmployeeManagementPage() {
   const payload = {
     ...formData,
 
-    // MongoDB ObjectId
     location_id: formData.location_id,
 
     role: formData.role || "Custom Role",
@@ -458,20 +426,18 @@ export default function EmployeeManagementPage() {
    const assignedWarehouseIds = warehouses
   .filter(
     (item) =>
-      sameId(getRecordId(item.employee_id), recordId)
+      String(item.employee_id) ===
+      String(recordId)
   )
   .map((item) =>
-    getRecordId(item)
+    String(item._id || item.id)
   );
     setFormData({
       name: employee.name || "",
       address: employee.address || "",
       username: employee.username || "",
       password: "",
-      location_id: getRecordId(employee.location_id),
-      location_ids: Array.isArray(employee.location_ids)
-        ? employee.location_ids.map(getRecordId)
-        : [],
+      location_id: String(employee.location_id || ""),
       role: employee.role || "",
       permissions: employee.permissions || [],
       opening_balance: String(employee.opening_balance || 0),
@@ -542,12 +508,12 @@ export default function EmployeeManagementPage() {
         <div>
           <h2 style={{ margin: 0, color: "#0f172a" }}>Users and Security</h2>
           <p style={{ margin: "8px 0 0", color: "#64748b" }}>
-            Create/edit employee users, define roles, and control access with checkboxes. Users will only have access to the items you tick.
+            Create employee users, assign roles, and keep access locked by permission.
           </p>
         </div>
         <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-          {canCreateEmployee ? <button type="button" onClick={() => setShowEmployeeForm(true)} style={primaryButton}>New User</button> : null}
-          {canManageRoles ? <button type="button" onClick={() => setShowRoleManager(true)} style={secondaryButton}>Roles</button> : null}
+          {canCreateEmployee ? <button type="button" onClick={() => setShowEmployeeForm(true)} style={primaryButton}>New Employee</button> : null}
+          {canManageRoles ? <button type="button" onClick={() => setShowRoleManager(true)} style={secondaryButton}>Role Security</button> : null}
         </div>
       </div>
 
@@ -555,13 +521,13 @@ export default function EmployeeManagementPage() {
         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
           <thead>
             <tr style={{ background: "#0f766e", color: "#fff" }}>
-              <th style={thStyle}>Emp. code / Record ID</th>
+              <th style={thStyle}>S.L</th>
+              <th style={thStyle}>Employee ID</th>
               <th style={thStyle}>Name</th>
               <th style={thStyle}>Username</th>
               <th style={thStyle}>Role</th>
               <th style={thStyle}>Location</th>
               <th style={thStyle}>Warehouse</th>
-              <th style={thStyle}>Access</th>
               <th style={thStyle}>Actions</th>
             </tr>
           </thead>
@@ -570,7 +536,8 @@ export default function EmployeeManagementPage() {
               const assignedNames = warehouses
   .filter(
     (item) =>
-      sameId(getRecordId(item.employee_id), employeeRecordId(employee))
+      String(item.employee_id) ===
+      String(employee.id || employee._id)
   )
   .map((item) => item.name)
   .join(", ");
@@ -580,26 +547,25 @@ export default function EmployeeManagementPage() {
               const canEditThisEmployee = canEditEmployee && (isAdminUser || !employeeIsAdmin);
               return (
                 <tr key={String(employeeRecordId(employee))} style={{ background: index % 2 === 0 ? "#fff" : "#f8fafc" }}>
+                  <td style={tdStyle}><span style={serialBadge}>{formatSerial(index)}</span></td>
                   <td style={tdStyle}>
                     <div style={{ fontWeight: 700 }}>
-                      {(employee.employee_id && String(employee.employee_id).trim()) || "—"}
-                    </div>
-                    <div style={{ fontSize: 11, color: "#64748b", wordBreak: "break-all", marginTop: 4 }}>
-                      {String(employeeRecordId(employee))}
+                      {(employee.employee_id && String(employee.employee_id).trim()) || `EMP${formatSerial(index)}`}
                     </div>
                   </td>
                   <td style={tdStyle}>{employee.name}</td>
                   <td style={tdStyle}>{employee.username}</td>
-                  <td style={tdStyle}>{employee.role || "-"}</td>
+                  <td style={tdStyle}><span style={roleBadge(employeeIsAdmin)}>{employee.role || "Custom Role"}</span></td>
                   <td style={tdStyle}>
   {
-    employee.location_name ||
-    locations.find((item) => sameId(getRecordId(item), getRecordId(employee.location_id)))?.name ||
-    "-"
+    locations.find(
+      (item) =>
+        String(item._id || item.id) ===
+        String(employee.location_id)
+    )?.name || "-"
   }
 </td>
                   <td style={tdStyle}>{assignedNames || "-"}</td>
-                  <td style={tdStyle}>{Array.isArray(employee.permissions) ? employee.permissions.join(", ") : "-"}</td>
                   <td style={tdStyle}>
                     {canEditThisEmployee ? <button type="button" onClick={() => handleEditEmployee(employee)} style={miniBlue}>Edit</button> : null}
                     {canDeleteEmployee && employeeRecordId(employee) ? (
@@ -646,25 +612,13 @@ export default function EmployeeManagementPage() {
     {locations.map((location) => (
       <option
         key={location._id || location.id}
-        value={getRecordId(location)}
+        value={location._id || location.id}
       >
         {location.name}
       </option>
     ))}
   </select>
 </Field>
-              <div style={{ gridColumn: "1 / -1" }}>
-                <MultiSelectDropdown
-                  label="Additional Locations (Multi-location Access)"
-                  options={locations.map((location) => ({
-                    value: getRecordId(location),
-                    label: location.name,
-                  }))}
-                  value={formData.location_ids}
-                  onChange={handleEmployeeLocationsChange}
-                  placeholder="Select locations for multi-access"
-                />
-              </div>
               <Field label="Opening Balance">
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 90px", gap: 10 }}>
                   <input name="opening_balance" value={formData.opening_balance} onChange={handleEmployeeChange} style={inputStyle} />
@@ -680,7 +634,7 @@ export default function EmployeeManagementPage() {
               <div style={{ gridColumn: "1 / -1" }}>
                 <MultiSelectDropdown
                   label="Assigned Warehouses"
-                  options={filteredWarehouseOptions}
+                  options={warehouseOptions}
                   value={formData.assigned_warehouse_ids}
                   onChange={(next) => setFormData((prev) => ({ ...prev, assigned_warehouse_ids: next }))}
                   placeholder="Select Warehouses"
@@ -689,8 +643,13 @@ export default function EmployeeManagementPage() {
             </div>
 
             <div style={securityCard}>
-              <div style={{ fontWeight: 800, marginBottom: 8 }}>Access Control List</div>
-              <div style={{ color: "#64748b", fontSize: 13, marginBottom: 12 }}>{permissionSummary}</div>
+              <div style={sectionHeaderRow}>
+                <div>
+                  <div style={{ fontWeight: 800, marginBottom: 4 }}>Access Control</div>
+                  <div style={{ color: "#64748b", fontSize: 13 }}>Tick only the modules this employee can use.</div>
+                </div>
+                <span style={accessCountBadge}>{permissionSummary}</span>
+              </div>
               <div style={groupGrid}>
                 {PERMISSION_GROUPS.map((group) => (
                   <div key={group.key} style={groupCard}>
@@ -727,25 +686,27 @@ export default function EmployeeManagementPage() {
       ) : null}
 
       {showRoleManager && canManageRoles ? (
-        <Modal onClose={() => { setShowRoleManager(false); resetRoleForm(); }} title="Roles">
+        <Modal onClose={() => { setShowRoleManager(false); resetRoleForm(); }} title="Role Security">
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-            <div style={{ color: "#64748b" }}>Create or edit roles. Employee create er time à¦¶à§à¦§à§ role select à¦•à¦°à¦²à§‡à¦‡ access fill à¦¹à§Ÿà§‡ à¦¯à¦¾à¦¬à§‡.</div>
+            <div style={{ color: "#64748b" }}>Create clean roles once, then assign that role to employees.</div>
             <button type="button" onClick={() => setShowRoleEditor(true)} style={primaryButton}>New Role</button>
           </div>
           <div style={tableCardStyle}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
               <thead>
                 <tr style={{ background: "#0f172a", color: "#fff" }}>
-                  <th style={thStyle}>Name</th>
-                  <th style={thStyle}>Permissions</th>
+                  <th style={thStyle}>Role</th>
+                  <th style={thStyle}>Type</th>
+                  <th style={thStyle}>Security</th>
                   <th style={thStyle}>Actions</th>
                 </tr>
               </thead>
               <tbody>
                 {roles.map((role) => (
                   <tr key={role.id}>
-                    <td style={tdStyle}>{role.name}</td>
-                    <td style={tdStyle}>{(role.permissions || []).join(", ") || "-"}</td>
+                    <td style={tdStyle}><span style={roleBadge(!!role.is_admin || (role.permissions || []).includes("all"))}>{role.name}</span></td>
+                    <td style={tdStyle}>{role.is_admin ? "Administrator" : "Limited Role"}</td>
+                    <td style={tdStyle}>{summarizeRoleAccess(role)}</td>
                     <td style={tdStyle}>
                       <button type="button" onClick={() => handleEditRole(role)} style={miniBlue}>Edit</button>
                       {role.id ? <button type="button" onClick={() => handleDeleteRole(role.id)} style={miniRed}>Delete</button> : null}
@@ -829,6 +790,19 @@ const heroCard = { background: "#fff", border: "1px solid #e2e8f0", borderRadius
 const tableCardStyle = { background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, overflowX: "auto", boxShadow: "0 10px 24px rgba(15,23,42,0.08)" };
 const thStyle = { padding: "10px 12px", textAlign: "left", whiteSpace: "nowrap" };
 const tdStyle = { padding: "10px 12px", borderTop: "1px solid #e2e8f0", verticalAlign: "top" };
+const serialBadge = { display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: 34, height: 26, borderRadius: 8, background: "#ecfeff", color: "#0f766e", fontWeight: 800, border: "1px solid #99f6e4" };
+const roleBadge = (isAdmin = false) => ({
+  display: "inline-flex",
+  alignItems: "center",
+  minHeight: 26,
+  padding: "4px 10px",
+  borderRadius: 999,
+  background: isAdmin ? "#fef2f2" : "#eff6ff",
+  color: isAdmin ? "#991b1b" : "#1d4ed8",
+  border: `1px solid ${isAdmin ? "#fecaca" : "#bfdbfe"}`,
+  fontWeight: 800,
+  whiteSpace: "nowrap",
+});
 const primaryButton = { border: "none", background: "#0f766e", color: "#fff", borderRadius: 10, padding: "10px 16px", fontWeight: 700, cursor: "pointer" };
 const secondaryButton = { border: "none", background: "#1e293b", color: "#fff", borderRadius: 10, padding: "10px 16px", fontWeight: 700, cursor: "pointer" };
 const dangerButton = { border: "none", background: "#dc2626", color: "#fff", borderRadius: 10, padding: "10px 16px", fontWeight: 700, cursor: "pointer" };
@@ -839,6 +813,8 @@ const modalCard = { width: "100%", maxWidth: 1180, overflowY: "auto", background
 const formGrid = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16 };
 const inputStyle = { width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1", fontSize: 14, boxSizing: "border-box" };
 const securityCard = { marginTop: 16, background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, padding: 16 };
+const sectionHeaderRow = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 14, flexWrap: "wrap" };
+const accessCountBadge = { display: "inline-flex", alignItems: "center", minHeight: 30, padding: "6px 12px", borderRadius: 999, background: "#f8fafc", border: "1px solid #cbd5e1", color: "#0f172a", fontWeight: 800, fontSize: 13 };
 const groupGrid = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 14 };
 const groupCard = { border: "1px solid #dbe4ea", borderRadius: 14, padding: 14, background: "#fff" };
 const groupTitle = { fontWeight: 800, color: "#0f172a", marginBottom: 8, fontSize: 14 };
@@ -847,6 +823,4 @@ const checkBlock = { padding: "4px 0 8px" };
 const checkLabel = { fontWeight: 700, color: "#0f172a", marginBottom: 4 };
 const actionRowWrap = { display: "flex", gap: 10, flexWrap: "wrap" };
 const actionRow = { display: "flex", justifyContent: "flex-end", gap: 12, marginTop: 16, flexWrap: "wrap" };
-
-
 
