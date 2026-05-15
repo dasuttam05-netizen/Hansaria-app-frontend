@@ -92,7 +92,7 @@ export default function DashboardPage() {
         "report.partyStock",
         "report.warehouseRentLedger",
         "report.warehouseRentMonthEnd",
-        "warehouses.manage",
+        "warehouse.trading.view",
       ]);
 
       const requests = [
@@ -344,10 +344,20 @@ export default function DashboardPage() {
     },
     {
       title: "Warehouse",
-      permission: "warehouses.manage",
+      permission: ["warehouses.manage", "farmers.view", "warehouse.trading.view", "warehouse.trading.manage"],
       icon: <FaWarehouse />,
       submenu: [
         { label: "Warehouse Management", permission: "warehouses.manage", action: () => setShowWarehousePopup(true) },
+        { label: "Farmer Master", permission: "farmers.view", action: () => navigate("/farmers") },
+        { label: "Purchase Voucher", permission: "warehouse.trading.view", action: () => navigate("/warehouse-trading?type=purchase") },
+        { label: "Sale Voucher", permission: "warehouse.trading.view", action: () => navigate("/warehouse-trading?type=sale") },
+        { label: "Payment Voucher", permission: "warehouse.trading.view", action: () => navigate("/warehouse-trading?type=payment") },
+        { label: "Receipt Voucher", permission: "warehouse.trading.view", action: () => navigate("/warehouse-trading?type=receipt") },
+        { label: "Journal Entry", permission: "warehouse.trading.view", action: () => navigate("/warehouse-trading?type=journal") },
+        { label: "Sales Report", permission: "warehouse.trading.view", action: () => navigate("/warehouse-trading?tab=reports&report=sale") },
+        { label: "Purchase Report", permission: "warehouse.trading.view", action: () => navigate("/warehouse-trading?tab=reports&report=purchase") },
+        { label: "Profit/Loss", permission: "warehouse.trading.view", action: () => navigate("/warehouse-trading?tab=reports&report=profit-loss") },
+        { label: "Stock Report", permission: "warehouse.trading.view", action: () => navigate("/warehouse-trading") },
       ],
     },
     {
@@ -577,9 +587,9 @@ export default function DashboardPage() {
     {
       title: "Warehouses",
       icon: <FaWarehouse />,
-      subtitle: "Manage warehouse data",
-      action: () => setShowWarehousePopup(true),
-      permission: "warehouses.manage",
+      subtitle: "Open warehouse setup and trading",
+      action: () => navigate(hasPermission(user, "warehouse.trading.view") ? "/warehouse-trading" : "/warehouses"),
+      permission: ["warehouses.manage", "warehouse.trading.view", "warehouse.trading.manage"],
     },
     {
       title: "Locations",
@@ -746,7 +756,7 @@ export default function DashboardPage() {
     "report.partyStock",
     "report.warehouseRentLedger",
     "report.warehouseRentMonthEnd",
-    "warehouses.manage",
+    "warehouse.trading.view",
   ]);
 
   const canViewDashboardOverview = canViewResourceOverview || canViewStockReport;
