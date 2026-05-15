@@ -102,6 +102,12 @@ const LEGACY_PERMISSION_MAP = {
   "report.paltiLorryAdjustment": ["report.expense", "reports.view"],
   "report.cash": ["reports.view"],
   "warehouses.view": ["warehouses.manage"],
+  "farmers.view": ["farmers.manage"],
+  "farmers.create": ["farmers.manage"],
+  "farmers.edit": ["farmers.manage"],
+  "farmers.delete": ["farmers.manage"],
+  "warehouse.trading.view": ["warehouse.trading.manage"],
+  "warehouse.trading.manage": ["warehouse.trading.manage"],
 };
 
 function expandPermissions(permissions = []) {
