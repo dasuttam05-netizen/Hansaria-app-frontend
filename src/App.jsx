@@ -41,6 +41,25 @@ function App() {
       ] = `Bearer ${token}`;
     }
 
+    // Handle extension messages to prevent "message channel closed" error
+    const handleMessage = (request, sender, sendResponse) => {
+      // Respond immediately to prevent channel timeout
+      sendResponse({ received: true });
+      return false; // Indicate we've handled the response
+    };
+
+    if (window.chrome && window.chrome.runtime) {
+      window.chrome.runtime.onMessage.addListener(handleMessage);
+      
+      return () => {
+        try {
+          window.chrome.runtime.onMessage.removeListener(handleMessage);
+        } catch (e) {
+          // Ignore cleanup errors
+        }
+      };
+    }
+
   }, []);
 
   return (
