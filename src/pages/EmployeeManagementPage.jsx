@@ -28,7 +28,14 @@ const PERMISSION_GROUPS = [
     items: [
       { key: "warehouse_setup", label: "Warehouse Setup", permissions: ["warehouses.manage"] },
       { key: "warehouse_farmers", label: "Farmers", permissions: ["farmers.view", "farmers.create", "farmers.edit", "farmers.delete"] },
-      { key: "warehouse_trading", label: "Sales / Purchase / Payment / Receipt / Profit Loss", permissions: ["warehouse.trading.view", "warehouse.trading.manage"] },
+      { key: "warehouse_purchase", label: "Purchase Voucher", permissions: ["warehouse.trading.purchase.view", "warehouse.trading.purchase.manage"] },
+      { key: "warehouse_sale", label: "Sale Voucher", permissions: ["warehouse.trading.sale.view", "warehouse.trading.sale.manage"] },
+      { key: "warehouse_payment", label: "Payment Voucher", permissions: ["warehouse.trading.payment.view", "warehouse.trading.payment.manage"] },
+      { key: "warehouse_receipt", label: "Receipt Voucher", permissions: ["warehouse.trading.receipt.view", "warehouse.trading.receipt.manage"] },
+      { key: "warehouse_journal", label: "Journal Voucher", permissions: ["warehouse.trading.journal.view", "warehouse.trading.journal.manage"] },
+      { key: "warehouse_report_sale", label: "Sales Report", permissions: ["warehouse.trading.report.sale"] },
+      { key: "warehouse_report_purchase", label: "Purchase Report", permissions: ["warehouse.trading.report.purchase"] },
+      { key: "warehouse_report_profit_loss", label: "Profit/Loss Report", permissions: ["warehouse.trading.report.profitLoss"] },
     ],
   },
   {
@@ -79,10 +86,18 @@ const getActionOptions = (groupKey, item) => {
     return [{ id: `${item.key}:access`, label: "Access", permission: item.permissions[0] || null }];
   }
   if (groupKey === "warehouse") {
-    if (item.key === "warehouse_trading") {
+    if (
+      [
+        "warehouse_purchase",
+        "warehouse_sale",
+        "warehouse_payment",
+        "warehouse_receipt",
+        "warehouse_journal",
+      ].includes(item.key)
+    ) {
       return [
-        { id: `${item.key}:view`, label: "View", permission: "warehouse.trading.view" },
-        { id: `${item.key}:manage`, label: "Create/Edit", permission: "warehouse.trading.manage" },
+        { id: `${item.key}:view`, label: "View", permission: item.permissions[0] || null },
+        { id: `${item.key}:manage`, label: "Create/Edit", permission: item.permissions[1] || null },
       ];
     }
     if (item.key === "warehouse_farmers") {
@@ -823,4 +838,3 @@ const checkBlock = { padding: "4px 0 8px" };
 const checkLabel = { fontWeight: 700, color: "#0f172a", marginBottom: 4 };
 const actionRowWrap = { display: "flex", gap: 10, flexWrap: "wrap" };
 const actionRow = { display: "flex", justifyContent: "flex-end", gap: 12, marginTop: 16, flexWrap: "wrap" };
-
