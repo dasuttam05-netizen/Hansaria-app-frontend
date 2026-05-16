@@ -6,16 +6,23 @@ import { hasPermission, loadSession } from "../utils/auth";
 const defaultForm = () => ({
   voucher_no: "",
   date: new Date().toISOString().slice(0, 10),
+  unloading_date: "",
   warehouse_id: "",
   farmer_id: "",
   company_id: "",
   consignee_id: "",
   product_id: "",
+  reference_type: "",
+  reference_id: "",
   employee_id: "",
   location_id: "",
   quantity: "",
+  shortage_quantity: "",
   rate: "",
   amount: "",
+  claim_amount: "",
+  tds_amount: "",
+  net_amount: "",
   packet: "",
   gross_weight: "",
   tare_weight: "",
@@ -84,6 +91,8 @@ export default function WarehouseTradingPage() {
   const [loading, setLoading] = useState(false);
   const [list, setList] = useState([]);
   const [reportData, setReportData] = useState([]);
+  const [partyOutstanding, setPartyOutstanding] = useState(null);
+  const [voucherNumberLoading, setVoucherNumberLoading] = useState(false);
   const selectedWarehouse = warehouses.find((w) => String(w.id || w._id) === String(formData.warehouse_id));
   const selectedManualLocation = locations.find((l) => String(l.id || l._id) === String(formData.location_id));
   const selectedWarehouseLocation =
@@ -151,6 +160,14 @@ export default function WarehouseTradingPage() {
     }
   }, [activeTab, activeVoucherType]);
 
+  useEffect(() => {
+    if (activeTab === "vouchers") {
+      fetchNextVoucherNo(activeVoucherType);
+      setPartyOutstanding(null);
+      setFormData((prev) => ({ ...prev, reference_type: "", reference_id: "" }));
+    }
+  }, [activeTab, activeVoucherType]);
+
   // Load report when type changes
   useEffect(() => {
     if (activeTab === "reports") {
@@ -182,6 +199,37 @@ export default function WarehouseTradingPage() {
     }
   };
 
+  const fetchNextVoucherNo = async (type) => {
+    try {
+      setVoucherNumberLoading(true);
+      const res = await axios.get(`/api/wh-vouchers/next-voucher-no`, { params: { type } });
+      if (res.data?.voucher_no) {
+        setFormData((prev) => ({ ...prev, voucher_no: prev.voucher_no || res.data.voucher_no }));
+      }
+    } catch (err) {
+      console.error(err);
+    } finally {
+      setVoucherNumberLoading(false);
+    }
+  };
+
+  const loadOutstanding = async (partyType, partyId, warehouseId = null) => {
+    if (!partyType || !partyId) {
+      setPartyOutstanding(null);
+      return;
+    }
+    try {
+      const params = { party_type: partyType, id: partyId };
+      const warehouse = warehouseId || formData.warehouse_id;
+      if (warehouse) params.warehouse_id = warehouse;
+      const res = await axios.get(`/api/wh-vouchers/outstanding`, { params });
+      setPartyOutstanding(res.data || null);
+    } catch (err) {
+      console.error(err);
+      setPartyOutstanding(null);
+    }
+  };
+
   const loadVouchers = async () => {
     try {
       if (!hasPermission(user, voucherPermissionMap[activeVoucherType])) {
@@ -210,7 +258,23 @@ export default function WarehouseTradingPage() {
   };
 
   const handleChange = (e) => {
-    setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+
+    if (activeVoucherType === "payment" && name === "farmer_id") {
+      loadOutstanding("farmer", value);
+    }
+    if (activeVoucherType === "receipt" && name === "company_id") {
+      loadOutstanding("company", value);
+    }
+    if (name === "warehouse_id") {
+      if (activeVoucherType === "payment" && formData.farmer_id) {
+        loadOutstanding("farmer", formData.farmer_id, value);
+      }
+      if (activeVoucherType === "receipt" && formData.company_id) {
+        loadOutstanding("company", formData.company_id, value);
+      }
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -223,8 +287,11 @@ export default function WarehouseTradingPage() {
     try {
       const numericFields = [
         "quantity",
+        "shortage_quantity",
         "rate",
         "amount",
+        "claim_amount",
+        "tds_amount",
         "packet",
         "gross_weight",
         "tare_weight",
@@ -256,8 +323,19 @@ export default function WarehouseTradingPage() {
         payload.net_amount_payable = purchaseNetPayable;
         payload.location_id = payload.location_id || selectedWarehouse?.location_id || "";
       }
-      await axios.post(`/api/wh-vouchers/${activeVoucherType}`, payload);
+      if (activeVoucherType === "sale") {
+        const claimAmount = Number(formData.claim_amount) || 0;
+        const tdsAmount = Number(formData.tds_amount) || 0;
+        const grossAmount = Number(formData.amount) || 0;
+        const netAmount = grossAmount - claimAmount - tdsAmount;
+        payload.net_amount = netAmount;
+        payload.outstanding = netAmount;
+      }
+      const res = await axios.post(`/api/wh-vouchers/${activeVoucherType}`, payload);
       alert("Voucher saved successfully");
+      if (res.data?.stats) {
+        setPartyOutstanding(res.data.stats);
+      }
       setFormData(defaultForm());
       loadVouchers();
     } catch (err) {
@@ -456,14 +534,21 @@ export default function WarehouseTradingPage() {
                 </Field>
 
                 {(activeVoucherType === "purchase" || activeVoucherType === "payment") && (
-                  <Field label="Farmer (Creditor)">
-                    <select name="farmer_id" value={formData.farmer_id} onChange={handleChange} style={inp}>
-                      <option value="">Select Farmer</option>
-                      {farmers.map((f) => (
-                        <option key={f._id} value={f._id}>{f.name}</option>
-                      ))}
-                    </select>
-                  </Field>
+                  <>
+                    <Field label="Farmer (Creditor)">
+                      <select name="farmer_id" value={formData.farmer_id} onChange={handleChange} style={inp}>
+                        <option value="">Select Farmer</option>
+                        {farmers.map((f) => (
+                          <option key={f._id} value={f._id}>{f.name}</option>
+                        ))}
+                      </select>
+                    </Field>
+                    {partyOutstanding && activeVoucherType === "payment" && (
+                      <div style={{ marginTop: 8, fontSize: 13, color: "#444" }}>
+                        Current outstanding: ₹{Number(partyOutstanding.outstanding || 0).toFixed(2)}
+                      </div>
+                    )}
+                  </>
                 )}
 
                 {(activeVoucherType === "sale" || activeVoucherType === "receipt") && (
@@ -476,6 +561,11 @@ export default function WarehouseTradingPage() {
                         ))}
                       </select>
                     </Field>
+                    {partyOutstanding && activeVoucherType === "receipt" && (
+                      <div style={{ marginTop: 8, fontSize: 13, color: "#444" }}>
+                        Current outstanding: ₹{Number(partyOutstanding.outstanding || 0).toFixed(2)}
+                      </div>
+                    )}
                     <Field label="Consignee">
                       <select name="consignee_id" value={formData.consignee_id} onChange={handleChange} style={inp}>
                         <option value="">Select Consignee</option>
@@ -497,22 +587,64 @@ export default function WarehouseTradingPage() {
                         ))}
                       </select>
                     </Field>
+                    <Field label={activeVoucherType === "sale" ? "Loading Date" : "Date"}>
+                      <input name="date" type="date" value={formData.date} onChange={handleChange} style={inp} />
+                    </Field>
+                    {activeVoucherType === "sale" && (
+                      <Field label="Unloading Date">
+                        <input name="unloading_date" type="date" value={formData.unloading_date} onChange={handleChange} style={inp} />
+                      </Field>
+                    )}
                     <Field label="Quantity">
                       <input name="quantity" type="number" step="0.01" value={formData.quantity} onChange={handleChange} style={inp} />
                     </Field>
+                    {activeVoucherType === "sale" && (
+                      <Field label="Shortage Quantity">
+                        <input name="shortage_quantity" type="number" step="0.01" value={formData.shortage_quantity} onChange={handleChange} style={inp} />
+                      </Field>
+                    )}
                     <Field label="Rate">
                       <input name="rate" type="number" step="0.01" value={formData.rate} onChange={handleChange} style={inp} />
                     </Field>
                     <Field label="Amount">
                       <input name="amount" type="number" step="0.01" value={formData.amount} onChange={handleChange} style={inp} />
                     </Field>
+                    {activeVoucherType === "sale" && (
+                      <>
+                        <Field label="Claim Amount">
+                          <input name="claim_amount" type="number" step="0.01" value={formData.claim_amount} onChange={handleChange} style={inp} />
+                        </Field>
+                        <Field label="TDS Amount">
+                          <input name="tds_amount" type="number" step="0.01" value={formData.tds_amount} onChange={handleChange} style={inp} />
+                        </Field>
+                        <Field label="Net Amount">
+                          <input value={(toNumber(formData.amount) - toNumber(formData.claim_amount) - toNumber(formData.tds_amount)).toFixed(2)} readOnly style={readOnlyInp} />
+                        </Field>
+                        <div style={{ marginTop: 8, fontSize: 13, color: "#444" }}>
+                          Outstanding: ₹{(toNumber(formData.amount) - toNumber(formData.claim_amount) - toNumber(formData.tds_amount)).toFixed(2)}
+                        </div>
+                      </>
+                    )}
                   </>
                 )}
 
                 {(activeVoucherType === "payment" || activeVoucherType === "receipt") && (
-                  <Field label="Amount">
-                    <input name="amount" type="number" step="0.01" value={formData.amount} onChange={handleChange} style={inp} required />
-                  </Field>
+                  <>
+                    <Field label="Reference Type">
+                      <select name="reference_type" value={formData.reference_type} onChange={handleChange} style={inp}>
+                        <option value="">Select Reference</option>
+                        <option value="purchase">Purchase Bill</option>
+                        <option value="sale">Sale Bill</option>
+                        <option value="other">Other</option>
+                      </select>
+                    </Field>
+                    <Field label="Reference ID">
+                      <input name="reference_id" value={formData.reference_id} onChange={handleChange} style={inp} placeholder="Optional bill ID" />
+                    </Field>
+                    <Field label="Amount">
+                      <input name="amount" type="number" step="0.01" value={formData.amount} onChange={handleChange} style={inp} required />
+                    </Field>
+                  </>
                 )}
 
                 {activeVoucherType === "journal" && (
