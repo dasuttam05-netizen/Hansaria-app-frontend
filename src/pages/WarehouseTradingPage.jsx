@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { useSearchParams } from "react-router-dom";
+import { hasPermission, loadSession } from "../utils/auth";
 
 const defaultForm = () => ({
   voucher_no: "",
@@ -21,6 +22,7 @@ const defaultForm = () => ({
 });
 
 export default function WarehouseTradingPage() {
+  const { user } = loadSession();
   const [searchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState("vouchers");
   const [activeVoucherType, setActiveVoucherType] = useState("purchase");
@@ -39,25 +41,45 @@ export default function WarehouseTradingPage() {
   const [loading, setLoading] = useState(false);
   const [list, setList] = useState([]);
   const [reportData, setReportData] = useState([]);
+  const voucherPermissionMap = {
+    purchase: "warehouse.trading.purchase.view",
+    sale: "warehouse.trading.sale.view",
+    payment: "warehouse.trading.payment.view",
+    receipt: "warehouse.trading.receipt.view",
+    journal: "warehouse.trading.journal.view",
+  };
+  const reportPermissionMap = {
+    sale: "warehouse.trading.report.sale",
+    purchase: "warehouse.trading.report.purchase",
+    "profit-loss": "warehouse.trading.report.profitLoss",
+  };
+  const allowedVoucherTypes = Object.keys(voucherPermissionMap).filter((type) => hasPermission(user, voucherPermissionMap[type]));
+  const allowedReports = Object.keys(reportPermissionMap).filter((type) => hasPermission(user, reportPermissionMap[type]));
 
   // Load initial data
   useEffect(() => {
     const requestedType = searchParams.get("type");
     const requestedTab = searchParams.get("tab");
     const requestedReport = searchParams.get("report");
-    const validVoucherTypes = ["purchase", "sale", "payment", "receipt", "journal"];
-    const validReports = ["sale", "purchase", "profit-loss"];
+    const validVoucherTypes = allowedVoucherTypes;
+    const validReports = allowedReports;
 
     if (validVoucherTypes.includes(requestedType)) {
       setActiveTab("vouchers");
       setActiveVoucherType(requestedType);
     } else if (requestedTab === "reports" || validReports.includes(requestedReport)) {
       setActiveTab("reports");
-      setActiveReport(validReports.includes(requestedReport) ? requestedReport : "sale");
+      setActiveReport(validReports.includes(requestedReport) ? requestedReport : validReports[0] || "sale");
+    } else if (validVoucherTypes.length) {
+      setActiveTab("vouchers");
+      setActiveVoucherType(validVoucherTypes[0]);
+    } else if (validReports.length) {
+      setActiveTab("reports");
+      setActiveReport(validReports[0]);
     }
 
     loadData();
-  }, [searchParams]);
+  }, [searchParams, user]);
 
   // Load voucher list when type changes
   useEffect(() => {
@@ -99,6 +121,10 @@ export default function WarehouseTradingPage() {
 
   const loadVouchers = async () => {
     try {
+      if (!hasPermission(user, voucherPermissionMap[activeVoucherType])) {
+        setList([]);
+        return;
+      }
       const res = await axios.get(`/api/wh-vouchers/${activeVoucherType}`);
       setList(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
@@ -108,6 +134,10 @@ export default function WarehouseTradingPage() {
 
   const loadReport = async () => {
     try {
+      if (!hasPermission(user, reportPermissionMap[activeReport])) {
+        setReportData([]);
+        return;
+      }
       const endpoint = activeReport === "sale" ? "sale-summary" : activeReport === "purchase" ? "purchase-summary" : "profit-loss";
       const res = await axios.get(`/api/wh-vouchers/report/${endpoint}`);
       setReportData(Array.isArray(res.data) ? res.data : []);
@@ -162,7 +192,7 @@ export default function WarehouseTradingPage() {
       {activeTab === "vouchers" ? (
         <>
           <div style={voucherTypeRow}>
-            {["purchase", "sale", "payment", "receipt", "journal"].map((type) => (
+            {allowedVoucherTypes.map((type) => (
               <button
                 key={type}
                 onClick={() => setActiveVoucherType(type)}
@@ -344,7 +374,7 @@ export default function WarehouseTradingPage() {
       ) : (
         <>
           <div style={voucherTypeRow}>
-            {["sale", "purchase", "profit-loss"].map((type) => (
+            {allowedReports.map((type) => (
               <button
                 key={type}
                 onClick={() => setActiveReport(type)}
