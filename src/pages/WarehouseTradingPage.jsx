@@ -125,7 +125,7 @@ export default function WarehouseTradingPage() {
     purchase: "warehouse.trading.report.purchase",
     "profit-loss": "warehouse.trading.report.profitLoss",
   };
-  const allowedVoucherTypes = Object.keys(voucherPermissionMap).filter((type) => hasPermission(user, voucherPermissionMap[type]));
+  const allowedVoucherTypes = ["purchase"]; // Only show Purchase vouchers
   const allowedReports = Object.keys(reportPermissionMap).filter((type) => hasPermission(user, reportPermissionMap[type]));
 
   // Load initial data
@@ -331,22 +331,67 @@ export default function WarehouseTradingPage() {
         payload.net_amount = netAmount;
         payload.outstanding = netAmount;
       }
-      const res = await axios.post(`/api/wh-vouchers/${activeVoucherType}`, payload);
-      alert("Voucher saved successfully");
+      
+      const isEdit = editId && String(editId).trim();
+      const url = isEdit ? `/api/wh-vouchers/${activeVoucherType}/${editId}` : `/api/wh-vouchers/${activeVoucherType}`;
+      const method = isEdit ? "put" : "post";
+      const res = isEdit ? await axios.put(url, payload) : await axios.post(url, payload);
+      
+      alert(`Voucher ${isEdit ? "updated" : "saved"} successfully`);
       if (res.data?.stats) {
         setPartyOutstanding(res.data.stats);
       }
       setFormData(defaultForm());
+      setEditId(null);
       loadVouchers();
     } catch (err) {
       console.error(err);
-      alert(err?.response?.data?.error || "Failed to save voucher");
+      alert(err?.response?.data?.error || `Failed to ${editId ? "update" : "save"} voucher`);
     } finally {
       setLoading(false);
     }
   };
 
   const isPurchaseVoucher = activeVoucherType === "purchase";
+
+  const handleDeleteVoucher = async (voucherId) => {
+    if (!window.confirm("Are you sure you want to delete this voucher?")) return;
+    try {
+      await axios.delete(`/api/wh-vouchers/${activeVoucherType}/${voucherId}`);
+      alert("Voucher deleted successfully");
+      loadVouchers();
+    } catch (err) {
+      console.error(err);
+      alert(err?.response?.data?.error || "Failed to delete voucher");
+    }
+  };
+
+  const handleEditVoucher = (voucherId) => {
+    const voucher = list.find(v => String(v.id || v._id) === String(voucherId));
+    if (voucher) {
+      setFormData({ ...defaultForm(), ...voucher });
+      setEditId(voucherId);
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  };
+
+  const handleGeneratePDF = async (voucherId) => {
+    try {
+      const response = await axios.get(`/api/wh-vouchers/${activeVoucherType}/${voucherId}/pdf`, {
+        responseType: "blob",
+      });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `Purchase-Voucher-${voucherId}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.parentChild.removeChild(link);
+    } catch (err) {
+      console.error(err);
+      alert("Failed to generate PDF");
+    }
+  };
 
   return (
     <div style={{ fontFamily: "Segoe UI, Arial, sans-serif", padding: "16px" }}>
@@ -376,7 +421,7 @@ export default function WarehouseTradingPage() {
           </div>
 
           <div style={card}>
-            <h3 style={{ marginTop: 0 }}>New {activeVoucherType.charAt(0).toUpperCase() + activeVoucherType.slice(1)} Voucher</h3>
+            <h3 style={{ marginTop: 0 }}>{editId ? "Edit" : "New"} {activeVoucherType.charAt(0).toUpperCase() + activeVoucherType.slice(1)} Voucher</h3>
             <form onSubmit={handleSubmit}>
               {isPurchaseVoucher ? (
                 <div style={memoShell}>
@@ -668,8 +713,11 @@ export default function WarehouseTradingPage() {
                 </div>
                 </div>
               )}
-              <div style={{ marginTop: 16 }}>
-                <button type="submit" disabled={loading} style={btnPrimary}>{loading ? "Saving..." : "Save Voucher"}</button>
+              <div style={{ marginTop: 16, display: "flex", gap: 10 }}>
+                <button type="submit" disabled={loading} style={btnPrimary}>{loading ? "Saving..." : editId ? "Update Voucher" : "Save Voucher"}</button>
+                {editId && (
+                  <button type="button" onClick={() => { setEditId(null); setFormData(defaultForm()); }} style={{ ...btnPrimary, background: "#64748b" }}>Cancel</button>
+                )}
               </div>
             </form>
           </div>
@@ -689,6 +737,7 @@ export default function WarehouseTradingPage() {
                     {(activeVoucherType === "purchase" || activeVoucherType === "sale") && <th style={th}>Qty</th>}
                     {(activeVoucherType === "purchase" || activeVoucherType === "sale") && <th style={th}>Rate</th>}
                     <th style={th}>Amount</th>
+                    <th style={th}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -711,6 +760,13 @@ export default function WarehouseTradingPage() {
                         </>
                       )}
                       <td style={td}>{activeVoucherType === "purchase" ? item.net_amount_payable || item.amount || 0 : item.amount || 0}</td>
+                      <td style={td}>
+                        <div style={{ display: "flex", gap: 6 }}>
+                          <button onClick={() => handleEditVoucher(item.id || item._id)} style={btnAction} title="Edit">Edit</button>
+                          <button onClick={() => handleDeleteVoucher(item.id || item._id)} style={{ ...btnAction, background: "#dc2626" }} title="Delete">Delete</button>
+                          <button onClick={() => handleGeneratePDF(item.id || item._id)} style={{ ...btnAction, background: "#ea580c" }} title="Download PDF">PDF</button>
+                        </div>
+                      </td>
                     </tr>
                   ))}
                   {list.length === 0 && (
@@ -843,3 +899,4 @@ const summaryReadOnlyInput = { ...summaryInput, background: "#f8fafc" };
 const memoTotals = { width: "min(100%, 420px)", marginLeft: "auto", border: "1px solid #d7dee8", borderRadius: 8, overflow: "hidden", background: "#fff" };
 const totalLine = { display: "flex", justifyContent: "space-between", gap: 12, padding: "12px 16px", borderBottom: "1px solid #e2e8f0", color: "#0f172a", fontWeight: 700 };
 const payableLine = { ...totalLine, borderBottom: "none", background: "#0b2a5b", color: "#fff" };
+const btnAction = { background: "#2563eb", color: "#fff", border: "none", padding: "6px 10px", borderRadius: 4, cursor: "pointer", fontWeight: 500, fontSize: 12 };
