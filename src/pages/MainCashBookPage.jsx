@@ -149,6 +149,11 @@ const MainCashBookPage = () => {
       const safeMainOpening = {
         main_opening_balance: Number(mainOpeningRes?.data?.main_opening_balance || 0),
         main_opening_type: String(mainOpeningRes?.data?.main_opening_type || "dr").toLowerCase() === "cr" ? "cr" : "dr",
+        opening_locked: !!mainOpeningRes?.data?.opening_locked,
+        opening_locked_by: mainOpeningRes?.data?.opening_locked_by || null,
+        opening_locked_at: mainOpeningRes?.data?.opening_locked_at || null,
+        updated_by: mainOpeningRes?.data?.updated_by || null,
+        updated_at: mainOpeningRes?.data?.updated_at || null,
       };
       setMainOpening(safeMainOpening);
       setMainOpeningForm({
@@ -525,12 +530,48 @@ const MainCashBookPage = () => {
       const payload = {
         main_opening_balance: Number(mainOpeningForm.main_opening_balance || 0),
         main_opening_type: String(mainOpeningForm.main_opening_type || "dr").toLowerCase() === "cr" ? "cr" : "dr",
+        expected_updated_at: mainOpening.updated_at || null,
       };
-      await axios.put(`${API_BASE}/cash-entries/opening/main`, payload);
-      setMainOpening(payload);
+      const res = await axios.put(`${API_BASE}/cash-entries/opening/main`, payload);
+      const nextOpening = res?.data || payload;
+      setMainOpening(nextOpening);
+      setMainOpeningForm({
+        main_opening_balance: String(Number(nextOpening.main_opening_balance || 0)),
+        main_opening_type: String(nextOpening.main_opening_type || "dr").toLowerCase() === "cr" ? "cr" : "dr",
+      });
       alert("Main cash opening balance saved.");
     } catch (err) {
-      alert("Error saving main opening: " + (err.response?.data?.error || err.message));
+      if (err?.response?.status === 409) {
+        const latest = err?.response?.data?.current;
+        if (latest) {
+          setMainOpening((prev) => ({ ...prev, ...latest }));
+          setMainOpeningForm({
+            main_opening_balance: String(Number(latest.main_opening_balance || 0)),
+            main_opening_type: String(latest.main_opening_type || "dr").toLowerCase() === "cr" ? "cr" : "dr",
+          });
+        }
+        alert("Opening balance অন্য user update করেছে। নতুন value লোড করা হয়েছে, আবার save করুন।");
+      } else if (err?.response?.status === 423) {
+        alert("Opening settings locked আছে। Unlock করে আবার চেষ্টা করুন।");
+      } else {
+        alert("Error saving main opening: " + (err.response?.data?.error || err.message));
+      }
+    } finally {
+      setMainOpeningSaving(false);
+    }
+  };
+
+  const handleToggleMainOpeningLock = async () => {
+    setMainOpeningSaving(true);
+    try {
+      const res = await axios.patch(`${API_BASE}/cash-entries/opening/main/lock`, {
+        locked: !mainOpening?.opening_locked,
+      });
+      const nextOpening = res?.data || {};
+      setMainOpening((prev) => ({ ...prev, ...nextOpening }));
+      alert(nextOpening?.opening_locked ? "Opening settings locked." : "Opening settings unlocked.");
+    } catch (err) {
+      alert("Error changing lock: " + (err.response?.data?.error || err.message));
     } finally {
       setMainOpeningSaving(false);
     }
@@ -578,21 +619,39 @@ const MainCashBookPage = () => {
             </div>
           </div>
           {canEditMainOpening ? (
-            <button
-              type="button"
-              onClick={() => setShowOpeningSettings((prev) => !prev)}
-              style={{
-                border: "none",
-                borderRadius: 6,
-                background: "#2563eb",
-                color: "#fff",
-                padding: "10px 14px",
-                fontWeight: 700,
-                cursor: "pointer",
-              }}
-            >
-              {showOpeningSettings ? "Hide Opening Settings" : "Show Opening Settings"}
-            </button>
+            <div style={{ display: "flex", gap: 8 }}>
+              <button
+                type="button"
+                onClick={() => setShowOpeningSettings((prev) => !prev)}
+                style={{
+                  border: "none",
+                  borderRadius: 6,
+                  background: "#2563eb",
+                  color: "#fff",
+                  padding: "10px 14px",
+                  fontWeight: 700,
+                  cursor: "pointer",
+                }}
+              >
+                {showOpeningSettings ? "Hide Opening Settings" : "Show Opening Settings"}
+              </button>
+              <button
+                type="button"
+                onClick={handleToggleMainOpeningLock}
+                disabled={mainOpeningSaving}
+                style={{
+                  border: "none",
+                  borderRadius: 6,
+                  background: mainOpening?.opening_locked ? "#16a34a" : "#b45309",
+                  color: "#fff",
+                  padding: "10px 14px",
+                  fontWeight: 700,
+                  cursor: mainOpeningSaving ? "not-allowed" : "pointer",
+                }}
+              >
+                {mainOpening?.opening_locked ? "Unlock Opening" : "Lock Opening"}
+              </button>
+            </div>
           ) : (
             <div style={{ color: "#6b7280", fontSize: 14, fontStyle: "italic", alignSelf: "center" }}>
               Only authorized users can edit opening settings.
@@ -634,6 +693,7 @@ const MainCashBookPage = () => {
                 value={mainOpeningForm.main_opening_balance}
                 onChange={(e) => setMainOpeningForm((prev) => ({ ...prev, main_opening_balance: e.target.value }))}
                 style={input}
+                disabled={!!mainOpening?.opening_locked}
               />
             </div>
             <div>
@@ -642,6 +702,7 @@ const MainCashBookPage = () => {
                 value={mainOpeningForm.main_opening_type}
                 onChange={(e) => setMainOpeningForm((prev) => ({ ...prev, main_opening_type: e.target.value }))}
                 style={input}
+                disabled={!!mainOpening?.opening_locked}
               >
                 <option value="dr">Dr</option>
                 <option value="cr">Cr</option>
@@ -650,7 +711,7 @@ const MainCashBookPage = () => {
             <button
               type="button"
               onClick={handleSaveMainOpening}
-              disabled={mainOpeningSaving}
+              disabled={mainOpeningSaving || !!mainOpening?.opening_locked}
               style={{
                 border: "none",
                 borderRadius: 6,
@@ -658,13 +719,13 @@ const MainCashBookPage = () => {
                 color: "#fff",
                 padding: "10px 14px",
                 fontWeight: 700,
-                cursor: mainOpeningSaving ? "not-allowed" : "pointer",
+                cursor: mainOpeningSaving || !!mainOpening?.opening_locked ? "not-allowed" : "pointer",
               }}
             >
               {mainOpeningSaving ? "Saving..." : "Save Opening"}
             </button>
             <div style={{ color: "#475569", fontSize: 14, paddingBottom: 8 }}>
-              Changes will update the opening used for ledger totals.
+              {mainOpening?.opening_locked ? "Opening currently locked. Unlock to edit." : "Changes will update the opening used for ledger totals."}
             </div>
           </div>
         )}
