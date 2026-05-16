@@ -8,6 +8,7 @@ const PERMISSION_GROUPS = [
     key: "operations",
     title: "Operations",
     items: [
+      
       { key: "inward_access", label: "Inward", permissions: ["inward.view", "inward.create", "inward.edit", "inward.delete"] },
       { key: "outward_access", label: "Outward", permissions: ["outward.view", "outward.create", "outward.edit", "outward.delete"] },
       { key: "adjustment_access", label: "Outward Adjustment", permissions: ["adjustment.manage"] },
@@ -150,6 +151,7 @@ const summarizeRoleAccess = (role) => {
 
 const createDefaultFormData = () => ({
   name: "",
+  mobile: "",
   address: "",
   username: "",
   password: "",
@@ -449,6 +451,7 @@ export default function EmployeeManagementPage() {
   );
     setFormData({
       name: employee.name || "",
+      mobile: employee.mobile || "",
       address: employee.address || "",
       username: employee.username || "",
       password: "",
@@ -539,6 +542,7 @@ export default function EmployeeManagementPage() {
               <th style={thStyle}>S.L</th>
               <th style={thStyle}>Employee ID</th>
               <th style={thStyle}>Name</th>
+              <th style={thStyle}>Mobile</th>
               <th style={thStyle}>Username</th>
               <th style={thStyle}>Role</th>
               <th style={thStyle}>Location</th>
@@ -569,6 +573,7 @@ export default function EmployeeManagementPage() {
                     </div>
                   </td>
                   <td style={tdStyle}>{employee.name}</td>
+                  <td style={tdStyle}>{employee.mobile || "-"}</td>
                   <td style={tdStyle}>{employee.username}</td>
                   <td style={tdStyle}><span style={roleBadge(employeeIsAdmin)}>{employee.role || "Custom Role"}</span></td>
                   <td style={tdStyle}>
@@ -599,6 +604,7 @@ export default function EmployeeManagementPage() {
           <form onSubmit={handleSubmitEmployee}>
             <div style={formGrid}>
               <Field label="Name"><input name="name" value={formData.name} onChange={handleEmployeeChange} style={inputStyle} /></Field>
+              <Field label="Mobile"><input name="mobile" value={formData.mobile} onChange={handleEmployeeChange} style={inputStyle} /></Field>
               <Field label="Username"><input name="username" value={formData.username} onChange={handleEmployeeChange} style={inputStyle} /></Field>
               <Field label="Password"><input type="password" name="password" value={formData.password} onChange={handleEmployeeChange} style={inputStyle} /></Field>
               <Field label="Role">
