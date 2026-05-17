@@ -18,11 +18,17 @@ const defaultForm = () => ({
   location_id: "",
   quantity: "",
   shortage_quantity: "",
+  unloading_qty: "",
   rate: "",
   amount: "",
   claim_amount: "",
+  other_deduction: "",
+  adjustment_amount: "",
   tds_amount: "",
   net_amount: "",
+  net_receivable_amount: "",
+  fifo_rate: "",
+  fifo_amount: "",
   packet: "",
   gross_weight: "",
   tare_weight: "",
@@ -125,7 +131,7 @@ export default function WarehouseTradingPage() {
     purchase: "warehouse.trading.report.purchase",
     "profit-loss": "warehouse.trading.report.profitLoss",
   };
-  const allowedVoucherTypes = ["purchase"]; // Only show Purchase vouchers
+  const allowedVoucherTypes = Object.keys(voucherPermissionMap).filter((type) => hasPermission(user, voucherPermissionMap[type]));
   const allowedReports = Object.keys(reportPermissionMap).filter((type) => hasPermission(user, reportPermissionMap[type]));
 
   // Load initial data
@@ -288,10 +294,16 @@ export default function WarehouseTradingPage() {
       const numericFields = [
         "quantity",
         "shortage_quantity",
+        "unloading_qty",
         "rate",
         "amount",
         "claim_amount",
+        "other_deduction",
+        "adjustment_amount",
         "tds_amount",
+        "net_receivable_amount",
+        "fifo_rate",
+        "fifo_amount",
         "packet",
         "gross_weight",
         "tare_weight",
@@ -325,11 +337,17 @@ export default function WarehouseTradingPage() {
       }
       if (activeVoucherType === "sale") {
         const claimAmount = Number(formData.claim_amount) || 0;
+        const otherDeduction = Number(formData.other_deduction) || 0;
+        const adjustmentAmount = Number(formData.adjustment_amount) || 0;
         const tdsAmount = Number(formData.tds_amount) || 0;
         const grossAmount = Number(formData.amount) || 0;
-        const netAmount = grossAmount - claimAmount - tdsAmount;
+        const netAmount = grossAmount - claimAmount - otherDeduction - adjustmentAmount - tdsAmount;
         payload.net_amount = netAmount;
+        payload.net_receivable_amount = netAmount;
         payload.outstanding = netAmount;
+        const qtyForFifo = Number(formData.unloading_qty || formData.quantity) || 0;
+        payload.fifo_rate = qtyForFifo > 0 ? grossAmount / qtyForFifo : 0;
+        payload.fifo_amount = grossAmount;
       }
       
       const isEdit = editId && String(editId).trim();
@@ -386,7 +404,7 @@ export default function WarehouseTradingPage() {
       link.setAttribute("download", `Purchase-Voucher-${voucherId}.pdf`);
       document.body.appendChild(link);
       link.click();
-      link.parentChild.removeChild(link);
+      link.parentNode.removeChild(link);
     } catch (err) {
       console.error(err);
       alert("Failed to generate PDF");
@@ -659,14 +677,26 @@ export default function WarehouseTradingPage() {
                         <Field label="Claim Amount">
                           <input name="claim_amount" type="number" step="0.01" value={formData.claim_amount} onChange={handleChange} style={inp} />
                         </Field>
+                        <Field label="Other Deduction">
+                          <input name="other_deduction" type="number" step="0.01" value={formData.other_deduction} onChange={handleChange} style={inp} />
+                        </Field>
+                        <Field label="Adjustment Amount">
+                          <input name="adjustment_amount" type="number" step="0.01" value={formData.adjustment_amount} onChange={handleChange} style={inp} />
+                        </Field>
                         <Field label="TDS Amount">
                           <input name="tds_amount" type="number" step="0.01" value={formData.tds_amount} onChange={handleChange} style={inp} />
                         </Field>
-                        <Field label="Net Amount">
-                          <input value={(toNumber(formData.amount) - toNumber(formData.claim_amount) - toNumber(formData.tds_amount)).toFixed(2)} readOnly style={readOnlyInp} />
+                        <Field label="Unloading Qty">
+                          <input name="unloading_qty" type="number" step="0.01" value={formData.unloading_qty} onChange={handleChange} style={inp} />
+                        </Field>
+                        <Field label="Net Receivable">
+                          <input value={(toNumber(formData.amount) - toNumber(formData.claim_amount) - toNumber(formData.other_deduction) - toNumber(formData.adjustment_amount) - toNumber(formData.tds_amount)).toFixed(2)} readOnly style={readOnlyInp} />
+                        </Field>
+                        <Field label="FIFO Amount">
+                          <input value={toNumber(formData.amount).toFixed(2)} readOnly style={readOnlyInp} />
                         </Field>
                         <div style={{ marginTop: 8, fontSize: 13, color: "#444" }}>
-                          Outstanding: ₹{(toNumber(formData.amount) - toNumber(formData.claim_amount) - toNumber(formData.tds_amount)).toFixed(2)}
+                          Outstanding: Rs.{(toNumber(formData.amount) - toNumber(formData.claim_amount) - toNumber(formData.other_deduction) - toNumber(formData.adjustment_amount) - toNumber(formData.tds_amount)).toFixed(2)}
                         </div>
                       </>
                     )}
@@ -755,11 +785,11 @@ export default function WarehouseTradingPage() {
                       {(activeVoucherType === "purchase" || activeVoucherType === "sale") && (
                         <>
                           <td style={td}>{products.find(p => String(p.id || p._id) === String(item.product_id))?.name || "-"}</td>
-                          <td style={td}>{activeVoucherType === "purchase" ? item.total_qty || item.net_weight || item.quantity || 0 : item.quantity || 0}</td>
+                          <td style={td}>{activeVoucherType === "purchase" ? item.total_qty || item.net_weight || item.quantity || 0 : item.unloading_qty || item.quantity || 0}</td>
                           <td style={td}>{item.rate || 0}</td>
                         </>
                       )}
-                      <td style={td}>{activeVoucherType === "purchase" ? item.net_amount_payable || item.amount || 0 : item.amount || 0}</td>
+                      <td style={td}>{activeVoucherType === "purchase" ? item.net_amount_payable || item.amount || 0 : item.net_receivable_amount || item.net_amount || item.amount || 0}</td>
                       <td style={td}>
                         <div style={{ display: "flex", gap: 6 }}>
                           <button onClick={() => handleEditVoucher(item.id || item._id)} style={btnAction} title="Edit">Edit</button>
