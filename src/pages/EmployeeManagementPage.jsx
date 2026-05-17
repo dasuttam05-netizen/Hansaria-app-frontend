@@ -207,6 +207,23 @@ const normalizeArray = (arr) => {
   return arr.map(normalizeData);
 };
 
+const collectEmployeeWarehouseIds = (employee, warehouses) => {
+  const employeeId = String(employee?.id || employee?._id || "");
+  const fromEmployee = normalizeIdArray(employee?.assigned_warehouse_ids);
+
+  const fromWarehouseSide = normalizeIdArray(
+    (warehouses || [])
+      .filter((item) => {
+        const primary = normalizeId(item?.employee_id);
+        const many = normalizeIdArray(item?.employee_ids);
+        return primary === employeeId || many.includes(employeeId);
+      })
+      .map((item) => normalizeId(item?._id || item?.id))
+  );
+
+  return Array.from(new Set([...fromEmployee, ...fromWarehouseSide]));
+};
+
 export default function EmployeeManagementPage() {
   const { user: currentUser } = loadSession();
   const isAdminUser = hasPermission(currentUser, "all");
@@ -473,9 +490,7 @@ export default function EmployeeManagementPage() {
       return;
     }
 
-    const assignedWarehouseIds = normalizeIdArray(
-      employee.assigned_warehouse_ids
-    );
+    const assignedWarehouseIds = collectEmployeeWarehouseIds(employee, warehouses);
     const safeEditLocationIds = normalizeIdArray(employee.location_ids);
     const fallbackLocationId = normalizeId(employee.location_id);
     const finalEditLocationIds = safeEditLocationIds.length
@@ -588,7 +603,7 @@ export default function EmployeeManagementPage() {
           </thead>
           <tbody>
             {employees.map((employee, index) => {
-              const assignedNames = normalizeIdArray(employee.assigned_warehouse_ids)
+              const assignedNames = collectEmployeeWarehouseIds(employee, warehouses)
                 .map((warehouseId) =>
                   warehouses.find(
                     (item) =>
