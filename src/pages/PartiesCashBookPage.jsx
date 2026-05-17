@@ -66,6 +66,7 @@ const getSignedOpening = (row) => {
   const type = String(row?.opening_balance_type || "dr").toLowerCase();
   return type === "cr" ? -Math.abs(amount) : Math.abs(amount);
 };
+const isPartyLedgerEntry = (entry) => String(entry?.fund_source || "main_cash") === "party_cash";
 
 const PartiesCashBookPage = () => {
   const navigate = useNavigate();
@@ -138,6 +139,7 @@ const PartiesCashBookPage = () => {
   const filteredRows = useMemo(() => {
     return entries
       .filter((e) => e.company_id)
+      .filter(isPartyLedgerEntry)
       .filter((e) => e.status === (showDeleted ? "cancelled" : "posted"))
       .filter((e) => !appliedFilters.warehouse_id || String(e.warehouse_id || "") === String(appliedFilters.warehouse_id))
       .filter((e) => !appliedFilters.company_id || String(e.company_id || "") === String(appliedFilters.company_id))
@@ -160,6 +162,7 @@ const PartiesCashBookPage = () => {
     const from = new Date(appliedFilters.start_date);
     const entryOpening = entries
       .filter((e) => e.company_id)
+      .filter(isPartyLedgerEntry)
       .filter((e) => e.status === "posted")
       .filter((e) => !appliedFilters.warehouse_id || String(e.warehouse_id || "") === String(appliedFilters.warehouse_id))
       .filter((e) => !appliedFilters.company_id || String(e.company_id || "") === String(appliedFilters.company_id))
