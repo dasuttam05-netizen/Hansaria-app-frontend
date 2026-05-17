@@ -1,11 +1,13 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
+import MultiSelectDropdown from "../components/MultiSelectDropdown";
 
 const emptyForm = () => ({
   name: "",
   address: "",
   location_id: "",
   employee_id: "",
+  employee_ids: [],
 });
 
 export default function WarehouseManagementPage() {
@@ -53,11 +55,15 @@ export default function WarehouseManagementPage() {
       return;
     }
     try {
+      const safeEmployeeIds = Array.isArray(formData.employee_ids)
+        ? Array.from(new Set(formData.employee_ids.map((id) => String(id || "").trim()).filter(Boolean)))
+        : [];
       const payload = {
         name: formData.name,
         address: formData.address,
         location_id: formData.location_id || null,
-        employee_id: formData.employee_id || null,
+        employee_id: safeEmployeeIds[0] || null,
+        employee_ids: safeEmployeeIds,
       };
       if (editId) {
         await axios.put(`${API_URL}/${editId}`, payload);
@@ -75,11 +81,17 @@ export default function WarehouseManagementPage() {
   };
 
   const handleEdit = (w) => {
+    const safeEmployeeIds = Array.isArray(w.employee_ids)
+      ? w.employee_ids.map((id) => String(id))
+      : w.employee_id
+      ? [String(w.employee_id)]
+      : [];
     setFormData({
       name: w.name || "",
       address: w.address || "",
       location_id: w.location_id ? String(w.location_id) : "",
-      employee_id: w.employee_id ? String(w.employee_id) : "",
+      employee_id: safeEmployeeIds[0] || "",
+      employee_ids: safeEmployeeIds,
     });
     setEditId(w.id);
     setShowForm(true);
@@ -95,6 +107,41 @@ export default function WarehouseManagementPage() {
       alert(err?.response?.data?.error || "Error deleting warehouse");
     }
   };
+
+  const employeeOptions = useMemo(
+    () =>
+      employees.map((emp) => {
+        const empId = String(emp._id || emp.id);
+        return { value: empId, label: emp.name || emp.username || `Employee ${empId}` };
+      }),
+    [employees]
+  );
+
+  const filteredEmployeeOptions = useMemo(() => {
+    if (!formData.location_id) return employeeOptions;
+    return employeeOptions.filter((option) => {
+      const emp = employees.find((e) => String(e._id || e.id) === String(option.value));
+      if (!emp) return false;
+      const primaryLocation = emp.location_id ? String(emp.location_id) : "";
+      const multiLocations = Array.isArray(emp.location_ids) ? emp.location_ids.map((id) => String(id)) : [];
+      return primaryLocation === String(formData.location_id) || multiLocations.includes(String(formData.location_id));
+    });
+  }, [employeeOptions, employees, formData.location_id]);
+
+  useEffect(() => {
+    if (!formData.location_id) return;
+    const allowed = new Set(filteredEmployeeOptions.map((item) => String(item.value)));
+    setFormData((prev) => {
+      const nextIds = Array.isArray(prev.employee_ids)
+        ? prev.employee_ids.filter((id) => allowed.has(String(id)))
+        : [];
+      return {
+        ...prev,
+        employee_ids: nextIds,
+        employee_id: nextIds[0] || "",
+      };
+    });
+  }, [formData.location_id, filteredEmployeeOptions]);
 
   return (
     <div style={{ fontFamily: "Segoe UI, Arial, sans-serif", padding: "8px" }}>
@@ -121,15 +168,19 @@ export default function WarehouseManagementPage() {
                 </select>
               </Field>
               <Field label="Assign Employee">
-                <select name="employee_id" value={formData.employee_id} onChange={handleChange} style={inp}>
-                  <option value="">Select Employee</option>
-                  {employees.map((emp) => {
-                    const empId = emp._id || emp.id;
-                    return (
-                      <option key={empId} value={String(empId)}>{emp.name}</option>
-                    );
-                  })}
-                </select>
+                <MultiSelectDropdown
+                  label=""
+                  options={filteredEmployeeOptions}
+                  value={formData.employee_ids}
+                  onChange={(next) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      employee_ids: next,
+                      employee_id: next[0] || "",
+                    }))
+                  }
+                  placeholder={formData.location_id ? "Select Employees" : "Select Location First (Optional)"}
+                />
               </Field>
               <div style={{ gridColumn: "1 / -1" }}>
                 <Field label="Address">
@@ -164,7 +215,15 @@ export default function WarehouseManagementPage() {
               <tbody>
                 {warehouses.map((w, i) => {
                   const locationName = locations.find(loc => (loc._id || loc.id) === w.location_id)?.name || "-";
-                  const employeeName = employees.find(emp => (emp._id || emp.id) === w.employee_id)?.name || "-";
+                  const employeeIds = Array.isArray(w.employee_ids) && w.employee_ids.length
+                    ? w.employee_ids.map((id) => String(id))
+                    : w.employee_id
+                    ? [String(w.employee_id)]
+                    : [];
+                  const employeeName = employeeIds
+                    .map((id) => employees.find((emp) => String(emp._id || emp.id) === String(id))?.name)
+                    .filter(Boolean)
+                    .join(", ") || "-";
                   return (
                     <tr key={w.id} style={{ background: i % 2 ? "#f8fafc" : "#fff" }}>
                       <td style={td}>{i + 1}</td>
