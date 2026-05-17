@@ -2,6 +2,36 @@
 import React, { useState, useEffect } from "react";
 import axios from "axios";
 
+const getRecordId = (record) => {
+  if (!record) return "";
+  if (typeof record === "string" || typeof record === "number") return String(record);
+  return String(record.id || record._id || "");
+};
+
+const sameId = (left, right) =>
+  String(left || "") !== "" && String(left || "") === String(right || "");
+
+const normalizeIdList = (input) => {
+  if (!Array.isArray(input)) return [];
+  return input.map((item) => getRecordId(item)).filter(Boolean);
+};
+
+const warehouseHasEmployee = (warehouse, employeeId, employees = []) => {
+  const selectedEmployeeId = String(employeeId || "");
+  if (!selectedEmployeeId) return true;
+
+  const directEmployeeId = getRecordId(warehouse?.employee_id);
+  const warehouseEmployeeIds = normalizeIdList(warehouse?.employee_ids);
+  if (sameId(directEmployeeId, selectedEmployeeId) || warehouseEmployeeIds.some((id) => sameId(id, selectedEmployeeId))) {
+    return true;
+  }
+
+  const warehouseId = getRecordId(warehouse);
+  const employee = employees.find((item) => sameId(getRecordId(item), selectedEmployeeId));
+  const assignedWarehouseIds = normalizeIdList(employee?.assigned_warehouse_ids);
+  return assignedWarehouseIds.some((id) => sameId(id, warehouseId));
+};
+
 export default function OutwardAdminForm({ editData, onSaved }) {
   const API_BASE = "/api";
   const [form, setForm] = useState({
@@ -84,18 +114,21 @@ export default function OutwardAdminForm({ editData, onSaved }) {
   // Auto-set location and warehouse when employee selected
   useEffect(() => {
     if (form.employee_id) {
-      const employeeId = Number(form.employee_id);
+      const employeeId = String(form.employee_id);
       const assignedWarehouses = warehouses.filter(
-        (w) => Number(w.employee_id) === employeeId
+        (w) => warehouseHasEmployee(w, employeeId, employees)
       );
-      const employee = employees.find((e) => e.id === employeeId);
+      const employee = employees.find((e) => sameId(getRecordId(e), employeeId));
+      const selectedWarehouse = assignedWarehouses.some((w) => sameId(getRecordId(w), form.warehouse_id))
+        ? assignedWarehouses.find((w) => sameId(getRecordId(w), form.warehouse_id))
+        : assignedWarehouses[0];
 
       setForm((prev) => ({
         ...prev,
-        location_id: employee?.location_id || "",
+        location_id: getRecordId(selectedWarehouse?.location_id) || getRecordId(employee?.location_id) || "",
         warehouse_id:
-          assignedWarehouses.length > 0
-            ? String(assignedWarehouses[0].id)
+          selectedWarehouse
+            ? getRecordId(selectedWarehouse)
             : "",
       }));
     }
@@ -140,17 +173,19 @@ export default function OutwardAdminForm({ editData, onSaved }) {
       
       <select name="employee_id" value={form.employee_id} onChange={handleChange} required>
         <option value="">Select Employee</option>
-        {employees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+        {employees.map(e => <option key={getRecordId(e)} value={getRecordId(e)}>{e.name}</option>)}
       </select>
 
       <select name="location_id" value={form.location_id} disabled>
         <option value="">Location</option>
-        {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+        {locations.map(l => <option key={getRecordId(l)} value={getRecordId(l)}>{l.name}</option>)}
       </select>
 
       <select name="warehouse_id" value={form.warehouse_id} onChange={handleChange}>
         <option value="">Warehouse</option>
-        {warehouses.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+        {warehouses
+          .filter((w) => warehouseHasEmployee(w, form.employee_id, employees))
+          .map(w => <option key={getRecordId(w)} value={getRecordId(w)}>{w.name}</option>)}
       </select>
 
       <select name="company_id" value={form.company_id} onChange={handleChange}>
