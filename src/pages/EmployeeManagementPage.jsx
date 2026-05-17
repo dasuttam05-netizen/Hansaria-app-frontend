@@ -183,6 +183,25 @@ const normalizeData = (data) => {
 const employeeRecordId = (employee) =>
   employee?.id ?? employee?._id ?? "";
 
+const normalizeId = (value) => {
+  if (!value) return "";
+  if (typeof value === "string") return value;
+  if (value._id) return String(value._id);
+  if (value.id) return String(value.id);
+  return String(value);
+};
+
+const normalizeIdArray = (input) => {
+  if (!Array.isArray(input)) return [];
+  return Array.from(
+    new Set(
+      input
+        .map((item) => normalizeId(item))
+        .filter(Boolean)
+    )
+  );
+};
+
 const normalizeArray = (arr) => {
   if (!Array.isArray(arr)) return [];
   return arr.map(normalizeData);
@@ -322,7 +341,7 @@ export default function EmployeeManagementPage() {
   if (isSubmittingEmployee) return;
 
   const safeLocationIds = Array.isArray(formData.location_ids)
-    ? formData.location_ids.filter(Boolean)
+    ? normalizeIdArray(formData.location_ids)
     : [];
 
   // Validate location
@@ -463,14 +482,12 @@ export default function EmployeeManagementPage() {
   .map((item) =>
     String(item._id || item.id)
   );
-    const safeEditLocationIds = Array.isArray(employee.location_ids)
-      ? Array.from(
-          new Set(
-            employee.location_ids
-              .map((id) => String(id || "").trim())
-              .filter(Boolean)
-          )
-        )
+    const safeEditLocationIds = normalizeIdArray(employee.location_ids);
+    const fallbackLocationId = normalizeId(employee.location_id);
+    const finalEditLocationIds = safeEditLocationIds.length
+      ? safeEditLocationIds
+      : fallbackLocationId
+      ? [fallbackLocationId]
       : [];
 
     setFormData({
@@ -479,8 +496,8 @@ export default function EmployeeManagementPage() {
       address: employee.address || "",
       username: employee.username || "",
       password: "",
-      location_id: String(employee.location_id || ""),
-      location_ids: safeEditLocationIds,
+      location_id: fallbackLocationId,
+      location_ids: finalEditLocationIds,
       role: employee.role || "",
       permissions: employee.permissions || [],
       opening_balance: String(employee.opening_balance || 0),
