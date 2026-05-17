@@ -473,15 +473,9 @@ export default function EmployeeManagementPage() {
       return;
     }
 
-   const assignedWarehouseIds = warehouses
-  .filter(
-    (item) =>
-      String(item.employee_id) ===
-      String(recordId)
-  )
-  .map((item) =>
-    String(item._id || item.id)
-  );
+    const assignedWarehouseIds = normalizeIdArray(
+      employee.assigned_warehouse_ids
+    );
     const safeEditLocationIds = normalizeIdArray(employee.location_ids);
     const fallbackLocationId = normalizeId(employee.location_id);
     const finalEditLocationIds = safeEditLocationIds.length
@@ -594,14 +588,15 @@ export default function EmployeeManagementPage() {
           </thead>
           <tbody>
             {employees.map((employee, index) => {
-              const assignedNames = warehouses
-  .filter(
-    (item) =>
-      String(item.employee_id) ===
-      String(employee.id || employee._id)
-  )
-  .map((item) => item.name)
-  .join(", ");
+              const assignedNames = normalizeIdArray(employee.assigned_warehouse_ids)
+                .map((warehouseId) =>
+                  warehouses.find(
+                    (item) =>
+                      String(item._id || item.id) === String(warehouseId)
+                  )?.name
+                )
+                .filter(Boolean)
+                .join(", ");
               const employeeIsAdmin =
                 String(employee?.role || "").toLowerCase() === "admin" ||
                 (Array.isArray(employee?.permissions) && employee.permissions.includes("all"));
