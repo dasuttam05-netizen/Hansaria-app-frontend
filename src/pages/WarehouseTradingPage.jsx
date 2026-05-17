@@ -157,7 +157,7 @@ export default function WarehouseTradingPage() {
     }
 
     loadData();
-  }, [searchParams, user]);
+  }, [searchParams]);
 
   // Load voucher list when type changes
   useEffect(() => {
