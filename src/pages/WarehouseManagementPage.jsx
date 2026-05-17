@@ -29,6 +29,25 @@ const normalizeIdArray = (input) => {
   );
 };
 
+const collectWarehouseEmployeeIds = (warehouse, employees) => {
+  const warehouseId = normalizeId(warehouse?._id || warehouse?.id);
+  const fromWarehouse = normalizeIdArray(warehouse?.employee_ids).length
+    ? normalizeIdArray(warehouse?.employee_ids)
+    : normalizeId(warehouse?.employee_id)
+    ? [normalizeId(warehouse?.employee_id)]
+    : [];
+
+  const fromEmployeeSide = normalizeIdArray(
+    (employees || [])
+      .filter((emp) =>
+        normalizeIdArray(emp?.assigned_warehouse_ids).includes(warehouseId)
+      )
+      .map((emp) => normalizeId(emp?._id || emp?.id))
+  );
+
+  return Array.from(new Set([...fromWarehouse, ...fromEmployeeSide]));
+};
+
 export default function WarehouseManagementPage() {
   const [warehouses, setWarehouses] = useState([]);
   const [locations, setLocations] = useState([]);
@@ -240,11 +259,7 @@ export default function WarehouseManagementPage() {
                 {warehouses.map((w, i) => {
                   const rowLocationId = normalizeId(w.location_id);
                   const locationName = locations.find(loc => String(loc._id || loc.id) === rowLocationId)?.name || "-";
-                  const employeeIds = normalizeIdArray(w.employee_ids).length
-                    ? normalizeIdArray(w.employee_ids)
-                    : normalizeId(w.employee_id)
-                    ? [normalizeId(w.employee_id)]
-                    : [];
+                  const employeeIds = collectWarehouseEmployeeIds(w, employees);
                   const employeeName = employeeIds
                     .map((id) => employees.find((emp) => String(emp._id || emp.id) === String(id))?.name)
                     .filter(Boolean)
