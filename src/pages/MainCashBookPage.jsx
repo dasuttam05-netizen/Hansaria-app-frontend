@@ -74,6 +74,12 @@ const getSignedOpening = (row) => {
   const type = String(row?.opening_balance_type || "dr").toLowerCase();
   return type === "cr" ? -Math.abs(amount) : Math.abs(amount);
 };
+const isMainCashLedgerEntry = (entry) => {
+  const isExpenseFromExpenseModule =
+    Number(entry?.source_expense_id || 0) > 0 &&
+    String(entry?.entry_type || "").toLowerCase() === "expense";
+  return String(entry?.fund_source || "main_cash") === "main_cash" && !isExpenseFromExpenseModule;
+};
 
 const MainCashBookPage = () => {
   const navigate = useNavigate();
@@ -193,7 +199,7 @@ const MainCashBookPage = () => {
   const filteredRows = useMemo(() => {
     return entries
       .filter((e) => e.status === (showDeleted ? "cancelled" : "posted"))
-      .filter((e) => String(e.fund_source || "main_cash") === "main_cash")
+      .filter(isMainCashLedgerEntry)
       .filter(matchesAppliedFilters)
       .sort((a, b) => new Date(a.entry_date) - new Date(b.entry_date));
   }, [entries, matchesAppliedFilters, showDeleted]);
@@ -221,7 +227,7 @@ const MainCashBookPage = () => {
     const from = new Date(appliedFilters.start_date);
     const entryOpening = entries
       .filter((e) => e.status === "posted")
-      .filter((e) => String(e.fund_source || "main_cash") === "main_cash")
+      .filter(isMainCashLedgerEntry)
       .filter((e) => {
         if (appliedFilters.warehouse_id && String(e.warehouse_id || "") !== String(appliedFilters.warehouse_id)) return false;
         if (appliedFilters.company_id && String(e.company_id || "") !== String(appliedFilters.company_id)) return false;
