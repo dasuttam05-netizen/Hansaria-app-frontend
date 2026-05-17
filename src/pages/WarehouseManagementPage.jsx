@@ -10,6 +10,25 @@ const emptyForm = () => ({
   employee_ids: [],
 });
 
+const normalizeId = (value) => {
+  if (!value) return "";
+  if (typeof value === "string") return value;
+  if (value._id) return String(value._id);
+  if (value.id) return String(value.id);
+  return String(value);
+};
+
+const normalizeIdArray = (input) => {
+  if (!Array.isArray(input)) return [];
+  return Array.from(
+    new Set(
+      input
+        .map((item) => normalizeId(item))
+        .filter(Boolean)
+    )
+  );
+};
+
 export default function WarehouseManagementPage() {
   const [warehouses, setWarehouses] = useState([]);
   const [locations, setLocations] = useState([]);
@@ -56,7 +75,7 @@ export default function WarehouseManagementPage() {
     }
     try {
       const safeEmployeeIds = Array.isArray(formData.employee_ids)
-        ? Array.from(new Set(formData.employee_ids.map((id) => String(id || "").trim()).filter(Boolean)))
+        ? normalizeIdArray(formData.employee_ids)
         : [];
       const payload = {
         name: formData.name,
@@ -81,15 +100,15 @@ export default function WarehouseManagementPage() {
   };
 
   const handleEdit = (w) => {
-    const safeEmployeeIds = Array.isArray(w.employee_ids)
-      ? w.employee_ids.map((id) => String(id))
-      : w.employee_id
-      ? [String(w.employee_id)]
+    const safeEmployeeIds = normalizeIdArray(w.employee_ids).length
+      ? normalizeIdArray(w.employee_ids)
+      : normalizeId(w.employee_id)
+      ? [normalizeId(w.employee_id)]
       : [];
     setFormData({
       name: w.name || "",
       address: w.address || "",
-      location_id: w.location_id ? String(w.location_id) : "",
+      location_id: normalizeId(w.location_id),
       employee_id: safeEmployeeIds[0] || "",
       employee_ids: safeEmployeeIds,
     });
@@ -122,8 +141,8 @@ export default function WarehouseManagementPage() {
     return employeeOptions.filter((option) => {
       const emp = employees.find((e) => String(e._id || e.id) === String(option.value));
       if (!emp) return false;
-      const primaryLocation = emp.location_id ? String(emp.location_id) : "";
-      const multiLocations = Array.isArray(emp.location_ids) ? emp.location_ids.map((id) => String(id)) : [];
+      const primaryLocation = normalizeId(emp.location_id);
+      const multiLocations = normalizeIdArray(emp.location_ids);
       return primaryLocation === String(formData.location_id) || multiLocations.includes(String(formData.location_id));
     });
   }, [employeeOptions, employees, formData.location_id]);
@@ -219,11 +238,12 @@ export default function WarehouseManagementPage() {
               </thead>
               <tbody>
                 {warehouses.map((w, i) => {
-                  const locationName = locations.find(loc => (loc._id || loc.id) === w.location_id)?.name || "-";
-                  const employeeIds = Array.isArray(w.employee_ids) && w.employee_ids.length
-                    ? w.employee_ids.map((id) => String(id))
-                    : w.employee_id
-                    ? [String(w.employee_id)]
+                  const rowLocationId = normalizeId(w.location_id);
+                  const locationName = locations.find(loc => String(loc._id || loc.id) === rowLocationId)?.name || "-";
+                  const employeeIds = normalizeIdArray(w.employee_ids).length
+                    ? normalizeIdArray(w.employee_ids)
+                    : normalizeId(w.employee_id)
+                    ? [normalizeId(w.employee_id)]
                     : [];
                   const employeeName = employeeIds
                     .map((id) => employees.find((emp) => String(emp._id || emp.id) === String(id))?.name)
