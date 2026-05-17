@@ -42,6 +42,27 @@ const getRecordId = (record) => {
 const sameId = (left, right) =>
   String(left || "") !== "" && String(left || "") === String(right || "");
 
+const normalizeIdList = (input) => {
+  if (!Array.isArray(input)) return [];
+  return input.map((item) => getRecordId(item)).filter(Boolean);
+};
+
+const warehouseHasEmployee = (warehouse, employeeId, employees = []) => {
+  const selectedEmployeeId = String(employeeId || "");
+  if (!selectedEmployeeId) return true;
+
+  const directEmployeeId = getRecordId(warehouse?.employee_id);
+  const warehouseEmployeeIds = normalizeIdList(warehouse?.employee_ids);
+  if (sameId(directEmployeeId, selectedEmployeeId) || warehouseEmployeeIds.some((id) => sameId(id, selectedEmployeeId))) {
+    return true;
+  }
+
+  const warehouseId = getRecordId(warehouse);
+  const employee = employees.find((item) => sameId(getRecordId(item), selectedEmployeeId));
+  const assignedWarehouseIds = normalizeIdList(employee?.assigned_warehouse_ids);
+  return assignedWarehouseIds.some((id) => sameId(id, warehouseId));
+};
+
 export default function OutwardPage() {
   const API_BASE = "/api";
   const { user } = loadSession();
@@ -109,17 +130,19 @@ export default function OutwardPage() {
       const employeeId = String(formData.employee_id);
       const emp = employees.find((e) => sameId(getRecordId(e), employeeId));
       const assignedWarehouses = warehouses.filter(
-        (w) => sameId(getRecordId(w.employee_id), employeeId)
+        (w) => warehouseHasEmployee(w, employeeId, employees)
       );
-      const fallbackLocationId = getRecordId(assignedWarehouses[0]?.location_id);
-
       const currentWarehouseIsValid = assignedWarehouses.some(
         (w) => sameId(getRecordId(w), formData.warehouse_id)
       );
+      const selectedWarehouse = currentWarehouseIsValid
+        ? assignedWarehouses.find((w) => sameId(getRecordId(w), formData.warehouse_id))
+        : assignedWarehouses[0];
+      const warehouseLocationId = getRecordId(selectedWarehouse?.location_id);
 
       setFormData((prev) => ({
         ...prev,
-        location_id: getRecordId(emp?.location_id) || fallbackLocationId,
+        location_id: warehouseLocationId || getRecordId(emp?.location_id),
         warehouse_id:
           currentWarehouseIsValid
             ? prev.warehouse_id
@@ -783,7 +806,7 @@ Consignee: ${row.consignee_name}`;
                   >
                     <option value="">{isSelfLoading ? "Self Loading - Warehouse Not Required" : "Select Warehouse"}</option>
                     {warehousesForLocation
-                      .filter((w) => !formData.employee_id || sameId(getRecordId(w.employee_id), formData.employee_id))
+                      .filter((w) => warehouseHasEmployee(w, formData.employee_id, employees))
                       .map((w) => (
                       <option key={getRecordId(w)} value={getRecordId(w)}>
                         {w.location_name ? `${w.name} (${w.location_name})` : w.name}
