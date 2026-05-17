@@ -3,6 +3,36 @@ import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { formatDisplayDate } from "../utils/date";
 
+const getRecordId = (record) => {
+  if (!record) return "";
+  if (typeof record === "string" || typeof record === "number") return String(record);
+  return String(record.id || record._id || "");
+};
+
+const sameId = (left, right) =>
+  String(left || "") !== "" && String(left || "") === String(right || "");
+
+const normalizeIdList = (input) => {
+  if (!Array.isArray(input)) return [];
+  return input.map((item) => getRecordId(item)).filter(Boolean);
+};
+
+const warehouseHasEmployee = (warehouse, employeeId, employees = []) => {
+  const selectedEmployeeId = String(employeeId || "");
+  if (!selectedEmployeeId) return true;
+
+  const directEmployeeId = getRecordId(warehouse?.employee_id);
+  const warehouseEmployeeIds = normalizeIdList(warehouse?.employee_ids);
+  if (sameId(directEmployeeId, selectedEmployeeId) || warehouseEmployeeIds.some((id) => sameId(id, selectedEmployeeId))) {
+    return true;
+  }
+
+  const warehouseId = getRecordId(warehouse);
+  const employee = employees.find((item) => sameId(getRecordId(item), selectedEmployeeId));
+  const assignedWarehouseIds = normalizeIdList(employee?.assigned_warehouse_ids);
+  return assignedWarehouseIds.some((id) => sameId(id, warehouseId));
+};
+
 export default function OutwardPage() {
   const API = "/api";
 
@@ -70,18 +100,21 @@ export default function OutwardPage() {
   // Auto-set location and warehouse when employee selected
   useEffect(() => {
     if (formData.employee_id) {
-      const employeeId = Number(formData.employee_id);
-      const emp = employees.find((e) => e.id === employeeId);
+      const employeeId = String(formData.employee_id);
+      const emp = employees.find((e) => sameId(getRecordId(e), employeeId));
       const assignedWarehouses = warehouses.filter(
-        (w) => Number(w.employee_id) === employeeId
+        (w) => warehouseHasEmployee(w, employeeId, employees)
       );
+      const selectedWarehouse = assignedWarehouses.some((w) => sameId(getRecordId(w), formData.warehouse_id))
+        ? assignedWarehouses.find((w) => sameId(getRecordId(w), formData.warehouse_id))
+        : assignedWarehouses[0];
 
       setFormData((prev) => ({
         ...prev,
-        location_id: emp?.location_id || "",
+        location_id: getRecordId(selectedWarehouse?.location_id) || getRecordId(emp?.location_id) || "",
         warehouse_id:
-          assignedWarehouses.length > 0
-            ? String(assignedWarehouses[0].id)
+          selectedWarehouse
+            ? getRecordId(selectedWarehouse)
             : "",
       }));
     }
@@ -101,12 +134,12 @@ export default function OutwardPage() {
     try {
       const payload = {
         ...formData,
-        employee_id: formData.employee_id ? Number(formData.employee_id) : null,
-        location_id: formData.location_id ? Number(formData.location_id) : null,
-        warehouse_id: formData.warehouse_id ? Number(formData.warehouse_id) : null,
-        product_id: formData.product_id ? Number(formData.product_id) : null,
-        company_id: formData.company_id ? Number(formData.company_id) : null,
-        company_account_id: formData.company_account_id ? Number(formData.company_account_id) : null,
+        employee_id: formData.employee_id || null,
+        location_id: formData.location_id || null,
+        warehouse_id: formData.warehouse_id || null,
+        product_id: formData.product_id || null,
+        company_id: formData.company_id || null,
+        company_account_id: formData.company_account_id || null,
         weight: Number(formData.weight) || 0,
         labour_charges: Number(formData.labour_charges) || 0,
       };
@@ -243,20 +276,22 @@ export default function OutwardPage() {
               <select name="employee_id" value={formData.employee_id} onChange={handleChange} required
                 style={{ padding:"12px", fontSize:"16px", borderRadius:"6px", border:"1px solid #ccc" }}>
                 <option value="">Select Employee</option>
-                {employees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+                {employees.map(e => <option key={getRecordId(e)} value={getRecordId(e)}>{e.name}</option>)}
               </select>
 
               <select name="location_id" value={formData.location_id} disabled
                 style={{ padding:"12px", fontSize:"16px", borderRadius:"6px", border:"1px solid #ccc", background:"#f5f5f5" }}>
                 <option value="">Location</option>
-                {locations.map(l => <option key={l.id} value={l.id}>{l.name}</option>)}
+                {locations.map(l => <option key={getRecordId(l)} value={getRecordId(l)}>{l.name}</option>)}
               </select>
 
               <select name="warehouse_id" value={formData.warehouse_id} onChange={handleChange}
                 disabled={noWarehousesAvailable}
                 style={{ padding:"12px", fontSize:"16px", borderRadius:"6px", border: noWarehousesAvailable ? "2px solid #ef4444" : "1px solid #ccc", background: noWarehousesAvailable ? "#fef2f2" : "#fff" }}>
                 <option value="">Select Warehouse</option>
-                {warehousesForLocation.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+                {warehousesForLocation
+                  .filter((w) => warehouseHasEmployee(w, formData.employee_id, employees))
+                  .map(w => <option key={getRecordId(w)} value={getRecordId(w)}>{w.name}</option>)}
               </select>
               {noWarehousesAvailable && (
                 <div style={{ color: "#dc2626", fontSize: "12px", marginTop: "4px", padding: "6px 8px", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "4px" }}>
@@ -280,8 +315,8 @@ export default function OutwardPage() {
                 style={{ padding:"12px", fontSize:"16px", borderRadius:"6px", border:"1px solid #ccc" }}>
                 <option value="">Select Account</option>
                 {companyAccounts
-                  .filter(acc => acc.company_id === Number(formData.company_id))
-                  .map(acc => <option key={acc.id} value={acc.id}>{acc.account_name}</option>)}
+                  .filter(acc => sameId(getRecordId(acc.company_id), formData.company_id))
+                  .map(acc => <option key={getRecordId(acc)} value={getRecordId(acc)}>{acc.account_name}</option>)}
               </select>
 
               <input type="text" name="lorry_no" placeholder="Lorry No" value={formData.lorry_no} onChange={handleChange}
