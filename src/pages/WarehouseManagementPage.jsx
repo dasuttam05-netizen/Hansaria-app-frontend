@@ -128,20 +128,25 @@ export default function WarehouseManagementPage() {
     });
   }, [employeeOptions, employees, formData.location_id]);
 
-  useEffect(() => {
-    if (!formData.location_id) return;
-    const allowed = new Set(filteredEmployeeOptions.map((item) => String(item.value)));
-    setFormData((prev) => {
-      const nextIds = Array.isArray(prev.employee_ids)
-        ? prev.employee_ids.filter((id) => allowed.has(String(id)))
-        : [];
-      return {
-        ...prev,
-        employee_ids: nextIds,
-        employee_id: nextIds[0] || "",
-      };
+  const stableEmployeeOptions = useMemo(() => {
+    const baseMap = new Map(
+      filteredEmployeeOptions.map((opt) => [String(opt.value), opt])
+    );
+
+    (formData.employee_ids || []).forEach((id) => {
+      const key = String(id);
+      if (baseMap.has(key)) return;
+      const emp = employees.find((e) => String(e._id || e.id) === key);
+      if (emp) {
+        baseMap.set(key, {
+          value: key,
+          label: emp.name || emp.username || `Employee ${key}`,
+        });
+      }
     });
-  }, [formData.location_id, filteredEmployeeOptions]);
+
+    return Array.from(baseMap.values());
+  }, [filteredEmployeeOptions, formData.employee_ids, employees]);
 
   return (
     <div style={{ fontFamily: "Segoe UI, Arial, sans-serif", padding: "8px" }}>
@@ -170,7 +175,7 @@ export default function WarehouseManagementPage() {
               <Field label="Assign Employee">
                 <MultiSelectDropdown
                   label=""
-                  options={filteredEmployeeOptions}
+                  options={stableEmployeeOptions}
                   value={formData.employee_ids}
                   onChange={(next) =>
                     setFormData((prev) => ({
