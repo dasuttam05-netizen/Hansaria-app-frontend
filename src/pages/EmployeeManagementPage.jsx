@@ -156,6 +156,7 @@ const createDefaultFormData = () => ({
   username: "",
   password: "",
   location_id: "",
+  location_ids: [],
   role: "",
   permissions: ["dashboard.view"],
   opening_balance: "0",
@@ -264,6 +265,14 @@ export default function EmployeeManagementPage() {
 );
 
   const roleOptions = useMemo(() => roles.map((role) => ({ value: String(role.id), label: role.name })), [roles]);
+  const locationOptions = useMemo(
+    () =>
+      locations.map((item) => ({
+        value: String(item._id || item.id),
+        label: item.name,
+      })),
+    [locations]
+  );
 
   const permissionSummary = useMemo(() => {
     const selected = flattenPermissionsFromToggles(employeeToggles);
@@ -312,9 +321,13 @@ export default function EmployeeManagementPage() {
 
   if (isSubmittingEmployee) return;
 
+  const safeLocationIds = Array.isArray(formData.location_ids)
+    ? formData.location_ids.filter(Boolean)
+    : [];
+
   // Validate location
-  if (!formData.location_id || formData.location_id === "") {
-    alert("Please select a location");
+  if (safeLocationIds.length === 0) {
+    alert("Please select at least one location");
     return;
   }
 
@@ -324,7 +337,8 @@ export default function EmployeeManagementPage() {
   const payload = {
     ...formData,
 
-    location_id: formData.location_id,
+    location_id: safeLocationIds[0] || "",
+    location_ids: safeLocationIds,
 
     role: formData.role || "Custom Role",
 
@@ -456,6 +470,12 @@ export default function EmployeeManagementPage() {
       username: employee.username || "",
       password: "",
       location_id: String(employee.location_id || ""),
+      location_ids:
+        Array.isArray(employee.location_ids) && employee.location_ids.length
+          ? employee.location_ids.map((id) => String(id))
+          : employee.location_id
+          ? [String(employee.location_id)]
+          : [],
       role: employee.role || "",
       permissions: employee.permissions || [],
       opening_balance: String(employee.opening_balance || 0),
@@ -577,14 +597,20 @@ export default function EmployeeManagementPage() {
                   <td style={tdStyle}>{employee.username}</td>
                   <td style={tdStyle}><span style={roleBadge(employeeIsAdmin)}>{employee.role || "Custom Role"}</span></td>
                   <td style={tdStyle}>
-  {
-    locations.find(
-      (item) =>
-        String(item._id || item.id) ===
-        String(employee.location_id)
-    )?.name || "-"
-  }
-</td>
+                    {(Array.isArray(employee.location_ids) && employee.location_ids.length
+                      ? employee.location_ids
+                      : employee.location_id
+                      ? [employee.location_id]
+                      : []
+                    )
+                      .map((id) =>
+                        locations.find(
+                          (item) => String(item._id || item.id) === String(id)
+                        )?.name
+                      )
+                      .filter(Boolean)
+                      .join(", ") || "-"}
+                  </td>
                   <td style={tdStyle}>{assignedNames || "-"}</td>
                   <td style={tdStyle}>
                     {canEditThisEmployee ? <button type="button" onClick={() => handleEditEmployee(employee)} style={miniBlue}>Edit</button> : null}
@@ -619,27 +645,21 @@ export default function EmployeeManagementPage() {
                   {roles.map((role) => <option key={role.id} value={role.id}>{role.name}</option>)}
                 </select>
               </Field>
-              <Field label="Location">
-  <select
-    name="location_id"
-    value={formData.location_id}
-    onChange={handleEmployeeChange}
-    style={inputStyle}
-  >
-    <option value="">
-      Select Location
-    </option>
-
-    {locations.map((location) => (
-      <option
-        key={location._id || location.id}
-        value={location._id || location.id}
-      >
-        {location.name}
-      </option>
-    ))}
-  </select>
-</Field>
+              <div style={{ gridColumn: "1 / -1" }}>
+                <MultiSelectDropdown
+                  label="Location"
+                  options={locationOptions}
+                  value={formData.location_ids}
+                  onChange={(next) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      location_ids: next,
+                      location_id: next[0] || "",
+                    }))
+                  }
+                  placeholder="Select Location"
+                />
+              </div>
               <Field label="Opening Balance">
                 <div style={{ display: "grid", gridTemplateColumns: "1fr 90px", gap: 10 }}>
                   <input name="opening_balance" value={formData.opening_balance} onChange={handleEmployeeChange} style={inputStyle} />
