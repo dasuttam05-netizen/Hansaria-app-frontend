@@ -463,6 +463,16 @@ export default function EmployeeManagementPage() {
   .map((item) =>
     String(item._id || item.id)
   );
+    const safeEditLocationIds = Array.isArray(employee.location_ids)
+      ? Array.from(
+          new Set(
+            employee.location_ids
+              .map((id) => String(id || "").trim())
+              .filter(Boolean)
+          )
+        )
+      : [];
+
     setFormData({
       name: employee.name || "",
       mobile: employee.mobile || "",
@@ -470,12 +480,7 @@ export default function EmployeeManagementPage() {
       username: employee.username || "",
       password: "",
       location_id: String(employee.location_id || ""),
-      location_ids:
-        Array.isArray(employee.location_ids) && employee.location_ids.length
-          ? employee.location_ids.map((id) => String(id))
-          : employee.location_id
-          ? [String(employee.location_id)]
-          : [],
+      location_ids: safeEditLocationIds,
       role: employee.role || "",
       permissions: employee.permissions || [],
       opening_balance: String(employee.opening_balance || 0),
