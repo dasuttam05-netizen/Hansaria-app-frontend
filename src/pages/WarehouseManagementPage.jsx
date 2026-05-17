@@ -260,10 +260,15 @@ export default function WarehouseManagementPage() {
                   const rowLocationId = normalizeId(w.location_id);
                   const locationName = locations.find(loc => String(loc._id || loc.id) === rowLocationId)?.name || "-";
                   const employeeIds = collectWarehouseEmployeeIds(w, employees);
-                  const employeeName = employeeIds
-                    .map((id) => employees.find((emp) => String(emp._id || emp.id) === String(id))?.name)
-                    .filter(Boolean)
-                    .join(", ") || "-";
+                  const employeeNamesFromApi = Array.isArray(w.employee_names)
+                    ? w.employee_names.filter(Boolean)
+                    : [];
+                  const employeeName = employeeNamesFromApi.length
+                    ? employeeNamesFromApi.join(", ")
+                    : employeeIds
+                        .map((id) => employees.find((emp) => String(emp._id || emp.id) === String(id))?.name)
+                        .filter(Boolean)
+                        .join(", ") || "-";
                   return (
                     <tr key={w.id} style={{ background: i % 2 ? "#f8fafc" : "#fff" }}>
                       <td style={td}>{i + 1}</td>
