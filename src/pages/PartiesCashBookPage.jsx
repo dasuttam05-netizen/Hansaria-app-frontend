@@ -54,6 +54,7 @@ const td = {
 
 const getWarehouseLabel = (w) => w?.name || w?.warehouse_name || w?.title || (w?.id ? `Warehouse ${w.id}` : "Unknown Warehouse");
 const getCompanyLabel = (c) => c?.name || c?.company_name || c?.company || (c?.id ? `Party ${c.id}` : "Unknown Party");
+const getRecordId = (row) => row?.id || row?._id || "";
 const getEntryAmounts = (entry) => {
   const amount = Number(entry?.amount || 0);
   const isIncome = String(entry?.entry_type || "").toLowerCase() === "income";
@@ -66,7 +67,16 @@ const getSignedOpening = (row) => {
   const type = String(row?.opening_balance_type || "dr").toLowerCase();
   return type === "cr" ? -Math.abs(amount) : Math.abs(amount);
 };
-const isPartyLedgerEntry = (entry) => String(entry?.fund_source || "main_cash") === "party_cash";
+const isPartyLedgerEntry = (entry) => {
+  const source = String(entry?.fund_source || "main_cash");
+  return source === "party_cash" || (!!entry?.company_id && source !== "employee_cash");
+};
+const isActiveLedgerStatus = (entry) =>
+  String(entry?.status || "posted").toLowerCase() !== "cancelled" &&
+  !(
+    Number(entry?.source_expense_id || 0) > 0 &&
+    String(entry?.status || "").toLowerCase() === "pending"
+  );
 
 const PartiesCashBookPage = () => {
   const navigate = useNavigate();
@@ -140,7 +150,7 @@ const PartiesCashBookPage = () => {
     return entries
       .filter((e) => e.company_id)
       .filter(isPartyLedgerEntry)
-      .filter((e) => e.status === (showDeleted ? "cancelled" : "posted"))
+      .filter((e) => (showDeleted ? String(e.status || "").toLowerCase() === "cancelled" : isActiveLedgerStatus(e)))
       .filter((e) => !appliedFilters.warehouse_id || String(e.warehouse_id || "") === String(appliedFilters.warehouse_id))
       .filter((e) => !appliedFilters.company_id || String(e.company_id || "") === String(appliedFilters.company_id))
       .filter((e) => {
@@ -153,8 +163,15 @@ const PartiesCashBookPage = () => {
   }, [entries, appliedFilters, showDeleted]);
 
   const openingBalance = useMemo(() => {
+    const selectedCompanyEntry = entries.find(
+      (e) => String(e.company_id || "") === String(appliedFilters.company_id)
+    );
     const selectedCompanies = appliedFilters.company_id
-      ? companies.filter((c) => String(c.id) === String(appliedFilters.company_id))
+      ? companies.filter(
+          (c) =>
+            String(getRecordId(c)) === String(appliedFilters.company_id) ||
+            getCompanyLabel(c) === selectedCompanyEntry?.company_name
+        )
       : companies;
     const masterOpening = selectedCompanies.reduce((sum, c) => sum + getSignedOpening(c), 0);
 
@@ -163,7 +180,7 @@ const PartiesCashBookPage = () => {
     const entryOpening = entries
       .filter((e) => e.company_id)
       .filter(isPartyLedgerEntry)
-      .filter((e) => e.status === "posted")
+      .filter(isActiveLedgerStatus)
       .filter((e) => !appliedFilters.warehouse_id || String(e.warehouse_id || "") === String(appliedFilters.warehouse_id))
       .filter((e) => !appliedFilters.company_id || String(e.company_id || "") === String(appliedFilters.company_id))
       .filter((e) => {
