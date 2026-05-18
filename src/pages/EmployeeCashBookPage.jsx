@@ -54,6 +54,7 @@ const td = {
 
 const getWarehouseLabel = (w) => w?.name || w?.warehouse_name || w?.title || (w?.id ? `Warehouse ${w.id}` : "Unknown Warehouse");
 const getEmployeeLabel = (e) => e?.name || e?.employee_name || e?.full_name || (e?.id ? `Employee ${e.id}` : "Unknown Employee");
+const getRecordId = (row) => row?.id || row?._id || "";
 const getEntryAmounts = (entry) => {
   const amount = Number(entry?.amount || 0);
   const isIncome = String(entry?.entry_type || "").toLowerCase() === "income";
@@ -69,8 +70,14 @@ const getSignedOpening = (row) => {
 
 const isEmployeeLedgerEntry = (entry) => {
   const source = String(entry?.fund_source || "main_cash");
-  return source === "employee_cash";
+  return source === "employee_cash" || (!!entry?.employee_id && source === "main_cash" && !entry?.linked_entry_id);
 };
+const isActiveLedgerStatus = (entry) =>
+  String(entry?.status || "posted").toLowerCase() !== "cancelled" &&
+  !(
+    Number(entry?.source_expense_id || 0) > 0 &&
+    String(entry?.status || "").toLowerCase() === "pending"
+  );
 
 const EmployeeCashBookPage = () => {
   const navigate = useNavigate();
@@ -144,7 +151,7 @@ const EmployeeCashBookPage = () => {
     return entries
       .filter((e) => e.employee_id)
       .filter(isEmployeeLedgerEntry)
-      .filter((e) => e.status === (showDeleted ? "cancelled" : "posted"))
+      .filter((e) => (showDeleted ? String(e.status || "").toLowerCase() === "cancelled" : isActiveLedgerStatus(e)))
       .filter((e) => !appliedFilters.warehouse_id || String(e.warehouse_id || "") === String(appliedFilters.warehouse_id))
       .filter((e) => !appliedFilters.employee_id || String(e.employee_id || "") === String(appliedFilters.employee_id))
       .filter((e) => {
@@ -157,8 +164,15 @@ const EmployeeCashBookPage = () => {
   }, [entries, appliedFilters, showDeleted]);
 
   const openingBalance = useMemo(() => {
+    const selectedEmployeeEntry = entries.find(
+      (e) => String(e.employee_id || "") === String(appliedFilters.employee_id)
+    );
     const selectedEmployees = appliedFilters.employee_id
-      ? employees.filter((e) => String(e.id) === String(appliedFilters.employee_id))
+      ? employees.filter(
+          (e) =>
+            String(getRecordId(e)) === String(appliedFilters.employee_id) ||
+            getEmployeeLabel(e) === selectedEmployeeEntry?.employee_name
+        )
       : employees;
     const masterOpening = selectedEmployees.reduce((sum, e) => sum + getSignedOpening(e), 0);
 
@@ -167,7 +181,7 @@ const EmployeeCashBookPage = () => {
     const entryOpening = entries
       .filter((e) => e.employee_id)
       .filter(isEmployeeLedgerEntry)
-      .filter((e) => e.status === "posted")
+      .filter(isActiveLedgerStatus)
       .filter((e) => !appliedFilters.warehouse_id || String(e.warehouse_id || "") === String(appliedFilters.warehouse_id))
       .filter((e) => !appliedFilters.employee_id || String(e.employee_id || "") === String(appliedFilters.employee_id))
       .filter((e) => {
