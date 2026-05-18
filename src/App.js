@@ -319,7 +319,7 @@ function AppRoutes() {
       <Route
         path="/cash-entries"
         element={
-          <ProtectedRoute permission={["cash.view", "cash.create", "cash.edit", "cash.delete"]}>
+          <ProtectedRoute permission="cash.create">
             <CashEntriesPage />
           </ProtectedRoute>
         }
@@ -337,7 +337,7 @@ function AppRoutes() {
       <Route
         path="/cash-book"
         element={
-          <ProtectedRoute permission={["cash.view", "cash.create", "cash.edit", "cash.delete"]}>
+          <ProtectedRoute permission="cash.mainBook.view">
             <MainCashBookPage />
           </ProtectedRoute>
         }
@@ -346,7 +346,7 @@ function AppRoutes() {
       <Route
         path="/parties-cash-book"
         element={
-          <ProtectedRoute permission={["cash.view", "cash.create", "cash.edit", "cash.delete"]}>
+          <ProtectedRoute permission="cash.partiesBook.view">
             <PartiesCashBookPage />
           </ProtectedRoute>
         }
@@ -355,7 +355,7 @@ function AppRoutes() {
       <Route
         path="/employee-cash-book"
         element={
-          <ProtectedRoute permission={["cash.view", "cash.create", "cash.edit", "cash.delete"]}>
+          <ProtectedRoute permission="cash.employeeBook.view">
             <EmployeeCashBookPage />
           </ProtectedRoute>
         }
