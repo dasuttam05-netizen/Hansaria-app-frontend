@@ -177,6 +177,7 @@ export default function ExpenseManagementPage() {
   const [approvedExpenseIds, setApprovedExpenseIds] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [editId, setEditId] = useState(null);
+  const [selectedExpenseId, setSelectedExpenseId] = useState(null);
   const [formData, setFormData] = useState(() => createEmptyForm(user));
   const [editLabels, setEditLabels] = useState({});
   const activeEditRequestRef = useRef(0);
@@ -299,6 +300,11 @@ export default function ExpenseManagementPage() {
         ? allExpenses.filter((e) => !approvedIds.includes(e.id))
         : allExpenses;
       setExpenses(unapprovedExpenses);
+      setSelectedExpenseId((currentId) =>
+        currentId && unapprovedExpenses.some((expense) => String(expense.id) === String(currentId))
+          ? currentId
+          : unapprovedExpenses[0]?.id || null
+      );
     } catch (error) {
       console.error("Failed to load expenses with approvals:", error);
       toast.error("Failed to load expenses", { theme: "colored" });
@@ -745,6 +751,21 @@ export default function ExpenseManagementPage() {
     return ageInDays;
   };
 
+  const pendingExpenses = useMemo(
+    () => expenses.filter((row) => !approvedExpenseIds.includes(row.id)),
+    [expenses, approvedExpenseIds]
+  );
+
+  const getExpenseWeightLabel = (row) => {
+    const weight =
+      Number(row.new_weight || 0) ||
+      Number(row.balance || 0) ||
+      Number(row.loading || 0) ||
+      Number(row.challan_weight || 0);
+
+    return weight ? `${Number(weight).toFixed(2)} MT` : "PENDING";
+  };
+
   const handleApproveForCashBook = async (expense) => {
     if (!canApproveToCashBook) {
       toast.error("Approve is not allowed for this user.", { theme: "colored" });
@@ -754,6 +775,7 @@ export default function ExpenseManagementPage() {
     try {
       const res = await axios.post(`${API_BASE}/expenses/${expense.id}/approve-cash-book`);
       setExpenses(prev => prev.filter(e => e.id !== expense.id));
+      setSelectedExpenseId((currentId) => (String(currentId) === String(expense.id) ? null : currentId));
       setApprovedExpenseIds(prev => [...prev, expense.id]);
       toast.success(res?.data?.message || "Expense approved and moved to Cash Book pending list!", { theme: "colored" });
       await loadExpensesWithApprovals();
@@ -1266,55 +1288,69 @@ export default function ExpenseManagementPage() {
 
       {!showForm && (
       <div style={listCardStyle}>
-        <div style={{ overflowX: "auto" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
-            <thead>
-              <tr>
-                <th style={tableHeadStyle}>Voucher</th>
-                <th style={tableHeadStyle}>Date</th>
-                <th style={tableHeadStyle}>Age (Days)</th>
-                <th style={tableHeadStyle}>Location</th>
-                <th style={tableHeadStyle}>Employee</th>
-                <th style={tableHeadStyle}>Product</th>
-                <th style={tableHeadStyle}>Work Desc</th>
-                <th style={tableHeadStyle}>Party (Co.)</th>
-                <th style={tableHeadStyle}>Reg From</th>
-                <th style={tableHeadStyle}>Send To</th>
-                <th style={tableHeadStyle}>Reg Lorry</th>
-                <th style={tableHeadStyle}>Paid By</th>
-                <th style={tableHeadStyle}>Grand Total</th>
-                <th style={tableHeadStyle}>Net Expense</th>
-                <th style={tableHeadStyle}>Actions</th>
-              </tr>
-            </thead>
-            <tbody>
-              {expenses.length > 0 ? (
-                expenses
-                  .filter(row => !approvedExpenseIds.includes(row.id))
-                  .map((row, index) => {
-                    const bgColor = index % 2 === 0 ? "#fff" : "#f8fafc";
-                    return (
-                      <tr key={row.id} style={{ background: bgColor }}>
-                      <td style={tableCellStyle}>{row.voucher_no}</td>
-                      <td style={tableCellStyle}>{formatDisplayDate(row.expense_date)}</td>
-                      <td style={{ ...tableCellStyle, textAlign: "center", fontWeight: 600 }}>{calculateAge(row.expense_date)}</td>
-                      <td style={tableCellStyle}>{row.location_name || row.warehouse_name || "-"}</td>
-                      <td style={tableCellStyle}>{row.employee_name || "-"}</td>
-                      <td style={tableCellStyle}>{row.product_name || "-"}</td>
-                      <td style={tableCellStyle}>{row.work_description || "-"}</td>
-                      <td style={tableCellStyle}>{row.company_name || "-"}</td>
-                      <td style={tableCellStyle}>{row.reg_from_company_name || "-"}</td>
-                      <td style={tableCellStyle}>{row.send_to_company_name || "-"}</td>
-                      <td style={tableCellStyle}>{row.reg_lorry_no || "-"}</td>
-                      <td style={tableCellStyle}>{row.paid_by || "-"}</td>
-                      <td style={{ ...tableCellStyle, textAlign: "right" }}>
-                        {Number(row.grand_total || 0).toFixed(2)}
-                      </td>
-                      <td style={{ ...tableCellStyle, textAlign: "right", fontWeight: 700 }}>
-                        {Number(row.total_expense_amount || 0).toFixed(2)}
-                      </td>
-                      <td style={tableCellStyle}>
-                        <div style={{ display: "flex", gap: "6px", flexWrap: "wrap" }}>
+        <div style={pendingHeaderStyle}>
+          <div>
+            <div style={{ fontWeight: 800, color: "#0f172a" }}>Pending Approval</div>
+            <div style={{ color: "#64748b", fontSize: 13 }}>Select an expense to view actions.</div>
+          </div>
+          <span style={pendingCountStyle}>{pendingExpenses.length}</span>
+        </div>
+
+        {pendingExpenses.length > 0 ? (
+          <div style={expenseCardListStyle}>
+            {pendingExpenses.map((row) => {
+              const selected = String(selectedExpenseId || "") === String(row.id);
+              const partyName = row.company_name || row.reg_from_company_name || row.send_to_company_name || "-";
+              const lorryNo = row.reg_lorry_no || row.new_lorry_no || "-";
+
+              return (
+                <div
+                  key={row.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => setSelectedExpenseId(row.id)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      setSelectedExpenseId(row.id);
+                    }
+                  }}
+                  style={{
+                    ...expenseCardStyle,
+                    borderColor: selected ? "#93c5fd" : "#dbe4ea",
+                    boxShadow: selected ? "0 0 0 3px rgba(59,130,246,0.12)" : "none",
+                    background: selected ? "#f8fbff" : "#f6f9fd",
+                  }}
+                >
+                  <div style={expenseCardTopStyle}>
+                    <div style={expenseVoucherStyle}>{row.voucher_no || `EXP${row.id}`}</div>
+                    <span style={weightBadgeStyle}>{getExpenseWeightLabel(row)}</span>
+                  </div>
+
+                  <div style={expenseCardLineStyle}>
+                    <strong>Date:</strong> {formatDisplayDate(row.expense_date) || "-"}
+                  </div>
+                  <div style={expenseCardLineStyle}>
+                    <strong>Party:</strong> {partyName}
+                  </div>
+                  <div style={expenseCardLineStyle}>
+                    <strong>Lorry No:</strong> {lorryNo}
+                  </div>
+
+                  {selected ? (
+                    <div style={selectedPanelStyle}>
+                      <div style={detailGridStyle}>
+                        <div><strong>Age:</strong> {calculateAge(row.expense_date)} days</div>
+                        <div><strong>Location:</strong> {row.location_name || row.warehouse_name || "-"}</div>
+                        <div><strong>Employee:</strong> {row.employee_name || "-"}</div>
+                        <div><strong>Product:</strong> {row.product_name || "-"}</div>
+                        <div><strong>Work:</strong> {row.work_description || "-"}</div>
+                        <div><strong>Paid By:</strong> {row.paid_by || "-"}</div>
+                        <div><strong>Grand Total:</strong> {Number(row.grand_total || 0).toFixed(2)}</div>
+                        <div><strong>Net Expense:</strong> {Number(row.total_expense_amount || 0).toFixed(2)}</div>
+                      </div>
+
+                      <div style={selectedActionStyle}>
                           {canEdit ? (
                             <button
                               onClick={() => handleEdit(row)}
@@ -1363,21 +1399,16 @@ export default function ExpenseManagementPage() {
                               Delete
                             </button>
                           ) : null}
-                        </div>
-                      </td>
-                    </tr>
-                    );
-                  })
-              ) : (
-                <tr>
-                  <td colSpan="15" style={{ ...tableCellStyle, textAlign: "center" }}>
-                    No expense entries found
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+                      </div>
+                    </div>
+                  ) : null}
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <div style={emptyPendingStyle}>No expense entries found</div>
+        )}
       </div>
       )}
         </>
@@ -1559,6 +1590,109 @@ const miniButtonStyle = {
   cursor: "pointer",
   fontWeight: 700,
   fontSize: "12px",
+};
+
+const pendingHeaderStyle = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: 12,
+  padding: "16px 16px 0",
+  marginBottom: 14,
+  flexWrap: "wrap",
+};
+
+const pendingCountStyle = {
+  minWidth: 36,
+  height: 30,
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  borderRadius: 999,
+  background: "#dbeafe",
+  color: "#1d4ed8",
+  fontWeight: 900,
+  fontSize: 13,
+};
+
+const expenseCardListStyle = {
+  display: "grid",
+  gap: 10,
+  padding: "0 16px 16px",
+};
+
+const expenseCardStyle = {
+  border: "1px solid #dbe4ea",
+  borderRadius: 8,
+  padding: "14px 14px 12px",
+  cursor: "pointer",
+  transition: "border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease",
+  outline: "none",
+};
+
+const expenseCardTopStyle = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: 12,
+  marginBottom: 10,
+};
+
+const expenseVoucherStyle = {
+  color: "#1d4ed8",
+  fontWeight: 900,
+  fontSize: 15,
+};
+
+const weightBadgeStyle = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  minHeight: 20,
+  padding: "3px 10px",
+  borderRadius: 999,
+  background: "#dbeafe",
+  color: "#1d4ed8",
+  fontWeight: 900,
+  fontSize: 11,
+  whiteSpace: "nowrap",
+};
+
+const expenseCardLineStyle = {
+  color: "#0f172a",
+  fontSize: 12,
+  lineHeight: 1.45,
+};
+
+const selectedPanelStyle = {
+  marginTop: 12,
+  paddingTop: 12,
+  borderTop: "1px solid #dbe4ea",
+};
+
+const detailGridStyle = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))",
+  gap: "8px 14px",
+  color: "#334155",
+  fontSize: 12,
+};
+
+const selectedActionStyle = {
+  display: "flex",
+  gap: 8,
+  flexWrap: "wrap",
+  marginTop: 12,
+};
+
+const emptyPendingStyle = {
+  margin: "0 16px 16px",
+  padding: "26px 12px",
+  textAlign: "center",
+  color: "#64748b",
+  border: "1px dashed #cbd5e1",
+  borderRadius: 8,
+  background: "#f8fafc",
 };
 
 const tableHeadStyle = {
