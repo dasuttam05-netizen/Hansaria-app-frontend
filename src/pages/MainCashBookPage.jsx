@@ -56,6 +56,7 @@ const td = {
 const getWarehouseLabel = (w) => w?.name || w?.warehouse_name || w?.title || (w?.id ? `Warehouse ${w.id}` : "Unknown Warehouse");
 const getCompanyLabel = (c) => c?.name || c?.company_name || c?.company || (c?.id ? `Party ${c.id}` : "Unknown Party");
 const getEmployeeLabel = (e) => e?.name || e?.employee_name || e?.full_name || (e?.id ? `Employee ${e.id}` : "Unknown Employee");
+const getRecordId = (row) => row?.id || row?._id || "";
 const getFundSourceLabel = (source) => {
   const key = String(source || "main_cash").toLowerCase();
   if (key === "employee_cash") return "Employee Cash";
@@ -80,6 +81,8 @@ const isMainCashLedgerEntry = (entry) => {
     String(entry?.entry_type || "").toLowerCase() === "expense";
   return String(entry?.fund_source || "main_cash") === "main_cash" && !isExpenseFromExpenseModule;
 };
+const isActiveLedgerStatus = (entry) =>
+  String(entry?.status || "posted").toLowerCase() !== "cancelled";
 
 const MainCashBookPage = () => {
   const navigate = useNavigate();
@@ -198,7 +201,7 @@ const MainCashBookPage = () => {
 
   const filteredRows = useMemo(() => {
     return entries
-      .filter((e) => e.status === (showDeleted ? "cancelled" : "posted"))
+      .filter((e) => (showDeleted ? String(e.status || "").toLowerCase() === "cancelled" : isActiveLedgerStatus(e)))
       .filter(isMainCashLedgerEntry)
       .filter(matchesAppliedFilters)
       .sort((a, b) => new Date(a.entry_date) - new Date(b.entry_date));
@@ -215,18 +218,28 @@ const MainCashBookPage = () => {
       masterOpening += mainOpeningSigned;
     }
     if (appliedFilters.company_id) {
-      const selectedCompany = companies.find((c) => String(c.id) === String(appliedFilters.company_id));
+      const selectedCompanyEntry = entries.find((e) => String(e.company_id || "") === String(appliedFilters.company_id));
+      const selectedCompany = companies.find(
+        (c) =>
+          String(getRecordId(c)) === String(appliedFilters.company_id) ||
+          getCompanyLabel(c) === selectedCompanyEntry?.company_name
+      );
       masterOpening += getSignedOpening(selectedCompany);
     }
     if (appliedFilters.employee_id) {
-      const selectedEmployee = employees.find((e) => String(e.id) === String(appliedFilters.employee_id));
+      const selectedEmployeeEntry = entries.find((e) => String(e.employee_id || "") === String(appliedFilters.employee_id));
+      const selectedEmployee = employees.find(
+        (e) =>
+          String(getRecordId(e)) === String(appliedFilters.employee_id) ||
+          getEmployeeLabel(e) === selectedEmployeeEntry?.employee_name
+      );
       masterOpening += getSignedOpening(selectedEmployee);
     }
 
     if (!appliedFilters.start_date) return masterOpening;
     const from = new Date(appliedFilters.start_date);
     const entryOpening = entries
-      .filter((e) => e.status === "posted")
+      .filter(isActiveLedgerStatus)
       .filter(isMainCashLedgerEntry)
       .filter((e) => {
         if (appliedFilters.warehouse_id && String(e.warehouse_id || "") !== String(appliedFilters.warehouse_id)) return false;
