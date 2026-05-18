@@ -3,6 +3,36 @@ import axios from "axios";
 import MultiSelectDropdown from "../components/MultiSelectDropdown";
 import { hasPermission, loadSession } from "../utils/auth";
 
+const CASH_BOOK_ALL_PERMISSIONS = [
+  "cash.view",
+  "cash.create",
+  "cash.edit",
+  "cash.delete",
+  "cash.mainBook.view",
+  "cash.mainBook.create",
+  "cash.mainBook.edit",
+  "cash.mainBook.delete",
+  "cash.partiesBook.view",
+  "cash.partiesBook.create",
+  "cash.partiesBook.edit",
+  "cash.partiesBook.delete",
+  "cash.employeeBook.view",
+  "cash.employeeBook.create",
+  "cash.employeeBook.edit",
+  "cash.employeeBook.delete",
+];
+
+const CASH_BOOK_LEGACY_PERMISSIONS = [
+  "cash.view",
+  "cash.create",
+  "cash.edit",
+  "cash.delete",
+];
+
+const CASH_BOOK_DETAILED_PERMISSIONS = CASH_BOOK_ALL_PERMISSIONS.filter(
+  (permission) => !CASH_BOOK_LEGACY_PERMISSIONS.includes(permission)
+);
+
 const PERMISSION_GROUPS = [
   {
     key: "operations",
@@ -19,7 +49,11 @@ const PERMISSION_GROUPS = [
       { key: "expense_self_loading_access", label: "Self Loading", permissions: ["expense.selfLoading"] },
       { key: "expense_local_sale_access", label: "Local Sale", permissions: ["expense.localSale"] },
       { key: "expense_pending_access", label: "Expenses Pending", permissions: ["expense.pending"] },
-      { key: "cash_access", label: "Cash Book", permissions: ["cash.view", "cash.create", "cash.edit", "cash.delete"] },
+      { key: "cash_access", label: "Cash Book", permissions: CASH_BOOK_ALL_PERMISSIONS, allAccess: true },
+      { key: "cash_entry_access", label: "New Cash Entry", permissions: ["cash.view", "cash.create"], grantTogether: true },
+      { key: "cash_main_report_access", label: "Main Cash Book Report", permissions: ["cash.mainBook.view"] },
+      { key: "cash_parties_report_access", label: "Parties Cash Book Report", permissions: ["cash.partiesBook.view"] },
+      { key: "cash_employee_report_access", label: "Employee Cash Book Report", permissions: ["cash.employeeBook.view"] },
       { key: "transport_access", label: "Transport", permissions: ["transport.manage"] },
     ],
   },
@@ -75,6 +109,21 @@ const ALL_PERMISSION_ITEMS = PERMISSION_GROUPS.flatMap((group) => group.items);
 const ACTIONS = ["view", "create", "edit", "delete"];
 
 const getActionOptions = (groupKey, item) => {
+  if (item.allAccess) {
+    return [
+      {
+        id: `${item.key}:all`,
+        label: "All Access",
+        permissions: item.permissions || [],
+        checkGroups: [CASH_BOOK_LEGACY_PERMISSIONS, CASH_BOOK_DETAILED_PERMISSIONS],
+      },
+    ];
+  }
+
+  if (item.grantTogether) {
+    return [{ id: `${item.key}:access`, label: "Access", permissions: item.permissions || [] }];
+  }
+
   if (groupKey === "operations") {
     const options = ACTIONS.map((action) => {
       const direct = item.permissions.find((permission) => permission.endsWith(`.${action}`));
@@ -122,8 +171,25 @@ const ALL_ACTION_OPTIONS = PERMISSION_GROUPS.flatMap((group) =>
   group.items.flatMap((item) => getActionOptions(group.key, item))
 );
 
+const optionPermissions = (option) =>
+  Array.isArray(option.permissions)
+    ? option.permissions
+    : option.permission
+    ? [option.permission]
+    : [];
+
+const isOptionEnabledByPermissions = (option, permissionSet) => {
+  if (Array.isArray(option.checkGroups)) {
+    return option.checkGroups.some(
+      (group) => Array.isArray(group) && group.length > 0 && group.every((permission) => permissionSet.has(permission))
+    );
+  }
+
+  return optionPermissions(option).some((permission) => permissionSet.has(permission));
+};
+
 const flattenPermissionsFromToggles = (toggles) =>
-  Array.from(new Set(ALL_ACTION_OPTIONS.flatMap((option) => (toggles[option.id] && option.permission ? [option.permission] : []))));
+  Array.from(new Set(ALL_ACTION_OPTIONS.flatMap((option) => (toggles[option.id] ? optionPermissions(option) : []))));
 
 const countEnabledToggles = (toggles = {}) =>
   Object.values(toggles || {}).filter(Boolean).length;
@@ -134,7 +200,7 @@ const formatSerial = (index) =>
 const togglesFromPermissions = (permissions = []) => {
   const permissionSet = new Set(permissions || []);
   return ALL_ACTION_OPTIONS.reduce((acc, option) => {
-    acc[option.id] = !!option.permission && permissionSet.has(option.permission);
+    acc[option.id] = isOptionEnabledByPermissions(option, permissionSet);
     return acc;
   }, {});
 };
@@ -157,11 +223,13 @@ const createDefaultFormData = () => ({
   password: "",
   location_id: "",
   location_ids: [],
+  all_location_access: false,
   role: "",
   permissions: ["dashboard.view"],
   opening_balance: "0",
   opening_balance_type: "dr",
   assigned_warehouse_ids: [],
+  all_warehouse_access: false,
 });
 
 const createRoleForm = () => ({
@@ -309,6 +377,16 @@ export default function EmployeeManagementPage() {
       })),
     [locations]
   );
+  const allLocationIds = useMemo(() => locationOptions.map((item) => String(item.value)), [locationOptions]);
+  const allWarehouseIds = useMemo(() => warehouseOptions.map((item) => String(item.value)), [warehouseOptions]);
+  const selectedLocationIds = useMemo(() => normalizeIdArray(formData.location_ids), [formData.location_ids]);
+  const selectedWarehouseIds = useMemo(() => normalizeIdArray(formData.assigned_warehouse_ids), [formData.assigned_warehouse_ids]);
+  const allLocationsSelected =
+    !!formData.all_location_access ||
+    (allLocationIds.length > 0 && allLocationIds.every((id) => selectedLocationIds.includes(id)));
+  const allWarehousesSelected =
+    !!formData.all_warehouse_access ||
+    (allWarehouseIds.length > 0 && allWarehouseIds.every((id) => selectedWarehouseIds.includes(id)));
 
   const permissionSummary = useMemo(() => {
     const selected = flattenPermissionsFromToggles(employeeToggles);
@@ -350,6 +428,40 @@ export default function EmployeeManagementPage() {
 
   const handleRoleToggle = (key) => {
     setRoleForm((prev) => ({ ...prev, toggles: { ...prev.toggles, [key]: !prev.toggles[key] } }));
+  };
+
+  const setAllLocations = () => {
+    setFormData((prev) => ({
+      ...prev,
+      location_ids: allLocationIds,
+      location_id: allLocationIds[0] || "",
+      all_location_access: true,
+    }));
+  };
+
+  const clearLocations = () => {
+    setFormData((prev) => ({
+      ...prev,
+      location_ids: [],
+      location_id: "",
+      all_location_access: false,
+    }));
+  };
+
+  const setAllWarehouses = () => {
+    setFormData((prev) => ({
+      ...prev,
+      assigned_warehouse_ids: allWarehouseIds,
+      all_warehouse_access: true,
+    }));
+  };
+
+  const clearWarehouses = () => {
+    setFormData((prev) => ({
+      ...prev,
+      assigned_warehouse_ids: [],
+      all_warehouse_access: false,
+    }));
   };
 
  const handleSubmitEmployee = async (e) => {
@@ -490,10 +602,14 @@ export default function EmployeeManagementPage() {
       return;
     }
 
-    const assignedWarehouseIds = collectEmployeeWarehouseIds(employee, warehouses);
+    const assignedWarehouseIds = employee.all_warehouse_access
+      ? allWarehouseIds
+      : collectEmployeeWarehouseIds(employee, warehouses);
     const safeEditLocationIds = normalizeIdArray(employee.location_ids);
     const fallbackLocationId = normalizeId(employee.location_id);
-    const finalEditLocationIds = safeEditLocationIds.length
+    const finalEditLocationIds = employee.all_location_access
+      ? allLocationIds
+      : safeEditLocationIds.length
       ? safeEditLocationIds
       : fallbackLocationId
       ? [fallbackLocationId]
@@ -507,11 +623,13 @@ export default function EmployeeManagementPage() {
       password: "",
       location_id: fallbackLocationId,
       location_ids: finalEditLocationIds,
+      all_location_access: !!employee.all_location_access,
       role: employee.role || "",
       permissions: employee.permissions || [],
       opening_balance: String(employee.opening_balance || 0),
       opening_balance_type: employee.opening_balance_type || "dr",
       assigned_warehouse_ids: assignedWarehouseIds,
+      all_warehouse_access: !!employee.all_warehouse_access,
     });
     setEmployeeToggles(togglesFromPermissions(employee.permissions || []));
     setEditId(String(recordId));
@@ -603,11 +721,33 @@ export default function EmployeeManagementPage() {
           </thead>
           <tbody>
             {employees.map((employee, index) => {
-              const assignedNames = collectEmployeeWarehouseIds(employee, warehouses)
+              const assignedWarehouseIds = collectEmployeeWarehouseIds(employee, warehouses);
+              const hasAllWarehouses =
+                !!employee.all_warehouse_access ||
+                warehouseOptions.length > 0 &&
+                allWarehouseIds.every((id) => assignedWarehouseIds.map(String).includes(id));
+              const assignedNames = assignedWarehouseIds
                 .map((warehouseId) =>
                   warehouses.find(
                     (item) =>
                       String(item._id || item.id) === String(warehouseId)
+                  )?.name
+                )
+                .filter(Boolean)
+                .join(", ");
+              const employeeLocationIds = Array.isArray(employee.location_ids) && employee.location_ids.length
+                ? normalizeIdArray(employee.location_ids)
+                : employee.location_id
+                ? [normalizeId(employee.location_id)]
+                : [];
+              const hasAllLocations =
+                !!employee.all_location_access ||
+                locationOptions.length > 0 &&
+                allLocationIds.every((id) => employeeLocationIds.map(String).includes(id));
+              const locationNames = employeeLocationIds
+                .map((id) =>
+                  locations.find(
+                    (item) => String(item._id || item.id) === String(id)
                   )?.name
                 )
                 .filter(Boolean)
@@ -629,21 +769,9 @@ export default function EmployeeManagementPage() {
                   <td style={tdStyle}>{employee.username}</td>
                   <td style={tdStyle}><span style={roleBadge(employeeIsAdmin)}>{employee.role || "Custom Role"}</span></td>
                   <td style={tdStyle}>
-                    {(Array.isArray(employee.location_ids) && employee.location_ids.length
-                      ? employee.location_ids
-                      : employee.location_id
-                      ? [employee.location_id]
-                      : []
-                    )
-                      .map((id) =>
-                        locations.find(
-                          (item) => String(item._id || item.id) === String(id)
-                        )?.name
-                      )
-                      .filter(Boolean)
-                      .join(", ") || "-"}
+                    {hasAllLocations ? "All Locations" : locationNames || "-"}
                   </td>
-                  <td style={tdStyle}>{assignedNames || "-"}</td>
+                  <td style={tdStyle}>{hasAllWarehouses ? "All Warehouses" : assignedNames || "-"}</td>
                   <td style={tdStyle}>
                     {canEditThisEmployee ? <button type="button" onClick={() => handleEditEmployee(employee)} style={miniBlue}>Edit</button> : null}
                     {canDeleteEmployee && employeeRecordId(employee) ? (
@@ -678,6 +806,15 @@ export default function EmployeeManagementPage() {
                 </select>
               </Field>
               <div style={{ gridColumn: "1 / -1" }}>
+                <div style={accessToolbar}>
+                  <button type="button" onClick={setAllLocations} style={miniGreen} disabled={!allLocationIds.length}>
+                    All Locations
+                  </button>
+                  <button type="button" onClick={clearLocations} style={miniSlate}>
+                    Clear Locations
+                  </button>
+                  <span style={accessHint}>{allLocationsSelected ? "All location access selected" : `${selectedLocationIds.length} location selected`}</span>
+                </div>
                 <MultiSelectDropdown
                   label="Location"
                   options={locationOptions}
@@ -687,6 +824,8 @@ export default function EmployeeManagementPage() {
                       ...prev,
                       location_ids: next,
                       location_id: next[0] || "",
+                      all_location_access:
+                        allLocationIds.length > 0 && allLocationIds.every((id) => next.map(String).includes(id)),
                     }))
                   }
                   placeholder="Select Location"
@@ -705,11 +844,27 @@ export default function EmployeeManagementPage() {
                 <Field label="Address"><textarea name="address" value={formData.address} onChange={handleEmployeeChange} rows={2} style={{ ...inputStyle, minHeight: 80 }} /></Field>
               </div>
               <div style={{ gridColumn: "1 / -1" }}>
+                <div style={accessToolbar}>
+                  <button type="button" onClick={setAllWarehouses} style={miniGreen} disabled={!allWarehouseIds.length}>
+                    All Warehouses
+                  </button>
+                  <button type="button" onClick={clearWarehouses} style={miniSlate}>
+                    Clear Warehouses
+                  </button>
+                  <span style={accessHint}>{allWarehousesSelected ? "All warehouse access selected" : `${selectedWarehouseIds.length} warehouse selected`}</span>
+                </div>
                 <MultiSelectDropdown
                   label="Assigned Warehouses"
                   options={warehouseOptions}
                   value={formData.assigned_warehouse_ids}
-                  onChange={(next) => setFormData((prev) => ({ ...prev, assigned_warehouse_ids: next }))}
+                  onChange={(next) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      assigned_warehouse_ids: next,
+                      all_warehouse_access:
+                        allWarehouseIds.length > 0 && allWarehouseIds.every((id) => next.map(String).includes(id)),
+                    }))
+                  }
                   placeholder="Select Warehouses"
                 />
               </div>
@@ -881,10 +1036,14 @@ const secondaryButton = { border: "none", background: "#1e293b", color: "#fff", 
 const dangerButton = { border: "none", background: "#dc2626", color: "#fff", borderRadius: 10, padding: "10px 16px", fontWeight: 700, cursor: "pointer" };
 const miniBlue = { border: "none", background: "#2563eb", color: "#fff", borderRadius: 8, padding: "6px 10px", marginRight: 8, cursor: "pointer" };
 const miniRed = { border: "none", background: "#dc2626", color: "#fff", borderRadius: 8, padding: "6px 10px", cursor: "pointer" };
+const miniGreen = { border: "none", background: "#0f766e", color: "#fff", borderRadius: 8, padding: "7px 11px", cursor: "pointer", fontWeight: 700 };
+const miniSlate = { border: "none", background: "#475569", color: "#fff", borderRadius: 8, padding: "7px 11px", cursor: "pointer", fontWeight: 700 };
 const inlineCardWrap = { marginTop: 16 };
 const modalCard = { width: "100%", maxWidth: 1180, overflowY: "auto", background: "#f8fafc", borderRadius: 18, padding: 20, boxShadow: "0 10px 24px rgba(15,23,42,0.08)", border: "1px solid #e2e8f0" };
 const formGrid = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16 };
 const inputStyle = { width: "100%", padding: "10px 12px", borderRadius: 10, border: "1px solid #cbd5e1", fontSize: 14, boxSizing: "border-box" };
+const accessToolbar = { display: "flex", alignItems: "center", gap: 8, marginBottom: 8, flexWrap: "wrap" };
+const accessHint = { color: "#475569", fontSize: 12, fontWeight: 700 };
 const securityCard = { marginTop: 16, background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, padding: 16 };
 const sectionHeaderRow = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 14, flexWrap: "wrap" };
 const accessCountBadge = { display: "inline-flex", alignItems: "center", minHeight: 30, padding: "6px 12px", borderRadius: 999, background: "#f8fafc", border: "1px solid #cbd5e1", color: "#0f172a", fontWeight: 800, fontSize: 13 };
