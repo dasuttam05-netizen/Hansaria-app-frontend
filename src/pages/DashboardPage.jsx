@@ -464,12 +464,21 @@ export default function DashboardPage() {
     },
     {
       title: "Cash Book",
-      permission: ["cash.view", "cash.create", "cash.edit", "cash.delete"],
+      permission: [
+        "cash.view",
+        "cash.create",
+        "cash.edit",
+        "cash.delete",
+        "cash.mainBook.view",
+        "cash.partiesBook.view",
+        "cash.employeeBook.view",
+        "expense.pending",
+      ],
       icon: <FaMoneyBillWave />,
       submenu: [
         {
           label: "New Cash Entry",
-          permission: ["cash.view", "cash.create", "cash.edit", "cash.delete"],
+          permission: "cash.create",
           action: () => navigate("/cash-entries"),
         },
         {
@@ -479,17 +488,17 @@ export default function DashboardPage() {
         },
         {
           label: "Main Cash Book Report",
-          permission: ["cash.view", "cash.create", "cash.edit", "cash.delete"],
+          permission: "cash.mainBook.view",
           action: () => navigate("/cash-book"),
         },
         {
           label: "Parties Cash Book Report",
-          permission: ["cash.view", "cash.create", "cash.edit", "cash.delete"],
+          permission: "cash.partiesBook.view",
           action: () => navigate("/parties-cash-book"),
         },
         {
           label: "Employee Cash Book Report",
-          permission: ["cash.view", "cash.create", "cash.edit", "cash.delete"],
+          permission: "cash.employeeBook.view",
           action: () => navigate("/employee-cash-book"),
         },
         {
