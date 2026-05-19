@@ -39,11 +39,68 @@ const nextExpenseItemRowKey = () => {
 const createExpenseItem = (item = {}, fallbackLineNo = 1) => ({
   row_key: nextExpenseItemRowKey(),
   line_no: Number(item.line_no) || fallbackLineNo,
-  particular_name: item.particular_name ?? "",
+  particular_name: item.particular_name ?? item.particulars ?? item.name ?? "",
   bags: item.bags ?? "",
   rate: item.rate ?? "",
-  amount: item.amount ?? "",
+  amount:
+    item.amount ??
+    Number(((Number(item.bags) || 0) * (Number(item.rate) || 0)).toFixed(2)),
 });
+
+const normalizeExpenseItemsForForm = (items, user) => {
+  const existingItems = Array.isArray(items) ? items.filter(Boolean) : [];
+  if (existingItems.length === 0) {
+    return createEmptyForm(user).items;
+  }
+
+  const unusedItems = [...existingItems];
+  const rows = defaultItems.map((defaultName, index) => {
+    const normalizedDefaultName = defaultName.trim().toLowerCase();
+    let matchIndex = unusedItems.findIndex(
+      (item) => Number(item.line_no) === index + 1
+    );
+
+    if (matchIndex === -1) {
+      matchIndex = unusedItems.findIndex(
+        (item) =>
+          String(item.particular_name ?? item.particulars ?? item.name ?? "")
+            .trim()
+            .toLowerCase() === normalizedDefaultName
+      );
+    }
+
+    const matchedItem =
+      matchIndex >= 0 ? unusedItems.splice(matchIndex, 1)[0] : null;
+
+    return createExpenseItem(
+      {
+        line_no: index + 1,
+        particular_name:
+          matchedItem?.particular_name ??
+          matchedItem?.particulars ??
+          matchedItem?.name ??
+          defaultName,
+        bags: matchedItem?.bags ?? 0,
+        rate: matchedItem?.rate ?? 0,
+        amount:
+          matchedItem?.amount ??
+          Number(
+            (
+              (Number(matchedItem?.bags) || 0) *
+              (Number(matchedItem?.rate) || 0)
+            ).toFixed(2)
+          ),
+      },
+      index + 1
+    );
+  });
+
+  const extraRows = unusedItems.map((item, index) =>
+    createExpenseItem(item, defaultItems.length + index + 1)
+  );
+
+  return [...rows, ...extraRows];
+};
 
 const normalizeDecimalInput = (value) => {
   const raw = String(value ?? "");
@@ -597,8 +654,8 @@ export default function ExpenseManagementPage() {
 
   const populateEditForm = (row) => {
     const existingItems = Array.isArray(row.items) ? row.items : [];
-    if (!canEdit) {
-      toast.error("You only have create access. Edit is not allowed.", { theme: "colored" });
+    if (!canEdit && !canExpenseEntryAccess) {
+      toast.error("You do not have access to view this expense.", { theme: "colored" });
       return;
     }
     setEditId(row.id);
@@ -661,27 +718,13 @@ export default function ExpenseManagementPage() {
       grand_total: Number(row.grand_total || 0),
       total_expense_amount: Number(row.total_expense_amount || 0),
       narration: row.narration || "",
-      items:
-        existingItems.length > 0
-          ? existingItems.map((item, index) =>
-              createExpenseItem(
-                {
-                  line_no: item.line_no || index + 1,
-                  particular_name: item.particular_name,
-                  bags: item.bags,
-                  rate: item.rate,
-                  amount: item.amount,
-                },
-                index + 1
-              )
-            )
-          : createEmptyForm(user).items,
+      items: normalizeExpenseItemsForForm(existingItems, user),
     });
     setShowForm(true);
   };
 
   const openExpenseById = async (expenseId, clearEditParam = true) => {
-    if (!canEdit) {
+    if (!canEdit && !canExpenseEntryAccess) {
       return;
     }
 
@@ -713,34 +756,13 @@ export default function ExpenseManagementPage() {
     }
   };
 
-  const handleEdit = (row) => {
-    if (!canEdit) {
-      toast.error("You only have create access. Edit is not allowed.", { theme: "colored" });
+  const handleView = (row) => {
+    if (!canEdit && !canExpenseEntryAccess) {
+      toast.error("You do not have access to view this expense.", { theme: "colored" });
       return;
     }
 
     openExpenseById(row.id, false);
-  };
-
-  const handleDelete = async (id) => {
-    if (!canDelete) {
-      toast.error("Delete is not allowed for this user.", { theme: "colored" });
-      return;
-    }
-    if (!window.confirm("Are you sure you want to delete this expense entry?")) {
-      return;
-    }
-
-    try {
-      await axios.delete(`${API_BASE}/expenses/${id}`);
-      toast.warn("Expense deleted", { theme: "colored" });
-      loadExpensesWithApprovals();
-    } catch (error) {
-      console.error(error);
-      toast.error(error?.response?.data?.error || "Delete failed", {
-        theme: "colored",
-      });
-    }
   };
 
   const calculateAge = (expenseDate) => {
@@ -826,7 +848,7 @@ export default function ExpenseManagementPage() {
             </button>
 
             <h3 style={{ marginTop: 0, color: "#0f172a" }}>
-              {editId ? "Edit Expense Entry" : "New Expense Entry"}
+              {editId ? "View Expense Entry" : "New Expense Entry"}
             </h3>
 
             <form onSubmit={handleSubmit}>
@@ -1275,7 +1297,7 @@ export default function ExpenseManagementPage() {
                       editId ? (canEdit ? "#0f766e" : "#94a3b8") : canCreate ? "#0f766e" : "#94a3b8",
                   }}
                 >
-                  Save
+                  {editId ? "Update" : "Save"}
                 </button>
                 <button type="button" onClick={resetForm} style={secondaryButtonStyle}>
                   Cancel
@@ -1351,17 +1373,23 @@ export default function ExpenseManagementPage() {
                       </div>
 
                       <div style={selectedActionStyle}>
-                          {canEdit ? (
+                          {canEdit || canExpenseEntryAccess ? (
                             <button
-                              onClick={() => handleEdit(row)}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                handleView(row);
+                              }}
                               style={{ ...miniButtonStyle, background: "#2563eb" }}
                             >
-                              Edit
+                              View
                             </button>
                           ) : null}
                           {canApproveToCashBook ? (
                             <button
-                              onClick={() => handleApproveForCashBook(row)}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                handleApproveForCashBook(row);
+                              }}
                               style={{ ...miniButtonStyle, background: "#16a34a" }}
                             >
                               Approve
@@ -1369,7 +1397,10 @@ export default function ExpenseManagementPage() {
                           ) : null}
                           {(row.send_to_kind === "palti_lorry" || row.work_description === "Palti Lorry") && canOpenPalti ? (
                             <button
-                              onClick={() => navigate("/palti-lorry")}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                navigate("/palti-lorry");
+                              }}
                               style={{ ...miniButtonStyle, background: "#7c3aed" }}
                             >
                               Palti Lorry
@@ -1377,7 +1408,10 @@ export default function ExpenseManagementPage() {
                           ) : null}
                           {row.work_description === "Self Loading" && canOpenSelfLoading ? (
                             <button
-                              onClick={() => navigate("/self-loading")}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                navigate("/self-loading");
+                              }}
                               style={{ ...miniButtonStyle, background: "#ea580c" }}
                             >
                               Self Loading
@@ -1385,18 +1419,13 @@ export default function ExpenseManagementPage() {
                           ) : null}
                           {row.work_description === "Local Sale" && canOpenLocalSale ? (
                             <button
-                              onClick={() => navigate("/local-sale")}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                navigate("/local-sale");
+                              }}
                               style={{ ...miniButtonStyle, background: "#f59e0b" }}
                             >
                               Local Sale
-                            </button>
-                          ) : null}
-                          {canDelete ? (
-                            <button
-                              onClick={() => handleDelete(row.id)}
-                              style={{ ...miniButtonStyle, background: "#dc2626" }}
-                            >
-                              Delete
                             </button>
                           ) : null}
                       </div>
