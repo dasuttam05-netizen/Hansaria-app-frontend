@@ -122,7 +122,9 @@ export default function LoginPage() {
         <section style={loginPanelStyle} className="login-form-panel">
           <div style={formCardStyle}>
             <div style={cardIconStyle}>
-              <img src={logo} alt="Hansaria" style={cardLogoStyle} />
+              <div style={cardLogoStyle} aria-label="Hansaria Food Warehouse">
+                HF
+              </div>
             </div>
             <div style={formHeaderStyle}>
               <h2 style={formTitleStyle}>Welcome Back!</h2>
@@ -324,19 +326,27 @@ const cardIconStyle = {
   width: 82,
   height: 82,
   borderRadius: "50%",
-  background: "#0b355d",
+  background: "linear-gradient(145deg, #07345e 0%, #0f766e 100%)",
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
   margin: "0 auto 18px",
-  boxShadow: "0 16px 30px rgba(11, 53, 93, 0.22)",
+  boxShadow: "0 16px 30px rgba(11, 53, 93, 0.24), inset 0 0 0 6px rgba(255, 255, 255, 0.12)",
 };
 
 const cardLogoStyle = {
   width: 56,
   height: 56,
-  objectFit: "contain",
-  filter: "brightness(0) invert(1)",
+  borderRadius: "50%",
+  border: "1px solid rgba(255, 255, 255, 0.28)",
+  color: "#ffffff",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontSize: 23,
+  fontWeight: 950,
+  letterSpacing: 0,
+  background: "rgba(255, 255, 255, 0.08)",
 };
 
 const formTitleStyle = {
