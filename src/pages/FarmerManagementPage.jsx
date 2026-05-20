@@ -10,8 +10,51 @@ const emptyForm = () => ({
   state: "",
   gst_no: "",
   pan_no: "",
+  aadhar_no: "",
+  aadhaar_pan_link_status: "unknown",
+  bank_name: "",
+  bank_account_no: "",
+  ifsc_code: "",
+  branch_name: "",
+  account_holder_name: "",
   location: "",
 });
+
+const compactUpper = (value) => String(value || "").replace(/\s/g, "").toUpperCase();
+const compactDigits = (value) => String(value || "").replace(/\D/g, "");
+const checkPan = (value) => {
+  const pan = compactUpper(value);
+  if (!pan) return { text: "PAN not entered", color: "#64748b" };
+  return /^[A-Z]{5}[0-9]{4}[A-Z]$/.test(pan)
+    ? { text: "PAN format OK", color: "#15803d" }
+    : { text: "Invalid PAN format", color: "#dc2626" };
+};
+const checkAadhar = (value) => {
+  const aadhar = compactDigits(value);
+  if (!aadhar) return { text: "Aadhaar not entered", color: "#64748b" };
+  return /^[0-9]{12}$/.test(aadhar)
+    ? { text: "Aadhaar format OK", color: "#15803d" }
+    : { text: "Aadhaar must be 12 digits", color: "#dc2626" };
+};
+const checkGst = (gstValue, panValue) => {
+  const gst = compactUpper(gstValue);
+  const pan = compactUpper(panValue);
+  if (!gst) return { text: "GST not entered", color: "#64748b" };
+  if (!/^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z][1-9A-Z]Z[0-9A-Z]$/.test(gst)) {
+    return { text: "Invalid GST format", color: "#dc2626" };
+  }
+  if (pan && gst.slice(2, 12) !== pan) {
+    return { text: "GST PAN mismatch", color: "#dc2626" };
+  }
+  return { text: pan ? "GST valid, PAN matched" : "GST format OK", color: "#15803d" };
+};
+const checkIfsc = (value) => {
+  const ifsc = compactUpper(value);
+  if (!ifsc) return { text: "IFSC not entered", color: "#64748b" };
+  return /^[A-Z]{4}0[A-Z0-9]{6}$/.test(ifsc)
+    ? { text: "IFSC format OK", color: "#15803d" }
+    : { text: "Invalid IFSC format", color: "#dc2626" };
+};
 
 export default function FarmerManagementPage() {
   const [farmers, setFarmers] = useState([]);
@@ -34,7 +77,13 @@ export default function FarmerManagementPage() {
     fetchFarmers();
   }, []);
 
-  const handleChange = (e) => setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+  const handleChange = (e) => {
+    const { name } = e.target;
+    let { value } = e.target;
+    if (name === "pan_no" || name === "gst_no" || name === "ifsc_code") value = compactUpper(value);
+    if (name === "aadhar_no" || name === "bank_account_no") value = compactDigits(value);
+    setFormData((prev) => ({ ...prev, [name]: value }));
+  };
 
   const resetForm = () => {
     setShowForm(false);
@@ -76,6 +125,13 @@ export default function FarmerManagementPage() {
       state: farmer.state || "",
       gst_no: farmer.gst_no || "",
       pan_no: farmer.pan_no || "",
+      aadhar_no: farmer.aadhar_no || "",
+      aadhaar_pan_link_status: farmer.aadhaar_pan_link_status || "unknown",
+      bank_name: farmer.bank_name || "",
+      bank_account_no: farmer.bank_account_no || "",
+      ifsc_code: farmer.ifsc_code || "",
+      branch_name: farmer.branch_name || "",
+      account_holder_name: farmer.account_holder_name || "",
       location: farmer.location || "",
     });
     setEditId(farmer._id);
@@ -114,9 +170,22 @@ export default function FarmerManagementPage() {
               </Field>
               <Field label="Gst No">
                 <input name="gst_no" value={formData.gst_no} onChange={handleChange} placeholder="GST No." style={inp} />
+                <StatusBadge status={checkGst(formData.gst_no, formData.pan_no)} />
               </Field>
               <Field label="Pan No">
                 <input name="pan_no" value={formData.pan_no} onChange={handleChange} placeholder="PAN No." style={inp} />
+                <StatusBadge status={checkPan(formData.pan_no)} />
+              </Field>
+              <Field label="Aadhaar No">
+                <input name="aadhar_no" value={formData.aadhar_no} onChange={handleChange} placeholder="12 digit Aadhaar No." maxLength={12} style={inp} />
+                <StatusBadge status={checkAadhar(formData.aadhar_no)} />
+              </Field>
+              <Field label="Aadhaar PAN Link">
+                <select name="aadhaar_pan_link_status" value={formData.aadhaar_pan_link_status} onChange={handleChange} style={inp}>
+                  <option value="unknown">Not Checked</option>
+                  <option value="linked">Linked</option>
+                  <option value="not_linked">Not Linked</option>
+                </select>
               </Field>
               <Field label="State">
                 <input name="state" value={formData.state} onChange={handleChange} placeholder="State" style={inp} />
@@ -132,6 +201,23 @@ export default function FarmerManagementPage() {
                   <textarea name="address" value={formData.address} onChange={handleChange} rows={3} style={{ ...inp, minHeight: 72, resize: "vertical" }} />
                 </Field>
               </div>
+              <div style={{ gridColumn: "1 / -1", ...sectionTitle }}>Bank Details</div>
+              <Field label="Account Holder Name">
+                <input name="account_holder_name" value={formData.account_holder_name} onChange={handleChange} placeholder="Account Holder Name" style={inp} />
+              </Field>
+              <Field label="Bank Name">
+                <input name="bank_name" value={formData.bank_name} onChange={handleChange} placeholder="Bank Name" style={inp} />
+              </Field>
+              <Field label="Account No">
+                <input name="bank_account_no" value={formData.bank_account_no} onChange={handleChange} placeholder="Bank Account No." style={inp} />
+              </Field>
+              <Field label="IFSC Code">
+                <input name="ifsc_code" value={formData.ifsc_code} onChange={handleChange} placeholder="IFSC Code" style={inp} />
+                <StatusBadge status={checkIfsc(formData.ifsc_code)} />
+              </Field>
+              <Field label="Branch Name">
+                <input name="branch_name" value={formData.branch_name} onChange={handleChange} placeholder="Branch Name" style={inp} />
+              </Field>
             </div>
             <div style={actionRow}>
               <button type="submit" style={btnPrimary}>Save</button>
@@ -157,6 +243,11 @@ export default function FarmerManagementPage() {
                   <th style={th}>State</th>
                   <th style={th}>GST No.</th>
                   <th style={th}>PAN No.</th>
+                  <th style={th}>Aadhaar No.</th>
+                  <th style={th}>Aadhaar PAN</th>
+                  <th style={th}>Bank</th>
+                  <th style={th}>Account No.</th>
+                  <th style={th}>IFSC</th>
                   <th style={th}>Actions</th>
                 </tr>
               </thead>
@@ -171,6 +262,11 @@ export default function FarmerManagementPage() {
                     <td style={td}>{farmer.state || "-"}</td>
                     <td style={td}>{farmer.gst_no || "-"}</td>
                     <td style={td}>{farmer.pan_no || "-"}</td>
+                    <td style={td}>{farmer.aadhar_no || "-"}</td>
+                    <td style={td}>{formatLinkStatus(farmer.aadhaar_pan_link_status)}</td>
+                    <td style={td}>{farmer.bank_name || "-"}</td>
+                    <td style={td}>{farmer.bank_account_no || "-"}</td>
+                    <td style={td}>{farmer.ifsc_code || "-"}</td>
                     <td style={td}>
                       <button type="button" onClick={() => handleEdit(farmer)} style={{ ...mini, background: "#2563eb" }}>Edit</button>{" "}
                       <button type="button" onClick={() => handleDelete(farmer._id)} style={{ ...mini, background: "#dc2626" }}>Delete</button>
@@ -178,7 +274,7 @@ export default function FarmerManagementPage() {
                   </tr>
                 ))}
                 {farmers.length === 0 ? (
-                  <tr><td colSpan={9} style={{ ...td, textAlign: "center", padding: "20px" }}>No farmers found.</td></tr>
+                  <tr><td colSpan={14} style={{ ...td, textAlign: "center", padding: "20px" }}>No farmers found.</td></tr>
                 ) : null}
               </tbody>
             </table>
@@ -193,6 +289,16 @@ function Field({ label, children }) {
   return <div><label style={lbl}>{label}</label>{children}</div>;
 }
 
+function StatusBadge({ status }) {
+  return <div style={{ ...statusBadge, color: status.color }}>{status.text}</div>;
+}
+
+function formatLinkStatus(value) {
+  if (value === "linked") return "Linked";
+  if (value === "not_linked") return "Not Linked";
+  return "Not Checked";
+}
+
 const titleStyle = { margin: 0, fontSize: "18px", color: "#0f172a" };
 const card = { background: "#fff", border: "1px solid #e2e8f0", borderRadius: "12px", padding: "20px", maxWidth: "1000px", margin: "0 auto", boxShadow: "0 4px 14px rgba(15,23,42,0.06)" };
 const tableCard = { overflowX: "auto", border: "1px solid #e2e8f0", borderRadius: "10px", background: "#fff" };
@@ -201,6 +307,8 @@ const formGrid = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minma
 const actionRow = { display: "flex", gap: "12px", marginTop: "22px", flexWrap: "wrap" };
 const inp = { width: "100%", padding: "10px 12px", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "14px", boxSizing: "border-box" };
 const lbl = { display: "block", marginBottom: "6px", fontWeight: 600, fontSize: "13px", color: "#334155" };
+const statusBadge = { marginTop: 5, fontSize: 12, fontWeight: 700 };
+const sectionTitle = { padding: "10px 12px", background: "#eef6f5", color: "#0f766e", fontWeight: 800, borderRadius: 8, border: "1px solid #cfe8e4" };
 const btnPrimary = { background: "#2563eb", color: "#fff", border: "none", padding: "10px 18px", borderRadius: "8px", cursor: "pointer", fontWeight: 600, fontSize: "14px" };
 const th = { padding: "10px 8px", textAlign: "left", borderBottom: "1px solid #0d5c56" };
 const td = { padding: "8px", borderBottom: "1px solid #e2e8f0" };
