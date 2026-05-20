@@ -58,9 +58,11 @@ const checkIfsc = (value) => {
 
 export default function FarmerManagementPage() {
   const [farmers, setFarmers] = useState([]);
+  const [locations, setLocations] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState(emptyForm);
   const [editId, setEditId] = useState(null);
+  const [ifscLookupStatus, setIfscLookupStatus] = useState("");
   const API_URL = "/api/farmers";
 
   const fetchFarmers = async () => {
@@ -75,14 +77,83 @@ export default function FarmerManagementPage() {
 
   useEffect(() => {
     fetchFarmers();
+    axios.get("/api/locations").then((res) => setLocations(Array.isArray(res.data) ? res.data : [])).catch(() => setLocations([]));
   }, []);
+
+  useEffect(() => {
+    const ifsc = compactUpper(formData.ifsc_code);
+    if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(ifsc)) {
+      setIfscLookupStatus(ifsc ? "Enter valid IFSC to auto fill bank details" : "");
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      try {
+        setIfscLookupStatus("Checking IFSC...");
+        const res = await axios.get(`https://ifsc.razorpay.com/${ifsc}`);
+        const data = res.data || {};
+        setFormData((prev) => ({
+          ...prev,
+          bank_name: prev.bank_name || data.BANK || "",
+          branch_name: prev.branch_name || data.BRANCH || "",
+          location: prev.location || data.CITY || data.DISTRICT || prev.location,
+          state: prev.state || data.STATE || prev.state,
+        }));
+        setIfscLookupStatus("IFSC found, bank details filled");
+      } catch (error) {
+        setIfscLookupStatus("IFSC lookup failed");
+      }
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [formData.ifsc_code]);
+
+  const findVillageMatch = (value) => {
+    const village = String(value || "").trim().toLowerCase();
+    if (!village || village.length < 3) return {};
+
+    const farmerMatch = farmers.find((farmer) => {
+      if (editId && String(farmer._id) === String(editId)) return false;
+      return String(farmer.village || "").trim().toLowerCase() === village;
+    });
+    if (farmerMatch?.location || farmerMatch?.state) {
+      return { location: farmerMatch.location || "", state: farmerMatch.state || "" };
+    }
+
+    const locationMatch = locations.find((loc) => {
+      const name = String(loc.name || "").toLowerCase();
+      const address = String(loc.address || "").toLowerCase();
+      return name === village || name.includes(village) || address.includes(village);
+    });
+    if (!locationMatch) return {};
+
+    const addressParts = String(locationMatch.address || "")
+      .split(",")
+      .map((part) => part.trim())
+      .filter(Boolean);
+    return {
+      location: locationMatch.name || "",
+      state: addressParts[addressParts.length - 1] || "",
+    };
+  };
 
   const handleChange = (e) => {
     const { name } = e.target;
     let { value } = e.target;
     if (name === "pan_no" || name === "gst_no" || name === "ifsc_code") value = compactUpper(value);
     if (name === "aadhar_no" || name === "bank_account_no") value = compactDigits(value);
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    setFormData((prev) => {
+      const next = { ...prev, [name]: value };
+      if ((name === "bank_account_no" || name === "name") && next.bank_account_no && !next.account_holder_name) {
+        next.account_holder_name = next.name;
+      }
+      if (name === "village") {
+        const matched = findVillageMatch(value);
+        if (matched.location) next.location = matched.location;
+        if (matched.state) next.state = matched.state;
+      }
+      return next;
+    });
   };
 
   const resetForm = () => {
@@ -210,10 +281,12 @@ export default function FarmerManagementPage() {
               </Field>
               <Field label="Account No">
                 <input name="bank_account_no" value={formData.bank_account_no} onChange={handleChange} placeholder="Bank Account No." style={inp} />
+                <div style={helperText}>Account holder auto fills from farmer name.</div>
               </Field>
               <Field label="IFSC Code">
                 <input name="ifsc_code" value={formData.ifsc_code} onChange={handleChange} placeholder="IFSC Code" style={inp} />
                 <StatusBadge status={checkIfsc(formData.ifsc_code)} />
+                {ifscLookupStatus ? <div style={helperText}>{ifscLookupStatus}</div> : null}
               </Field>
               <Field label="Branch Name">
                 <input name="branch_name" value={formData.branch_name} onChange={handleChange} placeholder="Branch Name" style={inp} />
@@ -308,6 +381,7 @@ const actionRow = { display: "flex", gap: "12px", marginTop: "22px", flexWrap: "
 const inp = { width: "100%", padding: "10px 12px", borderRadius: "8px", border: "1px solid #cbd5e1", fontSize: "14px", boxSizing: "border-box" };
 const lbl = { display: "block", marginBottom: "6px", fontWeight: 600, fontSize: "13px", color: "#334155" };
 const statusBadge = { marginTop: 5, fontSize: 12, fontWeight: 700 };
+const helperText = { marginTop: 5, fontSize: 12, color: "#64748b" };
 const sectionTitle = { padding: "10px 12px", background: "#eef6f5", color: "#0f766e", fontWeight: 800, borderRadius: 8, border: "1px solid #cfe8e4" };
 const btnPrimary = { background: "#2563eb", color: "#fff", border: "none", padding: "10px 18px", borderRadius: "8px", cursor: "pointer", fontWeight: 600, fontSize: "14px" };
 const th = { padding: "10px 8px", textAlign: "left", borderBottom: "1px solid #0d5c56" };
