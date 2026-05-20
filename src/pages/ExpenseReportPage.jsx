@@ -52,22 +52,12 @@ const getTotalCollectAmount = (expense) =>
 
 const getVoucherTotalAmount = (expense) => toAmount(expense?.grand_total) - getTotalCollectAmount(expense);
 
-const getRecordId = (item) => String(item?._id || item?.id || "");
-
-const normalizePartyKey = (value) => String(value || "").trim().toLowerCase();
-
-const normalizeWhatsAppPhone = (value) => {
-  const digits = String(value || "").replace(/\D/g, "");
-  if (!digits) return "";
-  if (digits.length === 10) return `91${digits}`;
-  if (digits.length === 11 && digits.startsWith("0")) return `91${digits.slice(1)}`;
-  return digits;
-};
-
 const getVoucherFileName = (expense) => {
   const voucherNo = printableText(expense?.voucher_no, `EXP-${expense?.id || "voucher"}`);
   return `${voucherNo.replace(/[/\\?%*:|"<>]/g, "-")}_Expense_Voucher.pdf`;
 };
+
+const getVoucherJpgFileName = (expense) => getVoucherFileName(expense).replace(/\.pdf$/i, ".jpg");
 
 const numberToWordsUnderCrore = (value) => {
   const ones = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"];
@@ -317,11 +307,234 @@ const createExpenseVoucherPdf = (expense) => {
   return doc;
 };
 
+const buildVoucherFields = (expense) => {
+  const totalCollect = getTotalCollectAmount(expense);
+  const totalAmount = getVoucherTotalAmount(expense);
+  return {
+    workDescription: printableText(expense.work_description),
+    voucherNo: printableText(expense.voucher_no),
+    date: formatVoucherDate(expense.expense_date),
+    product: printableText(expense.product_name),
+    partyName: printableText(expense.company_name),
+    partyCompanyNo: printableText(expense.company_account_name),
+    rejectLorryNo: printableText(expense.reg_lorry_no),
+    regFrom: printableText(expense.reg_from_company_name),
+    loading: printableText(formatItemNumber(expense.loading)),
+    unloading: printableText(formatItemNumber(expense.unloading)),
+    balance: printableText(formatItemNumber(expense.balance)),
+    netWeight: printableText(formatItemNumber(expense.net_weight)),
+    newLorryNo: printableText(expense.new_lorry_no),
+    newWeight: printableText(formatItemNumber(expense.new_weight)),
+    sendTo: printableText(expense.send_to_company_name),
+    account: printableText(expense.company_account_name || expense.company_name),
+    accountPartyCompany: printableText(expense.company_name),
+    paidBy: printableText(expense.paid_by),
+    partyDriverMobileNo: printableText(expense.paid_by_mobile),
+    challanWeight: printableText(formatItemNumber(expense.challan_weight)),
+    mbNo: printableText(expense.mb_no),
+    receiveCashFromParty: formatMoney(expense.receive_cash_from_party),
+    receiveCashFromDriver: formatMoney(expense.receive_cash_from_driver),
+    grandTotal: formatMoney(expense.grand_total),
+    totalCollect: formatMoney(totalCollect),
+    totalAmount: formatMoney(totalAmount),
+    totalAmountWords: `${numberToWordsUnderCrore(totalAmount)} Only`,
+  };
+};
+
+const createExpenseVoucherJpgFile = (expense) => {
+  const canvas = document.createElement("canvas");
+  canvas.width = 900;
+  canvas.height = 1275;
+  const ctx = canvas.getContext("2d");
+  const green = "#5b8a39";
+  const lightGreen = "#eef5e7";
+  const border = "#dae2d6";
+  const text = "#1c2632";
+  const muted = "#5b6977";
+  const fields = buildVoucherFields(expense);
+  const items = Array.isArray(expense.items) ? expense.items : [];
+
+  const roundRect = (x, y, w, h, r, fill = "#fff", stroke = border) => {
+    ctx.beginPath();
+    ctx.roundRect(x, y, w, h, r);
+    ctx.fillStyle = fill;
+    ctx.fill();
+    ctx.strokeStyle = stroke;
+    ctx.lineWidth = 1.4;
+    ctx.stroke();
+  };
+  const textLine = (value, x, y, size = 16, weight = "600", color = text, align = "left") => {
+    ctx.fillStyle = color;
+    ctx.font = `${weight} ${size}px Arial`;
+    ctx.textAlign = align;
+    ctx.fillText(String(value || ""), x, y);
+  };
+  const labelBlock = (label, value, x, y, w) => {
+    ctx.fillStyle = lightGreen;
+    ctx.strokeStyle = green;
+    ctx.beginPath();
+    ctx.arc(x + 18, y + 19, 13, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    textLine(label.toUpperCase(), x + 42, y + 15, 10, "700", muted);
+    textLine(value, x + 42, y + 34, 14, "700", text);
+    ctx.strokeStyle = border;
+    ctx.beginPath();
+    ctx.moveTo(x + w, y + 3);
+    ctx.lineTo(x + w, y + 43);
+    ctx.stroke();
+  };
+  const detailRow = (label, value, y) => {
+    textLine(label.toUpperCase(), 52, y, 11, "700", muted);
+    textLine(value, 192, y, 12, "700", text);
+    ctx.strokeStyle = border;
+    ctx.beginPath();
+    ctx.moveTo(36, y + 13);
+    ctx.lineTo(392, y + 13);
+    ctx.stroke();
+  };
+
+  ctx.fillStyle = "#f9fbf6";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  roundRect(28, 24, 844, 108, 9);
+  ctx.fillStyle = green;
+  ctx.beginPath();
+  ctx.roundRect(660, 24, 212, 108, 9);
+  ctx.fill();
+  textLine("HANSARIA FOOD PVT LTD", 58, 74, 38, "800", text);
+  textLine("PAYMENT VOUCHER", 58, 109, 20, "700", green);
+  textLine("VOUCHER NO.", 692, 56, 12, "800", "#fff");
+  textLine(fields.voucherNo, 692, 88, 26, "800", "#fff");
+  textLine(fields.date, 692, 116, 14, "700", "#fff");
+
+  roundRect(28, 154, 844, 132, 9);
+  labelBlock("Work Description", fields.workDescription, 48, 178, 260);
+  labelBlock("Product", fields.product, 330, 178, 230);
+  labelBlock("Party Name", fields.partyName, 585, 178, 245);
+  ctx.strokeStyle = border;
+  ctx.beginPath();
+  ctx.moveTo(48, 230);
+  ctx.lineTo(850, 230);
+  ctx.stroke();
+  labelBlock("Party Company No.", fields.partyCompanyNo, 48, 236, 260);
+  labelBlock("Reject Lorry No.", fields.rejectLorryNo, 330, 236, 230);
+  labelBlock("New Lorry No.", fields.newLorryNo, 585, 236, 245);
+
+  roundRect(28, 310, 380, 500, 9);
+  ctx.fillStyle = lightGreen;
+  ctx.fillRect(29, 311, 378, 34);
+  textLine("VOUCHER DETAILS", 86, 334, 12, "800", green);
+  [
+    ["REG FROM", fields.regFrom],
+    ["LOADING", fields.loading],
+    ["UNLOADING", fields.unloading],
+    ["BALANCE", fields.balance],
+    ["NET WEIGHT", fields.netWeight],
+    ["NEW LORRY NO.", fields.newLorryNo],
+    ["NEW WEIGHT", fields.newWeight],
+    ["SEND TO", fields.sendTo],
+    ["A/C", fields.account],
+    ["A/C PARTY COMPANY", fields.accountPartyCompany],
+    ["PAID BY PARTY/DRIVER", fields.paidBy],
+    ["PARTY/DRIVER MOBILE NO.", fields.partyDriverMobileNo],
+    ["CHALLAN WEIGHT", fields.challanWeight],
+    ["DRIVER SIGN", "-"],
+    ["MB NO.", fields.mbNo],
+    ["REP. SIGN", "-"],
+  ].forEach(([label, value], index) => detailRow(label, value, 370 + index * 27));
+
+  const tx = 430;
+  const ty = 310;
+  const tw = 442;
+  roundRect(tx, ty, tw, 640, 9);
+  ctx.fillStyle = green;
+  ctx.fillRect(tx + 1, ty + 1, tw - 2, 34);
+  const col = [tx, tx + 45, tx + 255, tx + 330, tx + 385, tx + tw];
+  ["#", "PARTICULARS", "BAGS", "RATE", "AMOUNT"].forEach((head, index) =>
+    textLine(head, (col[index] + col[index + 1]) / 2, ty + 23, 11, "800", "#fff", "center")
+  );
+  ctx.strokeStyle = border;
+  col.forEach((x) => {
+    ctx.beginPath();
+    ctx.moveTo(x, ty);
+    ctx.lineTo(x, ty + 640);
+    ctx.stroke();
+  });
+  for (let index = 0; index < VOUCHER_LINE_COUNT; index += 1) {
+    const y = ty + 35 + index * 30;
+    if (index % 2) {
+      ctx.fillStyle = "#fafcf8";
+      ctx.fillRect(tx + 1, y, tw - 2, 30);
+    }
+    ctx.strokeStyle = border;
+    ctx.beginPath();
+    ctx.moveTo(tx, y);
+    ctx.lineTo(tx + tw, y);
+    ctx.stroke();
+    const line = items[index] || {};
+    textLine(Number(line.line_no) || index + 1, col[0] + 22, y + 21, 12, "700", text, "center");
+    textLine(printableText(line.particular_name || "", ""), col[1] + 12, y + 21, 12, "700", text);
+    textLine(formatItemNumber(line.bags), col[3] - 12, y + 21, 12, "700", text, "right");
+    textLine(formatItemNumber(line.rate), col[4] - 12, y + 21, 12, "700", text, "right");
+    textLine(formatItemNumber(line.amount), col[5] - 14, y + 21, 12, "700", text, "right");
+  }
+
+  roundRect(28, 832, 380, 96, 9);
+  ctx.fillStyle = lightGreen;
+  ctx.fillRect(29, 833, 378, 34);
+  textLine("PAYMENT RECEIVED", 86, 856, 12, "800", green);
+  textLine("RECEIVE CASH FROM PARTY", 62, 890, 12, "800", text);
+  textLine(`Rs. ${fields.receiveCashFromParty}`, 380, 890, 14, "800", green, "right");
+  textLine("RECEIVE CASH FROM DRIVER", 62, 918, 12, "800", text);
+  textLine(`Rs. ${fields.receiveCashFromDriver}`, 380, 918, 14, "800", green, "right");
+
+  roundRect(430, 965, 442, 96, 9);
+  textLine("GRAND TOTAL", 455, 998, 14, "800", text);
+  textLine(`Rs. ${fields.grandTotal}`, 842, 998, 18, "800", text, "right");
+  textLine("TOTAL COLLECT AMOUNT", 455, 1030, 14, "800", text);
+  textLine(`Rs. ${fields.totalCollect}`, 842, 1030, 18, "800", text, "right");
+  ctx.fillStyle = green;
+  ctx.fillRect(430, 1038, 442, 23);
+  textLine("TOTAL AMOUNT", 455, 1055, 13, "800", "#fff");
+  textLine(`Rs. ${fields.totalAmount}`, 842, 1056, 20, "800", "#fff", "right");
+
+  roundRect(28, 1090, 844, 98, 9);
+  textLine("TOTAL AMOUNT (IN WORDS)", 95, 1120, 12, "800", green);
+  textLine(fields.totalAmountWords, 95, 1155, 16, "800", text);
+  ctx.strokeStyle = border;
+  ctx.beginPath();
+  ctx.moveTo(520, 1105);
+  ctx.lineTo(520, 1175);
+  ctx.stroke();
+  textLine("AUTHORIZED SIGNATURE", 618, 1148, 12, "800", green);
+  ctx.strokeStyle = "#9ba698";
+  ctx.beginPath();
+  ctx.moveTo(610, 1170);
+  ctx.lineTo(780, 1170);
+  ctx.stroke();
+
+  ctx.fillStyle = "#e1ebda";
+  ctx.fillRect(0, 1220, 900, 40);
+  textLine(printableText(expense.paid_by_mobile, "-"), 48, 1246, 12, "700", text);
+  textLine(printableText(expense.employee_name, "-"), 230, 1246, 12, "700", text);
+  textLine(printableText(expense.company_account_name || expense.company_name, "-"), 410, 1246, 12, "700", text);
+  textLine(`Generated: ${new Date().toLocaleString("en-IN")}`, 850, 1246, 12, "700", text, "right");
+
+  return new Promise((resolve) => {
+    canvas.toBlob((blob) => {
+      if (!blob) {
+        resolve(new File([], getVoucherJpgFileName(expense), { type: "image/jpeg" }));
+        return;
+      }
+      resolve(new File([blob], getVoucherJpgFileName(expense), { type: "image/jpeg" }));
+    }, "image/jpeg", 0.92);
+  });
+};
+
 export default function ExpenseReportPage() {
   const API_BASE = "/api";
   const [expenses, setExpenses] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
-  const [companies, setCompanies] = useState([]);
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [searchText, setSearchText] = useState("");
@@ -334,7 +547,6 @@ export default function ExpenseReportPage() {
   useEffect(() => {
     fetchExpenses();
     axios.get(`${API_BASE}/warehouses`).then((res) => setWarehouses(res.data || [])).catch(() => setWarehouses([]));
-    axios.get(`${API_BASE}/companies`).then((res) => setCompanies(res.data || [])).catch(() => setCompanies([]));
   }, []);
 
   const fetchExpenses = async () => {
@@ -379,25 +591,6 @@ export default function ExpenseReportPage() {
       return dateOk && monthOk && warehouseOk && partyOk && haystack.includes(searchText.toLowerCase());
     });
   }, [expenses, dateFrom, dateTo, searchText, warehouseIds, selectedParties, month]);
-
-  const companyMobileMap = useMemo(() => {
-    const map = new Map();
-    companies.forEach((company) => {
-      const mobile = normalizeWhatsAppPhone(company.mobile || company.phone || company.mobile_no);
-      if (!mobile) return;
-      const id = getRecordId(company);
-      const name = normalizePartyKey(company.name || company.company_name);
-      if (id) map.set(`id:${id}`, mobile);
-      if (name) map.set(`name:${name}`, mobile);
-    });
-    return map;
-  }, [companies]);
-
-  const getPartyWhatsAppPhone = (expense) => {
-    const id = String(expense?.company_id || "");
-    const name = normalizePartyKey(expense?.company_name);
-    return companyMobileMap.get(`id:${id}`) || companyMobileMap.get(`name:${name}`) || "";
-  };
 
   const buildReportRows = () =>
     filteredExpenses
@@ -466,18 +659,8 @@ export default function ExpenseReportPage() {
 
   const shareVoucherOnWhatsApp = async (expense) => {
     if (!expense) return;
-    const fileName = getVoucherFileName(expense);
-    const doc = createExpenseVoucherPdf(expense);
-    const blob = doc.output("blob");
-    const file = new File([blob], fileName, { type: "application/pdf" });
-    const partyPhone = getPartyWhatsAppPhone(expense);
+    const file = await createExpenseVoucherJpgFile(expense);
     const message = `Expense voucher ${printableText(expense.voucher_no)} - Total amount Rs. ${formatMoney(getVoucherTotalAmount(expense))}`;
-
-    if (partyPhone) {
-      doc.save(fileName);
-      window.open(`https://wa.me/${partyPhone}?text=${encodeURIComponent(`${message}\nPDF downloaded. Please attach it before sending.`)}`, "_blank");
-      return;
-    }
 
     if (navigator.canShare && navigator.canShare({ files: [file] }) && navigator.share) {
       try {
@@ -492,8 +675,15 @@ export default function ExpenseReportPage() {
       }
     }
 
-    doc.save(fileName);
-    window.open(`https://wa.me/?text=${encodeURIComponent(`${message}\nPDF downloaded. Please attach it in WhatsApp.`)}`, "_blank");
+    const url = URL.createObjectURL(file);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = file.name;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    window.open(`https://wa.me/?text=${encodeURIComponent(`${message}\nJPG downloaded. Please attach it in WhatsApp.`)}`, "_blank");
   };
 
   return (
@@ -622,9 +812,9 @@ export default function ExpenseReportPage() {
             <button
               onClick={() => shareVoucherOnWhatsApp(item)}
               style={whatsAppButtonStyle}
-              title={getPartyWhatsAppPhone(item) ? "Open party WhatsApp" : "Open WhatsApp"}
+              title="Share voucher JPG on WhatsApp"
             >
-              {getPartyWhatsAppPhone(item) ? "Party WhatsApp" : "WhatsApp"}
+              WhatsApp
             </button>
           </div>
         </td>
