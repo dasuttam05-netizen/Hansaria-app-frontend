@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
+import jsPDF from "jspdf";
 import MultiSelectDropdown from "../components/MultiSelectDropdown";
 import ReportSectionToggles from "../components/ReportSectionToggles";
 import { formatDisplayDate } from "../utils/date";
@@ -7,15 +8,6 @@ import { useNavigate } from "react-router-dom";
 import PageBackCloseActions from "../components/PageBackCloseActions";
 
 const VOUCHER_LINE_COUNT = 20;
-const VOUCHER_HEADER_TITLE = "HANSARIA FOOD PVT LTD PAYMENT VOUCHER";
-
-const escapeHtml = (value) =>
-  String(value ?? "")
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
 
 const printableText = (value, fallback = "N.A") => {
   const text = String(value ?? "").trim();
@@ -25,6 +17,11 @@ const printableText = (value, fallback = "N.A") => {
 const formatMoney = (value) => {
   const amount = Number(value);
   return Number.isFinite(amount) ? amount.toFixed(2) : "0.00";
+};
+
+const toAmount = (value) => {
+  const amount = Number(value);
+  return Number.isFinite(amount) ? amount : 0;
 };
 
 const formatItemNumber = (value) => {
@@ -48,6 +45,255 @@ const formatVoucherDate = (value) => {
       : "th";
   const month = date.toLocaleString("en-IN", { month: "short" });
   return `${day}${suffix} ${month}, ${date.getFullYear()}`;
+};
+
+const getTotalCollectAmount = (expense) =>
+  toAmount(expense?.receive_cash_from_party) + toAmount(expense?.receive_cash_from_driver);
+
+const getVoucherFileName = (expense) => {
+  const voucherNo = printableText(expense?.voucher_no, `EXP-${expense?.id || "voucher"}`);
+  return `${voucherNo.replace(/[/\\?%*:|"<>]/g, "-")}_Expense_Voucher.pdf`;
+};
+
+const numberToWordsUnderCrore = (value) => {
+  const ones = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"];
+  const tens = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
+  const twoDigits = (num) => {
+    if (num < 20) return ones[num];
+    return `${tens[Math.floor(num / 10)]}${num % 10 ? ` ${ones[num % 10]}` : ""}`;
+  };
+  const threeDigits = (num) => {
+    const hundred = Math.floor(num / 100);
+    const rest = num % 100;
+    return `${hundred ? `${ones[hundred]} Hundred` : ""}${hundred && rest ? " " : ""}${rest ? twoDigits(rest) : ""}`.trim();
+  };
+
+  let amount = Math.max(0, Math.floor(Number(value) || 0));
+  if (amount === 0) return "Zero";
+  const parts = [];
+  const crore = Math.floor(amount / 10000000);
+  amount %= 10000000;
+  const lakh = Math.floor(amount / 100000);
+  amount %= 100000;
+  const thousand = Math.floor(amount / 1000);
+  amount %= 1000;
+  if (crore) parts.push(`${threeDigits(crore)} Crore`);
+  if (lakh) parts.push(`${threeDigits(lakh)} Lakh`);
+  if (thousand) parts.push(`${threeDigits(thousand)} Thousand`);
+  if (amount) parts.push(threeDigits(amount));
+  return parts.join(" ");
+};
+
+const createExpenseVoucherPdf = (expense) => {
+  const doc = new jsPDF("p", "mm", "a4");
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const margin = 8;
+  const green = [91, 138, 57];
+  const lightGreen = [238, 245, 231];
+  const border = [218, 226, 214];
+  const text = [28, 38, 50];
+  const muted = [91, 105, 119];
+  const items = Array.isArray(expense.items) ? expense.items : [];
+  const totalCollect = getTotalCollectAmount(expense);
+  const fields = {
+    workDescription: printableText(expense.work_description),
+    voucherNo: printableText(expense.voucher_no),
+    date: formatVoucherDate(expense.expense_date),
+    product: printableText(expense.product_name),
+    partyName: printableText(expense.company_name),
+    partyCompanyNo: printableText(expense.company_account_name),
+    rejectLorryNo: printableText(expense.new_lorry_no || expense.reg_lorry_no),
+    regFrom: printableText(expense.reg_from_company_name),
+    loading: printableText(formatItemNumber(expense.loading)),
+    unloading: printableText(formatItemNumber(expense.unloading)),
+    balance: printableText(formatItemNumber(expense.balance)),
+    netWeight: printableText(formatItemNumber(expense.net_weight)),
+    newLorryNo: printableText(expense.new_lorry_no),
+    newWeight: printableText(formatItemNumber(expense.new_weight)),
+    sendTo: printableText(expense.send_to_company_name),
+    account: printableText(expense.company_account_name || expense.company_name),
+    accountPartyCompany: printableText(expense.company_name),
+    paidBy: printableText(expense.paid_by),
+    partyDriverMobileNo: printableText(expense.paid_by_mobile),
+    challanWeight: printableText(formatItemNumber(expense.challan_weight)),
+    mbNo: printableText(expense.mb_no),
+    receiveCashFromParty: formatMoney(expense.receive_cash_from_party),
+    receiveCashFromDriver: formatMoney(expense.receive_cash_from_driver),
+    grandTotal: formatMoney(expense.grand_total),
+    totalCollect: formatMoney(totalCollect),
+  };
+
+  const rounded = (x, y, w, h, fill) => {
+    doc.setDrawColor(...border);
+    doc.setFillColor(...fill);
+    doc.roundedRect(x, y, w, h, 2.5, 2.5, "FD");
+  };
+  const labelValue = (label, value, x, y, iconText = "") => {
+    doc.setFillColor(...lightGreen);
+    doc.setDrawColor(...green);
+    doc.circle(x + 5, y + 5, 3.5, "FD");
+    doc.setTextColor(...green);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(6.2);
+    doc.text(iconText || label.charAt(0), x + 5, y + 6, { align: "center" });
+    doc.setTextColor(...text);
+    doc.setFontSize(5.8);
+    doc.text(label.toUpperCase(), x + 12, y + 3.8);
+    doc.setFontSize(7);
+    doc.text(String(value), x + 12, y + 8.2, { maxWidth: 42 });
+  };
+  const leftRow = (label, value, y) => {
+    doc.setTextColor(...muted);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(5.8);
+    doc.text(label.toUpperCase(), 18, y);
+    doc.setTextColor(...text);
+    doc.setFontSize(6.2);
+    doc.text(String(value), 58, y, { maxWidth: 30 });
+    doc.setDrawColor(...border);
+    doc.line(13, y + 2.4, 93, y + 2.4);
+  };
+
+  doc.setFillColor(247, 250, 243);
+  doc.rect(0, 0, pageWidth, 297, "F");
+  rounded(margin, 7, pageWidth - margin * 2, 29, [255, 255, 255]);
+  doc.setFillColor(...green);
+  doc.roundedRect(pageWidth - 63, 7, 55, 29, 2.5, 2.5, "F");
+  doc.setTextColor(...text);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(18);
+  doc.text("HANSARIA FOOD PVT LTD", 14, 21);
+  doc.setTextColor(...green);
+  doc.setFontSize(9);
+  doc.text("PAYMENT VOUCHER", 14, 29);
+  doc.setDrawColor(...green);
+  doc.setLineWidth(0.4);
+  doc.line(14, 33, 22, 33);
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(6.2);
+  doc.text("VOUCHER NO.", pageWidth - 56, 15);
+  doc.setFontSize(13);
+  doc.text(fields.voucherNo, pageWidth - 56, 23);
+  doc.setFontSize(6.7);
+  doc.text(fields.date, pageWidth - 50, 30);
+
+  rounded(margin, 39, pageWidth - margin * 2, 33, [255, 255, 255]);
+  labelValue("Work Description", fields.workDescription, 12, 47, "W");
+  labelValue("Product", fields.product, 76, 47, "P");
+  labelValue("Party Name", fields.partyName, 136, 47, "N");
+  doc.setDrawColor(...border);
+  doc.line(70, 45, 70, 63);
+  doc.line(130, 45, 130, 63);
+  doc.line(12, 61, pageWidth - 12, 61);
+  labelValue("Party Company No.", fields.partyCompanyNo, 12, 61, "A");
+  labelValue("Reject Lorry No.", fields.rejectLorryNo, 76, 61, "X");
+
+  rounded(margin, 77, 86, 116, [255, 255, 255]);
+  doc.setFillColor(...lightGreen);
+  doc.rect(8, 77, 86, 8, "F");
+  doc.setTextColor(...green);
+  doc.setFontSize(6.3);
+  doc.text("VOUCHER DETAILS", 20, 82.2);
+  [
+    ["REG FROM", fields.regFrom],
+    ["LOADING", fields.loading],
+    ["UNLOADING", fields.unloading],
+    ["BALANCE", fields.balance],
+    ["NET WEIGHT", fields.netWeight],
+    ["NEW LORRY NO.", fields.newLorryNo],
+    ["NEW WEIGHT", fields.newWeight],
+    ["SEND TO", fields.sendTo],
+    ["A/C", fields.account],
+    ["A/C PARTY COMPANY", fields.accountPartyCompany],
+    ["PAID BY PARTY/DRIVER", fields.paidBy],
+    ["PARTY/DRIVER MOBILE NO.", fields.partyDriverMobileNo],
+    ["CHALLAN WEIGHT", fields.challanWeight],
+    ["DRIVER SIGN", "-"],
+    ["MB NO.", fields.mbNo],
+    ["REP. SIGN", "-"],
+  ].forEach(([label, value], index) => leftRow(label, value, 91 + index * 6.1));
+
+  const tableX = 98;
+  const tableY = 77;
+  const tableW = pageWidth - tableX - 8;
+  rounded(tableX, tableY, tableW, 152, [255, 255, 255]);
+  doc.setFillColor(...green);
+  doc.rect(tableX, tableY, tableW, 8, "F");
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(6);
+  const col = [tableX, tableX + 12, tableX + 58, tableX + 78, tableX + 97, tableX + tableW];
+  ["#", "PARTICULARS", "BAGS", "RATE", "AMOUNT"].forEach((head, i) => {
+    doc.text(head, (col[i] + col[i + 1]) / 2, tableY + 5.2, { align: "center" });
+  });
+  doc.setDrawColor(...border);
+  col.forEach((x) => doc.line(x, tableY, x, tableY + 152));
+  const itemRowHeight = 7.2;
+  for (let index = 0; index < VOUCHER_LINE_COUNT; index += 1) {
+    const y = tableY + 8 + index * itemRowHeight;
+    doc.line(tableX, y, tableX + tableW, y);
+    const line = items[index] || {};
+    doc.setTextColor(...text);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(6.2);
+    doc.text(String(Number(line.line_no) || index + 1), col[0] + 6, y + 4.2, { align: "center" });
+    doc.text(printableText(line.particular_name || "", ""), col[1] + 3, y + 4.2, { maxWidth: 42 });
+    doc.text(formatItemNumber(line.bags), col[3] - 3, y + 4.2, { align: "right" });
+    doc.text(formatItemNumber(line.rate), col[4] - 3, y + 4.2, { align: "right" });
+    doc.text(formatItemNumber(line.amount), col[5] - 4, y + 4.2, { align: "right" });
+  }
+
+  rounded(margin, 197, 86, 27, [255, 255, 255]);
+  doc.setFillColor(...lightGreen);
+  doc.rect(8, 197, 86, 8, "F");
+  doc.setTextColor(...green);
+  doc.setFontSize(6.2);
+  doc.text("PAYMENT RECEIVED", 20, 202.2);
+  doc.setTextColor(...text);
+  doc.text("RECEIVE CASH FROM PARTY", 21, 212);
+  doc.text(`Rs. ${fields.receiveCashFromParty}`, 88, 212, { align: "right" });
+  doc.text("RECEIVE CASH FROM DRIVER", 21, 220);
+  doc.text(`Rs. ${fields.receiveCashFromDriver}`, 88, 220, { align: "right" });
+
+  const sumY = 232;
+  rounded(98, sumY, tableW, 28, [255, 255, 255]);
+  doc.setFontSize(7);
+  doc.setTextColor(...text);
+  doc.text("GRAND TOTAL", 103, sumY + 8);
+  doc.text(`Rs. ${fields.grandTotal}`, pageWidth - 14, sumY + 8, { align: "right" });
+  doc.text("TOTAL COLLECT AMOUNT", 103, sumY + 18);
+  doc.text(`Rs. ${fields.totalCollect}`, pageWidth - 14, sumY + 18, { align: "right" });
+  doc.setFillColor(...green);
+  doc.rect(98, sumY + 20, tableW, 8, "F");
+  doc.setTextColor(255, 255, 255);
+  doc.text("TOTAL AMOUNT", 103, sumY + 25.5);
+  doc.setFontSize(10);
+  doc.text(`Rs. ${fields.totalCollect}`, pageWidth - 14, sumY + 25.5, { align: "right" });
+
+  rounded(margin, 263, pageWidth - margin * 2, 25, [255, 255, 255]);
+  doc.setTextColor(...green);
+  doc.setFontSize(5.8);
+  doc.text("TOTAL AMOUNT (IN WORDS)", 26, 270);
+  doc.setTextColor(...text);
+  doc.setFontSize(7);
+  doc.text(`${numberToWordsUnderCrore(totalCollect)} Only`, 26, 277, { maxWidth: 70 });
+  doc.setDrawColor(...border);
+  doc.line(122, 266, 122, 285);
+  doc.setTextColor(...green);
+  doc.setFontSize(5.8);
+  doc.text("AUTHORIZED SIGNATURE", 137, 276);
+  doc.setDrawColor(155, 166, 152);
+  doc.line(135, 283, 175, 283);
+
+  doc.setFillColor(225, 235, 218);
+  doc.rect(0, 290, pageWidth, 7, "F");
+  doc.setTextColor(...text);
+  doc.setFontSize(5.8);
+  doc.text(printableText(expense.paid_by_mobile, "-"), 15, 294.5);
+  doc.text(printableText(expense.employee_name, "-"), 50, 294.5);
+  doc.text(printableText(expense.company_account_name || expense.company_name, "-"), 90, 294.5);
+  doc.text(`Generated: ${new Date().toLocaleString("en-IN")}`, pageWidth - 14, 294.5, { align: "right" });
+
+  return doc;
 };
 
 export default function ExpenseReportPage() {
@@ -127,7 +373,7 @@ export default function ExpenseReportPage() {
           <td>${item.reg_lorry_no || ""}</td>
           <td>${item.paid_by || ""}</td>
           <td style="text-align:right">${Number(item.grand_total || 0).toFixed(2)}</td>
-          <td style="text-align:right">${Number(item.total_expense_amount || 0).toFixed(2)}</td>
+          <td style="text-align:right">${formatMoney(getTotalCollectAmount(item))}</td>
         </tr>`
       )
       .join("");
@@ -151,7 +397,7 @@ export default function ExpenseReportPage() {
             <thead>
               <tr>
                 <th>Sl No</th><th>Voucher</th><th>Date</th><th>Warehouse</th><th>Employee</th><th>Product</th>
-                <th>Party</th><th>Send To</th><th>Reg Lorry</th><th>Paid By</th><th>Grand Total</th><th>Net Expense</th>
+                <th>Party</th><th>Send To</th><th>Reg Lorry</th><th>Paid By</th><th>Grand Total</th><th>Total Collect</th>
               </tr>
             </thead>
             <tbody>${rows}</tbody>
@@ -171,165 +417,34 @@ export default function ExpenseReportPage() {
     URL.revokeObjectURL(url);
   };
 
-  const printVoucherPdf = (expense) => {
+  const downloadVoucherPdf = (expense) => {
     if (!expense) return;
-    const printWindow = window.open("", "_blank", "width=1100,height=780");
-    if (!printWindow) return;
+    createExpenseVoucherPdf(expense).save(getVoucherFileName(expense));
+  };
 
-    const items = Array.isArray(expense.items) ? expense.items : [];
-    const voucherTitle = VOUCHER_HEADER_TITLE;
-    const fields = {
-      workDescription: printableText(expense.work_description),
-      voucherNo: printableText(expense.voucher_no),
-      date: formatVoucherDate(expense.expense_date),
-      product: printableText(expense.product_name),
-      partyName: printableText(expense.company_name),
-      partyCompanyNo: printableText(expense.company_account_name),
-      rejectLorryNo: printableText(expense.new_lorry_no || expense.reg_lorry_no),
-      regFrom: printableText(expense.reg_from_company_name),
-      loading: printableText(formatItemNumber(expense.loading)),
-      unloading: printableText(formatItemNumber(expense.unloading)),
-      balance: printableText(formatItemNumber(expense.balance)),
-      netWeight: printableText(formatItemNumber(expense.net_weight)),
-      newLorryNo: printableText(expense.new_lorry_no),
-      newWeight: printableText(formatItemNumber(expense.new_weight)),
-      sendTo: printableText(expense.send_to_company_name),
-      account: printableText(expense.company_account_name || expense.company_name),
-      accountPartyCompany: printableText(expense.company_name),
-      paidBy: printableText(expense.paid_by),
-      partyDriverMobileNo: printableText(expense.paid_by_mobile),
-      challanWeight: printableText(formatItemNumber(expense.challan_weight)),
-      mbNo: printableText(expense.mb_no),
-      receiveCashFromParty: formatMoney(expense.receive_cash_from_party),
-      receiveCashFromDriver: formatMoney(expense.receive_cash_from_driver),
-      grandTotal: formatMoney(expense.grand_total),
-      totalExpense: formatMoney(expense.total_expense_amount),
-    };
+  const shareVoucherOnWhatsApp = async (expense) => {
+    if (!expense) return;
+    const fileName = getVoucherFileName(expense);
+    const doc = createExpenseVoucherPdf(expense);
+    const blob = doc.output("blob");
+    const file = new File([blob], fileName, { type: "application/pdf" });
+    const message = `Expense voucher ${printableText(expense.voucher_no)} - Total collect amount Rs. ${formatMoney(getTotalCollectAmount(expense))}`;
 
-    const itemRows = Array.from({ length: VOUCHER_LINE_COUNT }, (_, index) => {
-      const line = items[index] || {};
-      const lineNo = Number.isFinite(Number(line.line_no)) ? Number(line.line_no) : index + 1;
-      return `
-        <tr>
-          <td class="center">${lineNo}</td>
-          <td>${escapeHtml(printableText(line.particular_name || "", ""))}</td>
-          <td class="center">${escapeHtml(formatItemNumber(line.bags))}</td>
-          <td class="center">${escapeHtml(formatItemNumber(line.rate))}</td>
-          <td class="right">${escapeHtml(formatItemNumber(line.amount))}</td>
-        </tr>`;
-    }).join("");
+    if (navigator.canShare && navigator.canShare({ files: [file] }) && navigator.share) {
+      try {
+        await navigator.share({
+          title: "Expense Voucher",
+          text: message,
+          files: [file],
+        });
+        return;
+      } catch (error) {
+        if (error?.name === "AbortError") return;
+      }
+    }
 
-    const html = `
-      <html>
-        <head>
-          <meta charset="UTF-8" />
-          <title>Expense Voucher ${escapeHtml(fields.voucherNo)}</title>
-          <style>
-            @page { size: A4 portrait; margin: 8mm; }
-            body { margin: 0; font-family: "Segoe UI", Arial, sans-serif; color: #111827; }
-            .voucher { width: 100%; border-collapse: collapse; table-layout: fixed; border: 1px solid #111827; font-size: 10.8px; }
-            .voucher th, .voucher td { border: 1px solid #111827; padding: 5px 6px; vertical-align: top; }
-            .title { text-align: center; font-size: 14px; font-weight: 700; letter-spacing: 0.2px; background: #f1f5f9; }
-            .label { font-weight: 700; background: #f8fafc; white-space: nowrap; }
-            .value { font-weight: 600; }
-            .split-cell { padding: 0; }
-            .left-grid, .items-grid { width: 100%; border-collapse: collapse; table-layout: fixed; }
-            .left-grid th, .left-grid td, .items-grid th, .items-grid td { border: 1px solid #111827; padding: 4px 6px; font-size: 10.6px; }
-            .left-grid th { width: 48%; text-align: left; background: #f8fafc; }
-            .items-grid th { text-align: center; background: #f8fafc; font-weight: 700; }
-            .items-grid td { height: 18px; }
-            .center { text-align: center; }
-            .right { text-align: right; }
-            .summary-value { font-weight: 700; }
-            .generated { margin-top: 8px; text-align: right; color: #475569; font-size: 10px; }
-          </style>
-        </head>
-        <body>
-          <table class="voucher">
-            <tr>
-              <th colspan="4" class="title">${escapeHtml(voucherTitle)}</th>
-            </tr>
-            <tr>
-              <th class="label">WORK DESCRIPTION</th>
-              <td colspan="3" class="value">${escapeHtml(fields.workDescription)}</td>
-            </tr>
-            <tr>
-              <th class="label">VOUCHER NO.</th>
-              <td class="value">${escapeHtml(fields.voucherNo)}</td>
-              <th class="label">DATE</th>
-              <td class="value">${escapeHtml(fields.date)}</td>
-            </tr>
-            <tr>
-              <th class="label">PRODUCT</th>
-              <td class="value">${escapeHtml(fields.product)}</td>
-              <th class="label">PARTY NAME</th>
-              <td class="value">${escapeHtml(fields.partyName)}</td>
-            </tr>
-            <tr>
-              <th class="label">PARTY COMPANY NO.</th>
-              <td class="value">${escapeHtml(fields.partyCompanyNo)}</td>
-              <th class="label">REJECT LORRY NO.</th>
-              <td class="value">${escapeHtml(fields.rejectLorryNo)}</td>
-            </tr>
-            <tr>
-              <td colspan="2" class="split-cell">
-                <table class="left-grid">
-                  <tr><th>REG FROM</th><td>${escapeHtml(fields.regFrom)}</td></tr>
-                  <tr><th>LOADING</th><td>${escapeHtml(fields.loading)}</td></tr>
-                  <tr><th>UNLOADING</th><td>${escapeHtml(fields.unloading)}</td></tr>
-                  <tr><th>BALANCE</th><td>${escapeHtml(fields.balance)}</td></tr>
-                  <tr><th>NET WEIGHT</th><td>${escapeHtml(fields.netWeight)}</td></tr>
-                  <tr><th>NEW LORRY NO.</th><td>${escapeHtml(fields.newLorryNo)}</td></tr>
-                  <tr><th>NEW WEIGHT</th><td>${escapeHtml(fields.newWeight)}</td></tr>
-                  <tr><th>SEND TO</th><td>${escapeHtml(fields.sendTo)}</td></tr>
-                  <tr><th>A/C</th><td>${escapeHtml(fields.account)}</td></tr>
-                  <tr><th>A/C PARTY COMPANY</th><td>${escapeHtml(fields.accountPartyCompany)}</td></tr>
-                  <tr><th>PAID BY PARTY/DRIVER</th><td>${escapeHtml(fields.paidBy)}</td></tr>
-                  <tr><th>PARTY/DRIVER MOBILE NO.</th><td>${escapeHtml(fields.partyDriverMobileNo)}</td></tr>
-                  <tr><th>CHALLAN WEIGHT</th><td>${escapeHtml(fields.challanWeight)}</td></tr>
-                  <tr><th>DRIVER SIGN</th><td>&nbsp;</td></tr>
-                  <tr><th>MB NO.</th><td>${escapeHtml(fields.mbNo)}</td></tr>
-                  <tr><th>REP. SIGN</th><td>&nbsp;</td></tr>
-                </table>
-              </td>
-              <td colspan="2" class="split-cell">
-                <table class="items-grid">
-                  <thead>
-                    <tr>
-                      <th style="width: 12%;">#</th>
-                      <th style="width: 48%;">Particulars</th>
-                      <th style="width: 13%;">Bags</th>
-                      <th style="width: 12%;">Rate</th>
-                      <th style="width: 15%;">Amount</th>
-                    </tr>
-                  </thead>
-                  <tbody>${itemRows}</tbody>
-                </table>
-              </td>
-            </tr>
-            <tr>
-              <th class="label">RECEIVE CASH FROM PARTY</th>
-              <td class="summary-value">Rs. ${escapeHtml(fields.receiveCashFromParty)}</td>
-              <th class="label">GRAND TOTAL</th>
-              <td class="summary-value">Rs. ${escapeHtml(fields.grandTotal)}</td>
-            </tr>
-            <tr>
-              <th class="label">RECEIVE CASH FROM DRIVER</th>
-              <td class="summary-value">Rs. ${escapeHtml(fields.receiveCashFromDriver)}</td>
-              <th class="label">TOTAL EXPENSE AMOUNT</th>
-              <td class="summary-value">Rs. ${escapeHtml(fields.totalExpense)}</td>
-            </tr>
-          </table>
-          <div class="generated">Generated: ${escapeHtml(new Date().toLocaleString())}</div>
-        </body>
-      </html>
-    `;
-
-    printWindow.document.open();
-    printWindow.document.write(html);
-    printWindow.document.close();
-    printWindow.focus();
-    printWindow.print();
+    doc.save(fileName);
+    window.open(`https://wa.me/?text=${encodeURIComponent(`${message}\nPDF downloaded. Please attach it in WhatsApp.`)}`, "_blank");
   };
 
   return (
@@ -411,7 +526,7 @@ export default function ExpenseReportPage() {
                   <th style={thStyle}>Reg Lorry</th>
                   <th style={thStyle}>Paid By</th>
                   <th style={thStyle}>Grand Total</th>
-                  <th style={thStyle}>Net Expense</th>
+                  <th style={thStyle}>Total Collect</th>
                   <th style={thStyle}>Action</th>
                 </tr>
               </thead>
@@ -444,7 +559,7 @@ export default function ExpenseReportPage() {
             fontWeight: 700,
           }}
         >
-          {Number(item.total_expense_amount || 0).toFixed(2)}
+          {formatMoney(getTotalCollectAmount(item))}
         </td>
 
         <td style={tdStyle}>
@@ -452,8 +567,11 @@ export default function ExpenseReportPage() {
             <button onClick={() => navigate(`/expenses?edit=${item.id}`)} style={editButtonStyle}>
               Edit
             </button>
-            <button onClick={() => printVoucherPdf(item)} style={voucherPdfButtonStyle}>
+            <button onClick={() => downloadVoucherPdf(item)} style={voucherPdfButtonStyle}>
               PDF
+            </button>
+            <button onClick={() => shareVoucherOnWhatsApp(item)} style={whatsAppButtonStyle}>
+              WhatsApp
             </button>
           </div>
         </td>
@@ -553,6 +671,17 @@ const editButtonStyle = {
 const voucherPdfButtonStyle = {
   border: "none",
   background: "#0f766e",
+  color: "#fff",
+  borderRadius: "8px",
+  padding: "6px 12px",
+  cursor: "pointer",
+  fontWeight: 700,
+  fontSize: "12px",
+};
+
+const whatsAppButtonStyle = {
+  border: "none",
+  background: "#16a34a",
   color: "#fff",
   borderRadius: "8px",
   padding: "6px 12px",
