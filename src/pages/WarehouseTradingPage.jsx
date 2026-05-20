@@ -250,7 +250,14 @@ export default function WarehouseTradingPage() {
         return;
       }
       const res = await axios.get(`/api/wh-vouchers/${activeVoucherType}`);
-      setList(Array.isArray(res.data) ? res.data : []);
+      const rows = Array.isArray(res.data) ? res.data : [];
+      setList(
+        rows.slice().sort((a, b) => {
+          const dateSort = String(b.date || "").localeCompare(String(a.date || ""));
+          if (dateSort) return dateSort;
+          return Number(b.id || b._id || 0) - Number(a.id || a._id || 0);
+        })
+      );
     } catch (err) {
       console.error(err);
     }
@@ -535,7 +542,8 @@ export default function WarehouseTradingPage() {
                     <table style={erpItemsTable}>
                       <thead>
                         <tr>
-                          <th style={{ ...erpTh, minWidth: 250 }}>Items</th>
+                          <th style={{ ...erpTh, width: 54 }}>S.L No</th>
+                          <th style={{ ...erpTh, minWidth: 250 }}>Product</th>
                           <th style={erpTh}>Packet</th>
                           <th style={erpTh}>Gross Wt</th>
                           <th style={erpTh}>Tare Wt</th>
@@ -550,6 +558,7 @@ export default function WarehouseTradingPage() {
                       </thead>
                       <tbody>
                         <tr>
+                          <td style={{ ...erpTd, textAlign: "center", fontWeight: 700 }}>1</td>
                           <td style={erpTd}>
                             <select name="product_id" value={formData.product_id} onChange={handleChange} style={erpCellInput}>
                               <option value="">Select Product</option>
@@ -571,13 +580,6 @@ export default function WarehouseTradingPage() {
                           <td style={erpTd}><input name="rate" type="number" step="0.01" value={formData.rate} onChange={handleChange} style={erpCellInput} /></td>
                           <td style={erpTd}><input value={formatMoney(purchaseGrossAmount)} readOnly style={{ ...erpCellInput, ...erpReadOnlyCell }} /></td>
                         </tr>
-                        {Array.from({ length: 8 }).map((_, index) => (
-                          <tr key={`blank-${index}`}>
-                            {Array.from({ length: 14 }).map((__, cellIndex) => (
-                              <td key={cellIndex} style={erpTd}>&nbsp;</td>
-                            ))}
-                          </tr>
-                        ))}
                       </tbody>
                     </table>
                   </div>
@@ -822,6 +824,7 @@ export default function WarehouseTradingPage() {
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                 <thead>
                   <tr style={reportHeaderRowStyle}>
+                    <th style={th}>S.L No</th>
                     <th style={th}>Date</th>
                     <th style={th}>Voucher No</th>
                     <th style={th}>Warehouse</th>
@@ -837,18 +840,19 @@ export default function WarehouseTradingPage() {
                 <tbody>
                   {list.map((item, i) => (
                     <tr key={item.id || i} style={{ background: i % 2 ? "#f8fafc" : "#fff" }}>
+                      <td style={td}>{i + 1}</td>
                       <td style={td}>{item.date}</td>
                       <td style={td}>{item.voucher_no}</td>
-                      <td style={td}>{warehouses.find(w => String(w.id || w._id) === String(item.warehouse_id))?.name || "-"}</td>
+                      <td style={td}>{item.warehouse_name || warehouses.find(w => String(w.id || w._id) === String(item.warehouse_id))?.name || "-"}</td>
                       {(activeVoucherType === "purchase" || activeVoucherType === "payment") && (
-                        <td style={td}>{farmers.find(f => String(f.id || f._id) === String(item.farmer_id))?.name || "-"}</td>
+                        <td style={td}>{item.farmer_name || farmers.find(f => String(f.id || f._id) === String(item.farmer_id))?.name || "-"}</td>
                       )}
                       {(activeVoucherType === "sale" || activeVoucherType === "receipt") && (
                         <td style={td}>{companies.find(c => String(c.id || c._id) === String(item.company_id))?.name || "-"}</td>
                       )}
                       {(activeVoucherType === "purchase" || activeVoucherType === "sale") && (
                         <>
-                          <td style={td}>{products.find(p => String(p.id || p._id) === String(item.product_id))?.name || "-"}</td>
+                          <td style={td}>{item.product_name || products.find(p => String(p.id || p._id) === String(item.product_id))?.name || "-"}</td>
                           <td style={td}>{activeVoucherType === "purchase" ? item.total_qty || item.net_weight || item.quantity || 0 : item.unloading_qty || item.quantity || 0}</td>
                           <td style={td}>{item.rate || 0}</td>
                         </>
@@ -864,7 +868,7 @@ export default function WarehouseTradingPage() {
                     </tr>
                   ))}
                   {list.length === 0 && (
-                    <tr><td colSpan={9} style={{ ...td, textAlign: "center", padding: 20 }}>No vouchers found.</td></tr>
+                    <tr><td colSpan={10} style={{ ...td, textAlign: "center", padding: 20 }}>No vouchers found.</td></tr>
                   )}
                 </tbody>
               </table>
