@@ -524,13 +524,8 @@ export default function WarehouseTradingPage() {
                         <input name="date" type="date" value={formData.date} onChange={handleChange} style={erpInput} required />
                       </div>
                       <div style={erpRow}>
-                        <label style={erpLabel}>Location</label>
-                        <select name="location_id" value={formData.location_id} onChange={handleChange} style={erpInput}>
-                          <option value="">Auto</option>
-                          {locations.map((l) => (
-                            <option key={l.id || l._id} value={l.id || l._id}>{l.name}</option>
-                          ))}
-                        </select>
+                        <label style={erpLabel}>R. S. T No</label>
+                        <input name="reference_id" value={formData.reference_id} onChange={handleChange} placeholder="R. S. T No" style={erpInput} />
                       </div>
                     </div>
                   </div>
@@ -540,7 +535,6 @@ export default function WarehouseTradingPage() {
                     <table style={erpItemsTable}>
                       <thead>
                         <tr>
-                          <th style={erpTh}>No.</th>
                           <th style={{ ...erpTh, minWidth: 250 }}>Items</th>
                           <th style={erpTh}>Packet</th>
                           <th style={erpTh}>Gross Wt</th>
@@ -556,7 +550,6 @@ export default function WarehouseTradingPage() {
                       </thead>
                       <tbody>
                         <tr>
-                          <td style={erpTd}>1</td>
                           <td style={erpTd}>
                             <select name="product_id" value={formData.product_id} onChange={handleChange} style={erpCellInput}>
                               <option value="">Select Product</option>
@@ -580,7 +573,6 @@ export default function WarehouseTradingPage() {
                         </tr>
                         {Array.from({ length: 8 }).map((_, index) => (
                           <tr key={`blank-${index}`}>
-                            <td style={erpTd}>{index + 2}</td>
                             {Array.from({ length: 14 }).map((__, cellIndex) => (
                               <td key={cellIndex} style={erpTd}>&nbsp;</td>
                             ))}
@@ -604,7 +596,7 @@ export default function WarehouseTradingPage() {
                         <tbody>
                           <tr><td style={erpTd}>Bags Claim</td><td style={erpTd}><input name="bags_claim" type="number" step="0.01" value={formData.bags_claim} onChange={handleChange} style={erpCellInput} /></td></tr>
                           <tr><td style={erpTd}>Labour</td><td style={erpTd}><input name="labour" type="number" step="0.01" value={formData.labour} onChange={handleChange} style={erpCellInput} /></td></tr>
-                          <tr><td style={erpTd}>Total Deduct Amount</td><td style={erpTd}><input name="total_deduct_amount" type="number" step="0.01" value={formData.total_deduct_amount} onChange={handleChange} style={erpCellInput} /></td></tr>
+                          <tr><td style={erpTd}>Lorry Claim</td><td style={erpTd}><input name="total_deduct_amount" type="number" step="0.01" value={formData.total_deduct_amount} onChange={handleChange} style={erpCellInput} /></td></tr>
                           <tr><td style={erpTd}>Round Off</td><td style={erpTd}><input name="round_off" type="number" step="0.01" value={formData.round_off} onChange={handleChange} style={erpCellInput} /></td></tr>
                         </tbody>
                       </table>
@@ -622,6 +614,7 @@ export default function WarehouseTradingPage() {
                         <tbody>
                           <tr><td style={erpTd}>Gross Amount</td><td style={erpTd}>{formatMoney(purchaseGrossAmount)}</td></tr>
                           <tr><td style={erpTd}>Total Deduction</td><td style={erpTd}>{formatMoney(purchaseTotalDeduction)}</td></tr>
+                          <tr><td style={erpTd}>Lorry Claim</td><td style={erpTd}>{formatMoney(formData.total_deduct_amount)}</td></tr>
                           <tr><td style={erpTd}>Round Off</td><td style={erpTd}>{formatMoney(purchaseRoundOff)}</td></tr>
                           <tr><td style={erpTd}>Net Amount Payable</td><td style={erpTd}>{formatMoney(purchaseNetPayable)}</td></tr>
                         </tbody>
@@ -966,10 +959,10 @@ const subtitleStyle = { margin: 0, color: "#475569" };
 const titleStyle = { margin: 0, fontSize: 22, color: "#0f172a" };
 const tabRow = { display: "flex", gap: 10 };
 const tabStyle = { border: "1px solid #cbd5e1", background: "#fff", color: "#0f172a", padding: "10px 16px", borderRadius: 8, cursor: "pointer" };
-const activeTabStyle = { ...tabStyle, background: "#0f766e", color: "#fff", borderColor: "#0f766e" };
+const activeTabStyle = { ...tabStyle, background: "#087a73", color: "#fff", borderColor: "#087a73" };
 const voucherTypeRow = { display: "flex", gap: 8, marginBottom: 16, flexWrap: "wrap" };
 const voucherButtonStyle = { background: "#e2e8f0", color: "#0f172a", border: "none", padding: "8px 14px", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 500 };
-const activeVoucherButtonStyle = { ...voucherButtonStyle, background: "#2563eb", color: "#fff" };
+const activeVoucherButtonStyle = { ...voucherButtonStyle, background: "#087a73", color: "#fff" };
 const card = { background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, padding: 20, marginBottom: 18, boxShadow: "0 4px 14px rgba(15,23,42,0.06)" };
 const formGrid = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16 };
 const inp = { width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #cbd5e1", fontSize: 14, boxSizing: "border-box" };
@@ -978,7 +971,7 @@ const btnPrimary = { background: "#2563eb", color: "#fff", border: "none", paddi
 const th = { padding: "10px 8px", textAlign: "left", borderBottom: "1px solid #0d5c56" };
 const td = { padding: "8px", borderBottom: "1px solid #e2e8f0" };
 const tableCard = { overflowX: "auto", border: "1px solid #e2e8f0", borderRadius: 10, background: "#fff" };
-const reportHeaderRowStyle = { background: "#263b5e", color: "#fff" };
+const reportHeaderRowStyle = { background: "#087a73", color: "#fff" };
 const lbl = { display: "block", marginBottom: 6, fontWeight: 600, fontSize: 13, color: "#334155" };
 const memoShell = { border: "1px solid #d7dee8", borderRadius: 10, padding: 18, background: "#fbfdff" };
 const memoHeader = { display: "flex", justifyContent: "space-between", gap: 18, alignItems: "flex-start", borderBottom: "2px solid #ea580c", paddingBottom: 14, marginBottom: 16, flexWrap: "wrap" };
@@ -1004,8 +997,8 @@ const payableLine = { ...totalLine, borderBottom: "none", background: "#0b2a5b",
 const btnAction = { background: "#2563eb", color: "#fff", border: "none", padding: "6px 10px", borderRadius: 4, cursor: "pointer", fontWeight: 500, fontSize: 12 };
 
 const erpShell = {
-  background: "#f7f7f5",
-  border: "1px solid #c8c8c8",
+  background: "#f5f8f7",
+  border: "1px solid #b9d0cc",
   borderRadius: 4,
   padding: 8,
   color: "#111827",
@@ -1027,12 +1020,12 @@ const erpDocIcon = {
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
-  background: "#263b5e",
+  background: "#087a73",
   color: "#fff",
   fontSize: 14,
   fontWeight: 800,
 };
-const erpTitleText = { color: "#263b5e", fontSize: 22, fontWeight: 800, lineHeight: 1 };
+const erpTitleText = { color: "#2f542c", fontSize: 22, fontWeight: 800, lineHeight: 1 };
 const erpMetaLine = { display: "flex", alignItems: "center", gap: 10, fontSize: 12, color: "#111827", flexWrap: "wrap" };
 const erpTopGrid = {
   display: "grid",
@@ -1041,7 +1034,7 @@ const erpTopGrid = {
   alignItems: "stretch",
   marginBottom: 6,
 };
-const erpPanelWide = { border: "1px solid #c9c9d5", background: "#f2f2f7", borderRadius: 4, padding: 8 };
+const erpPanelWide = { border: "1px solid #c8d6d3", background: "#f7f7fb", borderRadius: 4, padding: 8 };
 const erpPanelSmall = {
   border: "1px solid #c9c9d5",
   background: "#f2f2f7",
@@ -1051,7 +1044,7 @@ const erpPanelSmall = {
   alignContent: "center",
   gap: 8,
 };
-const erpDocPanel = { border: "1px solid #c9c9d5", background: "#f2f2f7", borderRadius: 4, padding: 8 };
+const erpDocPanel = { border: "1px solid #c8d6d3", background: "#f7f7fb", borderRadius: 4, padding: 8 };
 const erpRow = { display: "flex", alignItems: "center", gap: 6, minHeight: 26, marginBottom: 4 };
 const erpLabel = { width: 88, fontSize: 12, color: "#111827", flex: "0 0 auto" };
 const erpCheckLabel = { display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#111827" };
@@ -1071,13 +1064,13 @@ const erpFocusInput = { borderColor: "#4d90fe", boxShadow: "inset 0 0 0 1px rgba
 const erpSectionLabel = { fontSize: 12, color: "#111827", margin: "3px 0 2px" };
 const erpGridWrap = {
   overflowX: "auto",
-  border: "1px solid #cfd6e0",
+  border: "1px solid #c3d8d5",
   background: "#fff",
 };
 const erpItemsTable = { width: "100%", minWidth: 1320, borderCollapse: "collapse", tableLayout: "fixed", fontSize: 12 };
 const erpTh = {
-  border: "1px solid #cfd6e0",
-  background: "#e8edf5",
+  border: "1px solid #c3d8d5",
+  background: "#e8f3f1",
   color: "#111827",
   padding: "2px 4px",
   fontWeight: 500,
@@ -1086,7 +1079,7 @@ const erpTh = {
   whiteSpace: "nowrap",
 };
 const erpTd = {
-  border: "1px solid #cfd6e0",
+  border: "1px solid #c3d8d5",
   background: "#fff",
   color: "#111827",
   padding: 0,
@@ -1134,7 +1127,7 @@ const erpTotalPanel = {
   marginTop: 8,
   minHeight: 46,
   border: "1px solid #c9c9d5",
-  background: "#e8edf5",
+  background: "#e8f3f1",
   display: "flex",
   alignItems: "center",
   justifyContent: "space-between",
@@ -1142,5 +1135,5 @@ const erpTotalPanel = {
   fontWeight: 900,
   fontSize: 18,
 };
-const erpTotalLabel = { letterSpacing: 8, color: "#263b5e" };
-const erpTotalAmount = { letterSpacing: 0, color: "#263b5e", fontSize: 30 };
+const erpTotalLabel = { letterSpacing: 8, color: "#2f542c" };
+const erpTotalAmount = { letterSpacing: 0, color: "#2f542c", fontSize: 30 };
