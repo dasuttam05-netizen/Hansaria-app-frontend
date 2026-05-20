@@ -52,6 +52,18 @@ const getTotalCollectAmount = (expense) =>
 
 const getVoucherTotalAmount = (expense) => toAmount(expense?.grand_total) - getTotalCollectAmount(expense);
 
+const getRecordId = (item) => String(item?._id || item?.id || "");
+
+const normalizePartyKey = (value) => String(value || "").trim().toLowerCase();
+
+const normalizeWhatsAppPhone = (value) => {
+  const digits = String(value || "").replace(/\D/g, "");
+  if (!digits) return "";
+  if (digits.length === 10) return `91${digits}`;
+  if (digits.length === 11 && digits.startsWith("0")) return `91${digits.slice(1)}`;
+  return digits;
+};
+
 const getVoucherFileName = (expense) => {
   const voucherNo = printableText(expense?.voucher_no, `EXP-${expense?.id || "voucher"}`);
   return `${voucherNo.replace(/[/\\?%*:|"<>]/g, "-")}_Expense_Voucher.pdf`;
@@ -309,6 +321,7 @@ export default function ExpenseReportPage() {
   const API_BASE = "/api";
   const [expenses, setExpenses] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
+  const [companies, setCompanies] = useState([]);
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
   const [searchText, setSearchText] = useState("");
@@ -321,6 +334,7 @@ export default function ExpenseReportPage() {
   useEffect(() => {
     fetchExpenses();
     axios.get(`${API_BASE}/warehouses`).then((res) => setWarehouses(res.data || [])).catch(() => setWarehouses([]));
+    axios.get(`${API_BASE}/companies`).then((res) => setCompanies(res.data || [])).catch(() => setCompanies([]));
   }, []);
 
   const fetchExpenses = async () => {
@@ -365,6 +379,25 @@ export default function ExpenseReportPage() {
       return dateOk && monthOk && warehouseOk && partyOk && haystack.includes(searchText.toLowerCase());
     });
   }, [expenses, dateFrom, dateTo, searchText, warehouseIds, selectedParties, month]);
+
+  const companyMobileMap = useMemo(() => {
+    const map = new Map();
+    companies.forEach((company) => {
+      const mobile = normalizeWhatsAppPhone(company.mobile || company.phone || company.mobile_no);
+      if (!mobile) return;
+      const id = getRecordId(company);
+      const name = normalizePartyKey(company.name || company.company_name);
+      if (id) map.set(`id:${id}`, mobile);
+      if (name) map.set(`name:${name}`, mobile);
+    });
+    return map;
+  }, [companies]);
+
+  const getPartyWhatsAppPhone = (expense) => {
+    const id = String(expense?.company_id || "");
+    const name = normalizePartyKey(expense?.company_name);
+    return companyMobileMap.get(`id:${id}`) || companyMobileMap.get(`name:${name}`) || "";
+  };
 
   const buildReportRows = () =>
     filteredExpenses
@@ -437,7 +470,14 @@ export default function ExpenseReportPage() {
     const doc = createExpenseVoucherPdf(expense);
     const blob = doc.output("blob");
     const file = new File([blob], fileName, { type: "application/pdf" });
+    const partyPhone = getPartyWhatsAppPhone(expense);
     const message = `Expense voucher ${printableText(expense.voucher_no)} - Total amount Rs. ${formatMoney(getVoucherTotalAmount(expense))}`;
+
+    if (partyPhone) {
+      doc.save(fileName);
+      window.open(`https://wa.me/${partyPhone}?text=${encodeURIComponent(`${message}\nPDF downloaded. Please attach it before sending.`)}`, "_blank");
+      return;
+    }
 
     if (navigator.canShare && navigator.canShare({ files: [file] }) && navigator.share) {
       try {
@@ -579,8 +619,12 @@ export default function ExpenseReportPage() {
             <button onClick={() => downloadVoucherPdf(item)} style={voucherPdfButtonStyle}>
               PDF
             </button>
-            <button onClick={() => shareVoucherOnWhatsApp(item)} style={whatsAppButtonStyle}>
-              WhatsApp
+            <button
+              onClick={() => shareVoucherOnWhatsApp(item)}
+              style={whatsAppButtonStyle}
+              title={getPartyWhatsAppPhone(item) ? "Open party WhatsApp" : "Open WhatsApp"}
+            >
+              {getPartyWhatsAppPhone(item) ? "Party WhatsApp" : "WhatsApp"}
             </button>
           </div>
         </td>
