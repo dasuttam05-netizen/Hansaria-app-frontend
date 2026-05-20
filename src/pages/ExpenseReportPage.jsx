@@ -50,6 +50,8 @@ const formatVoucherDate = (value) => {
 const getTotalCollectAmount = (expense) =>
   toAmount(expense?.receive_cash_from_party) + toAmount(expense?.receive_cash_from_driver);
 
+const getVoucherTotalAmount = (expense) => toAmount(expense?.grand_total) - getTotalCollectAmount(expense);
+
 const getVoucherFileName = (expense) => {
   const voucherNo = printableText(expense?.voucher_no, `EXP-${expense?.id || "voucher"}`);
   return `${voucherNo.replace(/[/\\?%*:|"<>]/g, "-")}_Expense_Voucher.pdf`;
@@ -95,6 +97,7 @@ const createExpenseVoucherPdf = (expense) => {
   const muted = [91, 105, 119];
   const items = Array.isArray(expense.items) ? expense.items : [];
   const totalCollect = getTotalCollectAmount(expense);
+  const totalAmount = getVoucherTotalAmount(expense);
   const fields = {
     workDescription: printableText(expense.work_description),
     voucherNo: printableText(expense.voucher_no),
@@ -102,7 +105,7 @@ const createExpenseVoucherPdf = (expense) => {
     product: printableText(expense.product_name),
     partyName: printableText(expense.company_name),
     partyCompanyNo: printableText(expense.company_account_name),
-    rejectLorryNo: printableText(expense.new_lorry_no || expense.reg_lorry_no),
+    rejectLorryNo: printableText(expense.reg_lorry_no),
     regFrom: printableText(expense.reg_from_company_name),
     loading: printableText(formatItemNumber(expense.loading)),
     unloading: printableText(formatItemNumber(expense.unloading)),
@@ -121,6 +124,7 @@ const createExpenseVoucherPdf = (expense) => {
     receiveCashFromDriver: formatMoney(expense.receive_cash_from_driver),
     grandTotal: formatMoney(expense.grand_total),
     totalCollect: formatMoney(totalCollect),
+    totalAmount: formatMoney(totalAmount),
   };
 
   const rounded = (x, y, w, h, fill) => {
@@ -154,7 +158,7 @@ const createExpenseVoucherPdf = (expense) => {
     doc.line(13, y + 2.4, 93, y + 2.4);
   };
 
-  doc.setFillColor(247, 250, 243);
+  doc.setFillColor(249, 251, 246);
   doc.rect(0, 0, pageWidth, 297, "F");
   rounded(margin, 7, pageWidth - margin * 2, 29, [255, 255, 255]);
   doc.setFillColor(...green);
@@ -177,16 +181,17 @@ const createExpenseVoucherPdf = (expense) => {
   doc.setFontSize(6.7);
   doc.text(fields.date, pageWidth - 50, 30);
 
-  rounded(margin, 39, pageWidth - margin * 2, 33, [255, 255, 255]);
+  rounded(margin, 39, pageWidth - margin * 2, 35, [255, 255, 255]);
   labelValue("Work Description", fields.workDescription, 12, 47, "W");
   labelValue("Product", fields.product, 76, 47, "P");
   labelValue("Party Name", fields.partyName, 136, 47, "N");
   doc.setDrawColor(...border);
-  doc.line(70, 45, 70, 63);
-  doc.line(130, 45, 130, 63);
+  doc.line(70, 45, 70, 72);
+  doc.line(130, 45, 130, 72);
   doc.line(12, 61, pageWidth - 12, 61);
-  labelValue("Party Company No.", fields.partyCompanyNo, 12, 61, "A");
-  labelValue("Reject Lorry No.", fields.rejectLorryNo, 76, 61, "X");
+  labelValue("Party Company No.", fields.partyCompanyNo, 12, 62, "A");
+  labelValue("Reject Lorry No.", fields.rejectLorryNo, 76, 62, "R");
+  labelValue("New Lorry No.", fields.newLorryNo, 136, 62, "L");
 
   rounded(margin, 77, 86, 116, [255, 255, 255]);
   doc.setFillColor(...lightGreen);
@@ -230,10 +235,14 @@ const createExpenseVoucherPdf = (expense) => {
   const itemRowHeight = 7.2;
   for (let index = 0; index < VOUCHER_LINE_COUNT; index += 1) {
     const y = tableY + 8 + index * itemRowHeight;
+    if (index % 2 === 1) {
+      doc.setFillColor(250, 252, 248);
+      doc.rect(tableX, y, tableW, itemRowHeight, "F");
+    }
     doc.line(tableX, y, tableX + tableW, y);
     const line = items[index] || {};
     doc.setTextColor(...text);
-    doc.setFont("helvetica", "bold");
+    doc.setFont("helvetica", index < items.length ? "bold" : "normal");
     doc.setFontSize(6.2);
     doc.text(String(Number(line.line_no) || index + 1), col[0] + 6, y + 4.2, { align: "center" });
     doc.text(printableText(line.particular_name || "", ""), col[1] + 3, y + 4.2, { maxWidth: 42 });
@@ -267,7 +276,7 @@ const createExpenseVoucherPdf = (expense) => {
   doc.setTextColor(255, 255, 255);
   doc.text("TOTAL AMOUNT", 103, sumY + 25.5);
   doc.setFontSize(10);
-  doc.text(`Rs. ${fields.totalCollect}`, pageWidth - 14, sumY + 25.5, { align: "right" });
+  doc.text(`Rs. ${fields.totalAmount}`, pageWidth - 14, sumY + 25.5, { align: "right" });
 
   rounded(margin, 263, pageWidth - margin * 2, 25, [255, 255, 255]);
   doc.setTextColor(...green);
@@ -275,7 +284,7 @@ const createExpenseVoucherPdf = (expense) => {
   doc.text("TOTAL AMOUNT (IN WORDS)", 26, 270);
   doc.setTextColor(...text);
   doc.setFontSize(7);
-  doc.text(`${numberToWordsUnderCrore(totalCollect)} Only`, 26, 277, { maxWidth: 70 });
+  doc.text(`${numberToWordsUnderCrore(totalAmount)} Only`, 26, 277, { maxWidth: 70 });
   doc.setDrawColor(...border);
   doc.line(122, 266, 122, 285);
   doc.setTextColor(...green);
@@ -428,7 +437,7 @@ export default function ExpenseReportPage() {
     const doc = createExpenseVoucherPdf(expense);
     const blob = doc.output("blob");
     const file = new File([blob], fileName, { type: "application/pdf" });
-    const message = `Expense voucher ${printableText(expense.voucher_no)} - Total collect amount Rs. ${formatMoney(getTotalCollectAmount(expense))}`;
+    const message = `Expense voucher ${printableText(expense.voucher_no)} - Total amount Rs. ${formatMoney(getVoucherTotalAmount(expense))}`;
 
     if (navigator.canShare && navigator.canShare({ files: [file] }) && navigator.share) {
       try {
