@@ -7,6 +7,7 @@ const emptyForm = () => ({
   email: "",
   address: "",
   village: "",
+  pincode: "",
   state: "",
   gst_no: "",
   pan_no: "",
@@ -63,6 +64,7 @@ export default function FarmerManagementPage() {
   const [formData, setFormData] = useState(emptyForm);
   const [editId, setEditId] = useState(null);
   const [ifscLookupStatus, setIfscLookupStatus] = useState("");
+  const [pinLookupStatus, setPinLookupStatus] = useState("");
   const API_URL = "/api/farmers";
 
   const fetchFarmers = async () => {
@@ -94,10 +96,8 @@ export default function FarmerManagementPage() {
         const data = res.data || {};
         setFormData((prev) => ({
           ...prev,
-          bank_name: prev.bank_name || data.BANK || "",
-          branch_name: prev.branch_name || data.BRANCH || "",
-          location: prev.location || data.CITY || data.DISTRICT || prev.location,
-          state: prev.state || data.STATE || prev.state,
+          bank_name: data.BANK || prev.bank_name,
+          branch_name: data.BRANCH || prev.branch_name,
         }));
         setIfscLookupStatus("IFSC found, bank details filled");
       } catch (error) {
@@ -107,6 +107,42 @@ export default function FarmerManagementPage() {
 
     return () => clearTimeout(timer);
   }, [formData.ifsc_code]);
+
+  useEffect(() => {
+    const pin = compactDigits(formData.pincode);
+    if (!pin) {
+      setPinLookupStatus("");
+      return;
+    }
+    if (!/^[0-9]{6}$/.test(pin)) {
+      setPinLookupStatus("PIN No. must be 6 digits");
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      try {
+        setPinLookupStatus("Checking PIN...");
+        const res = await axios.get(`https://api.postalpincode.in/pincode/${pin}`);
+        const result = Array.isArray(res.data) ? res.data[0] : null;
+        const postOffice = result?.PostOffice?.[0];
+        if (!postOffice) {
+          setPinLookupStatus("PIN not found");
+          return;
+        }
+        setFormData((prev) => ({
+          ...prev,
+          location: postOffice.District || postOffice.Block || prev.location,
+          state: postOffice.State || prev.state,
+          village: prev.village || postOffice.Name || "",
+        }));
+        setPinLookupStatus("PIN found, location and state filled");
+      } catch (error) {
+        setPinLookupStatus("PIN lookup failed");
+      }
+    }, 500);
+
+    return () => clearTimeout(timer);
+  }, [formData.pincode]);
 
   const findVillageMatch = (value) => {
     const village = String(value || "").trim().toLowerCase();
@@ -141,7 +177,7 @@ export default function FarmerManagementPage() {
     const { name } = e.target;
     let { value } = e.target;
     if (name === "pan_no" || name === "gst_no" || name === "ifsc_code") value = compactUpper(value);
-    if (name === "aadhar_no" || name === "bank_account_no") value = compactDigits(value);
+    if (name === "aadhar_no" || name === "bank_account_no" || name === "pincode") value = compactDigits(value);
     setFormData((prev) => {
       const next = { ...prev, [name]: value };
       if ((name === "bank_account_no" || name === "name") && next.bank_account_no && !next.account_holder_name) {
@@ -165,8 +201,12 @@ export default function FarmerManagementPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
-    if (!formData.name || !formData.mobile) {
-      alert("Farmer Name and Mobile No. are required");
+    if (!formData.name || !formData.mobile || !formData.pincode) {
+      alert("Farmer Name, Mobile No. and PIN No. are required");
+      return;
+    }
+    if (!/^[0-9]{6}$/.test(compactDigits(formData.pincode))) {
+      alert("PIN No. must be 6 digits");
       return;
     }
 
@@ -193,6 +233,7 @@ export default function FarmerManagementPage() {
       email: farmer.email || "",
       address: farmer.address || "",
       village: farmer.village || "",
+      pincode: farmer.pincode || "",
       state: farmer.state || "",
       gst_no: farmer.gst_no || "",
       pan_no: farmer.pan_no || "",
@@ -218,6 +259,10 @@ export default function FarmerManagementPage() {
       console.error(err);
       alert(err?.response?.data?.error || "Error deleting farmer");
     }
+  };
+
+  const openAadhaarPanCheck = () => {
+    window.open("https://eportal.incometax.gov.in/iec/foservices/#/pre-login/link-aadhaar-status", "_blank", "noopener,noreferrer");
   };
 
   return (
@@ -252,11 +297,14 @@ export default function FarmerManagementPage() {
                 <StatusBadge status={checkAadhar(formData.aadhar_no)} />
               </Field>
               <Field label="Aadhaar PAN Link">
-                <select name="aadhaar_pan_link_status" value={formData.aadhaar_pan_link_status} onChange={handleChange} style={inp}>
-                  <option value="unknown">Not Checked</option>
-                  <option value="linked">Linked</option>
-                  <option value="not_linked">Not Linked</option>
-                </select>
+                <div style={inlineFieldRow}>
+                  <select name="aadhaar_pan_link_status" value={formData.aadhaar_pan_link_status} onChange={handleChange} style={inp}>
+                    <option value="unknown">Not Checked</option>
+                    <option value="linked">Linked</option>
+                    <option value="not_linked">Not Linked</option>
+                  </select>
+                  <button type="button" onClick={openAadhaarPanCheck} style={miniUtilityBtn}>Check</button>
+                </div>
               </Field>
               <Field label="State">
                 <input name="state" value={formData.state} onChange={handleChange} placeholder="State" style={inp} />
@@ -266,6 +314,10 @@ export default function FarmerManagementPage() {
               </Field>
               <Field label="Village">
                 <input name="village" value={formData.village} onChange={handleChange} placeholder="Village" style={inp} />
+              </Field>
+              <Field label="PIN No">
+                <input name="pincode" value={formData.pincode} onChange={handleChange} placeholder="6 digit PIN No. *" maxLength={6} style={inp} />
+                {pinLookupStatus ? <div style={helperText}>{pinLookupStatus}</div> : null}
               </Field>
               <div style={{ gridColumn: "1 / -1" }}>
                 <Field label="Address">
@@ -313,6 +365,7 @@ export default function FarmerManagementPage() {
                   <th style={th}>Mobile</th>
                   <th style={th}>Location</th>
                   <th style={th}>Village</th>
+                  <th style={th}>PIN No.</th>
                   <th style={th}>State</th>
                   <th style={th}>GST No.</th>
                   <th style={th}>PAN No.</th>
@@ -332,6 +385,7 @@ export default function FarmerManagementPage() {
                     <td style={td}>{farmer.mobile || "-"}</td>
                     <td style={td}>{farmer.location || "-"}</td>
                     <td style={td}>{farmer.village || "-"}</td>
+                    <td style={td}>{farmer.pincode || "-"}</td>
                     <td style={td}>{farmer.state || "-"}</td>
                     <td style={td}>{farmer.gst_no || "-"}</td>
                     <td style={td}>{farmer.pan_no || "-"}</td>
@@ -347,7 +401,7 @@ export default function FarmerManagementPage() {
                   </tr>
                 ))}
                 {farmers.length === 0 ? (
-                  <tr><td colSpan={14} style={{ ...td, textAlign: "center", padding: "20px" }}>No farmers found.</td></tr>
+                  <tr><td colSpan={15} style={{ ...td, textAlign: "center", padding: "20px" }}>No farmers found.</td></tr>
                 ) : null}
               </tbody>
             </table>
@@ -382,6 +436,8 @@ const inp = { width: "100%", padding: "10px 12px", borderRadius: "8px", border: 
 const lbl = { display: "block", marginBottom: "6px", fontWeight: 600, fontSize: "13px", color: "#334155" };
 const statusBadge = { marginTop: 5, fontSize: 12, fontWeight: 700 };
 const helperText = { marginTop: 5, fontSize: 12, color: "#64748b" };
+const inlineFieldRow = { display: "grid", gridTemplateColumns: "1fr auto", gap: 8, alignItems: "center" };
+const miniUtilityBtn = { border: "none", background: "#0f766e", color: "#fff", borderRadius: 8, padding: "9px 12px", cursor: "pointer", fontWeight: 700 };
 const sectionTitle = { padding: "10px 12px", background: "#eef6f5", color: "#0f766e", fontWeight: 800, borderRadius: 8, border: "1px solid #cfe8e4" };
 const btnPrimary = { background: "#2563eb", color: "#fff", border: "none", padding: "10px 18px", borderRadius: "8px", cursor: "pointer", fontWeight: 600, fontSize: "14px" };
 const th = { padding: "10px 8px", textAlign: "left", borderBottom: "1px solid #0d5c56" };
