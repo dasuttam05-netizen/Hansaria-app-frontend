@@ -46,6 +46,7 @@ const defaultForm = () => ({
   total_qty: "",
   total_deduction: "",
   net_amount_payable: "",
+  round_off: "",
   debit_account: "",
   credit_account: "",
   description: "",
@@ -108,7 +109,12 @@ export default function WarehouseTradingPage() {
     selectedWarehouse?.address ||
     "";
   const selectedEmployee = employees.find((e) => String(e.id || e._id) === String(formData.employee_id));
+  const selectedFarmer = farmers.find((f) => String(f.id || f._id) === String(formData.farmer_id));
   const selectedEmployeeMobile = selectedEmployee?.mobile || selectedEmployee?.phone || selectedEmployee?.mobile_no || "";
+  const selectedFarmerMobile = selectedFarmer?.mobile || selectedFarmer?.phone || selectedFarmer?.mobile_no || "";
+  const selectedFarmerGst = selectedFarmer?.gst_no || selectedFarmer?.gst || "";
+  const selectedFarmerPan = selectedFarmer?.pan_no || selectedFarmer?.pan || "";
+  const selectedFarmerState = selectedFarmer?.state || "";
   const purchaseDeductionTotal = purchaseDeductionFields.reduce((sum, field) => sum + toNumber(formData[field.key]), 0);
   const purchaseNetWeight =
     toNumber(formData.gross_weight) -
@@ -118,7 +124,8 @@ export default function WarehouseTradingPage() {
   const safePurchaseNetWeight = Math.max(purchaseNetWeight, 0);
   const purchaseGrossAmount = safePurchaseNetWeight * toNumber(formData.rate);
   const purchaseTotalDeduction = toNumber(formData.bags_claim) + toNumber(formData.labour) + toNumber(formData.total_deduct_amount);
-  const purchaseNetPayable = Math.max(purchaseGrossAmount - purchaseTotalDeduction, 0);
+  const purchaseRoundOff = toNumber(formData.round_off);
+  const purchaseNetPayable = Math.max(purchaseGrossAmount - purchaseTotalDeduction + purchaseRoundOff, 0);
   const voucherPermissionMap = {
     purchase: "warehouse.trading.purchase.view",
     sale: "warehouse.trading.sale.view",
@@ -321,6 +328,7 @@ export default function WarehouseTradingPage() {
         "total_qty",
         "total_deduction",
         "net_amount_payable",
+        "round_off",
       ];
       const payload = { ...formData };
       numericFields.forEach((field) => {
@@ -459,11 +467,6 @@ export default function WarehouseTradingPage() {
                   <div style={erpTopGrid}>
                     <div style={erpPanelWide}>
                       <div style={erpRow}>
-                        <label style={erpLabel}>Account</label>
-                        <input value="Cash" readOnly style={erpInput} />
-                        <label style={erpCheckLabel}><input type="checkbox" style={erpCheck} /> Commit</label>
-                      </div>
-                      <div style={erpRow}>
                         <label style={erpLabel}>Name</label>
                         <select name="farmer_id" value={formData.farmer_id} onChange={handleChange} style={{ ...erpInput, ...erpFocusInput }}>
                           <option value="">Select Party</option>
@@ -474,16 +477,16 @@ export default function WarehouseTradingPage() {
                       </div>
                       <div style={erpRow}>
                         <label style={erpLabel}>GSTIN</label>
-                        <input value="" readOnly style={erpInput} />
+                        <input value={selectedFarmerGst} readOnly style={erpInput} />
                         <label style={{ ...erpLabel, width: 42, textAlign: "right" }}>State</label>
-                        <input value="Tamil Nadu" readOnly style={{ ...erpInput, width: 90 }} />
+                        <input value={selectedFarmerState} readOnly style={{ ...erpInput, width: 90 }} />
                       </div>
-                    </div>
-
-                    <div style={erpPanelSmall}>
-                      <label style={erpCheckLabel}><input type="checkbox" style={erpCheck} /> Registered</label>
-                      <label style={erpCheckLabel}><input type="checkbox" style={erpCheck} /> Composition</label>
-                      <label style={erpCheckLabel}><input type="checkbox" style={erpCheck} /> RCM</label>
+                      <div style={erpRow}>
+                        <label style={erpLabel}>PAN No.</label>
+                        <input value={selectedFarmerPan} readOnly style={erpInput} />
+                        <label style={{ ...erpLabel, width: 50, textAlign: "right" }}>Mobile</label>
+                        <input value={selectedFarmerMobile} readOnly style={{ ...erpInput, width: 110 }} />
+                      </div>
                     </div>
 
                     <div style={erpPanelWide}>
@@ -506,7 +509,7 @@ export default function WarehouseTradingPage() {
                         </select>
                       </div>
                       <div style={erpRow}>
-                        <label style={erpLabel}>Mobile No.</label>
+                        <label style={erpLabel}>Employee Mobile</label>
                         <input value={selectedEmployeeMobile} readOnly style={erpInput} />
                       </div>
                     </div>
@@ -588,20 +591,21 @@ export default function WarehouseTradingPage() {
                   </div>
 
                   <div style={erpMiddleBar}>
-                    <span>GST</span>
-                    <strong>Total Quantity : {formatMoney(safePurchaseNetWeight)}</strong>
+                      <span>Tax details auto filled from party master</span>
+                      <strong>Total Quantity : {formatMoney(safePurchaseNetWeight)}</strong>
                   </div>
 
                   <div style={erpBottomGrid}>
                     <div>
                       <table style={erpMiniTable}>
                         <thead>
-                          <tr><th style={erpTh}>Particulars</th><th style={erpTh}>Debit</th><th style={erpTh}>Credit</th></tr>
+                          <tr><th style={erpTh}>Particulars</th><th style={erpTh}>Amount</th></tr>
                         </thead>
                         <tbody>
-                          <tr><td style={erpTd}>Bags Claim</td><td style={erpTd}><input name="bags_claim" type="number" step="0.01" value={formData.bags_claim} onChange={handleChange} style={erpCellInput} /></td><td style={erpTd}>0.00</td></tr>
-                          <tr><td style={erpTd}>Labour</td><td style={erpTd}><input name="labour" type="number" step="0.01" value={formData.labour} onChange={handleChange} style={erpCellInput} /></td><td style={erpTd}>0.00</td></tr>
-                          <tr><td style={erpTd}>Total Deduct Amount</td><td style={erpTd}><input name="total_deduct_amount" type="number" step="0.01" value={formData.total_deduct_amount} onChange={handleChange} style={erpCellInput} /></td><td style={erpTd}>0.00</td></tr>
+                          <tr><td style={erpTd}>Bags Claim</td><td style={erpTd}><input name="bags_claim" type="number" step="0.01" value={formData.bags_claim} onChange={handleChange} style={erpCellInput} /></td></tr>
+                          <tr><td style={erpTd}>Labour</td><td style={erpTd}><input name="labour" type="number" step="0.01" value={formData.labour} onChange={handleChange} style={erpCellInput} /></td></tr>
+                          <tr><td style={erpTd}>Total Deduct Amount</td><td style={erpTd}><input name="total_deduct_amount" type="number" step="0.01" value={formData.total_deduct_amount} onChange={handleChange} style={erpCellInput} /></td></tr>
+                          <tr><td style={erpTd}>Round Off</td><td style={erpTd}><input name="round_off" type="number" step="0.01" value={formData.round_off} onChange={handleChange} style={erpCellInput} /></td></tr>
                         </tbody>
                       </table>
                       <div style={erpRemarksRow}>
@@ -613,12 +617,13 @@ export default function WarehouseTradingPage() {
                     <div>
                       <table style={erpMiniTable}>
                         <thead>
-                          <tr><th style={erpTh}>Miscellaneous</th><th style={erpTh}>Debit</th><th style={erpTh}>Credit</th></tr>
+                          <tr><th style={erpTh}>Miscellaneous</th><th style={erpTh}>Amount</th></tr>
                         </thead>
                         <tbody>
-                          <tr><td style={erpTd}>Gross Amount</td><td style={erpTd}>{formatMoney(purchaseGrossAmount)}</td><td style={erpTd}>0.00</td></tr>
-                          <tr><td style={erpTd}>Total Deduction</td><td style={erpTd}>{formatMoney(purchaseTotalDeduction)}</td><td style={erpTd}>0.00</td></tr>
-                          <tr><td style={erpTd}>Net Amount Payable</td><td style={erpTd}>{formatMoney(purchaseNetPayable)}</td><td style={erpTd}>0.00</td></tr>
+                          <tr><td style={erpTd}>Gross Amount</td><td style={erpTd}>{formatMoney(purchaseGrossAmount)}</td></tr>
+                          <tr><td style={erpTd}>Total Deduction</td><td style={erpTd}>{formatMoney(purchaseTotalDeduction)}</td></tr>
+                          <tr><td style={erpTd}>Round Off</td><td style={erpTd}>{formatMoney(purchaseRoundOff)}</td></tr>
+                          <tr><td style={erpTd}>Net Amount Payable</td><td style={erpTd}>{formatMoney(purchaseNetPayable)}</td></tr>
                         </tbody>
                       </table>
 
@@ -823,7 +828,7 @@ export default function WarehouseTradingPage() {
             <div style={tableCard}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                 <thead>
-                  <tr style={{ background: "#0f766e", color: "#fff" }}>
+                  <tr style={reportHeaderRowStyle}>
                     <th style={th}>Date</th>
                     <th style={th}>Voucher No</th>
                     <th style={th}>Warehouse</th>
@@ -892,7 +897,7 @@ export default function WarehouseTradingPage() {
             <div style={tableCard}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                 <thead>
-                  <tr style={{ background: "#0f766e", color: "#fff" }}>
+                  <tr style={reportHeaderRowStyle}>
                     <th style={th}>Warehouse</th>
                     {activeReport === "sale" && <th style={th}>Total Quantity</th>}
                     {activeReport === "sale" && <th style={th}>Total Amount</th>}
@@ -973,6 +978,7 @@ const btnPrimary = { background: "#2563eb", color: "#fff", border: "none", paddi
 const th = { padding: "10px 8px", textAlign: "left", borderBottom: "1px solid #0d5c56" };
 const td = { padding: "8px", borderBottom: "1px solid #e2e8f0" };
 const tableCard = { overflowX: "auto", border: "1px solid #e2e8f0", borderRadius: 10, background: "#fff" };
+const reportHeaderRowStyle = { background: "#263b5e", color: "#fff" };
 const lbl = { display: "block", marginBottom: 6, fontWeight: 600, fontSize: 13, color: "#334155" };
 const memoShell = { border: "1px solid #d7dee8", borderRadius: 10, padding: 18, background: "#fbfdff" };
 const memoHeader = { display: "flex", justifyContent: "space-between", gap: 18, alignItems: "flex-start", borderBottom: "2px solid #ea580c", paddingBottom: 14, marginBottom: 16, flexWrap: "wrap" };
@@ -1021,16 +1027,16 @@ const erpDocIcon = {
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
-  background: "#4f6d2a",
+  background: "#263b5e",
   color: "#fff",
   fontSize: 14,
   fontWeight: 800,
 };
-const erpTitleText = { color: "#4f6d2a", fontSize: 22, fontWeight: 800, lineHeight: 1 };
+const erpTitleText = { color: "#263b5e", fontSize: 22, fontWeight: 800, lineHeight: 1 };
 const erpMetaLine = { display: "flex", alignItems: "center", gap: 10, fontSize: 12, color: "#111827", flexWrap: "wrap" };
 const erpTopGrid = {
   display: "grid",
-  gridTemplateColumns: "minmax(330px, 1.4fr) 110px minmax(280px, 1.1fr) minmax(260px, 0.9fr)",
+  gridTemplateColumns: "minmax(390px, 1.35fr) minmax(320px, 1.05fr) minmax(260px, 0.85fr)",
   gap: 4,
   alignItems: "stretch",
   marginBottom: 6,
@@ -1065,13 +1071,13 @@ const erpFocusInput = { borderColor: "#4d90fe", boxShadow: "inset 0 0 0 1px rgba
 const erpSectionLabel = { fontSize: 12, color: "#111827", margin: "3px 0 2px" };
 const erpGridWrap = {
   overflowX: "auto",
-  border: "1px solid #1fd13b",
+  border: "1px solid #cfd6e0",
   background: "#fff",
 };
 const erpItemsTable = { width: "100%", minWidth: 1320, borderCollapse: "collapse", tableLayout: "fixed", fontSize: 12 };
 const erpTh = {
-  border: "1px solid #1fd13b",
-  background: "#eef5ef",
+  border: "1px solid #cfd6e0",
+  background: "#e8edf5",
   color: "#111827",
   padding: "2px 4px",
   fontWeight: 500,
@@ -1080,7 +1086,7 @@ const erpTh = {
   whiteSpace: "nowrap",
 };
 const erpTd = {
-  border: "1px solid #1fd13b",
+  border: "1px solid #cfd6e0",
   background: "#fff",
   color: "#111827",
   padding: 0,
@@ -1098,7 +1104,7 @@ const erpCellInput = {
   boxSizing: "border-box",
   outline: "none",
 };
-const erpReadOnlyCell = { background: "#f7fbf7", color: "#111827", fontWeight: 700 };
+const erpReadOnlyCell = { background: "#f5f7fb", color: "#111827", fontWeight: 700 };
 const erpMiddleBar = {
   display: "flex",
   justifyContent: "space-between",
@@ -1128,7 +1134,7 @@ const erpTotalPanel = {
   marginTop: 8,
   minHeight: 46,
   border: "1px solid #c9c9d5",
-  background: "#f1f1f7",
+  background: "#e8edf5",
   display: "flex",
   alignItems: "center",
   justifyContent: "space-between",
@@ -1136,5 +1142,5 @@ const erpTotalPanel = {
   fontWeight: 900,
   fontSize: 18,
 };
-const erpTotalLabel = { letterSpacing: 8, color: "#1f2937" };
-const erpTotalAmount = { letterSpacing: 0, color: "#1f2937", fontSize: 30 };
+const erpTotalLabel = { letterSpacing: 8, color: "#263b5e" };
+const erpTotalAmount = { letterSpacing: 0, color: "#263b5e", fontSize: 30 };
