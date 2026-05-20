@@ -442,125 +442,191 @@ export default function WarehouseTradingPage() {
             <h3 style={{ marginTop: 0 }}>{editId ? "Edit" : "New"} {activeVoucherType.charAt(0).toUpperCase() + activeVoucherType.slice(1)} Voucher</h3>
             <form onSubmit={handleSubmit}>
               {isPurchaseVoucher ? (
-                <div style={memoShell}>
-                  <div style={memoHeader}>
-                    <div>
-                      <h2 style={memoTitle}>PURCHASE MEMO</h2>
-                      <div style={memoSubTitle}>Warehouse Location: {selectedWarehouseLocation || "-"}</div>
+                <div style={erpShell}>
+                  <div style={erpTitleBar}>
+                    <div style={erpTitleLeft}>
+                      <span style={erpDocIcon}>P</span>
+                      <span style={erpTitleText}>Purchase</span>
                     </div>
-                    <div style={memoHeaderFields}>
-                      <Field label="Serial No.">
-                        <input name="voucher_no" value={formData.voucher_no} onChange={handleChange} placeholder="Serial No *" style={inp} required />
-                      </Field>
-                      <Field label="Date">
-                        <input name="date" type="date" value={formData.date} onChange={handleChange} style={inp} required />
-                      </Field>
+                    <div style={erpMetaLine}>
+                      <span>Subdocument : <strong>Purchase</strong></span>
+                      <span>Type : <strong>{editId ? "Regular [ Edit ]" : "Regular [ New ]"}</strong></span>
+                      <span>Location</span>
+                      <input value={selectedWarehouseLocation || ""} readOnly style={{ ...erpInput, width: 120 }} />
                     </div>
                   </div>
 
-                  <div style={memoInfoGrid}>
-                    <div style={memoPanel}>
-                      <div style={memoPanelTitle}>Party Information</div>
-                      <Field label="Name of Party">
-                        <select name="farmer_id" value={formData.farmer_id} onChange={handleChange} style={inp}>
+                  <div style={erpTopGrid}>
+                    <div style={erpPanelWide}>
+                      <div style={erpRow}>
+                        <label style={erpLabel}>Account</label>
+                        <input value="Cash" readOnly style={erpInput} />
+                        <label style={erpCheckLabel}><input type="checkbox" style={erpCheck} /> Commit</label>
+                      </div>
+                      <div style={erpRow}>
+                        <label style={erpLabel}>Name</label>
+                        <select name="farmer_id" value={formData.farmer_id} onChange={handleChange} style={{ ...erpInput, ...erpFocusInput }}>
                           <option value="">Select Party</option>
                           {farmers.map((f) => (
                             <option key={f.id || f._id} value={f.id || f._id}>{f.name}</option>
                           ))}
                         </select>
-                      </Field>
-                      <Field label="Warehouse">
-                        <select name="warehouse_id" value={formData.warehouse_id} onChange={handleChange} style={inp}>
+                      </div>
+                      <div style={erpRow}>
+                        <label style={erpLabel}>GSTIN</label>
+                        <input value="" readOnly style={erpInput} />
+                        <label style={{ ...erpLabel, width: 42, textAlign: "right" }}>State</label>
+                        <input value="Tamil Nadu" readOnly style={{ ...erpInput, width: 90 }} />
+                      </div>
+                    </div>
+
+                    <div style={erpPanelSmall}>
+                      <label style={erpCheckLabel}><input type="checkbox" style={erpCheck} /> Registered</label>
+                      <label style={erpCheckLabel}><input type="checkbox" style={erpCheck} /> Composition</label>
+                      <label style={erpCheckLabel}><input type="checkbox" style={erpCheck} /> RCM</label>
+                    </div>
+
+                    <div style={erpPanelWide}>
+                      <div style={erpRow}>
+                        <label style={erpLabel}>Vendor</label>
+                        <select name="warehouse_id" value={formData.warehouse_id} onChange={handleChange} style={erpInput}>
                           <option value="">Select Warehouse</option>
                           {warehouses.map((w) => (
                             <option key={w.id || w._id} value={w.id || w._id}>{w.name}</option>
                           ))}
                         </select>
-                      </Field>
-                      <Field label="Mobile No.">
-                        <input value={selectedEmployeeMobile} placeholder="Employee mobile" style={readOnlyInp} readOnly />
-                      </Field>
-                      <Field label="Employee">
-                        <select name="employee_id" value={formData.employee_id} onChange={handleChange} style={inp}>
+                      </div>
+                      <div style={erpRow}>
+                        <label style={erpLabel}>Delivery Person</label>
+                        <select name="employee_id" value={formData.employee_id} onChange={handleChange} style={erpInput}>
                           <option value="">Select Employee</option>
                           {employees.map((e) => (
                             <option key={e.id || e._id} value={e.id || e._id}>{e.name}</option>
                           ))}
                         </select>
-                      </Field>
+                      </div>
+                      <div style={erpRow}>
+                        <label style={erpLabel}>Mobile No.</label>
+                        <input value={selectedEmployeeMobile} readOnly style={erpInput} />
+                      </div>
                     </div>
 
-                    <div style={memoPanel}>
-                      <div style={memoPanelTitle}>Document Information</div>
-                      <Field label="Location">
-                        <input value={selectedWarehouseLocation} placeholder="Warehouse location" style={readOnlyInp} readOnly />
-                      </Field>
-                      <Field label="Manual Location">
-                        <select name="location_id" value={formData.location_id} onChange={handleChange} style={inp}>
-                          <option value="">Select Location</option>
+                    <div style={erpDocPanel}>
+                      <div style={erpRow}>
+                        <label style={erpLabel}>Number</label>
+                        <input name="voucher_no" value={formData.voucher_no} onChange={handleChange} placeholder="Voucher No *" style={erpInput} required />
+                      </div>
+                      <div style={erpRow}>
+                        <label style={erpLabel}>Date</label>
+                        <input name="date" type="date" value={formData.date} onChange={handleChange} style={erpInput} required />
+                      </div>
+                      <div style={erpRow}>
+                        <label style={erpLabel}>Location</label>
+                        <select name="location_id" value={formData.location_id} onChange={handleChange} style={erpInput}>
+                          <option value="">Auto</option>
                           {locations.map((l) => (
                             <option key={l.id || l._id} value={l.id || l._id}>{l.name}</option>
                           ))}
                         </select>
-                      </Field>
-                      <Field label="Remarks">
-                        <textarea name="description" value={formData.description} onChange={handleChange} rows={3} style={{ ...inp, resize: "vertical" }} />
-                      </Field>
+                      </div>
                     </div>
                   </div>
 
-                  <div style={memoMainGrid}>
-                    <div style={memoPanel}>
-                      <div style={memoPanelTitle}>Remarks</div>
-                      <textarea name="description" value={formData.description} onChange={handleChange} rows={12} style={{ ...inp, minHeight: 332, resize: "vertical" }} />
-                    </div>
-                    <div style={tableCard}>
-                      <table style={memoTable}>
-                        <thead>
-                          <tr>
-                            <th style={memoTh}>#</th>
-                            <th style={memoTh}>Particulars</th>
-                            <th style={memoTh}>Amount</th>
+                  <div style={erpSectionLabel}>ITEMS [ GOODS AND SERVICES ]</div>
+                  <div style={erpGridWrap}>
+                    <table style={erpItemsTable}>
+                      <thead>
+                        <tr>
+                          <th style={erpTh}>No.</th>
+                          <th style={{ ...erpTh, minWidth: 250 }}>Items</th>
+                          <th style={erpTh}>Packet</th>
+                          <th style={erpTh}>Gross Wt</th>
+                          <th style={erpTh}>Tare Wt</th>
+                          <th style={erpTh}>Dhalta</th>
+                          {purchaseDeductionFields.map((field) => (
+                            <th key={field.key} style={erpTh}>{field.label}</th>
+                          ))}
+                          <th style={erpTh}>Net Qty</th>
+                          <th style={erpTh}>Rate</th>
+                          <th style={erpTh}>Amount</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td style={erpTd}>1</td>
+                          <td style={erpTd}>
+                            <select name="product_id" value={formData.product_id} onChange={handleChange} style={erpCellInput}>
+                              <option value="">Select Product</option>
+                              {products.map((p) => (
+                                <option key={p.id || p._id} value={p.id || p._id}>{p.name}</option>
+                              ))}
+                            </select>
+                          </td>
+                          <td style={erpTd}><input name="packet" type="number" step="0.01" value={formData.packet} onChange={handleChange} style={erpCellInput} /></td>
+                          <td style={erpTd}><input name="gross_weight" type="number" step="0.01" value={formData.gross_weight} onChange={handleChange} style={erpCellInput} /></td>
+                          <td style={erpTd}><input name="tare_weight" type="number" step="0.01" value={formData.tare_weight} onChange={handleChange} style={erpCellInput} /></td>
+                          <td style={erpTd}><input name="dhalta" type="number" step="0.01" value={formData.dhalta} onChange={handleChange} style={erpCellInput} /></td>
+                          {purchaseDeductionFields.map((field) => (
+                            <td key={field.key} style={erpTd}>
+                              <input name={field.key} type="number" step="0.01" value={formData[field.key]} onChange={handleChange} style={erpCellInput} />
+                            </td>
+                          ))}
+                          <td style={erpTd}><input value={formatMoney(safePurchaseNetWeight)} readOnly style={{ ...erpCellInput, ...erpReadOnlyCell }} /></td>
+                          <td style={erpTd}><input name="rate" type="number" step="0.01" value={formData.rate} onChange={handleChange} style={erpCellInput} /></td>
+                          <td style={erpTd}><input value={formatMoney(purchaseGrossAmount)} readOnly style={{ ...erpCellInput, ...erpReadOnlyCell }} /></td>
+                        </tr>
+                        {Array.from({ length: 8 }).map((_, index) => (
+                          <tr key={`blank-${index}`}>
+                            <td style={erpTd}>{index + 2}</td>
+                            {Array.from({ length: 14 }).map((__, cellIndex) => (
+                              <td key={cellIndex} style={erpTd}>&nbsp;</td>
+                            ))}
                           </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div style={erpMiddleBar}>
+                    <span>GST</span>
+                    <strong>Total Quantity : {formatMoney(safePurchaseNetWeight)}</strong>
+                  </div>
+
+                  <div style={erpBottomGrid}>
+                    <div>
+                      <table style={erpMiniTable}>
+                        <thead>
+                          <tr><th style={erpTh}>Particulars</th><th style={erpTh}>Debit</th><th style={erpTh}>Credit</th></tr>
                         </thead>
                         <tbody>
-                          {purchaseParticulars.map((item, index) => (
-                            <tr key={item.key}>
-                              <td style={memoTd}>{index + 1}</td>
-                              <td style={memoTd}>{item.label}</td>
-                              <td style={memoTd}>
-                                {item.type === "product" ? (
-                                  <select name="product_id" value={formData.product_id} onChange={handleChange} style={tableInput}>
-                                    <option value="">Select Product</option>
-                                    {products.map((p) => (
-                                      <option key={p.id || p._id} value={p.id || p._id}>{p.name}</option>
-                                    ))}
-                                  </select>
-                                ) : item.readOnly ? (
-                                  <input value={formatMoney(safePurchaseNetWeight)} style={tableInput} readOnly />
-                                ) : (
-                                  <input name={item.key} type="number" step="0.01" value={formData[item.key]} onChange={handleChange} style={tableInput} />
-                                )}
-                              </td>
-                            </tr>
-                          ))}
+                          <tr><td style={erpTd}>Bags Claim</td><td style={erpTd}><input name="bags_claim" type="number" step="0.01" value={formData.bags_claim} onChange={handleChange} style={erpCellInput} /></td><td style={erpTd}>0.00</td></tr>
+                          <tr><td style={erpTd}>Labour</td><td style={erpTd}><input name="labour" type="number" step="0.01" value={formData.labour} onChange={handleChange} style={erpCellInput} /></td><td style={erpTd}>0.00</td></tr>
+                          <tr><td style={erpTd}>Total Deduct Amount</td><td style={erpTd}><input name="total_deduct_amount" type="number" step="0.01" value={formData.total_deduct_amount} onChange={handleChange} style={erpCellInput} /></td><td style={erpTd}>0.00</td></tr>
                         </tbody>
                       </table>
+                      <div style={erpRemarksRow}>
+                        <label style={erpLabel}>Narration</label>
+                        <textarea name="description" value={formData.description} onChange={handleChange} rows={2} style={erpTextarea} />
+                      </div>
                     </div>
-                  </div>
 
-                  <div style={memoBottomGrid}>
-                    <SummaryInput label="Purchase Kg." value={formatMoney(safePurchaseNetWeight)} readOnly />
-                    <SummaryInput label="Rate" name="rate" value={formData.rate} onChange={handleChange} />
-                    <SummaryInput label="Bags Claim" name="bags_claim" value={formData.bags_claim} onChange={handleChange} />
-                    <SummaryInput label="Labour" name="labour" value={formData.labour} onChange={handleChange} />
-                    <SummaryInput label="Total Deduct Amount" name="total_deduct_amount" value={formData.total_deduct_amount} onChange={handleChange} />
-                  </div>
+                    <div>
+                      <table style={erpMiniTable}>
+                        <thead>
+                          <tr><th style={erpTh}>Miscellaneous</th><th style={erpTh}>Debit</th><th style={erpTh}>Credit</th></tr>
+                        </thead>
+                        <tbody>
+                          <tr><td style={erpTd}>Gross Amount</td><td style={erpTd}>{formatMoney(purchaseGrossAmount)}</td><td style={erpTd}>0.00</td></tr>
+                          <tr><td style={erpTd}>Total Deduction</td><td style={erpTd}>{formatMoney(purchaseTotalDeduction)}</td><td style={erpTd}>0.00</td></tr>
+                          <tr><td style={erpTd}>Net Amount Payable</td><td style={erpTd}>{formatMoney(purchaseNetPayable)}</td><td style={erpTd}>0.00</td></tr>
+                        </tbody>
+                      </table>
 
-                  <div style={memoTotals}>
-                    <div style={totalLine}><span>Total Qnt</span><strong>{formatMoney(safePurchaseNetWeight)}</strong></div>
-                    <div style={totalLine}><span>Total Deduction</span><strong>{formatMoney(purchaseTotalDeduction)}</strong></div>
-                    <div style={payableLine}><span>Net Amount Payable</span><strong>{formatMoney(purchaseNetPayable)}</strong></div>
+                      <div style={erpTotalPanel}>
+                        <span style={erpTotalLabel}>T O T A L</span>
+                        <strong style={erpTotalAmount}>{formatMoney(purchaseNetPayable)}</strong>
+                      </div>
+                    </div>
                   </div>
                 </div>
               ) : (
@@ -930,3 +996,145 @@ const memoTotals = { width: "min(100%, 420px)", marginLeft: "auto", border: "1px
 const totalLine = { display: "flex", justifyContent: "space-between", gap: 12, padding: "12px 16px", borderBottom: "1px solid #e2e8f0", color: "#0f172a", fontWeight: 700 };
 const payableLine = { ...totalLine, borderBottom: "none", background: "#0b2a5b", color: "#fff" };
 const btnAction = { background: "#2563eb", color: "#fff", border: "none", padding: "6px 10px", borderRadius: 4, cursor: "pointer", fontWeight: 500, fontSize: 12 };
+
+const erpShell = {
+  background: "#f7f7f5",
+  border: "1px solid #c8c8c8",
+  borderRadius: 4,
+  padding: 8,
+  color: "#111827",
+  fontFamily: "Arial, Segoe UI, sans-serif",
+  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.7)",
+};
+const erpTitleBar = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: 12,
+  marginBottom: 6,
+  flexWrap: "wrap",
+};
+const erpTitleLeft = { display: "flex", alignItems: "center", gap: 6 };
+const erpDocIcon = {
+  width: 18,
+  height: 18,
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  background: "#4f6d2a",
+  color: "#fff",
+  fontSize: 14,
+  fontWeight: 800,
+};
+const erpTitleText = { color: "#4f6d2a", fontSize: 22, fontWeight: 800, lineHeight: 1 };
+const erpMetaLine = { display: "flex", alignItems: "center", gap: 10, fontSize: 12, color: "#111827", flexWrap: "wrap" };
+const erpTopGrid = {
+  display: "grid",
+  gridTemplateColumns: "minmax(330px, 1.4fr) 110px minmax(280px, 1.1fr) minmax(260px, 0.9fr)",
+  gap: 4,
+  alignItems: "stretch",
+  marginBottom: 6,
+};
+const erpPanelWide = { border: "1px solid #c9c9d5", background: "#f2f2f7", borderRadius: 4, padding: 8 };
+const erpPanelSmall = {
+  border: "1px solid #c9c9d5",
+  background: "#f2f2f7",
+  borderRadius: 4,
+  padding: 8,
+  display: "grid",
+  alignContent: "center",
+  gap: 8,
+};
+const erpDocPanel = { border: "1px solid #c9c9d5", background: "#f2f2f7", borderRadius: 4, padding: 8 };
+const erpRow = { display: "flex", alignItems: "center", gap: 6, minHeight: 26, marginBottom: 4 };
+const erpLabel = { width: 88, fontSize: 12, color: "#111827", flex: "0 0 auto" };
+const erpCheckLabel = { display: "flex", alignItems: "center", gap: 6, fontSize: 12, color: "#111827" };
+const erpCheck = { width: 16, height: 16, margin: 0 };
+const erpInput = {
+  height: 23,
+  minWidth: 0,
+  flex: 1,
+  border: "1px solid #c9c9c9",
+  background: "#fff",
+  padding: "2px 6px",
+  fontSize: 12,
+  borderRadius: 0,
+  boxSizing: "border-box",
+};
+const erpFocusInput = { borderColor: "#4d90fe", boxShadow: "inset 0 0 0 1px rgba(77,144,254,0.15)" };
+const erpSectionLabel = { fontSize: 12, color: "#111827", margin: "3px 0 2px" };
+const erpGridWrap = {
+  overflowX: "auto",
+  border: "1px solid #1fd13b",
+  background: "#fff",
+};
+const erpItemsTable = { width: "100%", minWidth: 1320, borderCollapse: "collapse", tableLayout: "fixed", fontSize: 12 };
+const erpTh = {
+  border: "1px solid #1fd13b",
+  background: "#eef5ef",
+  color: "#111827",
+  padding: "2px 4px",
+  fontWeight: 500,
+  textAlign: "left",
+  height: 20,
+  whiteSpace: "nowrap",
+};
+const erpTd = {
+  border: "1px solid #1fd13b",
+  background: "#fff",
+  color: "#111827",
+  padding: 0,
+  height: 22,
+  lineHeight: "20px",
+  verticalAlign: "middle",
+};
+const erpCellInput = {
+  width: "100%",
+  height: 21,
+  border: "none",
+  background: "transparent",
+  padding: "1px 4px",
+  fontSize: 12,
+  boxSizing: "border-box",
+  outline: "none",
+};
+const erpReadOnlyCell = { background: "#f7fbf7", color: "#111827", fontWeight: 700 };
+const erpMiddleBar = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: 12,
+  fontSize: 12,
+  padding: "5px 2px 3px",
+};
+const erpBottomGrid = {
+  display: "grid",
+  gridTemplateColumns: "minmax(420px, 1fr) minmax(420px, 1fr)",
+  gap: 10,
+  alignItems: "start",
+};
+const erpMiniTable = { width: "100%", borderCollapse: "collapse", tableLayout: "fixed", fontSize: 12, background: "#fff" };
+const erpRemarksRow = { display: "flex", alignItems: "stretch", gap: 6, marginTop: 8 };
+const erpTextarea = {
+  flex: 1,
+  minHeight: 48,
+  border: "1px solid #c9c9c9",
+  resize: "vertical",
+  padding: 6,
+  fontSize: 12,
+  fontFamily: "Arial, Segoe UI, sans-serif",
+};
+const erpTotalPanel = {
+  marginTop: 8,
+  minHeight: 46,
+  border: "1px solid #c9c9d5",
+  background: "#f1f1f7",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  padding: "0 14px",
+  fontWeight: 900,
+  fontSize: 18,
+};
+const erpTotalLabel = { letterSpacing: 8, color: "#1f2937" };
+const erpTotalAmount = { letterSpacing: 0, color: "#1f2937", fontSize: 30 };
