@@ -283,7 +283,10 @@ export default function WarehouseTradingPage() {
       setVoucherNumberLoading(true);
       const res = await axios.get(`/api/wh-vouchers/next-voucher-no`, { params: { type } });
       if (res.data?.voucher_no) {
-        setFormData((prev) => ({ ...prev, voucher_no: prev.voucher_no || res.data.voucher_no }));
+        setFormData((prev) => ({
+          ...prev,
+          voucher_no: editId ? prev.voucher_no : res.data.voucher_no,
+        }));
       }
     } catch (err) {
       console.error(err);
