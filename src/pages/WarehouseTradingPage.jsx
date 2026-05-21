@@ -697,7 +697,7 @@ export default function WarehouseTradingPage() {
                   </div>
 
                   <div style={erpMiddleBar}>
-                      <span>Net Qty = Gross Wt - Tare Wt - Dhalta - Less Bags Weight - Moistur - Dunki - Fungas - Disclour - Others</span>
+                      <span></span>
                       <strong>Total Quantity : {formatMoney(safePurchaseNetWeight)}</strong>
                   </div>
 
@@ -1075,10 +1075,14 @@ export default function WarehouseTradingPage() {
                       )}
                       {activeReport === "purchase" && (
                         <td style={td}>
-                          <div style={{ display: "flex", gap: 6 }}>
-                            <button onClick={() => handleEditPurchaseReport(item)} style={btnAction} title="Edit">Edit</button>
-                            <button onClick={() => handlePurchaseReportPDF(item.id || item._id)} style={{ ...btnAction, background: "#ea580c" }} title="Download PDF">PDF</button>
-                          </div>
+                          {item.legacy_purchase_entry ? (
+                            <span style={{ color: "#64748b" }}>Old Entry</span>
+                          ) : (
+                            <div style={{ display: "flex", gap: 6 }}>
+                              <button onClick={() => handleEditPurchaseReport(item)} style={btnAction} title="Edit">Edit</button>
+                              <button onClick={() => handlePurchaseReportPDF(item.id || item._id)} style={{ ...btnAction, background: "#ea580c" }} title="Download PDF">PDF</button>
+                            </div>
+                          )}
                         </td>
                       )}
                     </tr>
