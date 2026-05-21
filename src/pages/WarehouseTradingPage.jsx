@@ -60,6 +60,11 @@ const toNumber = (value) => {
 
 const getRecordId = (value) => value?._id || value?.id || value || "";
 const formatMoney = (value) => toNumber(value).toFixed(2);
+const titleCase = (value) =>
+  String(value || "")
+    .split("-")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
 
 const purchaseDeductionFields = [
   { key: "less_bags_weight", label: "Less Bags Weight" },
@@ -153,7 +158,29 @@ export default function WarehouseTradingPage() {
   const reportPermissionMap = {
     sale: "warehouse.trading.report.sale",
     purchase: "warehouse.trading.report.purchase",
+    "purchase-party-ledger": "warehouse.trading.report.purchase",
+    "sale-party-ledger": "warehouse.trading.report.sale",
+    "warehouse-stock": "warehouse.trading.report.purchase",
+    "fifo-stock": "warehouse.trading.report.purchase",
     "profit-loss": "warehouse.trading.report.profitLoss",
+  };
+  const reportEndpointMap = {
+    sale: "sale-summary",
+    purchase: "purchase-summary",
+    "purchase-party-ledger": "purchase-party-ledger",
+    "sale-party-ledger": "sale-party-ledger",
+    "warehouse-stock": "warehouse-stock",
+    "fifo-stock": "fifo-stock",
+    "profit-loss": "profit-loss",
+  };
+  const reportLabels = {
+    sale: "Sale Summary",
+    purchase: "Purchase Detail",
+    "purchase-party-ledger": "Purchase Party Ledger",
+    "sale-party-ledger": "Sale Party Ledger",
+    "warehouse-stock": "Warehouse Stock",
+    "fifo-stock": "FIFO Stock",
+    "profit-loss": "Profit/Loss",
   };
   const allowedVoucherTypes = Object.keys(voucherPermissionMap).filter((type) => hasPermission(user, voucherPermissionMap[type]));
   const allowedReports = Object.keys(reportPermissionMap).filter((type) => hasPermission(user, reportPermissionMap[type]));
@@ -288,7 +315,7 @@ export default function WarehouseTradingPage() {
         setReportData([]);
         return;
       }
-      const endpoint = activeReport === "sale" ? "sale-summary" : activeReport === "purchase" ? "purchase-summary" : "profit-loss";
+      const endpoint = reportEndpointMap[activeReport] || activeReport;
       const res = await axios.get(`/api/wh-vouchers/report/${endpoint}`);
       const rows = Array.isArray(res.data) ? res.data : [];
       if (activeReport === "purchase" && rows.length === 0 && hasPermission(user, voucherPermissionMap.purchase)) {
@@ -422,24 +449,6 @@ export default function WarehouseTradingPage() {
       setEditId(null);
       loadVouchers();
       fetchNextVoucherNo(activeVoucherType);
-      if (activeVoucherType === "purchase") {
-        setActiveTab("reports");
-        setActiveReport("purchase");
-        try {
-          const reportRes = await axios.get("/api/wh-vouchers/report/purchase-summary");
-          const rows = Array.isArray(reportRes.data) ? reportRes.data : [];
-          if (rows.length) {
-            setReportData(rows);
-          } else {
-            const fallbackRes = await axios.get("/api/wh-vouchers/purchase");
-            setReportData(Array.isArray(fallbackRes.data) ? fallbackRes.data : []);
-          }
-        } catch (reportErr) {
-          console.error(reportErr);
-          const fallbackRes = await axios.get("/api/wh-vouchers/purchase");
-          setReportData(Array.isArray(fallbackRes.data) ? fallbackRes.data : []);
-        }
-      }
     } catch (err) {
       console.error(err);
       alert(err?.response?.data?.error || `Failed to ${editId ? "update" : "save"} voucher`);
@@ -533,6 +542,99 @@ export default function WarehouseTradingPage() {
     companyAccounts.find((account) => String(account.id || account._id) === String(item.company_account_id))?.account_name ||
     companyAccounts.find((account) => String(account.id || account._id) === String(item.company_account_id))?.name ||
     "-";
+
+  const getCompanyName = (item) =>
+    item?.company_name ||
+    companies.find((c) => String(c.id || c._id) === String(item?.company_id))?.name ||
+    "-";
+
+  const reportColumns = {
+    purchase: [
+      ["sl", "S.L No", (_item, i) => i + 1],
+      ["date", "Date", (item) => item.date || "-"],
+      ["voucher_no", "Voucher No", (item) => item.voucher_no || "-"],
+      ["warehouse", "Warehouse", (item) => getWarehouseName(item)],
+      ["account", "Account", (item) => getAccountName(item)],
+      ["farmer", "Farmer", (item) => item.farmer_name || getFarmerName(item)],
+      ["product", "Product", (item) => getProductName(item)],
+      ["packet", "Packet", (item) => item.packet || 0],
+      ["gross_weight", "Gross Wt", (item) => item.gross_weight || 0],
+      ["tare_weight", "Tare Wt", (item) => item.tare_weight || 0],
+      ["dhalta", "Dhalta", (item) => item.dhalta || 0],
+      ["gross_amount", "Gross Amount", (item) => formatMoney(item.gross_amount || 0)],
+      ["deduction", "Deduction", (item) => formatMoney(item.total_deduction || 0)],
+      ["total_quantity", "Net Qty", (item) => item.total_quantity || 0],
+      ["total_amount", "Net Payable", (item) => formatMoney(item.total_amount || item.net_amount_payable || 0)],
+      ["actions", "Actions", (item) =>
+        item.legacy_purchase_entry ? (
+          <span style={{ color: "#64748b" }}>Old Entry</span>
+        ) : (
+          <div style={{ display: "flex", gap: 6 }}>
+            <button onClick={() => handleEditPurchaseReport(item)} style={btnAction} title="Edit">Edit</button>
+            <button onClick={() => handlePurchaseReportPDF(item.id || item._id)} style={{ ...btnAction, background: "#ea580c" }} title="Download PDF">PDF</button>
+          </div>
+        )
+      ],
+    ],
+    sale: [
+      ["warehouse", "Warehouse", (item) => getWarehouseName(item)],
+      ["total_quantity", "Total Quantity", (item) => item.total_quantity || 0],
+      ["total_amount", "Total Amount", (item) => formatMoney(item.total_amount || 0)],
+    ],
+    "purchase-party-ledger": [
+      ["date", "Date", (item) => item.date || "-"],
+      ["party", "Party", (item) => item.party_name || item.farmer_name || "-"],
+      ["voucher_type", "Type", (item) => item.voucher_type || "-"],
+      ["voucher_no", "Voucher No", (item) => item.voucher_no || "-"],
+      ["warehouse", "Warehouse", (item) => getWarehouseName(item)],
+      ["debit", "Debit", (item) => formatMoney(item.debit || 0)],
+      ["credit", "Credit", (item) => formatMoney(item.credit || 0)],
+      ["balance", "Balance", (item) => formatMoney(item.balance || 0)],
+    ],
+    "sale-party-ledger": [
+      ["date", "Date", (item) => item.date || "-"],
+      ["party", "Party", (item) => item.party_name || item.company_name || "-"],
+      ["voucher_type", "Type", (item) => item.voucher_type || "-"],
+      ["voucher_no", "Voucher No", (item) => item.voucher_no || "-"],
+      ["warehouse", "Warehouse", (item) => getWarehouseName(item)],
+      ["debit", "Debit", (item) => formatMoney(item.debit || 0)],
+      ["credit", "Credit", (item) => formatMoney(item.credit || 0)],
+      ["balance", "Balance", (item) => formatMoney(item.balance || 0)],
+    ],
+    "warehouse-stock": [
+      ["warehouse", "Warehouse", (item) => getWarehouseName(item)],
+      ["product", "Product", (item) => getProductName(item)],
+      ["purchase_qty", "Purchase Qty", (item) => item.purchase_qty || 0],
+      ["sale_qty", "Sale Qty", (item) => item.sale_qty || 0],
+      ["stock_qty", "Stock Qty", (item) => item.stock_qty || 0],
+      ["gross_weight", "Gross Wt", (item) => item.gross_weight || 0],
+      ["avg_rate", "Avg Rate", (item) => formatMoney(item.avg_rate || 0)],
+      ["stock_amount", "Stock Amount", (item) => formatMoney(item.stock_amount || 0)],
+    ],
+    "fifo-stock": [
+      ["date", "Purchase Date", (item) => item.date || "-"],
+      ["voucher_no", "Voucher No", (item) => item.voucher_no || "-"],
+      ["warehouse", "Warehouse", (item) => getWarehouseName(item)],
+      ["product", "Product", (item) => getProductName(item)],
+      ["purchase_qty", "Purchase Qty", (item) => item.purchase_qty || 0],
+      ["remaining_qty", "FIFO Balance Qty", (item) => item.remaining_qty || 0],
+      ["gross_weight", "Gross Wt", (item) => item.gross_weight || 0],
+      ["rate", "FIFO Rate", (item) => formatMoney(item.rate || 0)],
+      ["amount", "FIFO Amount", (item) => formatMoney(item.amount || 0)],
+    ],
+    "profit-loss": [
+      ["warehouse", "Warehouse", (item) => item.warehouse_name || getWarehouseName(item)],
+      ["sale_amount", "Sale Amount", (item) => formatMoney(item.sale_amount || 0)],
+      ["purchase_amount", "Purchase Amount", (item) => formatMoney(item.purchase_amount || 0)],
+      ["profit_loss", "Profit/Loss", (item) => (
+        <span style={{ color: Number(item.profit_loss || 0) >= 0 ? "#16a34a" : "#dc2626" }}>
+          {formatMoney(item.profit_loss || 0)}
+        </span>
+      )],
+    ],
+  };
+
+  const activeReportColumns = reportColumns[activeReport] || reportColumns.sale;
 
   return (
     <div style={{ fontFamily: "Segoe UI, Arial, sans-serif", padding: "16px" }}>
@@ -782,7 +884,7 @@ export default function WarehouseTradingPage() {
                       <select name="farmer_id" value={formData.farmer_id} onChange={handleChange} style={inp}>
                         <option value="">Select Farmer</option>
                         {farmers.map((f) => (
-                          <option key={f._id} value={f._id}>{f.name}</option>
+                          <option key={f.id || f._id} value={f.id || f._id}>{f.name}</option>
                         ))}
                       </select>
                     </Field>
@@ -800,7 +902,7 @@ export default function WarehouseTradingPage() {
                       <select name="company_id" value={formData.company_id} onChange={handleChange} style={inp}>
                         <option value="">Select Company</option>
                         {companies.map((c) => (
-                          <option key={c._id} value={c._id}>{c.name}</option>
+                          <option key={c.id || c._id} value={c.id || c._id}>{c.name}</option>
                         ))}
                       </select>
                     </Field>
@@ -813,7 +915,7 @@ export default function WarehouseTradingPage() {
                       <select name="consignee_id" value={formData.consignee_id} onChange={handleChange} style={inp}>
                         <option value="">Select Consignee</option>
                         {consignees.map((c) => (
-                          <option key={c.id} value={c.id}>{c.name}</option>
+                          <option key={c.id || c._id} value={c.id || c._id}>{c.name}</option>
                         ))}
                       </select>
                     </Field>
@@ -932,7 +1034,6 @@ export default function WarehouseTradingPage() {
             </form>
           </div>
 
-          {activeVoucherType !== "purchase" && (
           <div style={card}>
             <h3 style={{ marginTop: 0 }}>{activeVoucherType.charAt(0).toUpperCase() + activeVoucherType.slice(1)} Vouchers</h3>
             <div style={tableCard}>
@@ -993,7 +1094,6 @@ export default function WarehouseTradingPage() {
               </table>
             </div>
           </div>
-          )}
         </>
       ) : (
         <>
@@ -1004,91 +1104,32 @@ export default function WarehouseTradingPage() {
                 onClick={() => setActiveReport(type)}
                 style={activeReport === type ? activeVoucherButtonStyle : voucherButtonStyle}
               >
-                {type === "profit-loss" ? "Profit/Loss" : type.charAt(0).toUpperCase() + type.slice(1)}
+                {reportLabels[type] || titleCase(type)}
               </button>
             ))}
           </div>
 
           <div style={card}>
-            <h3 style={{ marginTop: 0 }}>{activeReport === "profit-loss" ? "Profit/Loss" : activeReport.charAt(0).toUpperCase() + activeReport.slice(1)} Report</h3>
+            <h3 style={{ marginTop: 0 }}>{reportLabels[activeReport] || titleCase(activeReport)}</h3>
             <div style={tableCard}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                 <thead>
                   <tr style={reportHeaderRowStyle}>
-                    {activeReport === "purchase" && <th style={th}>S.L No</th>}
-                    {activeReport === "purchase" && <th style={th}>Date</th>}
-                    {activeReport === "purchase" && <th style={th}>Voucher No</th>}
-                    <th style={th}>Warehouse</th>
-                    {activeReport === "purchase" && <th style={th}>Account</th>}
-                    {activeReport === "purchase" && <th style={th}>Farmer</th>}
-                    {activeReport === "purchase" && <th style={th}>Product</th>}
-                    {activeReport === "purchase" && <th style={th}>Packet</th>}
-                    {activeReport === "purchase" && <th style={th}>Gross Wt</th>}
-                    {activeReport === "purchase" && <th style={th}>Tare Wt</th>}
-                    {activeReport === "purchase" && <th style={th}>Dhalta</th>}
-                    {activeReport === "purchase" && <th style={th}>Gross Amount</th>}
-                    {activeReport === "purchase" && <th style={th}>Bags Claim</th>}
-                    {activeReport === "purchase" && <th style={th}>Labour</th>}
-                    {activeReport === "purchase" && <th style={th}>Deduction</th>}
-                    {activeReport === "purchase" && <th style={th}>Round Off</th>}
-                    {activeReport === "sale" && <th style={th}>Total Quantity</th>}
-                    {activeReport === "sale" && <th style={th}>Total Amount</th>}
-                    {activeReport === "purchase" && <th style={th}>Total Quantity</th>}
-                    {activeReport === "purchase" && <th style={th}>Net Payable</th>}
-                    {activeReport === "profit-loss" && <th style={th}>Sale Amount</th>}
-                    {activeReport === "profit-loss" && <th style={th}>Purchase Amount</th>}
-                    {activeReport === "profit-loss" && <th style={th}>Profit/Loss</th>}
-                    {activeReport === "purchase" && <th style={th}>Actions</th>}
+                    {activeReportColumns.map(([key, label]) => (
+                      <th key={key} style={th}>{label}</th>
+                    ))}
                   </tr>
                 </thead>
                 <tbody>
                   {reportData.map((item, i) => (
                     <tr key={item.id || i} style={{ background: i % 2 ? "#f8fafc" : "#fff" }}>
-                      {activeReport === "purchase" && <td style={td}>{i + 1}</td>}
-                      {activeReport === "purchase" && <td style={td}>{item.date || "-"}</td>}
-                      {activeReport === "purchase" && <td style={td}>{item.voucher_no || "-"}</td>}
-                      <td style={td}>{item.warehouse_name || warehouses.find(w => String(w.id || w._id) === String(item.warehouse_id))?.name || "-"}</td>
-                      {activeReport === "purchase" && <td style={td}>{getAccountName(item)}</td>}
-                      {activeReport === "purchase" && <td style={td}>{item.farmer_name || getFarmerName(item)}</td>}
-                      {activeReport === "purchase" && <td style={td}>{getProductName(item)}</td>}
-                      {activeReport === "purchase" && <td style={td}>{item.packet || 0}</td>}
-                      {activeReport === "purchase" && <td style={td}>{item.gross_weight || 0}</td>}
-                      {activeReport === "purchase" && <td style={td}>{item.tare_weight || 0}</td>}
-                      {activeReport === "purchase" && <td style={td}>{item.dhalta || 0}</td>}
-                      {activeReport === "purchase" && <td style={td}>{formatMoney(item.gross_amount || 0)}</td>}
-                      {activeReport === "purchase" && <td style={td}>{formatMoney(item.bags_claim || 0)}</td>}
-                      {activeReport === "purchase" && <td style={td}>{formatMoney(item.labour || 0)}</td>}
-                      {activeReport === "purchase" && <td style={td}>{formatMoney(item.total_deduction || 0)}</td>}
-                      {activeReport === "purchase" && <td style={td}>{formatMoney(item.round_off || 0)}</td>}
-                      {(activeReport === "sale" || activeReport === "purchase") && (
-                        <>
-                          <td style={td}>{item.total_quantity || 0}</td>
-                          <td style={td}>{item.total_amount || 0}</td>
-                        </>
-                      )}
-                      {activeReport === "profit-loss" && (
-                        <>
-                          <td style={td}>{item.sale_amount || 0}</td>
-                          <td style={td}>{item.purchase_amount || 0}</td>
-                          <td style={{ ...td, color: item.profit_loss >= 0 ? "#16a34a" : "#dc2626" }}>{item.profit_loss || 0}</td>
-                        </>
-                      )}
-                      {activeReport === "purchase" && (
-                        <td style={td}>
-                          {item.legacy_purchase_entry ? (
-                            <span style={{ color: "#64748b" }}>Old Entry</span>
-                          ) : (
-                            <div style={{ display: "flex", gap: 6 }}>
-                              <button onClick={() => handleEditPurchaseReport(item)} style={btnAction} title="Edit">Edit</button>
-                              <button onClick={() => handlePurchaseReportPDF(item.id || item._id)} style={{ ...btnAction, background: "#ea580c" }} title="Download PDF">PDF</button>
-                            </div>
-                          )}
-                        </td>
-                      )}
+                      {activeReportColumns.map(([key, _label, render]) => (
+                        <td key={key} style={td}>{render(item, i)}</td>
+                      ))}
                     </tr>
                   ))}
                   {reportData.length === 0 && (
-                    <tr><td colSpan={activeReport === "purchase" ? 19 : 5} style={{ ...td, textAlign: "center", padding: 20 }}>No data available.</td></tr>
+                    <tr><td colSpan={activeReportColumns.length} style={{ ...td, textAlign: "center", padding: 20 }}>No data available.</td></tr>
                   )}
                 </tbody>
               </table>
