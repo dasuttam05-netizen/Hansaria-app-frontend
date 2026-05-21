@@ -290,9 +290,25 @@ export default function WarehouseTradingPage() {
       }
       const endpoint = activeReport === "sale" ? "sale-summary" : activeReport === "purchase" ? "purchase-summary" : "profit-loss";
       const res = await axios.get(`/api/wh-vouchers/report/${endpoint}`);
-      setReportData(Array.isArray(res.data) ? res.data : []);
+      const rows = Array.isArray(res.data) ? res.data : [];
+      if (activeReport === "purchase" && rows.length === 0 && hasPermission(user, voucherPermissionMap.purchase)) {
+        const fallbackRes = await axios.get("/api/wh-vouchers/purchase");
+        setReportData(Array.isArray(fallbackRes.data) ? fallbackRes.data : []);
+        return;
+      }
+      setReportData(rows);
     } catch (err) {
       console.error(err);
+      if (activeReport === "purchase" && hasPermission(user, voucherPermissionMap.purchase)) {
+        try {
+          const fallbackRes = await axios.get("/api/wh-vouchers/purchase");
+          setReportData(Array.isArray(fallbackRes.data) ? fallbackRes.data : []);
+          return;
+        } catch (fallbackErr) {
+          console.error(fallbackErr);
+        }
+      }
+      setReportData([]);
     }
   };
 
@@ -409,8 +425,20 @@ export default function WarehouseTradingPage() {
       if (activeVoucherType === "purchase") {
         setActiveTab("reports");
         setActiveReport("purchase");
-        const reportRes = await axios.get("/api/wh-vouchers/report/purchase-summary");
-        setReportData(Array.isArray(reportRes.data) ? reportRes.data : []);
+        try {
+          const reportRes = await axios.get("/api/wh-vouchers/report/purchase-summary");
+          const rows = Array.isArray(reportRes.data) ? reportRes.data : [];
+          if (rows.length) {
+            setReportData(rows);
+          } else {
+            const fallbackRes = await axios.get("/api/wh-vouchers/purchase");
+            setReportData(Array.isArray(fallbackRes.data) ? fallbackRes.data : []);
+          }
+        } catch (reportErr) {
+          console.error(reportErr);
+          const fallbackRes = await axios.get("/api/wh-vouchers/purchase");
+          setReportData(Array.isArray(fallbackRes.data) ? fallbackRes.data : []);
+        }
       }
     } catch (err) {
       console.error(err);
