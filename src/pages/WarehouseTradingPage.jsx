@@ -106,6 +106,7 @@ export default function WarehouseTradingPage() {
   const [loading, setLoading] = useState(false);
   const [list, setList] = useState([]);
   const [reportData, setReportData] = useState([]);
+  const [reportFilters, setReportFilters] = useState({ farmer_id: "" });
   const [partyOutstanding, setPartyOutstanding] = useState(null);
   const [showPaymentAdjustPopup, setShowPaymentAdjustPopup] = useState(false);
   const [paymentAdjustments, setPaymentAdjustments] = useState([]);
@@ -238,7 +239,7 @@ export default function WarehouseTradingPage() {
     if (activeTab === "reports") {
       loadReport();
     }
-  }, [activeTab, activeReport]);
+  }, [activeTab, activeReport, reportFilters.farmer_id]);
 
   const loadData = async () => {
     try {
@@ -280,7 +281,7 @@ export default function WarehouseTradingPage() {
     }
   };
 
-  const loadOutstanding = async (partyType, partyId, warehouseId = null) => {
+  const loadOutstanding = async (partyType, partyId, warehouseId = null, excludePaymentId = null) => {
     if (!partyType || !partyId) {
       setPartyOutstanding(null);
       return;
@@ -289,6 +290,7 @@ export default function WarehouseTradingPage() {
       const params = { party_type: partyType, id: partyId };
       const warehouse = warehouseId || formData.warehouse_id;
       if (warehouse) params.warehouse_id = warehouse;
+      if (excludePaymentId) params.exclude_payment_id = excludePaymentId;
       const res = await axios.get(`/api/wh-vouchers/outstanding`, { params });
       setPartyOutstanding(res.data || null);
     } catch (err) {
@@ -324,7 +326,11 @@ export default function WarehouseTradingPage() {
         return;
       }
       const endpoint = reportEndpointMap[activeReport] || activeReport;
-      const res = await axios.get(`/api/wh-vouchers/report/${endpoint}`);
+      const params = {};
+      if (activeReport === "purchase-party-ledger" && reportFilters.farmer_id) {
+        params.farmer_id = reportFilters.farmer_id;
+      }
+      const res = await axios.get(`/api/wh-vouchers/report/${endpoint}`, { params });
       const rows = Array.isArray(res.data) ? res.data : [];
       if (activeReport === "purchase" && rows.length === 0 && hasPermission(user, voucherPermissionMap.purchase)) {
         const fallbackRes = await axios.get("/api/wh-vouchers/purchase");
@@ -360,7 +366,7 @@ export default function WarehouseTradingPage() {
     });
 
     if (activeVoucherType === "payment" && name === "farmer_id") {
-      loadOutstanding("farmer", value).then(() => {
+      loadOutstanding("farmer", value, null, editId).then(() => {
         if (value && toNumber(formData.amount) > 0) {
           setShowPaymentAdjustPopup(true);
         }
@@ -371,7 +377,7 @@ export default function WarehouseTradingPage() {
     }
     if (name === "warehouse_id") {
       if (activeVoucherType === "payment" && formData.farmer_id) {
-        loadOutstanding("farmer", formData.farmer_id, value).then(() => {
+        loadOutstanding("farmer", formData.farmer_id, value, editId).then(() => {
           if (toNumber(formData.amount) > 0) {
             setShowPaymentAdjustPopup(true);
           }
@@ -472,9 +478,14 @@ export default function WarehouseTradingPage() {
           .filter((item) => toNumber(item.adjusted_amount) > 0)
           .map((item) => ({
             purchase_id: item.purchase_id,
+            voucher_no: item.voucher_no || item.purchase_voucher_no || "",
             adjusted_amount: toNumber(item.adjusted_amount),
           }));
         payload.reference_type = "purchase";
+        payload.reference_id = paymentAdjustments
+          .map((item) => item.voucher_no || item.purchase_voucher_no || item.purchase_id)
+          .filter(Boolean)
+          .join(", ");
       }
       
       const isEdit = editId && String(editId).trim();
@@ -520,6 +531,19 @@ export default function WarehouseTradingPage() {
     if (voucher) {
       setFormData({ ...defaultForm(), ...voucher });
       setEditId(voucherId);
+      if (activeVoucherType === "payment") {
+        const existingAdjustments = Array.isArray(voucher.adjustments)
+          ? voucher.adjustments.map((item) => ({
+              purchase_id: String(item.purchase_id || item.id || ""),
+              voucher_no: item.purchase_voucher_no || item.voucher_no || "",
+              adjusted_amount: toNumber(item.adjusted_amount),
+            })).filter((item) => item.purchase_id && item.adjusted_amount > 0)
+          : [];
+        setPaymentAdjustments(existingAdjustments);
+        if (voucher.farmer_id) {
+          loadOutstanding("farmer", voucher.farmer_id, voucher.warehouse_id, voucherId);
+        }
+      }
       window.scrollTo({ top: 0, behavior: "smooth" });
     }
   };
@@ -580,7 +604,7 @@ export default function WarehouseTradingPage() {
       alert("Please select farmer");
       return;
     }
-    await loadOutstanding("farmer", formData.farmer_id);
+    await loadOutstanding("farmer", formData.farmer_id, null, editId);
     setShowPaymentAdjustPopup(true);
   };
 
@@ -686,6 +710,9 @@ export default function WarehouseTradingPage() {
       ["party", "Party", (item) => item.party_name || item.farmer_name || "-"],
       ["voucher_type", "Type", (item) => item.voucher_type || "-"],
       ["voucher_no", "Voucher No", (item) => item.voucher_no || "-"],
+      ["particulars", "Particulars", (item) => item.particulars || "-"],
+      ["reference_id", "Reference", (item) => item.reference_id || "-"],
+      ["adjustment_details", "Adjustment Details", (item) => item.adjustment_details || "-"],
       ["warehouse", "Warehouse", (item) => getWarehouseName(item)],
       ["debit", "Debit", (item) => formatMoney(item.debit || 0)],
       ["credit", "Credit", (item) => formatMoney(item.credit || 0)],
@@ -1108,7 +1135,13 @@ export default function WarehouseTradingPage() {
                 {(activeVoucherType === "payment" || activeVoucherType === "receipt") && (
                   <>
                     <Field label="Reference Type">
-                      <select name="reference_type" value={formData.reference_type} onChange={handleChange} style={inp}>
+                      <select
+                        name="reference_type"
+                        value={activeVoucherType === "payment" ? "purchase" : formData.reference_type}
+                        onChange={handleChange}
+                        style={activeVoucherType === "payment" ? readOnlyInp : inp}
+                        disabled={activeVoucherType === "payment"}
+                      >
                         <option value="">Select Reference</option>
                         <option value="purchase">Purchase Bill</option>
                         <option value="sale">Sale Bill</option>
@@ -1116,7 +1149,14 @@ export default function WarehouseTradingPage() {
                       </select>
                     </Field>
                     <Field label="Reference ID">
-                      <input name="reference_id" value={formData.reference_id} onChange={handleChange} style={inp} placeholder="Optional bill ID" />
+                      <input
+                        name="reference_id"
+                        value={activeVoucherType === "payment" ? paymentAdjustments.map((item) => item.voucher_no || item.purchase_voucher_no || item.purchase_id).filter(Boolean).join(", ") : formData.reference_id}
+                        onChange={handleChange}
+                        style={activeVoucherType === "payment" ? readOnlyInp : inp}
+                        placeholder={activeVoucherType === "payment" ? "Auto from adjusted purchase bill" : "Optional bill ID"}
+                        readOnly={activeVoucherType === "payment"}
+                      />
                     </Field>
                     {activeVoucherType === "receipt" && (
                       <Field label="Amount">
@@ -1150,7 +1190,7 @@ export default function WarehouseTradingPage() {
               <div style={{ marginTop: 16, display: "flex", gap: 10 }}>
                 <button type="submit" disabled={loading} style={btnPrimary}>{loading ? "Saving..." : editId ? "Update Voucher" : "Save Voucher"}</button>
                 {editId && (
-                  <button type="button" onClick={() => { setEditId(null); setFormData(defaultForm()); }} style={{ ...btnPrimary, background: "#64748b" }}>Cancel</button>
+                  <button type="button" onClick={() => { setEditId(null); setFormData(defaultForm()); setPaymentAdjustments([]); setPartyOutstanding(null); }} style={{ ...btnPrimary, background: "#64748b" }}>Cancel</button>
                 )}
               </div>
             </form>
@@ -1233,6 +1273,33 @@ export default function WarehouseTradingPage() {
 
           <div style={card}>
             <h3 style={{ marginTop: 0 }}>{reportLabels[activeReport] || titleCase(activeReport)}</h3>
+            {activeReport === "purchase-party-ledger" && (
+              <div style={{ display: "flex", gap: 12, alignItems: "end", flexWrap: "wrap", marginBottom: 14 }}>
+                <Field label="Farmer Filter">
+                  <select
+                    value={reportFilters.farmer_id}
+                    onChange={(event) => setReportFilters((prev) => ({ ...prev, farmer_id: event.target.value }))}
+                    style={{ ...inp, minWidth: 260 }}
+                  >
+                    <option value="">All Farmers</option>
+                    {farmers.map((farmer) => (
+                      <option key={farmer.id || farmer._id} value={farmer.id || farmer._id}>
+                        {farmer.name}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                {reportFilters.farmer_id && (
+                  <button
+                    type="button"
+                    onClick={() => setReportFilters((prev) => ({ ...prev, farmer_id: "" }))}
+                    style={{ ...btnAction, background: "#64748b", marginBottom: 1 }}
+                  >
+                    Clear Filter
+                  </button>
+                )}
+              </div>
+            )}
             <div style={tableCard}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                 <thead>
