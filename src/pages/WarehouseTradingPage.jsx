@@ -1006,7 +1006,7 @@ export default function WarehouseTradingPage() {
                     </Field>
                     {partyOutstanding && activeVoucherType === "payment" && (
                       <div style={{ marginTop: 8, fontSize: 13, color: "#444", display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                        <span>Current outstanding: Rs.{Number(partyOutstanding.stats?.outstanding ?? partyOutstanding.outstanding || 0).toFixed(2)}</span>
+                        <span>Current outstanding: Rs.{Number(partyOutstanding.stats?.outstanding ?? partyOutstanding.outstanding ?? 0).toFixed(2)}</span>
                         <span>Adjusted: Rs.{paymentAdjustmentTotal.toFixed(2)}</span>
                         <button type="button" onClick={openPaymentAdjustmentPopup} style={{ ...btnAction, background: "#2563eb" }}>
                           Adjust Bills
