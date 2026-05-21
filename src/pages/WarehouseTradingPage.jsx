@@ -115,6 +115,19 @@ export default function WarehouseTradingPage() {
   const selectedFarmerGst = selectedFarmer?.gst_no || selectedFarmer?.gst || "";
   const selectedFarmerPan = selectedFarmer?.pan_no || selectedFarmer?.pan || "";
   const selectedFarmerState = selectedFarmer?.state || "";
+  const getProductName = (item) =>
+    item?.product_name ||
+    products.find((p) => String(p.id || p._id) === String(item?.product_id))?.name ||
+    item?.product ||
+    "-";
+  const getWarehouseName = (item) =>
+    item?.warehouse_name ||
+    warehouses.find((w) => String(w.id || w._id) === String(item?.warehouse_id))?.name ||
+    "-";
+  const getFarmerName = (item) =>
+    item?.farmer_name ||
+    farmers.find((f) => String(f.id || f._id) === String(item?.farmer_id))?.name ||
+    "-";
   const purchaseDeductionTotal = purchaseDeductionFields.reduce((sum, field) => sum + toNumber(formData[field.key]), 0);
   const purchaseNetWeight =
     toNumber(formData.gross_weight) -
@@ -843,16 +856,16 @@ export default function WarehouseTradingPage() {
                       <td style={td}>{i + 1}</td>
                       <td style={td}>{item.date}</td>
                       <td style={td}>{item.voucher_no}</td>
-                      <td style={td}>{item.warehouse_name || warehouses.find(w => String(w.id || w._id) === String(item.warehouse_id))?.name || "-"}</td>
+                      <td style={td}>{getWarehouseName(item)}</td>
                       {(activeVoucherType === "purchase" || activeVoucherType === "payment") && (
-                        <td style={td}>{item.farmer_name || farmers.find(f => String(f.id || f._id) === String(item.farmer_id))?.name || "-"}</td>
+                        <td style={td}>{getFarmerName(item)}</td>
                       )}
                       {(activeVoucherType === "sale" || activeVoucherType === "receipt") && (
                         <td style={td}>{companies.find(c => String(c.id || c._id) === String(item.company_id))?.name || "-"}</td>
                       )}
                       {(activeVoucherType === "purchase" || activeVoucherType === "sale") && (
                         <>
-                          <td style={td}>{item.product_name || products.find(p => String(p.id || p._id) === String(item.product_id))?.name || "-"}</td>
+                          <td style={td}>{getProductName(item)}</td>
                           <td style={td}>{activeVoucherType === "purchase" ? item.total_qty || item.net_weight || item.quantity || 0 : item.unloading_qty || item.quantity || 0}</td>
                           <td style={td}>{item.rate || 0}</td>
                         </>
