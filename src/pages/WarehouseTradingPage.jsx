@@ -57,6 +57,7 @@ const toNumber = (value) => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
+const getRecordId = (value) => value?._id || value?.id || value || "";
 const formatMoney = (value) => toNumber(value).toFixed(2);
 
 const purchaseDeductionFields = [
@@ -103,7 +104,7 @@ export default function WarehouseTradingPage() {
   const selectedWarehouse = warehouses.find((w) => String(w.id || w._id) === String(formData.warehouse_id));
   const selectedManualLocation = locations.find((l) => String(l.id || l._id) === String(formData.location_id));
   const selectedWarehouseLocation =
-    locations.find((l) => String(l.id || l._id) === String(selectedWarehouse?.location_id))?.name ||
+    locations.find((l) => String(l.id || l._id) === String(getRecordId(selectedWarehouse?.location_id)))?.name ||
     selectedManualLocation?.name ||
     selectedWarehouse?.location ||
     selectedWarehouse?.address ||
@@ -115,6 +116,7 @@ export default function WarehouseTradingPage() {
   const selectedFarmerGst = selectedFarmer?.gst_no || selectedFarmer?.gst || "";
   const selectedFarmerPan = selectedFarmer?.pan_no || selectedFarmer?.pan || "";
   const selectedFarmerState = selectedFarmer?.state || "";
+  const selectedLocationName = selectedWarehouseLocation || selectedManualLocation?.name || "";
   const getProductName = (item) =>
     item?.product_name ||
     products.find((p) => String(p.id || p._id) === String(item?.product_id))?.name ||
@@ -136,7 +138,7 @@ export default function WarehouseTradingPage() {
     purchaseDeductionTotal;
   const safePurchaseNetWeight = Math.max(purchaseNetWeight, 0);
   const purchaseGrossAmount = safePurchaseNetWeight * toNumber(formData.rate);
-  const purchaseTotalDeduction = toNumber(formData.bags_claim) + toNumber(formData.labour) + toNumber(formData.total_deduct_amount);
+  const purchaseTotalDeduction = toNumber(formData.bags_claim) + toNumber(formData.labour);
   const purchaseRoundOff = toNumber(formData.round_off);
   const purchaseNetPayable = Math.max(purchaseGrossAmount - purchaseTotalDeduction + purchaseRoundOff, 0);
   const voucherPermissionMap = {
@@ -292,7 +294,15 @@ export default function WarehouseTradingPage() {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
-    setFormData((prev) => ({ ...prev, [name]: value }));
+    setFormData((prev) => {
+      const next = { ...prev, [name]: value };
+      if (name === "warehouse_id") {
+        const warehouse = warehouses.find((w) => String(w.id || w._id) === String(value));
+        next.location_id = getRecordId(warehouse?.location_id);
+        next.employee_id = getRecordId(warehouse?.employee_id) || prev.employee_id || "";
+      }
+      return next;
+    });
 
     if (activeVoucherType === "payment" && name === "farmer_id") {
       loadOutstanding("farmer", value);
@@ -358,6 +368,7 @@ export default function WarehouseTradingPage() {
         payload.quantity = safePurchaseNetWeight;
         payload.net_weight = safePurchaseNetWeight;
         payload.total_qty = safePurchaseNetWeight;
+        payload.total_deduct_amount = 0;
         payload.total_deduction = purchaseTotalDeduction;
         payload.amount = purchaseNetPayable;
         payload.net_amount_payable = purchaseNetPayable;
@@ -390,6 +401,13 @@ export default function WarehouseTradingPage() {
       setFormData(defaultForm());
       setEditId(null);
       loadVouchers();
+      fetchNextVoucherNo(activeVoucherType);
+      if (activeVoucherType === "purchase") {
+        setActiveTab("reports");
+        setActiveReport("purchase");
+        const reportRes = await axios.get("/api/wh-vouchers/report/purchase-summary");
+        setReportData(Array.isArray(reportRes.data) ? reportRes.data : []);
+      }
     } catch (err) {
       console.error(err);
       alert(err?.response?.data?.error || `Failed to ${editId ? "update" : "save"} voucher`);
@@ -480,7 +498,7 @@ export default function WarehouseTradingPage() {
                       <span>Subdocument : <strong>Purchase</strong></span>
                       <span>Type : <strong>{editId ? "Regular [ Edit ]" : "Regular [ New ]"}</strong></span>
                       <span>Location</span>
-                      <input value={selectedWarehouseLocation || ""} readOnly style={{ ...erpInput, width: 120 }} />
+                      <input value={selectedLocationName || ""} readOnly style={{ ...erpInput, width: 120 }} />
                     </div>
                   </div>
 
@@ -511,7 +529,7 @@ export default function WarehouseTradingPage() {
 
                     <div style={erpPanelWide}>
                       <div style={erpRow}>
-                        <label style={erpLabel}>Vendor</label>
+                        <label style={erpLabel}>Warehouse Name</label>
                         <select name="warehouse_id" value={formData.warehouse_id} onChange={handleChange} style={erpInput}>
                           <option value="">Select Warehouse</option>
                           {warehouses.map((w) => (
@@ -520,7 +538,7 @@ export default function WarehouseTradingPage() {
                         </select>
                       </div>
                       <div style={erpRow}>
-                        <label style={erpLabel}>Delivery Person</label>
+                        <label style={erpLabel}>Employee Name</label>
                         <select name="employee_id" value={formData.employee_id} onChange={handleChange} style={erpInput}>
                           <option value="">Select Employee</option>
                           {employees.map((e) => (
@@ -550,7 +568,7 @@ export default function WarehouseTradingPage() {
                     </div>
                   </div>
 
-                  <div style={erpSectionLabel}>ITEMS [ GOODS AND SERVICES ]</div>
+                  <div style={erpSectionLabel}>GOODS PURCHASE DETAILS</div>
                   <div style={erpGridWrap}>
                     <table style={erpItemsTable}>
                       <thead>
@@ -598,7 +616,7 @@ export default function WarehouseTradingPage() {
                   </div>
 
                   <div style={erpMiddleBar}>
-                      <span>Tax details auto filled from party master</span>
+                      <span></span>
                       <strong>Total Quantity : {formatMoney(safePurchaseNetWeight)}</strong>
                   </div>
 
@@ -611,7 +629,7 @@ export default function WarehouseTradingPage() {
                         <tbody>
                           <tr><td style={erpTd}>Bags Claim</td><td style={erpTd}><input name="bags_claim" type="number" step="0.01" value={formData.bags_claim} onChange={handleChange} style={erpCellInput} /></td></tr>
                           <tr><td style={erpTd}>Labour</td><td style={erpTd}><input name="labour" type="number" step="0.01" value={formData.labour} onChange={handleChange} style={erpCellInput} /></td></tr>
-                          <tr><td style={erpTd}>Lorry Claim</td><td style={erpTd}><input name="total_deduct_amount" type="number" step="0.01" value={formData.total_deduct_amount} onChange={handleChange} style={erpCellInput} /></td></tr>
+                          <tr><td style={{ ...erpTd, fontWeight: 700 }}>Total Deduction</td><td style={{ ...erpTd, fontWeight: 700 }}>{formatMoney(purchaseTotalDeduction)}</td></tr>
                           <tr><td style={erpTd}>Round Off</td><td style={erpTd}><input name="round_off" type="number" step="0.01" value={formData.round_off} onChange={handleChange} style={erpCellInput} /></td></tr>
                         </tbody>
                       </table>
@@ -624,12 +642,11 @@ export default function WarehouseTradingPage() {
                     <div>
                       <table style={erpMiniTable}>
                         <thead>
-                          <tr><th style={erpTh}>Miscellaneous</th><th style={erpTh}>Amount</th></tr>
+                          <tr><th style={erpTh}>Purchase Summary</th><th style={erpTh}>Amount</th></tr>
                         </thead>
                         <tbody>
                           <tr><td style={erpTd}>Gross Amount</td><td style={erpTd}>{formatMoney(purchaseGrossAmount)}</td></tr>
                           <tr><td style={erpTd}>Total Deduction</td><td style={erpTd}>{formatMoney(purchaseTotalDeduction)}</td></tr>
-                          <tr><td style={erpTd}>Lorry Claim</td><td style={erpTd}>{formatMoney(formData.total_deduct_amount)}</td></tr>
                           <tr><td style={erpTd}>Round Off</td><td style={erpTd}>{formatMoney(purchaseRoundOff)}</td></tr>
                           <tr><td style={erpTd}>Net Amount Payable</td><td style={erpTd}>{formatMoney(purchaseNetPayable)}</td></tr>
                         </tbody>
@@ -831,6 +848,7 @@ export default function WarehouseTradingPage() {
             </form>
           </div>
 
+          {activeVoucherType !== "purchase" && (
           <div style={card}>
             <h3 style={{ marginTop: 0 }}>{activeVoucherType.charAt(0).toUpperCase() + activeVoucherType.slice(1)} Vouchers</h3>
             <div style={tableCard}>
@@ -887,6 +905,7 @@ export default function WarehouseTradingPage() {
               </table>
             </div>
           </div>
+          )}
         </>
       ) : (
         <>
@@ -908,11 +927,25 @@ export default function WarehouseTradingPage() {
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                 <thead>
                   <tr style={reportHeaderRowStyle}>
+                    {activeReport === "purchase" && <th style={th}>S.L No</th>}
+                    {activeReport === "purchase" && <th style={th}>Date</th>}
+                    {activeReport === "purchase" && <th style={th}>Voucher No</th>}
                     <th style={th}>Warehouse</th>
+                    {activeReport === "purchase" && <th style={th}>Farmer</th>}
+                    {activeReport === "purchase" && <th style={th}>Product</th>}
+                    {activeReport === "purchase" && <th style={th}>Packet</th>}
+                    {activeReport === "purchase" && <th style={th}>Gross Wt</th>}
+                    {activeReport === "purchase" && <th style={th}>Tare Wt</th>}
+                    {activeReport === "purchase" && <th style={th}>Dhalta</th>}
+                    {activeReport === "purchase" && <th style={th}>Gross Amount</th>}
+                    {activeReport === "purchase" && <th style={th}>Bags Claim</th>}
+                    {activeReport === "purchase" && <th style={th}>Labour</th>}
+                    {activeReport === "purchase" && <th style={th}>Deduction</th>}
+                    {activeReport === "purchase" && <th style={th}>Round Off</th>}
                     {activeReport === "sale" && <th style={th}>Total Quantity</th>}
                     {activeReport === "sale" && <th style={th}>Total Amount</th>}
                     {activeReport === "purchase" && <th style={th}>Total Quantity</th>}
-                    {activeReport === "purchase" && <th style={th}>Total Amount</th>}
+                    {activeReport === "purchase" && <th style={th}>Net Payable</th>}
                     {activeReport === "profit-loss" && <th style={th}>Sale Amount</th>}
                     {activeReport === "profit-loss" && <th style={th}>Purchase Amount</th>}
                     {activeReport === "profit-loss" && <th style={th}>Profit/Loss</th>}
@@ -921,7 +954,21 @@ export default function WarehouseTradingPage() {
                 <tbody>
                   {reportData.map((item, i) => (
                     <tr key={item.id || i} style={{ background: i % 2 ? "#f8fafc" : "#fff" }}>
+                      {activeReport === "purchase" && <td style={td}>{i + 1}</td>}
+                      {activeReport === "purchase" && <td style={td}>{item.date || "-"}</td>}
+                      {activeReport === "purchase" && <td style={td}>{item.voucher_no || "-"}</td>}
                       <td style={td}>{item.warehouse_name || warehouses.find(w => String(w.id || w._id) === String(item.warehouse_id))?.name || "-"}</td>
+                      {activeReport === "purchase" && <td style={td}>{item.farmer_name || getFarmerName(item)}</td>}
+                      {activeReport === "purchase" && <td style={td}>{getProductName(item)}</td>}
+                      {activeReport === "purchase" && <td style={td}>{item.packet || 0}</td>}
+                      {activeReport === "purchase" && <td style={td}>{item.gross_weight || 0}</td>}
+                      {activeReport === "purchase" && <td style={td}>{item.tare_weight || 0}</td>}
+                      {activeReport === "purchase" && <td style={td}>{item.dhalta || 0}</td>}
+                      {activeReport === "purchase" && <td style={td}>{formatMoney(item.gross_amount || 0)}</td>}
+                      {activeReport === "purchase" && <td style={td}>{formatMoney(item.bags_claim || 0)}</td>}
+                      {activeReport === "purchase" && <td style={td}>{formatMoney(item.labour || 0)}</td>}
+                      {activeReport === "purchase" && <td style={td}>{formatMoney(item.total_deduction || 0)}</td>}
+                      {activeReport === "purchase" && <td style={td}>{formatMoney(item.round_off || 0)}</td>}
                       {(activeReport === "sale" || activeReport === "purchase") && (
                         <>
                           <td style={td}>{item.total_quantity || 0}</td>
@@ -938,7 +985,7 @@ export default function WarehouseTradingPage() {
                     </tr>
                   ))}
                   {reportData.length === 0 && (
-                    <tr><td colSpan={5} style={{ ...td, textAlign: "center", padding: 20 }}>No data available.</td></tr>
+                    <tr><td colSpan={activeReport === "purchase" ? 17 : 5} style={{ ...td, textAlign: "center", padding: 20 }}>No data available.</td></tr>
                   )}
                 </tbody>
               </table>
