@@ -92,12 +92,12 @@ export default function FarmerManagementPage() {
     const timer = setTimeout(async () => {
       try {
         setIfscLookupStatus("Checking IFSC...");
-        const res = await axios.get(`https://ifsc.razorpay.com/${ifsc}`);
+        const res = await axios.get(`${API_URL}/lookup/ifsc/${ifsc}`);
         const data = res.data || {};
         setFormData((prev) => ({
           ...prev,
-          bank_name: data.BANK || prev.bank_name,
-          branch_name: data.BRANCH || prev.branch_name,
+          bank_name: data.bank_name || prev.bank_name,
+          branch_name: data.branch_name || prev.branch_name,
         }));
         setIfscLookupStatus("IFSC found, bank details filled");
       } catch (error) {
@@ -122,18 +122,13 @@ export default function FarmerManagementPage() {
     const timer = setTimeout(async () => {
       try {
         setPinLookupStatus("Checking PIN...");
-        const res = await axios.get(`https://api.postalpincode.in/pincode/${pin}`);
-        const result = Array.isArray(res.data) ? res.data[0] : null;
-        const postOffice = result?.PostOffice?.[0];
-        if (!postOffice) {
-          setPinLookupStatus("PIN not found");
-          return;
-        }
+        const res = await axios.get(`${API_URL}/lookup/pincode/${pin}`);
+        const data = res.data || {};
         setFormData((prev) => ({
           ...prev,
-          location: postOffice.District || postOffice.Block || prev.location,
-          state: postOffice.State || prev.state,
-          village: prev.village || postOffice.Name || "",
+          location: data.location || prev.location,
+          state: data.state || prev.state,
+          village: prev.village || data.village || "",
         }));
         setPinLookupStatus("PIN found, location and state filled");
       } catch (error) {
@@ -143,6 +138,51 @@ export default function FarmerManagementPage() {
 
     return () => clearTimeout(timer);
   }, [formData.pincode]);
+
+  const fillFromPin = async () => {
+    const pin = compactDigits(formData.pincode);
+    if (!/^[0-9]{6}$/.test(pin)) {
+      setPinLookupStatus("PIN No. must be 6 digits");
+      return;
+    }
+
+    try {
+      setPinLookupStatus("Checking PIN...");
+      const res = await axios.get(`${API_URL}/lookup/pincode/${pin}`);
+      const data = res.data || {};
+      setFormData((prev) => ({
+        ...prev,
+        location: data.location || prev.location,
+        state: data.state || prev.state,
+        village: prev.village || data.village || "",
+      }));
+      setPinLookupStatus("PIN found, location and state filled");
+    } catch (error) {
+      setPinLookupStatus(error?.response?.data?.error || "PIN lookup failed");
+    }
+  };
+
+  const fillFromIfsc = async () => {
+    const ifsc = compactUpper(formData.ifsc_code);
+    if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(ifsc)) {
+      setIfscLookupStatus("Enter valid IFSC to auto fill bank details");
+      return;
+    }
+
+    try {
+      setIfscLookupStatus("Checking IFSC...");
+      const res = await axios.get(`${API_URL}/lookup/ifsc/${ifsc}`);
+      const data = res.data || {};
+      setFormData((prev) => ({
+        ...prev,
+        bank_name: data.bank_name || prev.bank_name,
+        branch_name: data.branch_name || prev.branch_name,
+      }));
+      setIfscLookupStatus("IFSC found, bank details filled");
+    } catch (error) {
+      setIfscLookupStatus(error?.response?.data?.error || "IFSC lookup failed");
+    }
+  };
 
   const findVillageMatch = (value) => {
     const village = String(value || "").trim().toLowerCase();
@@ -316,7 +356,10 @@ export default function FarmerManagementPage() {
                 <input name="village" value={formData.village} onChange={handleChange} placeholder="Village" style={inp} />
               </Field>
               <Field label="PIN No">
-                <input name="pincode" value={formData.pincode} onChange={handleChange} placeholder="6 digit PIN No. *" maxLength={6} style={inp} />
+                <div style={inlineFieldRow}>
+                  <input name="pincode" value={formData.pincode} onChange={handleChange} placeholder="6 digit PIN No. *" maxLength={6} style={inp} />
+                  <button type="button" onClick={fillFromPin} style={miniUtilityBtn}>Fill</button>
+                </div>
                 {pinLookupStatus ? <div style={helperText}>{pinLookupStatus}</div> : null}
               </Field>
               <div style={{ gridColumn: "1 / -1" }}>
@@ -336,7 +379,10 @@ export default function FarmerManagementPage() {
                 <div style={helperText}>Account holder auto fills from farmer name.</div>
               </Field>
               <Field label="IFSC Code">
-                <input name="ifsc_code" value={formData.ifsc_code} onChange={handleChange} placeholder="IFSC Code" style={inp} />
+                <div style={inlineFieldRow}>
+                  <input name="ifsc_code" value={formData.ifsc_code} onChange={handleChange} placeholder="IFSC Code" style={inp} />
+                  <button type="button" onClick={fillFromIfsc} style={miniUtilityBtn}>Fill</button>
+                </div>
                 <StatusBadge status={checkIfsc(formData.ifsc_code)} />
                 {ifscLookupStatus ? <div style={helperText}>{ifscLookupStatus}</div> : null}
               </Field>
