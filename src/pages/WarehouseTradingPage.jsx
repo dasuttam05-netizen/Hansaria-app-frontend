@@ -10,6 +10,7 @@ const defaultForm = () => ({
   warehouse_id: "",
   farmer_id: "",
   company_id: "",
+  company_account_id: "",
   consignee_id: "",
   product_id: "",
   reference_type: "",
@@ -89,6 +90,7 @@ export default function WarehouseTradingPage() {
   const [warehouses, setWarehouses] = useState([]);
   const [farmers, setFarmers] = useState([]);
   const [companies, setCompanies] = useState([]);
+  const [companyAccounts, setCompanyAccounts] = useState([]);
   const [consignees, setConsignees] = useState([]);
   const [products, setProducts] = useState([]);
   const [employees, setEmployees] = useState([]);
@@ -205,10 +207,11 @@ export default function WarehouseTradingPage() {
 
   const loadData = async () => {
     try {
-      const [wRes, fRes, cRes, coRes, pRes, eRes, lRes] = await Promise.allSettled([
+      const [wRes, fRes, cRes, caRes, coRes, pRes, eRes, lRes] = await Promise.allSettled([
         axios.get("/api/warehouses"),
         axios.get("/api/farmers"),
         axios.get("/api/companies"),
+        axios.get("/api/company-accounts"),
         axios.get("/api/consignee-names"),
         axios.get("/api/products"),
         axios.get("/api/employees"),
@@ -218,6 +221,7 @@ export default function WarehouseTradingPage() {
       setWarehouses(Array.isArray(dataOf(wRes)) ? dataOf(wRes) : []);
       setFarmers(Array.isArray(dataOf(fRes)) ? dataOf(fRes) : []);
       setCompanies(Array.isArray(dataOf(cRes)) ? dataOf(cRes) : []);
+      setCompanyAccounts(Array.isArray(dataOf(caRes)) ? dataOf(caRes) : []);
       setConsignees(Array.isArray(dataOf(coRes)) ? dataOf(coRes) : []);
       setProducts(Array.isArray(dataOf(pRes)) ? dataOf(pRes) : []);
       setEmployees(Array.isArray(dataOf(eRes)) ? dataOf(eRes) : []);
@@ -439,6 +443,16 @@ export default function WarehouseTradingPage() {
     }
   };
 
+  const handleEditPurchaseReport = (voucher) => {
+    const voucherId = voucher?.id || voucher?._id;
+    if (!voucherId) return;
+    setActiveTab("vouchers");
+    setActiveVoucherType("purchase");
+    setFormData({ ...defaultForm(), ...voucher });
+    setEditId(voucherId);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
   const handleGeneratePDF = async (voucherId) => {
     try {
       const response = await axios.get(`/api/wh-vouchers/${activeVoucherType}/${voucherId}/pdf`, {
@@ -456,6 +470,41 @@ export default function WarehouseTradingPage() {
       alert("Failed to generate PDF");
     }
   };
+
+  const handlePurchaseReportPDF = async (voucherId) => {
+    try {
+      const response = await axios.get(`/api/wh-vouchers/purchase/${voucherId}/pdf`, {
+        responseType: "blob",
+      });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", `Purchase-Memo-${voucherId}.pdf`);
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode.removeChild(link);
+    } catch (err) {
+      console.error(err);
+      alert("Failed to generate PDF");
+    }
+  };
+
+  const renderAccountSelect = (style = inp) => (
+    <select name="company_account_id" value={formData.company_account_id} onChange={handleChange} style={style}>
+      <option value="">Select Account</option>
+      {companyAccounts.map((account) => (
+        <option key={account.id || account._id} value={account.id || account._id}>
+          {account.account_name || account.name}
+        </option>
+      ))}
+    </select>
+  );
+
+  const getAccountName = (item) =>
+    item.company_account_name ||
+    companyAccounts.find((account) => String(account.id || account._id) === String(item.company_account_id))?.account_name ||
+    companyAccounts.find((account) => String(account.id || account._id) === String(item.company_account_id))?.name ||
+    "-";
 
   return (
     <div style={{ fontFamily: "Segoe UI, Arial, sans-serif", padding: "16px" }}>
@@ -512,6 +561,10 @@ export default function WarehouseTradingPage() {
                             <option key={f.id || f._id} value={f.id || f._id}>{f.name}</option>
                           ))}
                         </select>
+                      </div>
+                      <div style={erpRow}>
+                        <label style={erpLabel}>Account</label>
+                        {renderAccountSelect(erpInput)}
                       </div>
                       <div style={erpRow}>
                         <label style={erpLabel}>GSTIN</label>
@@ -691,6 +744,9 @@ export default function WarehouseTradingPage() {
                     ))}
                   </select>
                 </Field>
+                <Field label="Account">
+                  {renderAccountSelect(inp)}
+                </Field>
 
                 {(activeVoucherType === "purchase" || activeVoucherType === "payment") && (
                   <>
@@ -859,6 +915,7 @@ export default function WarehouseTradingPage() {
                     <th style={th}>Date</th>
                     <th style={th}>Voucher No</th>
                     <th style={th}>Warehouse</th>
+                    <th style={th}>Account</th>
                     {(activeVoucherType === "purchase" || activeVoucherType === "payment") && <th style={th}>Farmer</th>}
                     {(activeVoucherType === "sale" || activeVoucherType === "receipt") && <th style={th}>Company</th>}
                     {(activeVoucherType === "purchase" || activeVoucherType === "sale") && <th style={th}>Product</th>}
@@ -875,6 +932,7 @@ export default function WarehouseTradingPage() {
                       <td style={td}>{item.date}</td>
                       <td style={td}>{item.voucher_no}</td>
                       <td style={td}>{getWarehouseName(item)}</td>
+                      <td style={td}>{getAccountName(item)}</td>
                       {(activeVoucherType === "purchase" || activeVoucherType === "payment") && (
                         <td style={td}>{getFarmerName(item)}</td>
                       )}
@@ -893,13 +951,15 @@ export default function WarehouseTradingPage() {
                         <div style={{ display: "flex", gap: 6 }}>
                           <button onClick={() => handleEditVoucher(item.id || item._id)} style={btnAction} title="Edit">Edit</button>
                           <button onClick={() => handleDeleteVoucher(item.id || item._id)} style={{ ...btnAction, background: "#dc2626" }} title="Delete">Delete</button>
-                          <button onClick={() => handleGeneratePDF(item.id || item._id)} style={{ ...btnAction, background: "#ea580c" }} title="Download PDF">PDF</button>
+                          {activeVoucherType === "sale" && (
+                            <button onClick={() => handleGeneratePDF(item.id || item._id)} style={{ ...btnAction, background: "#ea580c" }} title="Download PDF">PDF</button>
+                          )}
                         </div>
                       </td>
                     </tr>
                   ))}
                   {list.length === 0 && (
-                    <tr><td colSpan={10} style={{ ...td, textAlign: "center", padding: 20 }}>No vouchers found.</td></tr>
+                    <tr><td colSpan={11} style={{ ...td, textAlign: "center", padding: 20 }}>No vouchers found.</td></tr>
                   )}
                 </tbody>
               </table>
@@ -931,6 +991,7 @@ export default function WarehouseTradingPage() {
                     {activeReport === "purchase" && <th style={th}>Date</th>}
                     {activeReport === "purchase" && <th style={th}>Voucher No</th>}
                     <th style={th}>Warehouse</th>
+                    {activeReport === "purchase" && <th style={th}>Account</th>}
                     {activeReport === "purchase" && <th style={th}>Farmer</th>}
                     {activeReport === "purchase" && <th style={th}>Product</th>}
                     {activeReport === "purchase" && <th style={th}>Packet</th>}
@@ -949,6 +1010,7 @@ export default function WarehouseTradingPage() {
                     {activeReport === "profit-loss" && <th style={th}>Sale Amount</th>}
                     {activeReport === "profit-loss" && <th style={th}>Purchase Amount</th>}
                     {activeReport === "profit-loss" && <th style={th}>Profit/Loss</th>}
+                    {activeReport === "purchase" && <th style={th}>Actions</th>}
                   </tr>
                 </thead>
                 <tbody>
@@ -958,6 +1020,7 @@ export default function WarehouseTradingPage() {
                       {activeReport === "purchase" && <td style={td}>{item.date || "-"}</td>}
                       {activeReport === "purchase" && <td style={td}>{item.voucher_no || "-"}</td>}
                       <td style={td}>{item.warehouse_name || warehouses.find(w => String(w.id || w._id) === String(item.warehouse_id))?.name || "-"}</td>
+                      {activeReport === "purchase" && <td style={td}>{getAccountName(item)}</td>}
                       {activeReport === "purchase" && <td style={td}>{item.farmer_name || getFarmerName(item)}</td>}
                       {activeReport === "purchase" && <td style={td}>{getProductName(item)}</td>}
                       {activeReport === "purchase" && <td style={td}>{item.packet || 0}</td>}
@@ -982,10 +1045,18 @@ export default function WarehouseTradingPage() {
                           <td style={{ ...td, color: item.profit_loss >= 0 ? "#16a34a" : "#dc2626" }}>{item.profit_loss || 0}</td>
                         </>
                       )}
+                      {activeReport === "purchase" && (
+                        <td style={td}>
+                          <div style={{ display: "flex", gap: 6 }}>
+                            <button onClick={() => handleEditPurchaseReport(item)} style={btnAction} title="Edit">Edit</button>
+                            <button onClick={() => handlePurchaseReportPDF(item.id || item._id)} style={{ ...btnAction, background: "#ea580c" }} title="Download PDF">PDF</button>
+                          </div>
+                        </td>
+                      )}
                     </tr>
                   ))}
                   {reportData.length === 0 && (
-                    <tr><td colSpan={activeReport === "purchase" ? 17 : 5} style={{ ...td, textAlign: "center", padding: 20 }}>No data available.</td></tr>
+                    <tr><td colSpan={activeReport === "purchase" ? 19 : 5} style={{ ...td, textAlign: "center", padding: 20 }}>No data available.</td></tr>
                   )}
                 </tbody>
               </table>
