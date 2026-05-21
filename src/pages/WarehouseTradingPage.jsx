@@ -582,7 +582,7 @@ export default function WarehouseTradingPage() {
                           {purchaseDeductionFields.map((field) => (
                             <th key={field.key} style={erpTh}>{field.label}</th>
                           ))}
-                          <th style={erpTh}>Net Qty</th>
+                          <th style={erpTh}>Net Qty (Auto)</th>
                           <th style={erpTh}>Rate</th>
                           <th style={erpTh}>Amount</th>
                         </tr>
@@ -616,7 +616,7 @@ export default function WarehouseTradingPage() {
                   </div>
 
                   <div style={erpMiddleBar}>
-                      <span></span>
+                      <span>Net Qty = Gross Wt - Tare Wt - Dhalta - Less Bags Weight - Moistur - Dunki - Fungas - Disclour - Others</span>
                       <strong>Total Quantity : {formatMoney(safePurchaseNetWeight)}</strong>
                   </div>
 
