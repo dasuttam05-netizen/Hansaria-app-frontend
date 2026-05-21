@@ -107,6 +107,7 @@ export default function WarehouseTradingPage() {
   const [list, setList] = useState([]);
   const [reportData, setReportData] = useState([]);
   const [reportFilters, setReportFilters] = useState({ farmer_id: "" });
+  const [selectedLedgerBillId, setSelectedLedgerBillId] = useState("");
   const [partyOutstanding, setPartyOutstanding] = useState(null);
   const [showPaymentAdjustPopup, setShowPaymentAdjustPopup] = useState(false);
   const [paymentAdjustments, setPaymentAdjustments] = useState([]);
@@ -239,6 +240,16 @@ export default function WarehouseTradingPage() {
     if (activeTab === "reports") {
       loadReport();
     }
+  }, [activeTab, activeReport, reportFilters.farmer_id]);
+
+  useEffect(() => {
+    const handleLedgerRefresh = (event) => {
+      if (event.key !== "F5" || activeTab !== "reports" || activeReport !== "purchase-party-ledger") return;
+      event.preventDefault();
+      loadReport();
+    };
+    window.addEventListener("keydown", handleLedgerRefresh);
+    return () => window.removeEventListener("keydown", handleLedgerRefresh);
   }, [activeTab, activeReport, reportFilters.farmer_id]);
 
   const loadData = async () => {
@@ -762,6 +773,10 @@ export default function WarehouseTradingPage() {
   };
 
   const activeReportColumns = reportColumns[activeReport] || reportColumns.sale;
+  const purchaseBillRows = activeReport === "purchase-party-ledger"
+    ? reportData.filter((row) => row.voucher_type === "Purchase")
+    : [];
+  const selectedBill = purchaseBillRows.find((row) => String(row.purchase_id || row.voucher_no) === String(selectedLedgerBillId)) || purchaseBillRows[0] || null;
 
   return (
     <div style={{ fontFamily: "Segoe UI, Arial, sans-serif", padding: "16px" }}>
@@ -1300,29 +1315,123 @@ export default function WarehouseTradingPage() {
                 )}
               </div>
             )}
-            <div style={tableCard}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                <thead>
-                  <tr style={reportHeaderRowStyle}>
-                    {activeReportColumns.map(([key, label]) => (
-                      <th key={key} style={th}>{label}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {reportData.map((item, i) => (
-                    <tr key={item.id || i} style={{ background: i % 2 ? "#f8fafc" : "#fff" }}>
-                      {activeReportColumns.map(([key, _label, render]) => (
-                        <td key={key} style={td}>{render(item, i)}</td>
+            {activeReport === "purchase-party-ledger" ? (
+              <div style={ledgerSplitStyle}>
+                <div style={tableCard}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                    <thead>
+                      <tr style={reportHeaderRowStyle}>
+                        {activeReportColumns.map(([key, label]) => (
+                          <th key={key} style={th}>{label}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {reportData.map((item, i) => (
+                        <tr key={item.id || `${item.voucher_type}-${item.voucher_no}-${i}`} style={{ background: i % 2 ? "#f8fafc" : "#fff" }}>
+                          {activeReportColumns.map(([key, _label, render]) => (
+                            <td key={key} style={td}>{render(item, i)}</td>
+                          ))}
+                        </tr>
+                      ))}
+                      {reportData.length === 0 && (
+                        <tr><td colSpan={activeReportColumns.length} style={{ ...td, textAlign: "center", padding: 20 }}>No data available.</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div style={billWisePanelStyle}>
+                  <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center", marginBottom: 10 }}>
+                    <strong>Bill Wise Report</strong>
+                    <button type="button" onClick={loadReport} style={{ ...btnAction, background: "#0f766e" }}>F5 Refresh</button>
+                  </div>
+                  <div style={{ ...tableCard, maxHeight: 330 }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                      <thead>
+                        <tr style={reportHeaderRowStyle}>
+                          <th style={th}>Bill</th>
+                          <th style={th}>Purchase</th>
+                          <th style={th}>Payment</th>
+                          <th style={th}>Journal</th>
+                          <th style={th}>Receipt</th>
+                          <th style={th}>Balance</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {purchaseBillRows.map((row) => {
+                          const rowKey = String(row.purchase_id || row.voucher_no);
+                          const isSelected = selectedBill && rowKey === String(selectedBill.purchase_id || selectedBill.voucher_no);
+                          return (
+                            <tr key={rowKey} style={{ background: isSelected ? "#e0f2fe" : "#fff" }}>
+                              <td style={td}>{row.voucher_no || "-"}</td>
+                              <td style={td}>{formatMoney(row.purchase_amount || row.credit || 0)}</td>
+                              <td style={td}>
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedLedgerBillId(rowKey)}
+                                  style={linkButtonStyle}
+                                >
+                                  {formatMoney(row.payment_amount || 0)}
+                                </button>
+                              </td>
+                              <td style={td}>{formatMoney(row.journal_amount || 0)}</td>
+                              <td style={td}>{formatMoney(row.receipt_amount || 0)}</td>
+                              <td style={{ ...td, fontWeight: 700, color: toNumber(row.bill_balance) > 0 ? "#b45309" : "#15803d" }}>
+                                {formatMoney(row.bill_balance || 0)}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                        {purchaseBillRows.length === 0 && (
+                          <tr><td colSpan={6} style={{ ...td, textAlign: "center", padding: 18 }}>No purchase bill found.</td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div style={paymentDetailBoxStyle}>
+                    <strong>{selectedBill?.voucher_no || "Select a bill"}</strong>
+                    <div style={{ color: "#64748b", fontSize: 12, margin: "4px 0 8px" }}>Payment details</div>
+                    {(selectedBill?.payment_details || []).length > 0 ? (
+                      (selectedBill.payment_details || []).map((detail, index) => (
+                        <div key={`${detail.payment_voucher_no}-${index}`} style={paymentDetailRowStyle}>
+                          <span>{detail.payment_date || "-"}</span>
+                          <span>{detail.payment_voucher_no || "-"}</span>
+                          <strong>Rs.{formatMoney(detail.adjusted_amount || 0)}</strong>
+                        </div>
+                      ))
+                    ) : (
+                      <div style={{ color: "#64748b", fontSize: 13 }}>No payment adjusted against this bill.</div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div style={tableCard}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                  <thead>
+                    <tr style={reportHeaderRowStyle}>
+                      {activeReportColumns.map(([key, label]) => (
+                        <th key={key} style={th}>{label}</th>
                       ))}
                     </tr>
-                  ))}
-                  {reportData.length === 0 && (
-                    <tr><td colSpan={activeReportColumns.length} style={{ ...td, textAlign: "center", padding: 20 }}>No data available.</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
+                  </thead>
+                  <tbody>
+                    {reportData.map((item, i) => (
+                      <tr key={item.id || i} style={{ background: i % 2 ? "#f8fafc" : "#fff" }}>
+                        {activeReportColumns.map(([key, _label, render]) => (
+                          <td key={key} style={td}>{render(item, i)}</td>
+                        ))}
+                      </tr>
+                    ))}
+                    {reportData.length === 0 && (
+                      <tr><td colSpan={activeReportColumns.length} style={{ ...td, textAlign: "center", padding: 20 }}>No data available.</td></tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            )}
           </div>
         </>
       )}
@@ -1462,6 +1571,11 @@ const btnPrimary = { background: "#2563eb", color: "#fff", border: "none", paddi
 const th = { padding: "10px 8px", textAlign: "left", borderBottom: "1px solid #0d5c56" };
 const td = { padding: "8px", borderBottom: "1px solid #e2e8f0" };
 const tableCard = { overflowX: "auto", border: "1px solid #e2e8f0", borderRadius: 10, background: "#fff" };
+const ledgerSplitStyle = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(360px, 100%), 1fr))", gap: 14, alignItems: "start" };
+const billWisePanelStyle = { border: "1px solid #dbe4ef", borderRadius: 10, padding: 12, background: "#f8fafc" };
+const linkButtonStyle = { border: "none", background: "transparent", color: "#2563eb", cursor: "pointer", padding: 0, fontWeight: 700, textDecoration: "underline" };
+const paymentDetailBoxStyle = { marginTop: 12, border: "1px solid #dbe4ef", borderRadius: 8, background: "#fff", padding: 12 };
+const paymentDetailRowStyle = { display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: 8, padding: "7px 0", borderBottom: "1px solid #edf2f7", fontSize: 13 };
 const modalOverlayStyle = {
   position: "fixed",
   inset: 0,
