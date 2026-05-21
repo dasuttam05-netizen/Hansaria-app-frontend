@@ -107,6 +107,8 @@ export default function WarehouseTradingPage() {
   const [list, setList] = useState([]);
   const [reportData, setReportData] = useState([]);
   const [partyOutstanding, setPartyOutstanding] = useState(null);
+  const [showPaymentAdjustPopup, setShowPaymentAdjustPopup] = useState(false);
+  const [paymentAdjustments, setPaymentAdjustments] = useState([]);
   const [voucherNumberLoading, setVoucherNumberLoading] = useState(false);
   const selectedWarehouse = warehouses.find((w) => String(w.id || w._id) === String(formData.warehouse_id));
   const selectedManualLocation = locations.find((l) => String(l.id || l._id) === String(formData.location_id));
@@ -148,6 +150,10 @@ export default function WarehouseTradingPage() {
   const purchaseTotalDeduction = toNumber(formData.bags_claim) + toNumber(formData.labour);
   const purchaseRoundOff = toNumber(formData.round_off);
   const purchaseNetPayable = Math.max(purchaseGrossAmount - purchaseTotalDeduction + purchaseRoundOff, 0);
+  const paymentAdjustmentTotal = paymentAdjustments.reduce(
+    (sum, item) => sum + toNumber(item.adjusted_amount),
+    0
+  );
   const voucherPermissionMap = {
     purchase: "warehouse.trading.purchase.view",
     sale: "warehouse.trading.sale.view",
@@ -221,6 +227,8 @@ export default function WarehouseTradingPage() {
     if (activeTab === "vouchers") {
       fetchNextVoucherNo(activeVoucherType);
       setPartyOutstanding(null);
+      setPaymentAdjustments([]);
+      setShowPaymentAdjustPopup(false);
       setFormData((prev) => ({ ...prev, reference_type: "", reference_id: "" }));
     }
   }, [activeTab, activeVoucherType]);
@@ -352,14 +360,22 @@ export default function WarehouseTradingPage() {
     });
 
     if (activeVoucherType === "payment" && name === "farmer_id") {
-      loadOutstanding("farmer", value);
+      loadOutstanding("farmer", value).then(() => {
+        if (value && toNumber(formData.amount) > 0) {
+          setShowPaymentAdjustPopup(true);
+        }
+      });
     }
     if (activeVoucherType === "receipt" && name === "company_id") {
       loadOutstanding("company", value);
     }
     if (name === "warehouse_id") {
       if (activeVoucherType === "payment" && formData.farmer_id) {
-        loadOutstanding("farmer", formData.farmer_id, value);
+        loadOutstanding("farmer", formData.farmer_id, value).then(() => {
+          if (toNumber(formData.amount) > 0) {
+            setShowPaymentAdjustPopup(true);
+          }
+        });
       }
       if (activeVoucherType === "receipt" && formData.company_id) {
         loadOutstanding("company", formData.company_id, value);
@@ -372,6 +388,22 @@ export default function WarehouseTradingPage() {
     if (!formData.voucher_no || !formData.date) {
       alert("Voucher no. and date are required");
       return;
+    }
+    if (activeVoucherType === "payment") {
+      const paymentAmount = toNumber(formData.amount);
+      if (!formData.farmer_id) {
+        alert("Please select farmer");
+        return;
+      }
+      if (paymentAmount <= 0) {
+        alert("Please enter payment amount first");
+        return;
+      }
+      if (Math.abs(paymentAdjustmentTotal - paymentAmount) > 0.0001) {
+        setShowPaymentAdjustPopup(true);
+        alert("Payment amount and adjustment amount must match before saving");
+        return;
+      }
     }
     setLoading(true);
     try {
@@ -435,6 +467,15 @@ export default function WarehouseTradingPage() {
         payload.fifo_rate = qtyForFifo > 0 ? grossAmount / qtyForFifo : 0;
         payload.fifo_amount = grossAmount;
       }
+      if (activeVoucherType === "payment") {
+        payload.adjustments = paymentAdjustments
+          .filter((item) => toNumber(item.adjusted_amount) > 0)
+          .map((item) => ({
+            purchase_id: item.purchase_id,
+            adjusted_amount: toNumber(item.adjusted_amount),
+          }));
+        payload.reference_type = "purchase";
+      }
       
       const isEdit = editId && String(editId).trim();
       const url = isEdit ? `/api/wh-vouchers/${activeVoucherType}/${editId}` : `/api/wh-vouchers/${activeVoucherType}`;
@@ -446,6 +487,9 @@ export default function WarehouseTradingPage() {
         setPartyOutstanding(res.data.stats);
       }
       setFormData(defaultForm());
+      setPaymentAdjustments([]);
+      setPartyOutstanding(null);
+      setShowPaymentAdjustPopup(false);
       setEditId(null);
       loadVouchers();
       fetchNextVoucherNo(activeVoucherType);
@@ -525,6 +569,62 @@ export default function WarehouseTradingPage() {
       alert("Failed to generate PDF");
     }
   };
+
+  const openPaymentAdjustmentPopup = async () => {
+    if (activeVoucherType !== "payment") return;
+    if (toNumber(formData.amount) <= 0) {
+      alert("Please enter amount first");
+      return;
+    }
+    if (!formData.farmer_id) {
+      alert("Please select farmer");
+      return;
+    }
+    await loadOutstanding("farmer", formData.farmer_id);
+    setShowPaymentAdjustPopup(true);
+  };
+
+  const setPaymentAdjustmentAmount = (purchase, value) => {
+    const purchaseId = String(purchase.id || purchase._id);
+    const amount = Math.max(0, toNumber(value));
+    const pending = toNumber(purchase.pending_amount ?? purchase.amount);
+    const safeAmount = Math.min(amount, pending);
+    setPaymentAdjustments((prev) => {
+      const others = prev.filter((item) => String(item.purchase_id) !== purchaseId);
+      if (safeAmount <= 0) return others;
+      return [
+        ...others,
+        {
+          purchase_id: purchaseId,
+          voucher_no: purchase.voucher_no,
+          adjusted_amount: safeAmount,
+        },
+      ];
+    });
+  };
+
+  const autoFillPaymentAdjustments = () => {
+    let remaining = toNumber(formData.amount);
+    const next = [];
+    (partyOutstanding?.purchases || [])
+      .filter((row) => toNumber(row.pending_amount) > 0)
+      .forEach((row) => {
+        if (remaining <= 0) return;
+        const adjusted = Math.min(remaining, toNumber(row.pending_amount));
+        if (adjusted > 0) {
+          next.push({
+            purchase_id: String(row.id || row._id),
+            voucher_no: row.voucher_no,
+            adjusted_amount: adjusted,
+          });
+          remaining -= adjusted;
+        }
+      });
+    setPaymentAdjustments(next);
+  };
+
+  const selectedAdjustmentFor = (purchaseId) =>
+    paymentAdjustments.find((item) => String(item.purchase_id) === String(purchaseId))?.adjusted_amount || "";
 
   const renderAccountSelect = (style = inp) => (
     <select name="company_account_id" value={formData.company_account_id} onChange={handleChange} style={style}>
@@ -880,6 +980,22 @@ export default function WarehouseTradingPage() {
 
                 {(activeVoucherType === "purchase" || activeVoucherType === "payment") && (
                   <>
+                    {activeVoucherType === "payment" && (
+                      <Field label="Amount">
+                        <input
+                          name="amount"
+                          type="number"
+                          step="0.01"
+                          value={formData.amount}
+                          onChange={(event) => {
+                            handleChange(event);
+                            setPaymentAdjustments([]);
+                          }}
+                          style={inp}
+                          required
+                        />
+                      </Field>
+                    )}
                     <Field label="Farmer (Creditor)">
                       <select name="farmer_id" value={formData.farmer_id} onChange={handleChange} style={inp}>
                         <option value="">Select Farmer</option>
@@ -889,8 +1005,12 @@ export default function WarehouseTradingPage() {
                       </select>
                     </Field>
                     {partyOutstanding && activeVoucherType === "payment" && (
-                      <div style={{ marginTop: 8, fontSize: 13, color: "#444" }}>
-                        Current outstanding: ₹{Number(partyOutstanding.outstanding || 0).toFixed(2)}
+                      <div style={{ marginTop: 8, fontSize: 13, color: "#444", display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                        <span>Current outstanding: Rs.{Number(partyOutstanding.stats?.outstanding ?? partyOutstanding.outstanding || 0).toFixed(2)}</span>
+                        <span>Adjusted: Rs.{paymentAdjustmentTotal.toFixed(2)}</span>
+                        <button type="button" onClick={openPaymentAdjustmentPopup} style={{ ...btnAction, background: "#2563eb" }}>
+                          Adjust Bills
+                        </button>
                       </div>
                     )}
                   </>
@@ -998,9 +1118,11 @@ export default function WarehouseTradingPage() {
                     <Field label="Reference ID">
                       <input name="reference_id" value={formData.reference_id} onChange={handleChange} style={inp} placeholder="Optional bill ID" />
                     </Field>
-                    <Field label="Amount">
-                      <input name="amount" type="number" step="0.01" value={formData.amount} onChange={handleChange} style={inp} required />
-                    </Field>
+                    {activeVoucherType === "receipt" && (
+                      <Field label="Amount">
+                        <input name="amount" type="number" step="0.01" value={formData.amount} onChange={handleChange} style={inp} required />
+                      </Field>
+                    )}
                   </>
                 )}
 
@@ -1137,6 +1259,100 @@ export default function WarehouseTradingPage() {
           </div>
         </>
       )}
+      {showPaymentAdjustPopup && (
+        <div style={modalOverlayStyle}>
+          <div style={paymentAdjustModalStyle}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+              <div>
+                <h3 style={{ margin: 0 }}>Payment Adjustment</h3>
+                <div style={{ fontSize: 13, color: "#64748b", marginTop: 4 }}>
+                  Farmer and warehouse wise pending purchase bills
+                </div>
+              </div>
+              <button type="button" onClick={() => setShowPaymentAdjustPopup(false)} style={{ ...btnAction, background: "#64748b" }}>
+                Close
+              </button>
+            </div>
+
+            <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginTop: 14, fontSize: 13 }}>
+              <strong>Payment: Rs.{toNumber(formData.amount).toFixed(2)}</strong>
+              <strong>Adjusted: Rs.{paymentAdjustmentTotal.toFixed(2)}</strong>
+              <strong style={{ color: Math.abs(paymentAdjustmentTotal - toNumber(formData.amount)) <= 0.0001 ? "#15803d" : "#dc2626" }}>
+                Difference: Rs.{(toNumber(formData.amount) - paymentAdjustmentTotal).toFixed(2)}
+              </strong>
+              <button type="button" onClick={autoFillPaymentAdjustments} style={{ ...btnAction, background: "#0f766e" }}>
+                Auto Adjust
+              </button>
+            </div>
+
+            <div style={{ ...tableCard, marginTop: 14, maxHeight: "55vh" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                <thead>
+                  <tr style={reportHeaderRowStyle}>
+                    <th style={th}>Date</th>
+                    <th style={th}>Voucher No</th>
+                    <th style={th}>Warehouse</th>
+                    <th style={th}>Bill Amount</th>
+                    <th style={th}>Adjusted</th>
+                    <th style={th}>Pending</th>
+                    <th style={th}>Adjustment Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(partyOutstanding?.purchases || [])
+                    .filter((row) => toNumber(row.pending_amount) > 0)
+                    .map((row) => (
+                      <tr key={row.id || row._id}>
+                        <td style={td}>{row.date || "-"}</td>
+                        <td style={td}>{row.voucher_no || "-"}</td>
+                        <td style={td}>{getWarehouseName(row)}</td>
+                        <td style={td}>{formatMoney(row.amount || 0)}</td>
+                        <td style={td}>{formatMoney(row.adjusted_amount || 0)}</td>
+                        <td style={td}>{formatMoney(row.pending_amount || 0)}</td>
+                        <td style={td}>
+                          <input
+                            type="number"
+                            step="0.01"
+                            min="0"
+                            max={row.pending_amount || row.amount || 0}
+                            value={selectedAdjustmentFor(row.id || row._id)}
+                            onChange={(event) => setPaymentAdjustmentAmount(row, event.target.value)}
+                            style={{ ...inp, padding: "7px 8px" }}
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  {(partyOutstanding?.purchases || []).filter((row) => toNumber(row.pending_amount) > 0).length === 0 && (
+                    <tr>
+                      <td colSpan={7} style={{ ...td, textAlign: "center", padding: 20 }}>
+                        No pending purchase bills found.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 14 }}>
+              <button type="button" onClick={() => setPaymentAdjustments([])} style={{ ...btnPrimary, background: "#64748b" }}>
+                Clear
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowPaymentAdjustPopup(false)}
+                disabled={Math.abs(paymentAdjustmentTotal - toNumber(formData.amount)) > 0.0001}
+                style={{
+                  ...btnPrimary,
+                  opacity: Math.abs(paymentAdjustmentTotal - toNumber(formData.amount)) > 0.0001 ? 0.55 : 1,
+                  cursor: Math.abs(paymentAdjustmentTotal - toNumber(formData.amount)) > 0.0001 ? "not-allowed" : "pointer",
+                }}
+              >
+                Confirm Adjustment
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1179,6 +1395,26 @@ const btnPrimary = { background: "#2563eb", color: "#fff", border: "none", paddi
 const th = { padding: "10px 8px", textAlign: "left", borderBottom: "1px solid #0d5c56" };
 const td = { padding: "8px", borderBottom: "1px solid #e2e8f0" };
 const tableCard = { overflowX: "auto", border: "1px solid #e2e8f0", borderRadius: 10, background: "#fff" };
+const modalOverlayStyle = {
+  position: "fixed",
+  inset: 0,
+  background: "rgba(15, 23, 42, 0.48)",
+  zIndex: 50,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: 16,
+};
+const paymentAdjustModalStyle = {
+  width: "min(980px, 96vw)",
+  maxHeight: "90vh",
+  overflow: "auto",
+  background: "#fff",
+  borderRadius: 8,
+  border: "1px solid #cbd5e1",
+  boxShadow: "0 20px 45px rgba(15, 23, 42, 0.25)",
+  padding: 18,
+};
 const reportHeaderRowStyle = { background: "#087a73", color: "#fff" };
 const lbl = { display: "block", marginBottom: 6, fontWeight: 600, fontSize: 13, color: "#334155" };
 const memoShell = { border: "1px solid #d7dee8", borderRadius: 10, padding: 18, background: "#fbfdff" };
