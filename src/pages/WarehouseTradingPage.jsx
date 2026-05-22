@@ -394,7 +394,6 @@ export default function WarehouseTradingPage() {
       } else {
         setAccountFarmers([]);
       }
-    }
       loadOutstanding("farmer", value, null, editId).then(() => {
         if (value && toNumber(formData.amount) > 0) {
           setShowPaymentAdjustPopup(true);
