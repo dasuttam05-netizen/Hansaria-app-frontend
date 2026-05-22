@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { useSearchParams } from "react-router-dom";
 import { hasPermission, loadSession } from "../utils/auth";
@@ -65,6 +65,13 @@ const titleCase = (value) =>
     .split("-")
     .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
     .join(" ");
+const formatLedgerDate = (value) => {
+  const raw = String(value || "").trim();
+  const datePart = raw.includes("T") ? raw.split("T")[0] : raw;
+  const match = datePart.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (match) return `${match[3]}-${match[2]}-${match[1]}`;
+  return raw || "-";
+};
 
 const purchaseDeductionFields = [
   { key: "less_bags_weight", label: "Less Bags Weight" },
@@ -107,7 +114,7 @@ export default function WarehouseTradingPage() {
   const [loading, setLoading] = useState(false);
   const [list, setList] = useState([]);
   const [reportData, setReportData] = useState([]);
-  const [reportFilters, setReportFilters] = useState({ farmer_id: "" });
+  const [reportFilters, setReportFilters] = useState({ farmer_id: "", company_account_id: "" });
   const [selectedLedgerBillId, setSelectedLedgerBillId] = useState("");
   const [partyOutstanding, setPartyOutstanding] = useState(null);
   const [showPaymentAdjustPopup, setShowPaymentAdjustPopup] = useState(false);
@@ -244,7 +251,7 @@ export default function WarehouseTradingPage() {
     if (activeTab === "reports") {
       loadReport();
     }
-  }, [activeTab, activeReport, reportFilters.farmer_id]);
+  }, [activeTab, activeReport, reportFilters.farmer_id, reportFilters.company_account_id]);
 
   useEffect(() => {
     const handleLedgerRefresh = (event) => {
@@ -254,7 +261,7 @@ export default function WarehouseTradingPage() {
     };
     window.addEventListener("keydown", handleLedgerRefresh);
     return () => window.removeEventListener("keydown", handleLedgerRefresh);
-  }, [activeTab, activeReport, reportFilters.farmer_id]);
+  }, [activeTab, activeReport, reportFilters.farmer_id, reportFilters.company_account_id]);
 
   const loadData = async () => {
     try {
@@ -345,6 +352,9 @@ export default function WarehouseTradingPage() {
       const params = {};
       if (activeReport === "purchase-party-ledger" && reportFilters.farmer_id) {
         params.farmer_id = reportFilters.farmer_id;
+      }
+      if (activeReport === "purchase-party-ledger" && reportFilters.company_account_id) {
+        params.company_account_id = reportFilters.company_account_id;
       }
       const res = await axios.get(`/api/wh-vouchers/report/${endpoint}`, { params });
       const rows = Array.isArray(res.data) ? res.data : [];
@@ -751,17 +761,20 @@ export default function WarehouseTradingPage() {
       ["total_amount", "Total Amount", (item) => formatMoney(item.total_amount || 0)],
     ],
     "purchase-party-ledger": [
-      ["date", "Date", (item) => item.date || "-"],
-      ["party", "Party", (item) => item.party_name || item.farmer_name || "-"],
+      ["date", "Date", (item) => (item.row_type === "closing" ? "-" : formatLedgerDate(item.date))],
+      ["farmer", "Farmer", (item) => (item.row_type === "closing" ? `Closing (${item.closing_side})` : (item.farmer_name || getFarmerName(item) || "-"))],
+      ["account", "Account", (item) => (item.row_type === "closing" ? "-" : getAccountName(item))],
       ["voucher_type", "Type", (item) => item.voucher_type || "-"],
       ["voucher_no", "Voucher No", (item) => item.voucher_no || "-"],
       ["particulars", "Particulars", (item) => item.particulars || "-"],
-      ["reference_id", "Reference", (item) => item.reference_id || "-"],
       ["adjustment_details", "Adjustment Details", (item) => item.adjustment_details || "-"],
       ["warehouse", "Warehouse", (item) => getWarehouseName(item)],
       ["debit", "Debit", (item) => formatMoney(item.debit || 0)],
       ["credit", "Credit", (item) => formatMoney(item.credit || 0)],
-      ["balance", "Balance", (item) => formatMoney(item.balance || 0)],
+      ["balance", "Balance", (item) => {
+        if (item.row_type === "closing") return `${item.closing_side} ${formatMoney(Math.abs(item.balance || 0))}`;
+        return formatMoney(item.balance || 0);
+      }],
     ],
     "sale-party-ledger": [
       ["date", "Date", (item) => item.date || "-"],
@@ -807,8 +820,53 @@ export default function WarehouseTradingPage() {
   };
 
   const activeReportColumns = reportColumns[activeReport] || reportColumns.sale;
+  const displayReportData = useMemo(() => {
+    if (activeReport !== "purchase-party-ledger") return reportData;
+    const entries = (Array.isArray(reportData) ? reportData : []).filter((row) => row.row_type !== "closing");
+    const sorted = entries.slice().sort((a, b) => {
+      const farmerCmp = String(a.farmer_name || getFarmerName(a) || "").localeCompare(String(b.farmer_name || getFarmerName(b) || ""));
+      if (farmerCmp) return farmerCmp;
+      const dateCmp = String(a.date || "").localeCompare(String(b.date || ""));
+      if (dateCmp) return dateCmp;
+      return String(a.voucher_no || "").localeCompare(String(b.voucher_no || ""));
+    });
+    const grouped = [];
+    let currentFarmer = null;
+    let running = 0;
+    let farmerDebit = 0;
+    let farmerCredit = 0;
+    const pushClosing = () => {
+      if (!currentFarmer) return;
+      grouped.push({
+        row_type: "closing",
+        farmer_name: currentFarmer,
+        debit: farmerDebit,
+        credit: farmerCredit,
+        balance: running,
+        closing_side: running > 0 ? "DR" : "CR",
+      });
+    };
+    sorted.forEach((row) => {
+      const farmerName = row.farmer_name || getFarmerName(row) || "Unknown Farmer";
+      if (currentFarmer && farmerName !== currentFarmer) {
+        pushClosing();
+        running = 0;
+        farmerDebit = 0;
+        farmerCredit = 0;
+      }
+      currentFarmer = farmerName;
+      const debit = toNumber(row.debit || 0);
+      const credit = toNumber(row.credit || 0);
+      running += debit - credit;
+      farmerDebit += debit;
+      farmerCredit += credit;
+      grouped.push({ ...row, farmer_name: farmerName, balance: Number(running.toFixed(2)), row_type: "entry" });
+    });
+    pushClosing();
+    return grouped;
+  }, [activeReport, reportData, farmers]);
   const purchaseBillRows = activeReport === "purchase-party-ledger"
-    ? reportData.filter((row) => row.voucher_type === "Purchase")
+    ? displayReportData.filter((row) => row.row_type === "entry" && row.voucher_type === "Purchase")
     : [];
   const selectedBill = purchaseBillRows.find((row) => String(row.purchase_id || row.voucher_no) === String(selectedLedgerBillId)) || purchaseBillRows[0] || null;
 
@@ -1389,13 +1447,27 @@ export default function WarehouseTradingPage() {
                     ))}
                   </select>
                 </Field>
-                {reportFilters.farmer_id && (
+                <Field label="Account Filter">
+                  <select
+                    value={reportFilters.company_account_id}
+                    onChange={(event) => setReportFilters((prev) => ({ ...prev, company_account_id: event.target.value }))}
+                    style={{ ...inp, minWidth: 260 }}
+                  >
+                    <option value="">All Accounts</option>
+                    {companyAccounts.map((account) => (
+                      <option key={account.id || account._id} value={account.id || account._id}>
+                        {account.account_name || account.name}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                {(reportFilters.farmer_id || reportFilters.company_account_id) && (
                   <button
                     type="button"
-                    onClick={() => setReportFilters((prev) => ({ ...prev, farmer_id: "" }))}
+                    onClick={() => setReportFilters({ farmer_id: "", company_account_id: "" })}
                     style={{ ...btnAction, background: "#64748b", marginBottom: 1 }}
                   >
-                    Clear Filter
+                    Clear Filters
                   </button>
                 )}
               </div>
@@ -1412,14 +1484,14 @@ export default function WarehouseTradingPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {reportData.map((item, i) => (
-                        <tr key={item.id || `${item.voucher_type}-${item.voucher_no}-${i}`} style={{ background: i % 2 ? "#f8fafc" : "#fff" }}>
+                      {displayReportData.map((item, i) => (
+                        <tr key={item.id || `${item.voucher_type || item.row_type}-${item.voucher_no || i}-${i}`} style={{ background: item.row_type === "closing" ? "#eef6ff" : (i % 2 ? "#f8fafc" : "#fff"), fontWeight: item.row_type === "closing" ? 700 : 400 }}>
                           {activeReportColumns.map(([key, _label, render]) => (
                             <td key={key} style={td}>{render(item, i)}</td>
                           ))}
                         </tr>
                       ))}
-                      {reportData.length === 0 && (
+                      {displayReportData.length === 0 && (
                         <tr><td colSpan={activeReportColumns.length} style={{ ...td, textAlign: "center", padding: 20 }}>No data available.</td></tr>
                       )}
                     </tbody>
@@ -1503,14 +1575,14 @@ export default function WarehouseTradingPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {reportData.map((item, i) => (
+                    {displayReportData.map((item, i) => (
                       <tr key={item.id || i} style={{ background: i % 2 ? "#f8fafc" : "#fff" }}>
                         {activeReportColumns.map(([key, _label, render]) => (
                           <td key={key} style={td}>{render(item, i)}</td>
                         ))}
                       </tr>
                     ))}
-                    {reportData.length === 0 && (
+                    {displayReportData.length === 0 && (
                       <tr><td colSpan={activeReportColumns.length} style={{ ...td, textAlign: "center", padding: 20 }}>No data available.</td></tr>
                     )}
                   </tbody>
