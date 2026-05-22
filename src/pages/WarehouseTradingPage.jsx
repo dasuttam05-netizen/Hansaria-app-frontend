@@ -1,6 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { useSearchParams } from "react-router-dom";
+import { FaFilePdf, FaWhatsapp } from "react-icons/fa";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 import { hasPermission, loadSession } from "../utils/auth";
 
 const defaultForm = () => ({
@@ -761,19 +764,18 @@ export default function WarehouseTradingPage() {
       ["total_amount", "Total Amount", (item) => formatMoney(item.total_amount || 0)],
     ],
     "purchase-party-ledger": [
-      ["date", "Date", (item) => (item.row_type === "closing" ? "-" : formatLedgerDate(item.date))],
-      ["farmer", "Farmer", (item) => (item.row_type === "closing" ? `Closing (${item.closing_side})` : (item.farmer_name || getFarmerName(item) || "-"))],
-      ["account", "Account", (item) => (item.row_type === "closing" ? "-" : getAccountName(item))],
-      ["voucher_type", "Type", (item) => item.voucher_type || "-"],
-      ["voucher_no", "Voucher No", (item) => item.voucher_no || "-"],
-      ["particulars", "Particulars", (item) => item.particulars || "-"],
-      ["adjustment_details", "Adjustment Details", (item) => item.adjustment_details || "-"],
-      ["warehouse", "Warehouse", (item) => getWarehouseName(item)],
+      ["date", "Date", (item) => (item.row_type === "closing" ? "" : formatLedgerDate(item.date))],
+      ["farmer", "Farmer", (item) => (item.row_type === "closing" ? `Closing Balance (${item.closing_side})` : (item.farmer_name || getFarmerName(item) || "-"))],
+      ["account", "Account", (item) => (item.row_type === "closing" ? "" : (item.company_account_name || getAccountName(item)))],
+      ["voucher_type", "Type", (item) => (item.row_type === "closing" ? "" : (item.voucher_type || "-"))],
+      ["voucher_no", "Voucher No", (item) => (item.row_type === "closing" ? "" : (item.voucher_no || "-"))],
+      ["particulars", "Particulars", (item) => (item.row_type === "closing" ? "" : (item.particulars || "-"))],
+      ["adjustment_details", "Adjustment Details", (item) => (item.row_type === "closing" ? "" : (item.adjustment_details || "-"))],
+      ["warehouse", "Warehouse", (item) => (item.row_type === "closing" ? "" : getWarehouseName(item))],
       ["debit", "Debit", (item) => formatMoney(item.debit || 0)],
       ["credit", "Credit", (item) => formatMoney(item.credit || 0)],
       ["balance", "Balance", (item) => {
-        if (item.row_type === "closing") return `${item.closing_side} ${formatMoney(Math.abs(item.balance || 0))}`;
-        return formatMoney(item.balance || 0);
+        return formatMoney(Math.abs(item.balance || 0));
       }],
     ],
     "sale-party-ledger": [
@@ -869,6 +871,46 @@ export default function WarehouseTradingPage() {
     ? displayReportData.filter((row) => row.row_type === "entry" && row.voucher_type === "Purchase")
     : [];
   const selectedBill = purchaseBillRows.find((row) => String(row.purchase_id || row.voucher_no) === String(selectedLedgerBillId)) || purchaseBillRows[0] || null;
+
+  const downloadPurchaseLedgerPdf = () => {
+    if (activeReport !== "purchase-party-ledger" || !displayReportData.length) {
+      alert("No ledger data available");
+      return;
+    }
+    const doc = new jsPDF({ orientation: "landscape" });
+    doc.setFontSize(14);
+    doc.text("Purchase Party Ledger", 14, 14);
+    autoTable(doc, {
+      startY: 20,
+      styles: { fontSize: 8 },
+      head: [["Date", "Farmer", "Account", "Type", "Voucher No", "Particulars", "Dr", "Cr", "Balance"]],
+      body: displayReportData.map((row) => [
+        row.row_type === "closing" ? "" : formatLedgerDate(row.date),
+        row.row_type === "closing" ? `Closing Balance (${row.closing_side})` : (row.farmer_name || getFarmerName(row) || "-"),
+        row.row_type === "closing" ? "" : (row.company_account_name || getAccountName(row)),
+        row.row_type === "closing" ? "" : (row.voucher_type || ""),
+        row.row_type === "closing" ? "" : (row.voucher_no || ""),
+        row.row_type === "closing" ? "" : (row.particulars || ""),
+        formatMoney(row.debit || 0),
+        formatMoney(row.credit || 0),
+        formatMoney(Math.abs(row.balance || 0)),
+      ]),
+    });
+    doc.save(`purchase-party-ledger-${new Date().toISOString().slice(0, 10)}.pdf`);
+  };
+
+  const sharePurchaseLedgerWhatsapp = () => {
+    if (activeReport !== "purchase-party-ledger" || !displayReportData.length) {
+      alert("No ledger data available");
+      return;
+    }
+    const closingRows = displayReportData.filter((row) => row.row_type === "closing");
+    const summary = closingRows
+      .map((row) => `${row.farmer_name}: ${row.closing_side} ${formatMoney(Math.abs(row.balance || 0))}`)
+      .join("\n");
+    const message = `Purchase Party Ledger\n\n${summary || "No closing rows"}`;
+    window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, "_blank");
+  };
 
   return (
     <div style={{ fontFamily: "Segoe UI, Arial, sans-serif", padding: "16px" }}>
@@ -1430,7 +1472,19 @@ export default function WarehouseTradingPage() {
             ))}
           </div>
           <div style={card}>
-            <h3 style={{ marginTop: 0 }}>{reportLabels[activeReport] || titleCase(activeReport)}</h3>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+              <h3 style={{ marginTop: 0, marginBottom: 0 }}>{reportLabels[activeReport] || titleCase(activeReport)}</h3>
+              {activeReport === "purchase-party-ledger" && (
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button type="button" onClick={downloadPurchaseLedgerPdf} style={{ ...btnAction, background: "#b45309", display: "inline-flex", alignItems: "center", gap: 6 }}>
+                    <FaFilePdf /> PDF
+                  </button>
+                  <button type="button" onClick={sharePurchaseLedgerWhatsapp} style={{ ...btnAction, background: "#15803d", display: "inline-flex", alignItems: "center", gap: 6 }}>
+                    <FaWhatsapp /> WhatsApp
+                  </button>
+                </div>
+              )}
+            </div>
             {activeReport === "purchase-party-ledger" && (
               <div style={{ display: "flex", gap: 12, alignItems: "end", flexWrap: "wrap", marginBottom: 14 }}>
                 <Field label="Farmer Filter">
@@ -1735,8 +1789,8 @@ const tableCard = { overflowX: "auto", border: "1px solid #e2e8f0", borderRadius
 const ledgerSplitStyle = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(360px, 100%), 1fr))", gap: 14, alignItems: "start" };
 const billWisePanelStyle = { border: "1px solid #dbe4ef", borderRadius: 10, padding: 12, background: "#f8fafc" };
 const linkButtonStyle = { border: "none", background: "transparent", color: "#2563eb", cursor: "pointer", padding: 0, fontWeight: 700, textDecoration: "underline" };
-const paymentDetailBoxStyle = { marginTop: 12, border: "1px solid #dbe4ef", borderRadius: 8, background: "#fff", padding: 12 };
-const paymentDetailRowStyle = { display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: 8, padding: "7px 0", borderBottom: "1px solid #edf2f7", fontSize: 13 };
+const paymentDetailBoxStyle = { marginTop: 10, border: "1px solid #dbe4ef", borderRadius: 8, background: "#fff", padding: 10, maxWidth: 460 };
+const paymentDetailRowStyle = { display: "grid", gridTemplateColumns: "90px 1fr auto", gap: 8, padding: "6px 0", borderBottom: "1px solid #edf2f7", fontSize: 12 };
 const modalOverlayStyle = {
   position: "fixed",
   inset: 0,
