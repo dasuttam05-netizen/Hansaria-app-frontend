@@ -112,7 +112,9 @@ export default function WarehouseTradingPage() {
   const [partyOutstanding, setPartyOutstanding] = useState(null);
   const [showPaymentAdjustPopup, setShowPaymentAdjustPopup] = useState(false);
   const [paymentAdjustments, setPaymentAdjustments] = useState([]);
+  const [selectedPaymentId, setSelectedPaymentId] = useState(null);
   const [voucherNumberLoading, setVoucherNumberLoading] = useState(false);
+  const selectedVoucher = list.find((item) => String(item.id || item._id) === String(selectedPaymentId));
   const selectedWarehouse = warehouses.find((w) => String(w.id || w._id) === String(formData.warehouse_id));
   const selectedManualLocation = locations.find((l) => String(l.id || l._id) === String(formData.location_id));
   const selectedWarehouseLocation =
@@ -231,6 +233,7 @@ export default function WarehouseTradingPage() {
       fetchNextVoucherNo(activeVoucherType);
       setPartyOutstanding(null);
       setPaymentAdjustments([]);
+      setSelectedPaymentId(null);
       setShowPaymentAdjustPopup(false);
       setFormData((prev) => ({ ...prev, reference_type: "", reference_id: "" }));
     }
@@ -293,7 +296,7 @@ export default function WarehouseTradingPage() {
     }
   };
 
-  const loadOutstanding = async (partyType, partyId, warehouseId = null, excludePaymentId = null) => {
+  const loadOutstanding = async (partyType, partyId, warehouseId = null, excludePaymentId = null, companyAccountId = null) => {
     if (!partyType || !partyId) {
       setPartyOutstanding(null);
       return;
@@ -303,6 +306,7 @@ export default function WarehouseTradingPage() {
       const warehouse = warehouseId || formData.warehouse_id;
       if (warehouse) params.warehouse_id = warehouse;
       if (excludePaymentId) params.exclude_payment_id = excludePaymentId;
+      if (companyAccountId) params.company_account_id = companyAccountId;
       const res = await axios.get(`/api/wh-vouchers/outstanding`, { params });
       setPartyOutstanding(res.data || null);
     } catch (err) {
@@ -404,7 +408,7 @@ export default function WarehouseTradingPage() {
     }
     if (activeVoucherType === "payment" && name === "farmer_id") {
       if (value) {
-        loadOutstanding("farmer", value, formData.warehouse_id, editId).then(() => {
+        loadOutstanding("farmer", value, formData.warehouse_id, editId, formData.company_account_id).then(() => {
           if (toNumber(formData.amount) > 0) {
             setShowPaymentAdjustPopup(true);
           }
@@ -418,7 +422,7 @@ export default function WarehouseTradingPage() {
     }
     if (name === "warehouse_id") {
       if (activeVoucherType === "payment" && formData.farmer_id) {
-        loadOutstanding("farmer", formData.farmer_id, value, editId).then(() => {
+        loadOutstanding("farmer", formData.farmer_id, value, editId, formData.company_account_id).then(() => {
           if (toNumber(formData.amount) > 0) {
             setShowPaymentAdjustPopup(true);
           }
@@ -582,7 +586,7 @@ export default function WarehouseTradingPage() {
           : [];
         setPaymentAdjustments(existingAdjustments);
         if (voucher.farmer_id) {
-          loadOutstanding("farmer", voucher.farmer_id, voucher.warehouse_id, voucherId);
+          loadOutstanding("farmer", voucher.farmer_id, voucher.warehouse_id, voucherId, voucher.company_account_id);
         }
       }
       window.scrollTo({ top: 0, behavior: "smooth" });
@@ -645,7 +649,7 @@ export default function WarehouseTradingPage() {
       alert("Please select farmer");
       return;
     }
-    await loadOutstanding("farmer", formData.farmer_id, null, editId);
+    await loadOutstanding("farmer", formData.farmer_id, formData.warehouse_id, editId, formData.company_account_id);
     setShowPaymentAdjustPopup(true);
   };
 
@@ -1278,48 +1282,83 @@ export default function WarehouseTradingPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {list.map((item, i) => (
-                    <tr key={item.id || i} style={{ background: i % 2 ? "#f8fafc" : "#fff" }}>
-                      <td style={td}>{i + 1}</td>
-                      <td style={td}>{item.date}</td>
-                      <td style={td}>{item.voucher_no}</td>
-                      <td style={td}>{getWarehouseName(item)}</td>
-                      <td style={td}>{getAccountName(item)}</td>
-                      {(activeVoucherType === "purchase" || activeVoucherType === "payment") && (
-                        <td style={td}>{getFarmerName(item)}</td>
-                      )}
-                      {(activeVoucherType === "sale" || activeVoucherType === "receipt") && (
-                        <td style={td}>{companies.find(c => String(c.id || c._id) === String(item.company_id))?.name || "-"}</td>
-                      )}
-                      {(activeVoucherType === "purchase" || activeVoucherType === "sale") && (
-                        <>
-                          <td style={td}>{getProductName(item)}</td>
-                          <td style={td}>{activeVoucherType === "purchase" ? item.total_qty || item.net_weight || item.quantity || 0 : item.unloading_qty || item.quantity || 0}</td>
-                          <td style={td}>{item.rate || 0}</td>
-                        </>
-                      )}
-                      <td style={td}>{activeVoucherType === "purchase" ? item.net_amount_payable || item.amount || 0 : item.net_receivable_amount || item.net_amount || item.amount || 0}</td>
-                      <td style={td}>
-                        <div style={{ display: "flex", gap: 6 }}>
-                          <button onClick={() => handleEditVoucher(item.id || item._id)} style={btnAction} title="Edit">Edit</button>
-                          <button onClick={() => handleDeleteVoucher(item.id || item._id)} style={{ ...btnAction, background: "#dc2626" }} title="Delete">Delete</button>
-                          {activeVoucherType === "sale" && (
-                            <button onClick={() => handleGeneratePDF(item.id || item._id)} style={{ ...btnAction, background: "#ea580c" }} title="Download PDF">PDF</button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
+                  {list.map((item, i) => {
+                    const isSelectedRow = activeVoucherType === "payment" && String(item.id || item._id) === String(selectedPaymentId);
+                    return (
+                      <tr key={item.id || i} style={{ background: isSelectedRow ? "#e0f2fe" : i % 2 ? "#f8fafc" : "#fff" }}>
+                        <td style={td}>{i + 1}</td>
+                        <td style={td}>{item.date}</td>
+                        <td style={td}>{item.voucher_no}</td>
+                        <td style={td}>{getWarehouseName(item)}</td>
+                        <td style={td}>{getAccountName(item)}</td>
+                        {(activeVoucherType === "purchase" || activeVoucherType === "payment") && (
+                          <td style={td}>{getFarmerName(item)}</td>
+                        )}
+                        {(activeVoucherType === "sale" || activeVoucherType === "receipt") && (
+                          <td style={td}>{companies.find(c => String(c.id || c._id) === String(item.company_id))?.name || "-"}</td>
+                        )}
+                        {(activeVoucherType === "purchase" || activeVoucherType === "sale") && (
+                          <>
+                            <td style={td}>{getProductName(item)}</td>
+                            <td style={td}>{activeVoucherType === "purchase" ? item.total_qty || item.net_weight || item.quantity || 0 : item.unloading_qty || item.quantity || 0}</td>
+                            <td style={td}>{item.rate || 0}</td>
+                          </>
+                        )}
+                        <td style={td}>{activeVoucherType === "purchase" ? item.net_amount_payable || item.amount || 0 : item.net_receivable_amount || item.net_amount || item.amount || 0}</td>
+                        <td style={td}>
+                          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+                            <button onClick={() => handleEditVoucher(item.id || item._id)} style={btnAction} title="Edit">Edit</button>
+                            <button onClick={() => handleDeleteVoucher(item.id || item._id)} style={{ ...btnAction, background: "#dc2626" }} title="Delete">Delete</button>
+                            {activeVoucherType === "payment" && (
+                              <button type="button" onClick={() => setSelectedPaymentId(item.id || item._id)} style={{ ...btnAction, background: "#2563eb" }} title="Show Details">
+                                {isSelectedRow ? "Selected" : "Details"}
+                              </button>
+                            )}
+                            {activeVoucherType === "sale" && (
+                              <button onClick={() => handleGeneratePDF(item.id || item._id)} style={{ ...btnAction, background: "#ea580c" }} title="Download PDF">PDF</button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
                   {list.length === 0 && (
                     <tr><td colSpan={11} style={{ ...td, textAlign: "center", padding: 20 }}>No vouchers found.</td></tr>
                   )}
                 </tbody>
               </table>
             </div>
+            {activeVoucherType === "payment" && selectedVoucher && (
+              <div style={{ marginTop: 14, padding: 14, border: "1px solid #cbd5e1", borderRadius: 8, background: "#f8fafc" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                  <strong>Selected Payment Voucher</strong>
+                  <span style={{ color: "#0f766e", fontSize: 13 }}>{selectedVoucher.voucher_no || "-"}</span>
+                </div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10, marginTop: 10, fontSize: 13 }}>
+                  <div><strong>Date:</strong> {selectedVoucher.date || "-"}</div>
+                  <div><strong>Account:</strong> {getAccountName(selectedVoucher)}</div>
+                  <div><strong>Farmer:</strong> {getFarmerName(selectedVoucher)}</div>
+                  <div><strong>Amount:</strong> Rs.{formatMoney(selectedVoucher.amount || selectedVoucher.net_amount || selectedVoucher.amount || 0)}</div>
+                  <div><strong>Reference:</strong> {selectedVoucher.reference_id || selectedVoucher.reference_type || "-"}</div>
+                </div>
+                <div style={{ marginTop: 12 }}>
+                  <strong>Adjustments</strong>
+                  {(selectedVoucher.adjustments || []).length > 0 ? (
+                    (selectedVoucher.adjustments || []).map((item, index) => (
+                      <div key={`${item.purchase_id || item.voucher_no}-${index}`} style={{ display: "flex", justifyContent: "space-between", gap: 8, padding: "8px 0", borderBottom: index < (selectedVoucher.adjustments || []).length - 1 ? "1px solid #e2e8f0" : "none" }}>
+                        <span>{item.voucher_no || item.purchase_voucher_no || item.purchase_id}</span>
+                        <strong>Rs.{formatMoney(item.adjusted_amount || 0)}</strong>
+                      </div>
+                    ))
+                  ) : (
+                    <div style={{ color: "#475569", marginTop: 8 }}>No purchase bill adjustments available.</div>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         </>
       ) : (
-        <>
           <div style={voucherTypeRow}>
             {allowedReports.map((type) => (
               <button
