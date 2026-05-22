@@ -1071,7 +1071,7 @@ export default function WarehouseTradingPage() {
                     <Field label="Farmer (Creditor)">
                       <select name="farmer_id" value={formData.farmer_id} onChange={handleChange} style={inp}>
                         <option value="">Select Farmer</option>
-                        {(activeVoucherType === "payment" && formData.company_account_id && accountFarmers.length > 0
+                        {(activeVoucherType === "payment" && formData.company_account_id
                           ? accountFarmers
                           : farmers
                         ).map((f) => (
@@ -1082,6 +1082,11 @@ export default function WarehouseTradingPage() {
                               : ""}
                           </option>
                         ))}
+                        {activeVoucherType === "payment" && formData.company_account_id && accountFarmers.length === 0 && (
+                          <option value="" disabled>
+                            No farmers with outstanding balance for this account
+                          </option>
+                        )}
                       </select>
                     </Field>
                     {partyOutstanding && activeVoucherType === "payment" && (
