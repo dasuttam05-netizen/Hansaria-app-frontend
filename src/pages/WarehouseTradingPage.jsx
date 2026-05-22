@@ -1508,6 +1508,8 @@ export default function WarehouseTradingPage() {
                       <thead>
                         <tr style={reportHeaderRowStyle}>
                           <th style={th}>Bill</th>
+                          <th style={th}>Farmer</th>
+                          <th style={th}>Account</th>
                           <th style={th}>Purchase</th>
                           <th style={th}>Payment</th>
                           <th style={th}>Journal</th>
@@ -1522,6 +1524,8 @@ export default function WarehouseTradingPage() {
                           return (
                             <tr key={rowKey} style={{ background: isSelected ? "#e0f2fe" : "#fff" }}>
                               <td style={td}>{row.voucher_no || "-"}</td>
+                              <td style={td}>{row.farmer_name || getFarmerName(row) || "-"}</td>
+                              <td style={td}>{getAccountName(row)}</td>
                               <td style={td}>{formatMoney(row.purchase_amount || row.credit || 0)}</td>
                               <td style={td}>
                                 <button
@@ -1541,7 +1545,7 @@ export default function WarehouseTradingPage() {
                           );
                         })}
                         {purchaseBillRows.length === 0 && (
-                          <tr><td colSpan={6} style={{ ...td, textAlign: "center", padding: 18 }}>No purchase bill found.</td></tr>
+                          <tr><td colSpan={8} style={{ ...td, textAlign: "center", padding: 18 }}>No purchase bill found.</td></tr>
                         )}
                       </tbody>
                     </table>
