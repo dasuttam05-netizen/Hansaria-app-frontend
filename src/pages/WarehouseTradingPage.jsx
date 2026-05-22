@@ -1359,6 +1359,7 @@ export default function WarehouseTradingPage() {
           </div>
         </>
       ) : (
+        <>
           <div style={voucherTypeRow}>
             {allowedReports.map((type) => (
               <button
@@ -1370,7 +1371,6 @@ export default function WarehouseTradingPage() {
               </button>
             ))}
           </div>
-
           <div style={card}>
             <h3 style={{ marginTop: 0 }}>{reportLabels[activeReport] || titleCase(activeReport)}</h3>
             {activeReport === "purchase-party-ledger" && (
