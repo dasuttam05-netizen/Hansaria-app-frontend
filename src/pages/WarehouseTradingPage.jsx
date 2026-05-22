@@ -391,14 +391,27 @@ export default function WarehouseTradingPage() {
             console.error("Failed to load farmers for account:", err);
             setAccountFarmers([]);
           });
+        setFormData((prev) => ({ ...prev, farmer_id: "" }));
+        setPartyOutstanding(null);
+        setPaymentAdjustments([]);
+        setShowPaymentAdjustPopup(false);
       } else {
         setAccountFarmers([]);
+        setPartyOutstanding(null);
+        setPaymentAdjustments([]);
+        setShowPaymentAdjustPopup(false);
       }
-      loadOutstanding("farmer", value, null, editId).then(() => {
-        if (value && toNumber(formData.amount) > 0) {
-          setShowPaymentAdjustPopup(true);
-        }
-      });
+    }
+    if (activeVoucherType === "payment" && name === "farmer_id") {
+      if (value) {
+        loadOutstanding("farmer", value, formData.warehouse_id, editId).then(() => {
+          if (toNumber(formData.amount) > 0) {
+            setShowPaymentAdjustPopup(true);
+          }
+        });
+      } else {
+        setPartyOutstanding(null);
+      }
     }
     if (activeVoucherType === "receipt" && name === "company_id") {
       loadOutstanding("company", value);
