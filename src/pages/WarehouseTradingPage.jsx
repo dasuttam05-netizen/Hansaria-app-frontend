@@ -94,6 +94,7 @@ export default function WarehouseTradingPage() {
 
   const [warehouses, setWarehouses] = useState([]);
   const [farmers, setFarmers] = useState([]);
+  const [accountFarmers, setAccountFarmers] = useState([]);
   const [companies, setCompanies] = useState([]);
   const [companyAccounts, setCompanyAccounts] = useState([]);
   const [consignees, setConsignees] = useState([]);
@@ -283,10 +284,7 @@ export default function WarehouseTradingPage() {
       setVoucherNumberLoading(true);
       const res = await axios.get(`/api/wh-vouchers/next-voucher-no`, { params: { type } });
       if (res.data?.voucher_no) {
-        setFormData((prev) => ({
-          ...prev,
-          voucher_no: editId ? prev.voucher_no : res.data.voucher_no,
-        }));
+        setFormData((prev) => ({ ...prev, voucher_no: prev.voucher_no || res.data.voucher_no }));
       }
     } catch (err) {
       console.error(err);
@@ -379,7 +377,24 @@ export default function WarehouseTradingPage() {
       return next;
     });
 
-    if (activeVoucherType === "payment" && name === "farmer_id") {
+    if (activeVoucherType === "payment" && name === "company_account_id") {
+      if (value) {
+        axios
+          .get(`/api/wh-vouchers/farmers-by-account/${value}`, {
+            params: { warehouse_id: formData.warehouse_id || undefined },
+          })
+          .then((res) => {
+            const farmersWithOutstanding = Array.isArray(res.data) ? res.data : [];
+            setAccountFarmers(farmersWithOutstanding);
+          })
+          .catch((err) => {
+            console.error("Failed to load farmers for account:", err);
+            setAccountFarmers([]);
+          });
+      } else {
+        setAccountFarmers([]);
+      }
+    }
       loadOutstanding("farmer", value, null, editId).then(() => {
         if (value && toNumber(formData.amount) > 0) {
           setShowPaymentAdjustPopup(true);
@@ -1044,18 +1059,29 @@ export default function WarehouseTradingPage() {
                     <Field label="Farmer (Creditor)">
                       <select name="farmer_id" value={formData.farmer_id} onChange={handleChange} style={inp}>
                         <option value="">Select Farmer</option>
-                        {farmers.map((f) => (
-                          <option key={f.id || f._id} value={f.id || f._id}>{f.name}</option>
+                        {(activeVoucherType === "payment" && formData.company_account_id && accountFarmers.length > 0
+                          ? accountFarmers
+                          : farmers
+                        ).map((f) => (
+                          <option key={f.id || f._id} value={f.id || f._id}>
+                            {f.name}
+                            {activeVoucherType === "payment" && formData.company_account_id && f.outstanding !== undefined
+                              ? ` (Balance: ${f.outstanding.toFixed(2)})`
+                              : ""}
+                          </option>
                         ))}
                       </select>
                     </Field>
                     {partyOutstanding && activeVoucherType === "payment" && (
                       <div style={{ marginTop: 8, fontSize: 13, color: "#444", display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                        <span>Current outstanding: Rs.{Number(partyOutstanding.stats?.outstanding ?? partyOutstanding.outstanding ?? 0).toFixed(2)}</span>
-                        <span>Adjusted: Rs.{paymentAdjustmentTotal.toFixed(2)}</span>
+                        <span>Party: <strong>{formData.company_account_id ? companyAccounts.find(ca => String(ca.id || ca._id) === String(formData.company_account_id))?.account_name || "-" : "-"}</strong></span>
+                        <span>Farmer Bill: <strong>Rs.{Number(partyOutstanding.stats?.total_purchase ?? partyOutstanding.total_purchase ?? 0).toFixed(2)}</strong></span>
+                        <span>Paid: <strong>Rs.{Number(partyOutstanding.stats?.total_payment ?? partyOutstanding.total_payment ?? 0).toFixed(2)}</strong></span>
+                        <span>Balance: <strong>Rs.{Number(partyOutstanding.stats?.outstanding ?? partyOutstanding.outstanding ?? 0).toFixed(2)}</strong></span>
                         <button type="button" onClick={openPaymentAdjustmentPopup} style={{ ...btnAction, background: "#2563eb" }}>
                           Adjust Bills
                         </button>
+                        <span>Adjusted: <strong>Rs.{paymentAdjustmentTotal.toFixed(2)}</strong></span>
                       </div>
                     )}
                   </>
