@@ -5,6 +5,12 @@ import MultiSelectDropdown from "../components/MultiSelectDropdown";
 const emptyForm = () => ({
   name: "",
   address: "",
+  pincode: "",
+  state: "",
+  district: "",
+  city: "",
+  room_floor_building: "",
+  street_locality_landmark: "",
   location_id: "",
   employee_id: "",
   employee_ids: [],
@@ -99,6 +105,12 @@ export default function WarehouseManagementPage() {
       const payload = {
         name: formData.name,
         address: formData.address,
+        pincode: formData.pincode || null,
+        state: formData.state || null,
+        district: formData.district || null,
+        city: formData.city || null,
+        room_floor_building: formData.room_floor_building || null,
+        street_locality_landmark: formData.street_locality_landmark || null,
         location_id: formData.location_id || null,
         employee_id: safeEmployeeIds[0] || null,
         employee_ids: safeEmployeeIds,
@@ -127,6 +139,12 @@ export default function WarehouseManagementPage() {
     setFormData({
       name: w.name || "",
       address: w.address || "",
+      pincode: w.pincode || "",
+      state: w.state || "",
+      district: w.district || "",
+      city: w.city || "",
+      room_floor_building: w.room_floor_building || "",
+      street_locality_landmark: w.street_locality_landmark || "",
       location_id: normalizeId(w.location_id),
       employee_id: safeEmployeeIds[0] || "",
       employee_ids: safeEmployeeIds,
@@ -209,6 +227,24 @@ export default function WarehouseManagementPage() {
                     );
                   })}
                 </select>
+              </Field>
+              <Field label="PIN No">
+                <input name="pincode" value={formData.pincode} onChange={handleChange} placeholder="6 digit PIN No." style={inp} />
+              </Field>
+              <Field label="State">
+                <input name="state" value={formData.state} onChange={handleChange} placeholder="State" style={inp} />
+              </Field>
+              <Field label="District">
+                <input name="district" value={formData.district} onChange={handleChange} placeholder="District" style={inp} />
+              </Field>
+              <Field label="City">
+                <input name="city" value={formData.city} onChange={handleChange} placeholder="City" style={inp} />
+              </Field>
+              <Field label="Room / Floor / Building">
+                <input name="room_floor_building" value={formData.room_floor_building} onChange={handleChange} placeholder="Room No / Floor / Building" style={inp} />
+              </Field>
+              <Field label="Street / Locality / Landmark">
+                <input name="street_locality_landmark" value={formData.street_locality_landmark} onChange={handleChange} placeholder="Street / Locality / Landmark" style={inp} />
               </Field>
               <Field label="Assign Employee">
                 <MultiSelectDropdown
