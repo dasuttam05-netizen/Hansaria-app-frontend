@@ -62,7 +62,8 @@ const toNumber = (value) => {
 };
 
 const getRecordId = (value) => value?._id || value?.id || value || "";
-const formatMoney = (value) => toNumber(value).toFixed(2);
+const formatDecimal4 = (value) => toNumber(value).toFixed(4);
+const formatMoney = formatDecimal4;
 const titleCase = (value) =>
   String(value || "")
     .split("-")
@@ -155,9 +156,10 @@ export default function WarehouseTradingPage() {
     farmers.find((f) => String(f.id || f._id) === String(item?.farmer_id))?.name ||
     "-";
   const purchaseDeductionTotal = purchaseDeductionFields.reduce((sum, field) => sum + toNumber(formData[field.key]), 0);
+  const purchaseNewWeight = toNumber(formData.gross_weight) - toNumber(formData.tare_weight);
+  const safePurchaseNewWeight = Math.max(purchaseNewWeight, 0);
   const purchaseNetWeight =
-    toNumber(formData.gross_weight) -
-    toNumber(formData.tare_weight) -
+    safePurchaseNewWeight -
     toNumber(formData.dhalta) -
     purchaseDeductionTotal;
   const safePurchaseNetWeight = Math.max(purchaseNetWeight, 0);
@@ -739,13 +741,14 @@ export default function WarehouseTradingPage() {
       ["account", "Account", (item) => getAccountName(item)],
       ["farmer", "Farmer", (item) => item.farmer_name || getFarmerName(item)],
       ["product", "Product", (item) => getProductName(item)],
-      ["packet", "Packet", (item) => item.packet || 0],
-      ["gross_weight", "Gross Wt", (item) => item.gross_weight || 0],
-      ["tare_weight", "Tare Wt", (item) => item.tare_weight || 0],
-      ["dhalta", "Dhalta", (item) => item.dhalta || 0],
+      ["packet", "Packet", (item) => formatDecimal4(item.packet || 0)],
+      ["gross_weight", "Gross Wt", (item) => formatDecimal4(item.gross_weight || 0)],
+      ["tare_weight", "Tare Wt", (item) => formatDecimal4(item.tare_weight || 0)],
+      ["new_weight", "New Wt", (item) => formatDecimal4(Math.max(toNumber(item.gross_weight) - toNumber(item.tare_weight), 0))],
+      ["dhalta", "Dhalta", (item) => formatDecimal4(item.dhalta || 0)],
       ["gross_amount", "Gross Amount", (item) => formatMoney(item.gross_amount || 0)],
       ["deduction", "Deduction", (item) => formatMoney(item.total_deduction || 0)],
-      ["total_quantity", "Net Qty", (item) => item.total_quantity || 0],
+      ["total_quantity", "Net Qty", (item) => formatDecimal4(item.total_quantity || 0)],
       ["total_amount", "Net Payable", (item) => formatMoney(item.total_amount || item.net_amount_payable || 0)],
       ["actions", "Actions", (item) =>
         item.legacy_purchase_entry ? (
@@ -760,7 +763,7 @@ export default function WarehouseTradingPage() {
     ],
     sale: [
       ["warehouse", "Warehouse", (item) => getWarehouseName(item)],
-      ["total_quantity", "Total Quantity", (item) => item.total_quantity || 0],
+      ["total_quantity", "Total Quantity", (item) => formatDecimal4(item.total_quantity || 0)],
       ["total_amount", "Total Amount", (item) => formatMoney(item.total_amount || 0)],
     ],
     "purchase-party-ledger": [
@@ -791,10 +794,10 @@ export default function WarehouseTradingPage() {
     "warehouse-stock": [
       ["warehouse", "Warehouse", (item) => getWarehouseName(item)],
       ["product", "Product", (item) => getProductName(item)],
-      ["purchase_qty", "Purchase Qty", (item) => item.purchase_qty || 0],
-      ["sale_qty", "Sale Qty", (item) => item.sale_qty || 0],
-      ["stock_qty", "Stock Qty", (item) => item.stock_qty || 0],
-      ["gross_weight", "Gross Wt", (item) => item.gross_weight || 0],
+      ["purchase_qty", "Purchase Qty", (item) => formatDecimal4(item.purchase_qty || 0)],
+      ["sale_qty", "Sale Qty", (item) => formatDecimal4(item.sale_qty || 0)],
+      ["stock_qty", "Stock Qty", (item) => formatDecimal4(item.stock_qty || 0)],
+      ["gross_weight", "Gross Wt", (item) => formatDecimal4(item.gross_weight || 0)],
       ["avg_rate", "Avg Rate", (item) => formatMoney(item.avg_rate || 0)],
       ["stock_amount", "Stock Amount", (item) => formatMoney(item.stock_amount || 0)],
     ],
@@ -803,9 +806,9 @@ export default function WarehouseTradingPage() {
       ["voucher_no", "Voucher No", (item) => item.voucher_no || "-"],
       ["warehouse", "Warehouse", (item) => getWarehouseName(item)],
       ["product", "Product", (item) => getProductName(item)],
-      ["purchase_qty", "Purchase Qty", (item) => item.purchase_qty || 0],
-      ["remaining_qty", "FIFO Balance Qty", (item) => item.remaining_qty || 0],
-      ["gross_weight", "Gross Wt", (item) => item.gross_weight || 0],
+      ["purchase_qty", "Purchase Qty", (item) => formatDecimal4(item.purchase_qty || 0)],
+      ["remaining_qty", "FIFO Balance Qty", (item) => formatDecimal4(item.remaining_qty || 0)],
+      ["gross_weight", "Gross Wt", (item) => formatDecimal4(item.gross_weight || 0)],
       ["rate", "FIFO Rate", (item) => formatMoney(item.rate || 0)],
       ["amount", "FIFO Amount", (item) => formatMoney(item.amount || 0)],
     ],
@@ -862,7 +865,7 @@ export default function WarehouseTradingPage() {
       running += debit - credit;
       farmerDebit += debit;
       farmerCredit += credit;
-      grouped.push({ ...row, farmer_name: farmerName, balance: Number(running.toFixed(2)), row_type: "entry" });
+      grouped.push({ ...row, farmer_name: farmerName, balance: Number(running.toFixed(4)), row_type: "entry" });
     });
     pushClosing();
     return grouped;
@@ -1037,6 +1040,7 @@ export default function WarehouseTradingPage() {
                           <th style={erpTh}>Packet</th>
                           <th style={erpTh}>Gross Wt</th>
                           <th style={erpTh}>Tare Wt</th>
+                          <th style={erpTh}>New Wt</th>
                           <th style={erpTh}>Dhalta</th>
                           {purchaseDeductionFields.map((field) => (
                             <th key={field.key} style={erpTh}>{field.label}</th>
@@ -1057,17 +1061,18 @@ export default function WarehouseTradingPage() {
                               ))}
                             </select>
                           </td>
-                          <td style={erpTd}><input name="packet" type="number" step="0.01" value={formData.packet} onChange={handleChange} style={erpCellInput} /></td>
-                          <td style={erpTd}><input name="gross_weight" type="number" step="0.01" value={formData.gross_weight} onChange={handleChange} style={erpCellInput} /></td>
-                          <td style={erpTd}><input name="tare_weight" type="number" step="0.01" value={formData.tare_weight} onChange={handleChange} style={erpCellInput} /></td>
-                          <td style={erpTd}><input name="dhalta" type="number" step="0.01" value={formData.dhalta} onChange={handleChange} style={erpCellInput} /></td>
+                          <td style={erpTd}><input name="packet" type="number" step="0.0001" value={formData.packet} onChange={handleChange} style={erpCellInput} /></td>
+                          <td style={erpTd}><input name="gross_weight" type="number" step="0.0001" value={formData.gross_weight} onChange={handleChange} style={erpCellInput} /></td>
+                          <td style={erpTd}><input name="tare_weight" type="number" step="0.0001" value={formData.tare_weight} onChange={handleChange} style={erpCellInput} /></td>
+                          <td style={erpTd}><input value={formatDecimal4(safePurchaseNewWeight)} readOnly style={{ ...erpCellInput, ...erpReadOnlyCell }} /></td>
+                          <td style={erpTd}><input name="dhalta" type="number" step="0.0001" value={formData.dhalta} onChange={handleChange} style={erpCellInput} /></td>
                           {purchaseDeductionFields.map((field) => (
                             <td key={field.key} style={erpTd}>
-                              <input name={field.key} type="number" step="0.01" value={formData[field.key]} onChange={handleChange} style={erpCellInput} />
+                              <input name={field.key} type="number" step="0.0001" value={formData[field.key]} onChange={handleChange} style={erpCellInput} />
                             </td>
                           ))}
-                          <td style={erpTd}><input value={formatMoney(safePurchaseNetWeight)} readOnly style={{ ...erpCellInput, ...erpReadOnlyCell }} /></td>
-                          <td style={erpTd}><input name="rate" type="number" step="0.01" value={formData.rate} onChange={handleChange} style={erpCellInput} /></td>
+                          <td style={erpTd}><input value={formatDecimal4(safePurchaseNetWeight)} readOnly style={{ ...erpCellInput, ...erpReadOnlyCell }} /></td>
+                          <td style={erpTd}><input name="rate" type="number" step="0.0001" value={formData.rate} onChange={handleChange} style={erpCellInput} /></td>
                           <td style={erpTd}><input value={formatMoney(purchaseGrossAmount)} readOnly style={{ ...erpCellInput, ...erpReadOnlyCell }} /></td>
                         </tr>
                       </tbody>
@@ -1076,7 +1081,7 @@ export default function WarehouseTradingPage() {
 
                   <div style={erpMiddleBar}>
                       <span></span>
-                      <strong>Total Quantity : {formatMoney(safePurchaseNetWeight)}</strong>
+                      <strong>Total Quantity : {formatDecimal4(safePurchaseNetWeight)}</strong>
                   </div>
 
                   <div style={erpBottomGrid}>
@@ -1086,10 +1091,10 @@ export default function WarehouseTradingPage() {
                           <tr><th style={erpTh}>Particulars</th><th style={erpTh}>Amount</th></tr>
                         </thead>
                         <tbody>
-                          <tr><td style={erpTd}>Bags Claim</td><td style={erpTd}><input name="bags_claim" type="number" step="0.01" value={formData.bags_claim} onChange={handleChange} style={erpCellInput} /></td></tr>
-                          <tr><td style={erpTd}>Labour</td><td style={erpTd}><input name="labour" type="number" step="0.01" value={formData.labour} onChange={handleChange} style={erpCellInput} /></td></tr>
+                          <tr><td style={erpTd}>Bags Claim</td><td style={erpTd}><input name="bags_claim" type="number" step="0.0001" value={formData.bags_claim} onChange={handleChange} style={erpCellInput} /></td></tr>
+                          <tr><td style={erpTd}>Labour</td><td style={erpTd}><input name="labour" type="number" step="0.0001" value={formData.labour} onChange={handleChange} style={erpCellInput} /></td></tr>
                           <tr><td style={{ ...erpTd, fontWeight: 700 }}>Total Deduction</td><td style={{ ...erpTd, fontWeight: 700 }}>{formatMoney(purchaseTotalDeduction)}</td></tr>
-                          <tr><td style={erpTd}>Round Off</td><td style={erpTd}><input name="round_off" type="number" step="0.01" value={formData.round_off} onChange={handleChange} style={erpCellInput} /></td></tr>
+                          <tr><td style={erpTd}>Round Off</td><td style={erpTd}><input name="round_off" type="number" step="0.0001" value={formData.round_off} onChange={handleChange} style={erpCellInput} /></td></tr>
                         </tbody>
                       </table>
                       <div style={erpRemarksRow}>
@@ -1161,7 +1166,7 @@ export default function WarehouseTradingPage() {
                         <input
                           name="amount"
                           type="number"
-                          step="0.01"
+                          step="0.0001"
                           value={formData.amount}
                           onChange={(event) => {
                             handleChange(event);
@@ -1182,7 +1187,7 @@ export default function WarehouseTradingPage() {
                           <option key={f.id || f._id} value={f.id || f._id}>
                             {f.name}
                             {activeVoucherType === "payment" && formData.company_account_id && f.outstanding !== undefined
-                              ? ` (Balance: ${f.outstanding.toFixed(2)})`
+                              ? ` (Balance: ${formatMoney(f.outstanding)})`
                               : ""}
                           </option>
                         ))}
@@ -1196,13 +1201,13 @@ export default function WarehouseTradingPage() {
                     {partyOutstanding && activeVoucherType === "payment" && (
                       <div style={{ marginTop: 8, fontSize: 13, color: "#444", display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
                         <span>Party: <strong>{formData.company_account_id ? companyAccounts.find(ca => String(ca.id || ca._id) === String(formData.company_account_id))?.account_name || "-" : "-"}</strong></span>
-                        <span>Farmer Bill: <strong>Rs.{Number(partyOutstanding.stats?.total_purchase ?? partyOutstanding.total_purchase ?? 0).toFixed(2)}</strong></span>
-                        <span>Paid: <strong>Rs.{Number(partyOutstanding.stats?.total_payment ?? partyOutstanding.total_payment ?? 0).toFixed(2)}</strong></span>
-                        <span>Balance: <strong>Rs.{Number(partyOutstanding.stats?.outstanding ?? partyOutstanding.outstanding ?? 0).toFixed(2)}</strong></span>
+                        <span>Farmer Bill: <strong>Rs.{formatMoney(partyOutstanding.stats?.total_purchase ?? partyOutstanding.total_purchase ?? 0)}</strong></span>
+                        <span>Paid: <strong>Rs.{formatMoney(partyOutstanding.stats?.total_payment ?? partyOutstanding.total_payment ?? 0)}</strong></span>
+                        <span>Balance: <strong>Rs.{formatMoney(partyOutstanding.stats?.outstanding ?? partyOutstanding.outstanding ?? 0)}</strong></span>
                         <button type="button" onClick={openPaymentAdjustmentPopup} style={{ ...btnAction, background: "#2563eb" }}>
                           Adjust Bills
                         </button>
-                        <span>Adjusted: <strong>Rs.{paymentAdjustmentTotal.toFixed(2)}</strong></span>
+                        <span>Adjusted: <strong>Rs.{formatMoney(paymentAdjustmentTotal)}</strong></span>
                       </div>
                     )}
                   </>
@@ -1220,7 +1225,7 @@ export default function WarehouseTradingPage() {
                     </Field>
                     {partyOutstanding && activeVoucherType === "receipt" && (
                       <div style={{ marginTop: 8, fontSize: 13, color: "#444" }}>
-                        Current outstanding: ₹{Number(partyOutstanding.outstanding || 0).toFixed(2)}
+                        Current outstanding: Rs.{formatMoney(partyOutstanding.outstanding || 0)}
                       </div>
                     )}
                     <Field label="Consignee">
@@ -1253,44 +1258,44 @@ export default function WarehouseTradingPage() {
                       </Field>
                     )}
                     <Field label="Quantity">
-                      <input name="quantity" type="number" step="0.01" value={formData.quantity} onChange={handleChange} style={inp} />
+                      <input name="quantity" type="number" step="0.0001" value={formData.quantity} onChange={handleChange} style={inp} />
                     </Field>
                     {activeVoucherType === "sale" && (
                       <Field label="Shortage Quantity">
-                        <input name="shortage_quantity" type="number" step="0.01" value={formData.shortage_quantity} onChange={handleChange} style={inp} />
+                        <input name="shortage_quantity" type="number" step="0.0001" value={formData.shortage_quantity} onChange={handleChange} style={inp} />
                       </Field>
                     )}
                     <Field label="Rate">
-                      <input name="rate" type="number" step="0.01" value={formData.rate} onChange={handleChange} style={inp} />
+                      <input name="rate" type="number" step="0.0001" value={formData.rate} onChange={handleChange} style={inp} />
                     </Field>
                     <Field label="Amount">
-                      <input name="amount" type="number" step="0.01" value={formData.amount} onChange={handleChange} style={inp} />
+                      <input name="amount" type="number" step="0.0001" value={formData.amount} onChange={handleChange} style={inp} />
                     </Field>
                     {activeVoucherType === "sale" && (
                       <>
                         <Field label="Claim Amount">
-                          <input name="claim_amount" type="number" step="0.01" value={formData.claim_amount} onChange={handleChange} style={inp} />
+                          <input name="claim_amount" type="number" step="0.0001" value={formData.claim_amount} onChange={handleChange} style={inp} />
                         </Field>
                         <Field label="Other Deduction">
-                          <input name="other_deduction" type="number" step="0.01" value={formData.other_deduction} onChange={handleChange} style={inp} />
+                          <input name="other_deduction" type="number" step="0.0001" value={formData.other_deduction} onChange={handleChange} style={inp} />
                         </Field>
                         <Field label="Adjustment Amount">
-                          <input name="adjustment_amount" type="number" step="0.01" value={formData.adjustment_amount} onChange={handleChange} style={inp} />
+                          <input name="adjustment_amount" type="number" step="0.0001" value={formData.adjustment_amount} onChange={handleChange} style={inp} />
                         </Field>
                         <Field label="TDS Amount">
-                          <input name="tds_amount" type="number" step="0.01" value={formData.tds_amount} onChange={handleChange} style={inp} />
+                          <input name="tds_amount" type="number" step="0.0001" value={formData.tds_amount} onChange={handleChange} style={inp} />
                         </Field>
                         <Field label="Unloading Qty">
-                          <input name="unloading_qty" type="number" step="0.01" value={formData.unloading_qty} onChange={handleChange} style={inp} />
+                          <input name="unloading_qty" type="number" step="0.0001" value={formData.unloading_qty} onChange={handleChange} style={inp} />
                         </Field>
                         <Field label="Net Receivable">
-                          <input value={(toNumber(formData.amount) - toNumber(formData.claim_amount) - toNumber(formData.other_deduction) - toNumber(formData.adjustment_amount) - toNumber(formData.tds_amount)).toFixed(2)} readOnly style={readOnlyInp} />
+                          <input value={formatMoney(toNumber(formData.amount) - toNumber(formData.claim_amount) - toNumber(formData.other_deduction) - toNumber(formData.adjustment_amount) - toNumber(formData.tds_amount))} readOnly style={readOnlyInp} />
                         </Field>
                         <Field label="FIFO Amount">
-                          <input value={toNumber(formData.amount).toFixed(2)} readOnly style={readOnlyInp} />
+                          <input value={formatMoney(formData.amount)} readOnly style={readOnlyInp} />
                         </Field>
                         <div style={{ marginTop: 8, fontSize: 13, color: "#444" }}>
-                          Outstanding: Rs.{(toNumber(formData.amount) - toNumber(formData.claim_amount) - toNumber(formData.other_deduction) - toNumber(formData.adjustment_amount) - toNumber(formData.tds_amount)).toFixed(2)}
+                          Outstanding: Rs.{formatMoney(toNumber(formData.amount) - toNumber(formData.claim_amount) - toNumber(formData.other_deduction) - toNumber(formData.adjustment_amount) - toNumber(formData.tds_amount))}
                         </div>
                       </>
                     )}
@@ -1325,7 +1330,7 @@ export default function WarehouseTradingPage() {
                     </Field>
                     {activeVoucherType === "receipt" && (
                       <Field label="Amount">
-                        <input name="amount" type="number" step="0.01" value={formData.amount} onChange={handleChange} style={inp} required />
+                        <input name="amount" type="number" step="0.0001" value={formData.amount} onChange={handleChange} style={inp} required />
                       </Field>
                     )}
                   </>
@@ -1340,7 +1345,7 @@ export default function WarehouseTradingPage() {
                       <input name="credit_account" value={formData.credit_account} onChange={handleChange} placeholder="Credit Account" style={inp} />
                     </Field>
                     <Field label="Amount">
-                      <input name="amount" type="number" step="0.01" value={formData.amount} onChange={handleChange} style={inp} required />
+                      <input name="amount" type="number" step="0.0001" value={formData.amount} onChange={handleChange} style={inp} required />
                     </Field>
                   </>
                 )}
@@ -1400,11 +1405,11 @@ export default function WarehouseTradingPage() {
                         {(activeVoucherType === "purchase" || activeVoucherType === "sale") && (
                           <>
                             <td style={td}>{getProductName(item)}</td>
-                            <td style={td}>{activeVoucherType === "purchase" ? item.total_qty || item.net_weight || item.quantity || 0 : item.unloading_qty || item.quantity || 0}</td>
+                            <td style={td}>{formatDecimal4(activeVoucherType === "purchase" ? item.total_qty || item.net_weight || item.quantity || 0 : item.unloading_qty || item.quantity || 0)}</td>
                             <td style={td}>{item.rate || 0}</td>
                           </>
                         )}
-                        <td style={td}>{activeVoucherType === "purchase" ? item.net_amount_payable || item.amount || 0 : item.net_receivable_amount || item.net_amount || item.amount || 0}</td>
+                        <td style={td}>{formatMoney(activeVoucherType === "purchase" ? item.net_amount_payable || item.amount || 0 : item.net_receivable_amount || item.net_amount || item.amount || 0)}</td>
                         <td style={td}>
                           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                             <button onClick={() => handleEditVoucher(item.id || item._id)} style={btnAction} title="Edit">Edit</button>
@@ -1666,10 +1671,10 @@ export default function WarehouseTradingPage() {
             </div>
 
             <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginTop: 14, fontSize: 13 }}>
-              <strong>Payment: Rs.{toNumber(formData.amount).toFixed(2)}</strong>
-              <strong>Adjusted: Rs.{paymentAdjustmentTotal.toFixed(2)}</strong>
+              <strong>Payment: Rs.{formatMoney(formData.amount)}</strong>
+              <strong>Adjusted: Rs.{formatMoney(paymentAdjustmentTotal)}</strong>
               <strong style={{ color: Math.abs(paymentAdjustmentTotal - toNumber(formData.amount)) <= 0.0001 ? "#15803d" : "#dc2626" }}>
-                Difference: Rs.{(toNumber(formData.amount) - paymentAdjustmentTotal).toFixed(2)}
+                Difference: Rs.{formatMoney(toNumber(formData.amount) - paymentAdjustmentTotal)}
               </strong>
               <button type="button" onClick={autoFillPaymentAdjustments} style={{ ...btnAction, background: "#0f766e" }}>
                 Auto Adjust
@@ -1703,7 +1708,7 @@ export default function WarehouseTradingPage() {
                         <td style={td}>
                           <input
                             type="number"
-                            step="0.01"
+                            step="0.0001"
                             min="0"
                             max={row.pending_amount || row.amount || 0}
                             value={selectedAdjustmentFor(row.id || row._id)}
@@ -1759,7 +1764,7 @@ function SummaryInput({ label, name, value, onChange, readOnly = false }) {
       <input
         name={name}
         type={readOnly ? "text" : "number"}
-        step="0.01"
+        step="0.0001"
         value={value}
         onChange={onChange}
         readOnly={readOnly}
