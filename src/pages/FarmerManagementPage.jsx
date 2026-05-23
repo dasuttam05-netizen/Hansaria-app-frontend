@@ -6,7 +6,6 @@ const emptyForm = () => ({
   mobile: "",
   email: "",
   address: "",
-  village: "",
   pincode: "",
   state: "",
   district: "",
@@ -22,7 +21,6 @@ const emptyForm = () => ({
   ifsc_code: "",
   branch_name: "",
   account_holder_name: "",
-  location: "",
 });
 
 const compactUpper = (value) => String(value || "").replace(/\s/g, "").toUpperCase();
@@ -63,7 +61,6 @@ const checkIfsc = (value) => {
 
 export default function FarmerManagementPage() {
   const [farmers, setFarmers] = useState([]);
-  const [locations, setLocations] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState(emptyForm);
   const [editId, setEditId] = useState(null);
@@ -87,8 +84,6 @@ export default function FarmerManagementPage() {
     "city",
     "room_floor_building",
     "street_locality_landmark",
-    "location",
-    "village",
     "pincode",
     "address",
     "bank_name",
@@ -113,8 +108,6 @@ export default function FarmerManagementPage() {
       "Bengaluru",
       "Room 101, ABC Building",
       "MG Road, Near Landmark",
-      "Bengaluru",
-      "Hoskote",
       "560048",
       "Example address line",
       "State Bank of India",
@@ -213,7 +206,6 @@ export default function FarmerManagementPage() {
 
   useEffect(() => {
     fetchFarmers();
-    axios.get("/api/locations").then((res) => setLocations(Array.isArray(res.data) ? res.data : [])).catch(() => setLocations([]));
   }, []);
 
   useEffect(() => {
@@ -260,13 +252,11 @@ export default function FarmerManagementPage() {
         const data = res.data || {};
         setFormData((prev) => ({
           ...prev,
-          location: data.location || prev.location,
           state: data.state || prev.state,
           district: data.district || prev.district || "",
           city: data.city || prev.city || "",
-          village: prev.village || data.village || "",
         }));
-        setPinLookupStatus("PIN found, location and state filled");
+        setPinLookupStatus("PIN found, district, city and state filled");
       } catch (error) {
         setPinLookupStatus("PIN lookup failed");
       }
@@ -288,13 +278,11 @@ export default function FarmerManagementPage() {
       const data = res.data || {};
       setFormData((prev) => ({
         ...prev,
-        location: data.location || prev.location,
         state: data.state || prev.state,
         district: data.district || prev.district || "",
         city: data.city || prev.city || "",
-        village: prev.village || data.village || "",
       }));
-      setPinLookupStatus("PIN found, location, district, city and state filled");
+      setPinLookupStatus("PIN found, district, city and state filled");
     } catch (error) {
       setPinLookupStatus(error?.response?.data?.error || "PIN lookup failed");
     }
@@ -322,35 +310,6 @@ export default function FarmerManagementPage() {
     }
   };
 
-  const findVillageMatch = (value) => {
-    const village = String(value || "").trim().toLowerCase();
-    if (!village || village.length < 3) return {};
-
-    const farmerMatch = farmers.find((farmer) => {
-      if (editId && String(farmer._id) === String(editId)) return false;
-      return String(farmer.village || "").trim().toLowerCase() === village;
-    });
-    if (farmerMatch?.location || farmerMatch?.state) {
-      return { location: farmerMatch.location || "", state: farmerMatch.state || "" };
-    }
-
-    const locationMatch = locations.find((loc) => {
-      const name = String(loc.name || "").toLowerCase();
-      const address = String(loc.address || "").toLowerCase();
-      return name === village || name.includes(village) || address.includes(village);
-    });
-    if (!locationMatch) return {};
-
-    const addressParts = String(locationMatch.address || "")
-      .split(",")
-      .map((part) => part.trim())
-      .filter(Boolean);
-    return {
-      location: locationMatch.name || "",
-      state: addressParts[addressParts.length - 1] || "",
-    };
-  };
-
   const handleChange = (e) => {
     const { name } = e.target;
     let { value } = e.target;
@@ -360,11 +319,6 @@ export default function FarmerManagementPage() {
       const next = { ...prev, [name]: value };
       if ((name === "bank_account_no" || name === "name") && next.bank_account_no && !next.account_holder_name) {
         next.account_holder_name = next.name;
-      }
-      if (name === "village") {
-        const matched = findVillageMatch(value);
-        if (matched.location) next.location = matched.location;
-        if (matched.state) next.state = matched.state;
       }
       return next;
     });
@@ -410,9 +364,12 @@ export default function FarmerManagementPage() {
       mobile: farmer.mobile || "",
       email: farmer.email || "",
       address: farmer.address || "",
-      village: farmer.village || "",
       pincode: farmer.pincode || "",
       state: farmer.state || "",
+      district: farmer.district || "",
+      city: farmer.city || "",
+      room_floor_building: farmer.room_floor_building || "",
+      street_locality_landmark: farmer.street_locality_landmark || "",
       gst_no: farmer.gst_no || "",
       pan_no: farmer.pan_no || "",
       aadhar_no: farmer.aadhar_no || "",
@@ -422,7 +379,6 @@ export default function FarmerManagementPage() {
       ifsc_code: farmer.ifsc_code || "",
       branch_name: farmer.branch_name || "",
       account_holder_name: farmer.account_holder_name || "",
-      location: farmer.location || "",
     });
     setEditId(farmer._id);
     setShowForm(true);
@@ -506,12 +462,6 @@ export default function FarmerManagementPage() {
               <Field label="Street / Locality / Landmark">
                 <input name="street_locality_landmark" value={formData.street_locality_landmark} onChange={handleChange} placeholder="Street / Locality / Landmark" style={inp} />
               </Field>
-              <Field label="Location">
-                <input name="location" value={formData.location} onChange={handleChange} placeholder="Location" style={inp} />
-              </Field>
-              <Field label="Village">
-                <input name="village" value={formData.village} onChange={handleChange} placeholder="Village" style={inp} />
-              </Field>
               <div style={{ gridColumn: "1 / -1" }}>
                 <Field label="Address">
                   <textarea name="address" value={formData.address} onChange={handleChange} rows={3} style={{ ...inp, minHeight: 72, resize: "vertical" }} />
@@ -572,8 +522,8 @@ export default function FarmerManagementPage() {
                   <th style={th}>ID</th>
                   <th style={th}>Farmer Name</th>
                   <th style={th}>Mobile</th>
-                  <th style={th}>Location</th>
-                  <th style={th}>Village</th>
+                  <th style={th}>District</th>
+                  <th style={th}>City</th>
                   <th style={th}>PIN No.</th>
                   <th style={th}>State</th>
                   <th style={th}>GST No.</th>
@@ -592,8 +542,8 @@ export default function FarmerManagementPage() {
                     <td style={td}>{String(i + 1).padStart(2, "0")}</td>
                     <td style={td}>{farmer.name || "-"}</td>
                     <td style={td}>{farmer.mobile || "-"}</td>
-                    <td style={td}>{farmer.location || "-"}</td>
-                    <td style={td}>{farmer.village || "-"}</td>
+                    <td style={td}>{farmer.district || "-"}</td>
+                    <td style={td}>{farmer.city || "-"}</td>
                     <td style={td}>{farmer.pincode || "-"}</td>
                     <td style={td}>{farmer.state || "-"}</td>
                     <td style={td}>{farmer.gst_no || "-"}</td>
