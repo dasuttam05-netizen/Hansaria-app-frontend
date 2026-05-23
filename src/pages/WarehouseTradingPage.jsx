@@ -125,6 +125,7 @@ export default function WarehouseTradingPage() {
   const [paymentAdjustments, setPaymentAdjustments] = useState([]);
   const [selectedPaymentId, setSelectedPaymentId] = useState(null);
   const [stockDrilldown, setStockDrilldown] = useState(null);
+  const [importingPurchase, setImportingPurchase] = useState(false);
   const [voucherNumberLoading, setVoucherNumberLoading] = useState(false);
   const selectedVoucher = list.find((item) => String(item.id || item._id) === String(selectedPaymentId));
   const selectedWarehouse = warehouses.find((w) => String(w.id || w._id) === String(formData.warehouse_id));
@@ -658,6 +659,61 @@ export default function WarehouseTradingPage() {
     }
   };
 
+  const downloadPurchaseImportTemplate = async () => {
+    try {
+      const response = await axios.get("/api/wh-vouchers/purchase/import-template", {
+        responseType: "blob",
+      });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", "purchase_voucher_import_format.xlsx");
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error(err);
+      alert(err?.response?.data?.error || "Failed to download import format");
+    }
+  };
+
+  const handlePurchaseExcelImport = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    const fileName = file.name.toLowerCase();
+    if (!fileName.endsWith(".xlsx") && !fileName.endsWith(".xls")) {
+      alert("Please select an Excel file (.xlsx or .xls)");
+      return;
+    }
+    const uploadForm = new FormData();
+    uploadForm.append("file", file);
+    setImportingPurchase(true);
+    try {
+      const res = await axios.post("/api/wh-vouchers/purchase/import-xlsx", uploadForm, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      const imported = Number(res.data?.imported || 0);
+      const failed = Number(res.data?.failed || 0);
+      const errors = Array.isArray(res.data?.errors) ? res.data.errors : [];
+      const errorText = errors
+        .slice(0, 8)
+        .map((item) => `Row ${item.row}: ${item.error}`)
+        .join("\n");
+      alert(`Purchase import complete.\nImported: ${imported}\nFailed: ${failed}${errorText ? `\n\n${errorText}` : ""}`);
+      setActiveVoucherType("purchase");
+      await loadVouchers();
+      if (activeTab === "reports") await loadReport();
+      fetchNextVoucherNo("purchase");
+    } catch (err) {
+      console.error(err);
+      alert(err?.response?.data?.error || "Purchase import failed");
+    } finally {
+      setImportingPurchase(false);
+    }
+  };
+
   const openPaymentAdjustmentPopup = async () => {
     if (activeVoucherType !== "payment") return;
     if (toNumber(formData.amount) <= 0) {
@@ -977,7 +1033,26 @@ export default function WarehouseTradingPage() {
           </div>
 
           <div style={card}>
-            <h3 style={{ marginTop: 0 }}>{editId ? "Edit" : "New"} {activeVoucherType.charAt(0).toUpperCase() + activeVoucherType.slice(1)} Voucher</h3>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 12 }}>
+              <h3 style={{ margin: 0 }}>{editId ? "Edit" : "New"} {activeVoucherType.charAt(0).toUpperCase() + activeVoucherType.slice(1)} Voucher</h3>
+              {isPurchaseVoucher && hasPermission(user, "warehouse.trading.purchase.manage") && (
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                  <button type="button" onClick={downloadPurchaseImportTemplate} style={{ ...btnAction, background: "#0f766e" }}>
+                    Download Excel Format
+                  </button>
+                  <label style={{ ...btnAction, background: importingPurchase ? "#94a3b8" : "#2563eb", cursor: importingPurchase ? "not-allowed" : "pointer" }}>
+                    {importingPurchase ? "Importing..." : "Import Excel"}
+                    <input
+                      type="file"
+                      accept=".xlsx,.xls"
+                      onChange={handlePurchaseExcelImport}
+                      disabled={importingPurchase}
+                      style={{ display: "none" }}
+                    />
+                  </label>
+                </div>
+              )}
+            </div>
             <form onSubmit={handleSubmit}>
               {isPurchaseVoucher ? (
                 <div style={erpShell}>
