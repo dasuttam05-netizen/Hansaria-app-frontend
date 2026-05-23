@@ -63,7 +63,7 @@ const toNumber = (value) => {
 
 const getRecordId = (value) => value?._id || value?.id || value || "";
 const formatDecimal4 = (value) => toNumber(value).toFixed(4);
-const formatMoney = formatDecimal4;
+const formatMoney = (value) => toNumber(value).toFixed(2);
 const titleCase = (value) =>
   String(value || "")
     .split("-")
@@ -124,6 +124,7 @@ export default function WarehouseTradingPage() {
   const [showPaymentAdjustPopup, setShowPaymentAdjustPopup] = useState(false);
   const [paymentAdjustments, setPaymentAdjustments] = useState([]);
   const [selectedPaymentId, setSelectedPaymentId] = useState(null);
+  const [stockDrilldown, setStockDrilldown] = useState(null);
   const [voucherNumberLoading, setVoucherNumberLoading] = useState(false);
   const selectedVoucher = list.find((item) => String(item.id || item._id) === String(selectedPaymentId));
   const selectedWarehouse = warehouses.find((w) => String(w.id || w._id) === String(formData.warehouse_id));
@@ -155,6 +156,9 @@ export default function WarehouseTradingPage() {
     item?.farmer_name ||
     farmers.find((f) => String(f.id || f._id) === String(item?.farmer_id))?.name ||
     "-";
+  const openStockDrilldown = (item, mode) => {
+    setStockDrilldown({ item, mode });
+  };
   const purchaseDeductionTotal = purchaseDeductionFields.reduce((sum, field) => sum + toNumber(formData[field.key]), 0);
   const purchaseNewWeight = toNumber(formData.gross_weight) - toNumber(formData.tare_weight);
   const safePurchaseNewWeight = Math.max(purchaseNewWeight, 0);
@@ -793,11 +797,23 @@ export default function WarehouseTradingPage() {
     ],
     "warehouse-stock": [
       ["warehouse", "Warehouse", (item) => getWarehouseName(item)],
+      ["account", "Account Name", (item) => getAccountName(item)],
       ["product", "Product", (item) => getProductName(item)],
-      ["purchase_qty", "Purchase Qty", (item) => formatDecimal4(item.purchase_qty || 0)],
-      ["sale_qty", "Sale Qty", (item) => formatDecimal4(item.sale_qty || 0)],
-      ["stock_qty", "Stock Qty", (item) => formatDecimal4(item.stock_qty || 0)],
-      ["gross_weight", "Gross Wt", (item) => formatDecimal4(item.gross_weight || 0)],
+      ["purchase_qty", "Purchase Qty", (item) => (
+        <button type="button" onClick={() => openStockDrilldown(item, "purchase")} style={linkButtonStyle}>
+          {formatDecimal4(item.purchase_qty || 0)}
+        </button>
+      )],
+      ["sale_qty", "Sale Qty", (item) => (
+        <button type="button" onClick={() => openStockDrilldown(item, "sale")} style={linkButtonStyle}>
+          {formatDecimal4(item.sale_qty || 0)}
+        </button>
+      )],
+      ["stock_qty", "Stock Qty", (item) => (
+        <button type="button" onClick={() => openStockDrilldown(item, "stock")} style={linkButtonStyle}>
+          {formatDecimal4(item.stock_qty || 0)}
+        </button>
+      )],
       ["avg_rate", "Avg Rate", (item) => formatMoney(item.avg_rate || 0)],
       ["stock_amount", "Stock Amount", (item) => formatMoney(item.stock_amount || 0)],
     ],
@@ -914,6 +930,24 @@ export default function WarehouseTradingPage() {
     const message = `Purchase Party Ledger\n\n${summary || "No closing rows"}`;
     window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, "_blank");
   };
+
+  const stockPurchaseRows = stockDrilldown?.item?.purchase_details || [];
+  const stockSaleRows = stockDrilldown?.item?.sale_details || [];
+  const stockDrilldownRows =
+    stockDrilldown?.mode === "purchase"
+      ? stockPurchaseRows.map((row) => ({ ...row, type: "Purchase" }))
+      : stockDrilldown?.mode === "sale"
+        ? stockSaleRows.map((row) => ({ ...row, type: "Sale" }))
+        : [
+            ...stockPurchaseRows.map((row) => ({ ...row, type: "Purchase" })),
+            ...stockSaleRows.map((row) => ({ ...row, type: "Sale" })),
+          ].sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")));
+  const stockDrilldownTitle =
+    stockDrilldown?.mode === "purchase"
+      ? "Purchase Qty Details"
+      : stockDrilldown?.mode === "sale"
+        ? "Sale Qty Details"
+        : "Stock Qty Full Details";
 
   return (
     <div style={{ fontFamily: "Segoe UI, Arial, sans-serif", padding: "16px" }}>
@@ -1749,6 +1783,63 @@ export default function WarehouseTradingPage() {
           </div>
         </div>
       )}
+      {stockDrilldown && (
+        <div style={modalOverlayStyle}>
+          <div style={stockDrilldownModalStyle}>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start", marginBottom: 14 }}>
+              <div>
+                <h3 style={{ margin: 0 }}>{stockDrilldownTitle}</h3>
+                <div style={{ color: "#475569", fontSize: 13, marginTop: 5 }}>
+                  {getWarehouseName(stockDrilldown.item)} | {getAccountName(stockDrilldown.item)} | {getProductName(stockDrilldown.item)}
+                </div>
+              </div>
+              <button type="button" onClick={() => setStockDrilldown(null)} style={{ ...btnAction, background: "#64748b" }}>
+                Close
+              </button>
+            </div>
+
+            <div style={stockSummaryGridStyle}>
+              <div style={stockMetricStyle}><span>Purchase Qty</span><strong>{formatDecimal4(stockDrilldown.item.purchase_qty || 0)}</strong></div>
+              <div style={stockMetricStyle}><span>Sale Qty</span><strong>{formatDecimal4(stockDrilldown.item.sale_qty || 0)}</strong></div>
+              <div style={stockMetricStyle}><span>Stock Qty</span><strong>{formatDecimal4(stockDrilldown.item.stock_qty || 0)}</strong></div>
+              <div style={stockMetricStyle}><span>Avg Rate</span><strong>{formatMoney(stockDrilldown.item.avg_rate || 0)}</strong></div>
+              <div style={stockMetricStyle}><span>Stock Amount</span><strong>{formatMoney(stockDrilldown.item.stock_amount || 0)}</strong></div>
+            </div>
+
+            <div style={{ ...tableCard, maxHeight: "58vh", marginTop: 14 }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                <thead>
+                  <tr style={reportHeaderRowStyle}>
+                    <th style={th}>Date</th>
+                    <th style={th}>Type</th>
+                    <th style={th}>Voucher No</th>
+                    <th style={th}>Party</th>
+                    <th style={th}>Qty</th>
+                    <th style={th}>Rate</th>
+                    <th style={th}>Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {stockDrilldownRows.map((row, index) => (
+                    <tr key={`${row.type}-${row.voucher_no || index}-${index}`} style={{ background: index % 2 ? "#f8fafc" : "#fff" }}>
+                      <td style={td}>{formatLedgerDate(row.date)}</td>
+                      <td style={{ ...td, fontWeight: 700, color: row.type === "Purchase" ? "#0f766e" : "#b45309" }}>{row.type}</td>
+                      <td style={td}>{row.voucher_no || "-"}</td>
+                      <td style={td}>{row.party_name || "-"}</td>
+                      <td style={td}>{formatDecimal4(row.qty || 0)}</td>
+                      <td style={td}>{formatMoney(row.rate || 0)}</td>
+                      <td style={td}>{formatMoney(row.amount || 0)}</td>
+                    </tr>
+                  ))}
+                  {stockDrilldownRows.length === 0 && (
+                    <tr><td colSpan={7} style={{ ...td, textAlign: "center", padding: 20 }}>No stock detail available.</td></tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -1815,6 +1906,29 @@ const paymentAdjustModalStyle = {
   border: "1px solid #cbd5e1",
   boxShadow: "0 20px 45px rgba(15, 23, 42, 0.25)",
   padding: 18,
+};
+const stockDrilldownModalStyle = {
+  width: "min(1120px, 96vw)",
+  maxHeight: "90vh",
+  overflow: "auto",
+  background: "#fff",
+  borderRadius: 8,
+  border: "1px solid #cbd5e1",
+  boxShadow: "0 20px 45px rgba(15, 23, 42, 0.25)",
+  padding: 18,
+};
+const stockSummaryGridStyle = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+  gap: 10,
+};
+const stockMetricStyle = {
+  border: "1px solid #dbe4ef",
+  borderRadius: 6,
+  background: "#f8fafc",
+  padding: "10px 12px",
+  display: "grid",
+  gap: 5,
 };
 const reportHeaderRowStyle = { background: "#087a73", color: "#fff" };
 const lbl = { display: "block", marginBottom: 6, fontWeight: 600, fontSize: 13, color: "#334155" };
