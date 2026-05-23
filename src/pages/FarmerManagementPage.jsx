@@ -93,6 +93,14 @@ export default function FarmerManagementPage() {
     "account_holder_name",
   ];
 
+  const escapeCsvValue = (value) => {
+    const text = String(value ?? "");
+    if (/[",\r\n]/.test(text)) {
+      return `"${text.replace(/"/g, '""')}"`;
+    }
+    return text;
+  };
+
   const downloadTemplate = () => {
     const headerRow = farmerImportHeaders.join(",");
     const exampleRow = [
@@ -116,22 +124,83 @@ export default function FarmerManagementPage() {
       "MG Road Branch",
       "Example Farmer",
     ];
-    const csvContent = [headerRow, exampleRow.join(",")].join("\r\n");
-    const blob = new Blob([csvContent], { type: "application/vnd.ms-excel" });
+    const csvContent = [headerRow, exampleRow.map(escapeCsvValue).join(",")].join("\r\n");
+    const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
     const link = document.createElement("a");
     link.href = URL.createObjectURL(blob);
-    link.download = "farmer-template.xls";
+    link.download = "farmer-template.csv";
     link.click();
     URL.revokeObjectURL(link.href);
   };
 
   const parseCsv = (text) => {
-    const lines = text.split(/\r?\n/).filter((line) => line.trim());
-    const rows = lines.map((line) => {
-      const values = line.split(",").map((value) => value.trim());
-      return values;
-    });
-    return rows;
+    const rows = [];
+    let row = [];
+    let field = "";
+    let inQuotes = false;
+    let i = 0;
+
+    while (i < text.length) {
+      const char = text[i];
+
+      if (inQuotes) {
+        if (char === '"') {
+          if (text[i + 1] === '"') {
+            field += '"';
+            i += 2;
+            continue;
+          }
+          inQuotes = false;
+          i += 1;
+          continue;
+        }
+        field += char;
+        i += 1;
+        continue;
+      }
+
+      if (char === '"') {
+        inQuotes = true;
+        i += 1;
+        continue;
+      }
+
+      if (char === ",") {
+        row.push(field);
+        field = "";
+        i += 1;
+        continue;
+      }
+
+      if (char === "\r") {
+        if (text[i + 1] === "\n") i += 1;
+        row.push(field);
+        if (row.length || field !== "") rows.push(row);
+        row = [];
+        field = "";
+        i += 1;
+        continue;
+      }
+
+      if (char === "\n") {
+        row.push(field);
+        if (row.length || field !== "") rows.push(row);
+        row = [];
+        field = "";
+        i += 1;
+        continue;
+      }
+
+      field += char;
+      i += 1;
+    }
+
+    if (field !== "" || row.length) {
+      row.push(field);
+      rows.push(row);
+    }
+
+    return rows.filter((r) => r.length && !(r.length === 1 && r[0] === ""));
   };
 
   const handleImportFileChange = async (event) => {
@@ -322,6 +391,20 @@ export default function FarmerManagementPage() {
       }
       return next;
     });
+    // Auto-trigger PIN lookup when user has entered 6 digits
+    if (name === "pincode") {
+      const pinDigits = String(value || "").replace(/\D/g, "");
+      if (pinDigits.length === 6) {
+        // small delay to let state update
+        setTimeout(() => {
+          try {
+            fillFromPin();
+          } catch (e) {
+            /* ignore */
+          }
+        }, 120);
+      }
+    }
   };
 
   const resetForm = () => {
@@ -445,7 +528,7 @@ export default function FarmerManagementPage() {
               </Field>
               <Field label="PIN No">
                 <div style={inlineFieldRow}>
-                  <input name="pincode" value={formData.pincode} onChange={handleChange} placeholder="6 digit PIN No. *" maxLength={6} style={inp} />
+                  <input name="pincode" value={formData.pincode} onChange={handleChange} onBlur={() => { if (/^[0-9]{6}$/.test(String(formData.pincode || ""))) fillFromPin(); }} placeholder="6 digit PIN No. *" maxLength={6} style={inp} />
                   <button type="button" onClick={fillFromPin} style={miniUtilityBtn}>Fill</button>
                 </div>
                 {pinLookupStatus ? <div style={helperText}>{pinLookupStatus}</div> : null}
