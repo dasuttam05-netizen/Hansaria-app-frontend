@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import axios from "axios";
 
 const emptyForm = () => ({
@@ -9,6 +9,10 @@ const emptyForm = () => ({
   village: "",
   pincode: "",
   state: "",
+  district: "",
+  city: "",
+  room_floor_building: "",
+  street_locality_landmark: "",
   gst_no: "",
   pan_no: "",
   aadhar_no: "",
@@ -65,7 +69,137 @@ export default function FarmerManagementPage() {
   const [editId, setEditId] = useState(null);
   const [ifscLookupStatus, setIfscLookupStatus] = useState("");
   const [pinLookupStatus, setPinLookupStatus] = useState("");
+  const [importStatus, setImportStatus] = useState("");
+  const [importErrors, setImportErrors] = useState([]);
+  const importInputRef = useRef(null);
   const API_URL = "/api/farmers";
+
+  const farmerImportHeaders = [
+    "name",
+    "mobile",
+    "email",
+    "gst_no",
+    "pan_no",
+    "aadhar_no",
+    "aadhaar_pan_link_status",
+    "state",
+    "district",
+    "city",
+    "room_floor_building",
+    "street_locality_landmark",
+    "location",
+    "village",
+    "pincode",
+    "address",
+    "bank_name",
+    "bank_account_no",
+    "ifsc_code",
+    "branch_name",
+    "account_holder_name",
+  ];
+
+  const downloadTemplate = () => {
+    const headerRow = farmerImportHeaders.join(",");
+    const exampleRow = [
+      "Example Farmer",
+      "9123456789",
+      "example@farm.com",
+      "29ABCDE1234F1Z5",
+      "ABCDE1234F",
+      "123412341234",
+      "linked",
+      "Karnataka",
+      "Bengaluru Urban",
+      "Bengaluru",
+      "Room 101, ABC Building",
+      "MG Road, Near Landmark",
+      "Bengaluru",
+      "Hoskote",
+      "560048",
+      "Example address line",
+      "State Bank of India",
+      "123456789012",
+      "SBIN0001234",
+      "MG Road Branch",
+      "Example Farmer",
+    ];
+    const csvContent = [headerRow, exampleRow.join(",")].join("\r\n");
+    const blob = new Blob([csvContent], { type: "application/vnd.ms-excel" });
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(blob);
+    link.download = "farmer-template.xls";
+    link.click();
+    URL.revokeObjectURL(link.href);
+  };
+
+  const parseCsv = (text) => {
+    const lines = text.split(/\r?\n/).filter((line) => line.trim());
+    const rows = lines.map((line) => {
+      const values = line.split(",").map((value) => value.trim());
+      return values;
+    });
+    return rows;
+  };
+
+  const handleImportFileChange = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    setImportStatus("Importing...");
+    setImportErrors([]);
+    try {
+      const text = await file.text();
+      const rows = parseCsv(text);
+      if (rows.length <= 1) {
+        throw new Error("The file must contain a header row and at least one data row.");
+      }
+      const headers = rows[0].map((h) => h.toLowerCase().trim());
+      const requiredHeaders = farmerImportHeaders;
+      const missing = requiredHeaders.filter((field) => !headers.includes(field));
+      if (missing.length) {
+        throw new Error(`Missing headers: ${missing.join(", ")}`);
+      }
+      const matchedKeys = headers;
+      const importRows = rows.slice(1).map((values, rowIndex) => {
+        const row = {};
+        matchedKeys.forEach((key, index) => {
+          row[key] = values[index] || "";
+        });
+        return row;
+      });
+
+      const results = await Promise.allSettled(
+        importRows.map((row, index) =>
+          axios.post(API_URL, row).then(() => ({ rowNumber: index + 2, success: true })).catch((err) => {
+            throw { rowNumber: index + 2, error: err };
+          })
+        )
+      );
+
+      const errors = results
+        .filter((result) => result.status === "rejected")
+        .map((result) => {
+          const rowNumber = result.reason?.rowNumber || "unknown";
+          const message = result.reason?.error?.response?.data?.error || result.reason?.error?.message || result.reason?.message || "Import failed";
+          return `Row ${rowNumber}: ${message}`;
+        });
+
+      const successCount = results.filter((result) => result.status === "fulfilled").length;
+      const failureCount = errors.length;
+      setImportStatus(`Import completed: ${successCount} rows added, ${failureCount} errors.`);
+      setImportErrors(errors);
+      if (successCount) fetchFarmers();
+    } catch (error) {
+      const message = error?.message || "Import failed";
+      setImportStatus(message);
+      setImportErrors([message]);
+    } finally {
+      if (importInputRef.current) importInputRef.current.value = "";
+    }
+  };
+
+  const triggerImportFile = () => {
+    importInputRef.current?.click();
+  };
 
   const fetchFarmers = async () => {
     try {
@@ -128,6 +262,8 @@ export default function FarmerManagementPage() {
           ...prev,
           location: data.location || prev.location,
           state: data.state || prev.state,
+          district: data.district || prev.district || "",
+          city: data.city || prev.city || "",
           village: prev.village || data.village || "",
         }));
         setPinLookupStatus("PIN found, location and state filled");
@@ -154,9 +290,11 @@ export default function FarmerManagementPage() {
         ...prev,
         location: data.location || prev.location,
         state: data.state || prev.state,
+        district: data.district || prev.district || "",
+        city: data.city || prev.city || "",
         village: prev.village || data.village || "",
       }));
-      setPinLookupStatus("PIN found, location and state filled");
+      setPinLookupStatus("PIN found, location, district, city and state filled");
     } catch (error) {
       setPinLookupStatus(error?.response?.data?.error || "PIN lookup failed");
     }
@@ -349,18 +487,30 @@ export default function FarmerManagementPage() {
               <Field label="State">
                 <input name="state" value={formData.state} onChange={handleChange} placeholder="State" style={inp} />
               </Field>
-              <Field label="Location">
-                <input name="location" value={formData.location} onChange={handleChange} placeholder="Location" style={inp} />
-              </Field>
-              <Field label="Village">
-                <input name="village" value={formData.village} onChange={handleChange} placeholder="Village" style={inp} />
-              </Field>
               <Field label="PIN No">
                 <div style={inlineFieldRow}>
                   <input name="pincode" value={formData.pincode} onChange={handleChange} placeholder="6 digit PIN No. *" maxLength={6} style={inp} />
                   <button type="button" onClick={fillFromPin} style={miniUtilityBtn}>Fill</button>
                 </div>
                 {pinLookupStatus ? <div style={helperText}>{pinLookupStatus}</div> : null}
+              </Field>
+              <Field label="District">
+                <input name="district" value={formData.district} onChange={handleChange} placeholder="District" style={inp} />
+              </Field>
+              <Field label="City">
+                <input name="city" value={formData.city} onChange={handleChange} placeholder="City" style={inp} />
+              </Field>
+              <Field label="Room / Floor / Building">
+                <input name="room_floor_building" value={formData.room_floor_building} onChange={handleChange} placeholder="Room No / Floor / Building" style={inp} />
+              </Field>
+              <Field label="Street / Locality / Landmark">
+                <input name="street_locality_landmark" value={formData.street_locality_landmark} onChange={handleChange} placeholder="Street / Locality / Landmark" style={inp} />
+              </Field>
+              <Field label="Location">
+                <input name="location" value={formData.location} onChange={handleChange} placeholder="Location" style={inp} />
+              </Field>
+              <Field label="Village">
+                <input name="village" value={formData.village} onChange={handleChange} placeholder="Village" style={inp} />
               </Field>
               <div style={{ gridColumn: "1 / -1" }}>
                 <Field label="Address">
@@ -400,8 +550,21 @@ export default function FarmerManagementPage() {
         <>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px", gap: 10, flexWrap: "wrap" }}>
             <h2 style={titleStyle}>Farmer Master</h2>
-            <button type="button" onClick={() => setShowForm(true)} style={{ ...btnPrimary, background: "#0f766e" }}>Add Farmer</button>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+              <button type="button" onClick={downloadTemplate} style={{ ...btnPrimary, background: "#0f766e" }}>Download Farmer Excel Template</button>
+              <button type="button" onClick={triggerImportFile} style={{ ...btnPrimary, background: "#10b981" }}>Import Farmer Excel</button>
+              <button type="button" onClick={() => setShowForm(true)} style={{ ...btnPrimary, background: "#2563eb" }}>Add Farmer</button>
+            </div>
           </div>
+          <input ref={importInputRef} type="file" accept=".csv,text/csv" onChange={handleImportFileChange} style={{ display: "none" }} />
+          {importStatus ? <div style={{ marginBottom: 12, color: "#334155", fontWeight: 600 }}>{importStatus}</div> : null}
+          {importErrors.length ? (
+            <div style={{ marginBottom: 16, color: "#b91c1c", fontSize: 13 }}>
+              {importErrors.map((error, idx) => (
+                <div key={idx}>{error}</div>
+              ))}
+            </div>
+          ) : null}
           <div style={tableCard}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
               <thead>
