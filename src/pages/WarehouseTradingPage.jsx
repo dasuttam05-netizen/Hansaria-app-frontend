@@ -127,6 +127,7 @@ export default function WarehouseTradingPage() {
   const [stockDrilldown, setStockDrilldown] = useState(null);
   const [importingPurchase, setImportingPurchase] = useState(false);
   const [voucherNumberLoading, setVoucherNumberLoading] = useState(false);
+  const [showSaleDeductionModal, setShowSaleDeductionModal] = useState(false);
   const selectedVoucher = list.find((item) => String(item.id || item._id) === String(selectedPaymentId));
   const selectedWarehouse = warehouses.find((w) => String(w.id || w._id) === String(formData.warehouse_id));
   const selectedManualLocation = locations.find((l) => String(l.id || l._id) === String(formData.location_id));
@@ -272,6 +273,16 @@ export default function WarehouseTradingPage() {
     window.addEventListener("keydown", handleLedgerRefresh);
     return () => window.removeEventListener("keydown", handleLedgerRefresh);
   }, [activeTab, activeReport, reportFilters.farmer_id, reportFilters.company_account_id]);
+
+  useEffect(() => {
+    const handleF2Key = (event) => {
+      if (event.key !== "F2" || activeTab !== "vouchers" || activeVoucherType !== "sale") return;
+      event.preventDefault();
+      setShowSaleDeductionModal(true);
+    };
+    window.addEventListener("keydown", handleF2Key);
+    return () => window.removeEventListener("keydown", handleF2Key);
+  }, [activeTab, activeVoucherType]);
 
   const loadData = async () => {
     try {
@@ -578,6 +589,7 @@ export default function WarehouseTradingPage() {
   };
 
   const isPurchaseVoucher = activeVoucherType === "purchase";
+  const isSaleVoucher = activeVoucherType === "sale";
 
   const handleDeleteVoucher = async (voucherId) => {
     if (!window.confirm("Are you sure you want to delete this voucher?")) return;
@@ -1232,6 +1244,176 @@ export default function WarehouseTradingPage() {
                     </div>
                   </div>
                 </div>
+              ) : isSaleVoucher ? (
+                <div style={erpShell}>
+                  <div style={erpTitleBar}>
+                    <div style={erpTitleLeft}>
+                      <span style={erpDocIcon}>S</span>
+                      <span style={erpTitleText}>Sale</span>
+                    </div>
+                    <div style={erpMetaLine}>
+                      <span>Subdocument : <strong>Sale</strong></span>
+                      <span>Type : <strong>{editId ? "Regular [ Edit ]" : "Regular [ New ]"}</strong></span>
+                      <span>Location</span>
+                      <input value={selectedLocationName || ""} readOnly style={{ ...erpInput, width: 120 }} />
+                    </div>
+                  </div>
+
+                  <div style={erpTopGrid}>
+                    <div style={erpPanelWide}>
+                      <div style={erpRow}>
+                        <label style={erpLabel}>Buyer Name</label>
+                        <select name="company_account_id" value={formData.company_account_id} onChange={handleChange} style={{ ...erpInput, ...erpFocusInput }}>
+                          <option value="">Select Buyer</option>
+                          {companyAccounts.map((ca) => (
+                            <option key={ca.id || ca._id} value={ca.id || ca._id}>{ca.account_name || ca.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div style={erpRow}>
+                        <label style={erpLabel}>Account</label>
+                        {renderAccountSelect(erpInput)}
+                      </div>
+                      <div style={erpRow}>
+                        <label style={erpLabel}>GSTIN</label>
+                        <input value={companyAccounts.find(ca => String(ca.id || ca._id) === String(formData.company_account_id))?.gst_no || ""} readOnly style={erpInput} />
+                        <label style={{ ...erpLabel, width: 42, textAlign: "right" }}>State</label>
+                        <input value={companyAccounts.find(ca => String(ca.id || ca._id) === String(formData.company_account_id))?.state || ""} readOnly style={{ ...erpInput, width: 90 }} />
+                      </div>
+                      <div style={erpRow}>
+                        <label style={erpLabel}>PAN No.</label>
+                        <input value={companyAccounts.find(ca => String(ca.id || ca._id) === String(formData.company_account_id))?.pan_no || ""} readOnly style={erpInput} />
+                        <label style={{ ...erpLabel, width: 50, textAlign: "right" }}>Mobile</label>
+                        <input value={companyAccounts.find(ca => String(ca.id || ca._id) === String(formData.company_account_id))?.mobile || ""} readOnly style={{ ...erpInput, width: 110 }} />
+                      </div>
+                    </div>
+
+                    <div style={erpPanelWide}>
+                      <div style={erpRow}>
+                        <label style={erpLabel}>Warehouse Name</label>
+                        <select name="warehouse_id" value={formData.warehouse_id} onChange={handleChange} style={erpInput}>
+                          <option value="">Select Warehouse</option>
+                          {warehouses.map((w) => (
+                            <option key={w.id || w._id} value={w.id || w._id}>{w.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div style={erpRow}>
+                        <label style={erpLabel}>Employee Name</label>
+                        <select name="employee_id" value={formData.employee_id} onChange={handleChange} style={erpInput}>
+                          <option value="">Select Employee</option>
+                          {employees.map((e) => (
+                            <option key={e.id || e._id} value={e.id || e._id}>{e.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div style={erpRow}>
+                        <label style={erpLabel}>Employee Mobile</label>
+                        <input value={selectedEmployeeMobile} readOnly style={erpInput} />
+                      </div>
+                    </div>
+
+                    <div style={erpDocPanel}>
+                      <div style={erpRow}>
+                        <label style={erpLabel}>Number</label>
+                        <input name="voucher_no" value={formData.voucher_no} onChange={handleChange} placeholder="Voucher No *" style={erpInput} required />
+                      </div>
+                      <div style={erpRow}>
+                        <label style={erpLabel}>Date</label>
+                        <input name="date" type="date" value={formData.date} onChange={handleChange} style={erpInput} required />
+                      </div>
+                      <div style={erpRow}>
+                        <label style={erpLabel}>R. S. T No</label>
+                        <input name="reference_id" value={formData.reference_id} onChange={handleChange} placeholder="R. S. T No" style={erpInput} />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={erpSectionLabel}>GOODS SALE DETAILS</div>
+                  <div style={erpGridWrap}>
+                    <table style={erpItemsTable}>
+                      <thead>
+                        <tr>
+                          <th style={{ ...erpTh, width: 54 }}>S.L No</th>
+                          <th style={{ ...erpTh, minWidth: 250 }}>Product</th>
+                          <th style={erpTh}>Packet</th>
+                          <th style={erpTh}>Gross Wt</th>
+                          <th style={erpTh}>Tare Wt</th>
+                          <th style={erpTh}>New Wt</th>
+                          <th style={erpTh}>Net Qty (Auto)</th>
+                          <th style={erpTh}>Rate</th>
+                          <th style={erpTh}>Amount</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td style={{ ...erpTd, textAlign: "center", fontWeight: 700 }}>1</td>
+                          <td style={erpTd}>
+                            <select name="product_id" value={formData.product_id} onChange={handleChange} style={erpCellInput}>
+                              <option value="">Select Product</option>
+                              {products.map((p) => (
+                                <option key={p.id || p._id} value={p.id || p._id}>{p.name}</option>
+                              ))}
+                            </select>
+                          </td>
+                          <td style={erpTd}><input name="packet" type="number" step="0.0001" value={formData.packet} onChange={handleChange} style={erpCellInput} /></td>
+                          <td style={erpTd}><input name="gross_weight" type="number" step="0.0001" value={formData.gross_weight} onChange={handleChange} style={erpCellInput} /></td>
+                          <td style={erpTd}><input name="tare_weight" type="number" step="0.0001" value={formData.tare_weight} onChange={handleChange} style={erpCellInput} /></td>
+                          <td style={erpTd}><input value={formatDecimal4(toNumber(formData.gross_weight) - toNumber(formData.tare_weight))} readOnly style={{ ...erpCellInput, ...erpReadOnlyCell }} /></td>
+                          <td style={erpTd}><input value={formatDecimal4(toNumber(formData.unloading_qty) || toNumber(formData.quantity) || toNumber(formData.gross_weight) - toNumber(formData.tare_weight))} readOnly style={{ ...erpCellInput, ...erpReadOnlyCell }} /></td>
+                          <td style={erpTd}><input name="rate" type="number" step="0.0001" value={formData.rate} onChange={handleChange} style={erpCellInput} /></td>
+                          <td style={erpTd}><input value={formatMoney(toNumber(formData.amount))} readOnly style={{ ...erpCellInput, ...erpReadOnlyCell }} /></td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div style={erpMiddleBar}>
+                      <span></span>
+                      <strong>Sale Date : {formData.date || "Not Set"}</strong>
+                  </div>
+
+                  <div style={erpBottomGrid}>
+                    <div>
+                      <table style={erpMiniTable}>
+                        <thead>
+                          <tr><th style={erpTh}>Particulars</th><th style={erpTh}>Amount</th></tr>
+                        </thead>
+                        <tbody>
+                          <tr><td style={erpTd}>Bags Claim</td><td style={erpTd}><input name="bags_claim" type="number" step="0.0001" value={formData.bags_claim} onChange={handleChange} style={erpCellInput} /></td></tr>
+                          <tr><td style={erpTd}>Other Deduction</td><td style={erpTd}><input name="other_deduction" type="number" step="0.0001" value={formData.other_deduction} onChange={handleChange} style={erpCellInput} /></td></tr>
+                          <tr><td style={erpTd}>Claim/TDS</td><td style={erpTd}><input name="claim_amount" type="number" step="0.0001" value={formData.claim_amount} onChange={handleChange} style={erpCellInput} /></td></tr>
+                          <tr><td style={{ ...erpTd, fontWeight: 700 }}>Total Deduction</td><td style={{ ...erpTd, fontWeight: 700 }}>{formatMoney(toNumber(formData.bags_claim) + toNumber(formData.other_deduction) + toNumber(formData.claim_amount))}</td></tr>
+                          <tr><td style={erpTd}>Round Off</td><td style={erpTd}><input name="round_off" type="number" step="0.0001" value={formData.round_off} onChange={handleChange} style={erpCellInput} /></td></tr>
+                          <tr><td style={erpTd}>⌨️ Press F2 for Deductions</td><td style={erpTd}><button type="button" onClick={() => setShowSaleDeductionModal(true)} style={{ ...btnAction, background: "#0f766e", width: "100%" }}>F2 Deduction</button></td></tr>
+                        </tbody>
+                      </table>
+                      <div style={erpRemarksRow}>
+                        <label style={erpLabel}>Narration</label>
+                        <textarea name="description" value={formData.description} onChange={handleChange} rows={2} style={erpTextarea} />
+                      </div>
+                    </div>
+
+                    <div>
+                      <table style={erpMiniTable}>
+                        <thead>
+                          <tr><th style={erpTh}>Sale Summary</th><th style={erpTh}>Amount</th></tr>
+                        </thead>
+                        <tbody>
+                          <tr><td style={erpTd}>Gross Amount</td><td style={erpTd}>{formatMoney(toNumber(formData.amount))}</td></tr>
+                          <tr><td style={erpTd}>Total Deduction</td><td style={erpTd}>{formatMoney(toNumber(formData.bags_claim) + toNumber(formData.other_deduction) + toNumber(formData.claim_amount))}</td></tr>
+                          <tr><td style={erpTd}>Round Off</td><td style={erpTd}>{formatMoney(toNumber(formData.round_off))}</td></tr>
+                          <tr><td style={erpTd}>Net Amount Payable</td><td style={erpTd}>{formatMoney(toNumber(formData.amount) - toNumber(formData.bags_claim) - toNumber(formData.other_deduction) - toNumber(formData.claim_amount) + toNumber(formData.round_off))}</td></tr>
+                        </tbody>
+                      </table>
+
+                      <div style={erpTotalPanel}>
+                        <span style={erpTotalLabel}>T O T A L</span>
+                        <strong style={erpTotalAmount}>{formatMoney(toNumber(formData.amount) - toNumber(formData.bags_claim) - toNumber(formData.other_deduction) - toNumber(formData.claim_amount) + toNumber(formData.round_off))}</strong>
+                      </div>
+                    </div>
+                  </div>
+                </div>
               ) : (
                 <div style={formGrid}>
                 <Field label="Voucher No">
@@ -1853,6 +2035,139 @@ export default function WarehouseTradingPage() {
                 }}
               >
                 Confirm Adjustment
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {showSaleDeductionModal && (
+        <div style={modalOverlayStyle}>
+          <div style={paymentAdjustModalStyle}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+              <div>
+                <h3 style={{ margin: 0 }}>Sale Deduction Details</h3>
+                <div style={{ fontSize: 13, color: "#64748b", marginTop: 4 }}>
+                  Press F2 to edit | Auto-calculated deductions
+                </div>
+              </div>
+              <button type="button" onClick={() => setShowSaleDeductionModal(false)} style={{ ...btnAction, background: "#64748b" }}>
+                Close
+              </button>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, marginTop: 14 }}>
+              <div>
+                <label style={lbl}>Unloading Date</label>
+                <input 
+                  type="date" 
+                  value={formData.unloading_date} 
+                  onChange={(e) => setFormData(prev => ({ ...prev, unloading_date: e.target.value }))}
+                  style={inp}
+                />
+              </div>
+              <div>
+                <label style={lbl}>Unloading Weight (Qty)</label>
+                <input 
+                  type="number"
+                  step="0.0001"
+                  value={formData.unloading_qty}
+                  onChange={(e) => setFormData(prev => ({ ...prev, unloading_qty: e.target.value }))}
+                  style={inp}
+                  placeholder="Weight"
+                />
+              </div>
+              <div>
+                <label style={lbl}>Moisture</label>
+                <input 
+                  type="number"
+                  step="0.0001"
+                  value={formData.moisture}
+                  onChange={(e) => setFormData(prev => ({ ...prev, moisture: e.target.value }))}
+                  style={inp}
+                  placeholder="Moisture %"
+                />
+              </div>
+              <div>
+                <label style={lbl}>Dunky</label>
+                <input 
+                  type="number"
+                  step="0.0001"
+                  value={formData.dunki}
+                  onChange={(e) => setFormData(prev => ({ ...prev, dunki: e.target.value }))}
+                  style={inp}
+                  placeholder="Dunky %"
+                />
+              </div>
+              <div>
+                <label style={lbl}>Fungus</label>
+                <input 
+                  type="number"
+                  step="0.0001"
+                  value={formData.fungus}
+                  onChange={(e) => setFormData(prev => ({ ...prev, fungus: e.target.value }))}
+                  style={inp}
+                  placeholder="Fungus %"
+                />
+              </div>
+              <div>
+                <label style={lbl}>Discolour</label>
+                <input 
+                  type="number"
+                  step="0.0001"
+                  value={formData.discolour}
+                  onChange={(e) => setFormData(prev => ({ ...prev, discolour: e.target.value }))}
+                  style={inp}
+                  placeholder="Discolour %"
+                />
+              </div>
+              <div>
+                <label style={lbl}>Others</label>
+                <input 
+                  type="number"
+                  step="0.0001"
+                  value={formData.others}
+                  onChange={(e) => setFormData(prev => ({ ...prev, others: e.target.value }))}
+                  style={inp}
+                  placeholder="Others %"
+                />
+              </div>
+              <div>
+                <label style={lbl}>Total Deduction (Auto)</label>
+                <input 
+                  type="text"
+                  value={formatDecimal4(toNumber(formData.moisture) + toNumber(formData.dunki) + toNumber(formData.fungus) + toNumber(formData.discolour) + toNumber(formData.others))}
+                  readOnly
+                  style={readOnlyInp}
+                />
+              </div>
+            </div>
+
+            <div style={{ marginTop: 16, padding: 12, background: "#f8fafc", borderRadius: 8, border: "1px solid #cbd5e1" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12, fontSize: 13 }}>
+                <div>
+                  <strong>Gross Amount:</strong> Rs.{formatMoney(formData.amount)}
+                </div>
+                <div>
+                  <strong>Total Deduction:</strong> Rs.{formatMoney(toNumber(formData.moisture) + toNumber(formData.dunki) + toNumber(formData.fungus) + toNumber(formData.discolour) + toNumber(formData.others))}
+                </div>
+                <div>
+                  <strong>Claim Amount:</strong> Rs.{formatMoney(formData.claim_amount)}
+                </div>
+                <div>
+                  <strong>Other Deduction:</strong> Rs.{formatMoney(formData.other_deduction)}
+                </div>
+                <div>
+                  <strong>Round Off:</strong> Rs.{formatMoney(formData.round_off)}
+                </div>
+                <div style={{ fontWeight: 700, color: "#0f766e", fontSize: 14 }}>
+                  <strong>Net Amount Payable:</strong> Rs.{formatMoney(toNumber(formData.amount) - toNumber(formData.claim_amount) - toNumber(formData.other_deduction) - toNumber(formData.round_off))}
+                </div>
+              </div>
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 14 }}>
+              <button type="button" onClick={() => setShowSaleDeductionModal(false)} style={btnPrimary}>
+                Save & Close
               </button>
             </div>
           </div>
