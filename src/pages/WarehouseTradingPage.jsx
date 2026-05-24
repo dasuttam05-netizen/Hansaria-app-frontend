@@ -126,11 +126,15 @@ export default function WarehouseTradingPage() {
   const [showPaymentAdjustPopup, setShowPaymentAdjustPopup] = useState(false);
   const [paymentAdjustments, setPaymentAdjustments] = useState([]);
   const [selectedPaymentId, setSelectedPaymentId] = useState(null);
+  const [showReceiptAdjustPopup, setShowReceiptAdjustPopup] = useState(false);
+  const [receiptAdjustments, setReceiptAdjustments] = useState([]);
+  const [selectedReceiptId, setSelectedReceiptId] = useState(null);
   const [stockDrilldown, setStockDrilldown] = useState(null);
   const [importingPurchase, setImportingPurchase] = useState(false);
   const [voucherNumberLoading, setVoucherNumberLoading] = useState(false);
   const [showSaleDeductionModal, setShowSaleDeductionModal] = useState(false);
   const selectedVoucher = list.find((item) => String(item.id || item._id) === String(selectedPaymentId));
+  const selectedReceiptVoucher = list.find((item) => String(item.id || item._id) === String(selectedReceiptId));
   const selectedWarehouse = warehouses.find((w) => String(w.id || w._id) === String(formData.warehouse_id));
   const selectedManualLocation = locations.find((l) => String(l.id || l._id) === String(formData.location_id));
   const selectedWarehouseLocation =
@@ -195,6 +199,10 @@ export default function WarehouseTradingPage() {
   const purchaseRoundOff = toNumber(formData.round_off);
   const purchaseNetPayable = Math.max(purchaseGrossAmount - purchaseTotalDeduction + purchaseRoundOff, 0);
   const paymentAdjustmentTotal = paymentAdjustments.reduce(
+    (sum, item) => sum + toNumber(item.adjusted_amount),
+    0
+  );
+  const receiptAdjustmentTotal = receiptAdjustments.reduce(
     (sum, item) => sum + toNumber(item.adjusted_amount),
     0
   );
@@ -274,6 +282,9 @@ export default function WarehouseTradingPage() {
       setPaymentAdjustments([]);
       setSelectedPaymentId(null);
       setShowPaymentAdjustPopup(false);
+      setReceiptAdjustments([]);
+      setSelectedReceiptId(null);
+      setShowReceiptAdjustPopup(false);
       setFormData((prev) => ({ ...prev, reference_type: "", reference_id: "" }));
     }
   }, [activeTab, activeVoucherType]);
@@ -490,7 +501,17 @@ export default function WarehouseTradingPage() {
       }
     }
     if (activeVoucherType === "receipt" && name === "company_id") {
-      loadOutstanding("company", value);
+      if (value) {
+        loadOutstanding("company", value).then(() => {
+          if (toNumber(formData.amount) > 0) {
+            setShowReceiptAdjustPopup(true);
+          }
+        });
+      } else {
+        setPartyOutstanding(null);
+        setReceiptAdjustments([]);
+        setShowReceiptAdjustPopup(false);
+      }
     }
     if (name === "warehouse_id") {
       if (activeVoucherType === "payment" && formData.farmer_id) {
@@ -502,6 +523,14 @@ export default function WarehouseTradingPage() {
       }
       if (activeVoucherType === "receipt" && formData.company_id) {
         loadOutstanding("company", formData.company_id, value);
+      }
+    }
+    if (activeVoucherType === "receipt" && name === "amount") {
+      if (toNumber(value) > 0 && formData.company_id) {
+        setShowReceiptAdjustPopup(true);
+      } else {
+        setReceiptAdjustments([]);
+        setShowReceiptAdjustPopup(false);
       }
     }
   };
@@ -525,6 +554,22 @@ export default function WarehouseTradingPage() {
       if (Math.abs(paymentAdjustmentTotal - paymentAmount) > 0.0001) {
         setShowPaymentAdjustPopup(true);
         alert("Payment amount and adjustment amount must match before saving");
+        return;
+      }
+    }
+    if (activeVoucherType === "receipt") {
+      const receiptAmount = toNumber(formData.amount);
+      if (!formData.company_id) {
+        alert("Please select company");
+        return;
+      }
+      if (receiptAmount <= 0) {
+        alert("Please enter receipt amount first");
+        return;
+      }
+      if (Math.abs(receiptAdjustmentTotal - receiptAmount) > 0.0001) {
+        setShowReceiptAdjustPopup(true);
+        alert("Receipt amount and adjustment amount must match before saving");
         return;
       }
     }
@@ -611,6 +656,20 @@ export default function WarehouseTradingPage() {
           .filter(Boolean)
           .join(", ");
       }
+      if (activeVoucherType === "receipt") {
+        payload.adjustments = receiptAdjustments
+          .filter((item) => toNumber(item.adjusted_amount) > 0)
+          .map((item) => ({
+            sale_id: item.sale_id,
+            voucher_no: item.voucher_no || item.sale_voucher_no || "",
+            adjusted_amount: toNumber(item.adjusted_amount),
+          }));
+        payload.reference_type = "sale";
+        payload.reference_id = receiptAdjustments
+          .map((item) => item.voucher_no || item.sale_voucher_no || item.sale_id)
+          .filter(Boolean)
+          .join(", ");
+      }
       
       const isEdit = editId && String(editId).trim();
       const url = isEdit ? `/api/wh-vouchers/${activeVoucherType}/${editId}` : `/api/wh-vouchers/${activeVoucherType}`;
@@ -623,8 +682,10 @@ export default function WarehouseTradingPage() {
       }
       setFormData(defaultForm());
       setPaymentAdjustments([]);
+      setReceiptAdjustments([]);
       setPartyOutstanding(null);
       setShowPaymentAdjustPopup(false);
+      setShowReceiptAdjustPopup(false);
       setEditId(null);
       loadVouchers();
       fetchNextVoucherNo(activeVoucherType);
@@ -788,6 +849,20 @@ export default function WarehouseTradingPage() {
     setShowPaymentAdjustPopup(true);
   };
 
+  const openReceiptAdjustmentPopup = async () => {
+    if (activeVoucherType !== "receipt") return;
+    if (toNumber(formData.amount) <= 0) {
+      alert("Please enter amount first");
+      return;
+    }
+    if (!formData.company_id) {
+      alert("Please select company");
+      return;
+    }
+    await loadOutstanding("company", formData.company_id, formData.warehouse_id);
+    setShowReceiptAdjustPopup(true);
+  };
+
   const setPaymentAdjustmentAmount = (purchase, value) => {
     const purchaseId = String(purchase.id || purchase._id);
     const amount = Math.max(0, toNumber(value));
@@ -829,6 +904,48 @@ export default function WarehouseTradingPage() {
 
   const selectedAdjustmentFor = (purchaseId) =>
     paymentAdjustments.find((item) => String(item.purchase_id) === String(purchaseId))?.adjusted_amount || "";
+
+  const setReceiptAdjustmentAmount = (sale, value) => {
+    const saleId = String(sale.id || sale._id);
+    const amount = Math.max(0, toNumber(value));
+    const pending = toNumber(sale.pending_amount ?? sale.amount);
+    const safeAmount = Math.min(amount, pending);
+    setReceiptAdjustments((prev) => {
+      const others = prev.filter((item) => String(item.sale_id) !== saleId);
+      if (safeAmount <= 0) return others;
+      return [
+        ...others,
+        {
+          sale_id: saleId,
+          voucher_no: sale.voucher_no,
+          adjusted_amount: safeAmount,
+        },
+      ];
+    });
+  };
+
+  const autoFillReceiptAdjustments = () => {
+    let remaining = toNumber(formData.amount);
+    const next = [];
+    (partyOutstanding?.sales || [])
+      .filter((row) => toNumber(row.pending_amount) > 0)
+      .forEach((row) => {
+        if (remaining <= 0) return;
+        const adjusted = Math.min(remaining, toNumber(row.pending_amount));
+        if (adjusted > 0) {
+          next.push({
+            sale_id: String(row.id || row._id),
+            voucher_no: row.voucher_no,
+            adjusted_amount: adjusted,
+          });
+          remaining -= adjusted;
+        }
+      });
+    setReceiptAdjustments(next);
+  };
+
+  const selectedAdjustmentForReceipt = (saleId) =>
+    receiptAdjustments.find((item) => String(item.sale_id) === String(saleId))?.adjusted_amount || "";
 
   const renderAccountSelect = (style = inp) => (
     <select name="company_account_id" value={formData.company_account_id} onChange={handleChange} style={style}>
@@ -2106,6 +2223,100 @@ export default function WarehouseTradingPage() {
                   ...btnPrimary,
                   opacity: Math.abs(paymentAdjustmentTotal - toNumber(formData.amount)) > 0.0001 ? 0.55 : 1,
                   cursor: Math.abs(paymentAdjustmentTotal - toNumber(formData.amount)) > 0.0001 ? "not-allowed" : "pointer",
+                }}
+              >
+                Confirm Adjustment
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {showReceiptAdjustPopup && (
+        <div style={modalOverlayStyle}>
+          <div style={paymentAdjustModalStyle}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+              <div>
+                <h3 style={{ margin: 0 }}>Receipt Adjustment</h3>
+                <div style={{ fontSize: 13, color: "#64748b", marginTop: 4 }}>
+                  Company and warehouse wise pending sale bills
+                </div>
+              </div>
+              <button type="button" onClick={() => setShowReceiptAdjustPopup(false)} style={{ ...btnAction, background: "#64748b" }}>
+                Close
+              </button>
+            </div>
+
+            <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginTop: 14, fontSize: 13 }}>
+              <strong>Receipt: Rs.{formatMoney(formData.amount)}</strong>
+              <strong>Adjusted: Rs.{formatMoney(receiptAdjustmentTotal)}</strong>
+              <strong style={{ color: Math.abs(receiptAdjustmentTotal - toNumber(formData.amount)) <= 0.0001 ? "#15803d" : "#dc2626" }}>
+                Difference: Rs.{formatMoney(toNumber(formData.amount) - receiptAdjustmentTotal)}
+              </strong>
+              <button type="button" onClick={autoFillReceiptAdjustments} style={{ ...btnAction, background: "#0f766e" }}>
+                Auto Adjust
+              </button>
+            </div>
+
+            <div style={{ ...tableCard, marginTop: 14, maxHeight: "55vh" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                <thead>
+                  <tr style={reportHeaderRowStyle}>
+                    <th style={th}>Date</th>
+                    <th style={th}>Voucher No</th>
+                    <th style={th}>Warehouse</th>
+                    <th style={th}>Bill Amount</th>
+                    <th style={th}>Adjusted</th>
+                    <th style={th}>Pending</th>
+                    <th style={th}>Adjustment Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(partyOutstanding?.sales || [])
+                    .filter((row) => toNumber(row.pending_amount) > 0)
+                    .map((row) => (
+                      <tr key={row.id || row._id}>
+                        <td style={td}>{row.date || "-"}</td>
+                        <td style={td}>{row.voucher_no || "-"}</td>
+                        <td style={td}>{getWarehouseName(row)}</td>
+                        <td style={td}>{formatMoney(row.amount || 0)}</td>
+                        <td style={td}>{formatMoney(row.adjusted_amount || 0)}</td>
+                        <td style={td}>{formatMoney(row.pending_amount || 0)}</td>
+                        <td style={td}>
+                          <input
+                            type="number"
+                            step="0.0001"
+                            min="0"
+                            max={row.pending_amount || row.amount || 0}
+                            value={selectedAdjustmentForReceipt(row.id || row._id)}
+                            onChange={(event) => setReceiptAdjustmentAmount(row, event.target.value)}
+                            style={{ ...inp, padding: "7px 8px" }}
+                          />
+                        </td>
+                      </tr>
+                    ))}
+                  {(partyOutstanding?.sales || []).filter((row) => toNumber(row.pending_amount) > 0).length === 0 && (
+                    <tr>
+                      <td colSpan={7} style={{ ...td, textAlign: "center", padding: 20 }}>
+                        No pending sale bills found.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 14 }}>
+              <button type="button" onClick={() => setReceiptAdjustments([])} style={{ ...btnPrimary, background: "#64748b" }}>
+                Clear
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowReceiptAdjustPopup(false)}
+                disabled={Math.abs(receiptAdjustmentTotal - toNumber(formData.amount)) > 0.0001}
+                style={{
+                  ...btnPrimary,
+                  opacity: Math.abs(receiptAdjustmentTotal - toNumber(formData.amount)) > 0.0001 ? 0.55 : 1,
+                  cursor: Math.abs(receiptAdjustmentTotal - toNumber(formData.amount)) > 0.0001 ? "not-allowed" : "pointer",
                 }}
               >
                 Confirm Adjustment
