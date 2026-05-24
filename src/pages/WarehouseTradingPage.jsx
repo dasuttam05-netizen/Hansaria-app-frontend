@@ -11,6 +11,7 @@ const defaultForm = () => ({
   date: new Date().toISOString().slice(0, 10),
   unloading_date: "",
   warehouse_id: "",
+  buyer_id: "",
   farmer_id: "",
   company_id: "",
   company_account_id: "",
@@ -106,6 +107,7 @@ export default function WarehouseTradingPage() {
   const [warehouses, setWarehouses] = useState([]);
   const [farmers, setFarmers] = useState([]);
   const [accountFarmers, setAccountFarmers] = useState([]);
+  const [buyerNames, setBuyerNames] = useState([]);
   const [companies, setCompanies] = useState([]);
   const [companyAccounts, setCompanyAccounts] = useState([]);
   const [consignees, setConsignees] = useState([]);
@@ -139,6 +141,8 @@ export default function WarehouseTradingPage() {
     "";
   const selectedEmployee = employees.find((e) => String(e.id || e._id) === String(formData.employee_id));
   const selectedFarmer = farmers.find((f) => String(f.id || f._id) === String(formData.farmer_id));
+  const selectedBuyer = buyerNames.find((b) => String(b.id || b._id) === String(formData.buyer_id || formData.company_id));
+  const selectedConsignee = consignees.find((c) => String(c.id || c._id) === String(formData.consignee_id));
   const selectedEmployeeMobile = selectedEmployee?.mobile || selectedEmployee?.phone || selectedEmployee?.mobile_no || "";
   const selectedFarmerMobile = selectedFarmer?.mobile || selectedFarmer?.phone || selectedFarmer?.mobile_no || "";
   const selectedFarmerGst = selectedFarmer?.gst_no || selectedFarmer?.gst || "";
@@ -158,6 +162,23 @@ export default function WarehouseTradingPage() {
     item?.farmer_name ||
     farmers.find((f) => String(f.id || f._id) === String(item?.farmer_id))?.name ||
     "-";
+  const getBuyerId = (item) => item?.buyer_id || item?.company_id || "";
+  const getBuyerName = (item) =>
+    item?.buyer_name ||
+    buyerNames.find((b) => String(b.id || b._id) === String(getBuyerId(item)))?.name ||
+    item?.company_name ||
+    companies.find((c) => String(c.id || c._id) === String(item?.company_id))?.name ||
+    "-";
+  const saleQtyFromData = (data) => {
+    const netWeight = toNumber(data.unloading_qty) || toNumber(data.quantity) || Math.max(toNumber(data.gross_weight) - toNumber(data.tare_weight), 0);
+    return Math.max(netWeight - toNumber(data.shortage_quantity), 0);
+  };
+  const saleGrossAmountFromData = (data) => saleQtyFromData(data) * toNumber(data.rate);
+  const filteredConsignees = useMemo(() => {
+    const buyerId = String(formData.buyer_id || formData.company_id || "");
+    if (!buyerId) return consignees;
+    return consignees.filter((c) => String(c.buyer_id || "") === buyerId);
+  }, [consignees, formData.buyer_id, formData.company_id]);
   const openStockDrilldown = (item, mode) => {
     setStockDrilldown({ item, mode });
   };
@@ -286,9 +307,10 @@ export default function WarehouseTradingPage() {
 
   const loadData = async () => {
     try {
-      const [wRes, fRes, cRes, caRes, coRes, pRes, eRes, lRes] = await Promise.allSettled([
+      const [wRes, fRes, bRes, cRes, caRes, coRes, pRes, eRes, lRes] = await Promise.allSettled([
         axios.get("/api/warehouses"),
         axios.get("/api/farmers"),
+        axios.get("/api/buyer-names"),
         axios.get("/api/companies"),
         axios.get("/api/company-accounts"),
         axios.get("/api/consignee-names"),
@@ -299,6 +321,7 @@ export default function WarehouseTradingPage() {
       const dataOf = (result) => (result.status === "fulfilled" ? result.value.data : []);
       setWarehouses(Array.isArray(dataOf(wRes)) ? dataOf(wRes) : []);
       setFarmers(Array.isArray(dataOf(fRes)) ? dataOf(fRes) : []);
+      setBuyerNames(Array.isArray(dataOf(bRes)) ? dataOf(bRes) : []);
       setCompanies(Array.isArray(dataOf(cRes)) ? dataOf(cRes) : []);
       setCompanyAccounts(Array.isArray(dataOf(caRes)) ? dataOf(caRes) : []);
       setConsignees(Array.isArray(dataOf(coRes)) ? dataOf(coRes) : []);
@@ -408,6 +431,24 @@ export default function WarehouseTradingPage() {
         const warehouse = warehouses.find((w) => String(w.id || w._id) === String(value));
         next.location_id = getRecordId(warehouse?.location_id);
         next.employee_id = getRecordId(warehouse?.employee_id) || prev.employee_id || "";
+      }
+      if (activeVoucherType === "sale" && name === "buyer_id") {
+        next.company_id = value;
+        const matchingConsignee = consignees.find((c) => String(c.buyer_id || "") === String(value));
+        next.consignee_id = matchingConsignee ? getRecordId(matchingConsignee) : "";
+      }
+      if (activeVoucherType === "sale" && name === "consignee_id") {
+        const consignee = consignees.find((c) => String(c.id || c._id) === String(value));
+        if (consignee?.buyer_id) {
+          next.buyer_id = String(consignee.buyer_id);
+          next.company_id = String(consignee.buyer_id);
+        }
+      }
+      if (
+        activeVoucherType === "sale" &&
+        ["gross_weight", "tare_weight", "quantity", "unloading_qty", "shortage_quantity", "rate"].includes(name)
+      ) {
+        next.amount = saleGrossAmountFromData(next).toFixed(2);
       }
       return next;
     });
@@ -536,16 +577,23 @@ export default function WarehouseTradingPage() {
         payload.location_id = payload.location_id || selectedWarehouse?.location_id || "";
       }
       if (activeVoucherType === "sale") {
+        payload.buyer_id = payload.buyer_id || payload.company_id || "";
+        payload.company_id = payload.buyer_id;
+        payload.quantity = saleQtyFromData(formData);
+        payload.unloading_qty = payload.quantity;
+        payload.amount = saleGrossAmountFromData(formData);
         const claimAmount = Number(formData.claim_amount) || 0;
         const otherDeduction = Number(formData.other_deduction) || 0;
         const adjustmentAmount = Number(formData.adjustment_amount) || 0;
         const tdsAmount = Number(formData.tds_amount) || 0;
-        const grossAmount = Number(formData.amount) || 0;
-        const netAmount = grossAmount - claimAmount - otherDeduction - adjustmentAmount - tdsAmount;
+        const roundOff = Number(formData.round_off) || 0;
+        const grossAmount = payload.amount;
+        const netAmount = grossAmount - claimAmount - otherDeduction - adjustmentAmount - tdsAmount + roundOff;
         payload.net_amount = netAmount;
+        payload.net_amount_payable = netAmount;
         payload.net_receivable_amount = netAmount;
         payload.outstanding = netAmount;
-        const qtyForFifo = Number(formData.unloading_qty || formData.quantity) || 0;
+        const qtyForFifo = Number(payload.unloading_qty || payload.quantity) || 0;
         payload.fifo_rate = qtyForFifo > 0 ? grossAmount / qtyForFifo : 0;
         payload.fifo_amount = grossAmount;
       }
@@ -834,6 +882,8 @@ export default function WarehouseTradingPage() {
       ],
     ],
     sale: [
+      ["buyer", "Buyer", (item) => getBuyerName(item)],
+      ["consignee", "Consignee", (item) => item.consignee_name || consignees.find((c) => String(c.id || c._id) === String(item.consignee_id))?.name || "-"],
       ["warehouse", "Warehouse", (item) => getWarehouseName(item)],
       ["total_quantity", "Total Quantity", (item) => formatDecimal4(item.total_quantity || 0)],
       ["total_amount", "Total Amount", (item) => formatMoney(item.total_amount || 0)],
@@ -1263,10 +1313,10 @@ export default function WarehouseTradingPage() {
                     <div style={erpPanelWide}>
                       <div style={erpRow}>
                         <label style={erpLabel}>Buyer Name</label>
-                        <select name="company_account_id" value={formData.company_account_id} onChange={handleChange} style={{ ...erpInput, ...erpFocusInput }}>
+                        <select name="buyer_id" value={formData.buyer_id || formData.company_id} onChange={handleChange} style={{ ...erpInput, ...erpFocusInput }}>
                           <option value="">Select Buyer</option>
-                          {companyAccounts.map((ca) => (
-                            <option key={ca.id || ca._id} value={ca.id || ca._id}>{ca.account_name || ca.name}</option>
+                          {buyerNames.map((buyer) => (
+                            <option key={buyer.id || buyer._id} value={buyer.id || buyer._id}>{buyer.name}</option>
                           ))}
                         </select>
                       </div>
@@ -1275,16 +1325,25 @@ export default function WarehouseTradingPage() {
                         {renderAccountSelect(erpInput)}
                       </div>
                       <div style={erpRow}>
+                        <label style={erpLabel}>Consignee</label>
+                        <select name="consignee_id" value={formData.consignee_id} onChange={handleChange} style={erpInput}>
+                          <option value="">{formData.buyer_id || formData.company_id ? "Select Consignee" : "Select Buyer First"}</option>
+                          {filteredConsignees.map((c) => (
+                            <option key={c.id || c._id} value={c.id || c._id}>{c.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div style={erpRow}>
                         <label style={erpLabel}>GSTIN</label>
-                        <input value={companyAccounts.find(ca => String(ca.id || ca._id) === String(formData.company_account_id))?.gst_no || ""} readOnly style={erpInput} />
+                        <input value={selectedBuyer?.gst_no || selectedConsignee?.gst_no || ""} readOnly style={erpInput} />
                         <label style={{ ...erpLabel, width: 42, textAlign: "right" }}>State</label>
-                        <input value={companyAccounts.find(ca => String(ca.id || ca._id) === String(formData.company_account_id))?.state || ""} readOnly style={{ ...erpInput, width: 90 }} />
+                        <input value={selectedBuyer?.state || selectedConsignee?.state || ""} readOnly style={{ ...erpInput, width: 90 }} />
                       </div>
                       <div style={erpRow}>
                         <label style={erpLabel}>PAN No.</label>
-                        <input value={companyAccounts.find(ca => String(ca.id || ca._id) === String(formData.company_account_id))?.pan_no || ""} readOnly style={erpInput} />
+                        <input value={selectedBuyer?.pan_no || selectedConsignee?.pan_no || ""} readOnly style={erpInput} />
                         <label style={{ ...erpLabel, width: 50, textAlign: "right" }}>Mobile</label>
-                        <input value={companyAccounts.find(ca => String(ca.id || ca._id) === String(formData.company_account_id))?.mobile || ""} readOnly style={{ ...erpInput, width: 110 }} />
+                        <input value={selectedBuyer?.mobile || selectedConsignee?.mobile || ""} readOnly style={{ ...erpInput, width: 110 }} />
                       </div>
                     </div>
 
@@ -1360,9 +1419,9 @@ export default function WarehouseTradingPage() {
                           <td style={erpTd}><input name="gross_weight" type="number" step="0.0001" value={formData.gross_weight} onChange={handleChange} style={erpCellInput} /></td>
                           <td style={erpTd}><input name="tare_weight" type="number" step="0.0001" value={formData.tare_weight} onChange={handleChange} style={erpCellInput} /></td>
                           <td style={erpTd}><input value={formatDecimal4(toNumber(formData.gross_weight) - toNumber(formData.tare_weight))} readOnly style={{ ...erpCellInput, ...erpReadOnlyCell }} /></td>
-                          <td style={erpTd}><input value={formatDecimal4(toNumber(formData.unloading_qty) || toNumber(formData.quantity) || toNumber(formData.gross_weight) - toNumber(formData.tare_weight))} readOnly style={{ ...erpCellInput, ...erpReadOnlyCell }} /></td>
+                          <td style={erpTd}><input value={formatDecimal4(saleQtyFromData(formData))} readOnly style={{ ...erpCellInput, ...erpReadOnlyCell }} /></td>
                           <td style={erpTd}><input name="rate" type="number" step="0.0001" value={formData.rate} onChange={handleChange} style={erpCellInput} /></td>
-                          <td style={erpTd}><input value={formatMoney(toNumber(formData.amount))} readOnly style={{ ...erpCellInput, ...erpReadOnlyCell }} /></td>
+                          <td style={erpTd}><input value={formatMoney(saleGrossAmountFromData(formData))} readOnly style={{ ...erpCellInput, ...erpReadOnlyCell }} /></td>
                         </tr>
                       </tbody>
                     </table>
@@ -1400,16 +1459,16 @@ export default function WarehouseTradingPage() {
                           <tr><th style={erpTh}>Sale Summary</th><th style={erpTh}>Amount</th></tr>
                         </thead>
                         <tbody>
-                          <tr><td style={erpTd}>Gross Amount</td><td style={erpTd}>{formatMoney(toNumber(formData.amount))}</td></tr>
+                          <tr><td style={erpTd}>Gross Amount</td><td style={erpTd}>{formatMoney(saleGrossAmountFromData(formData))}</td></tr>
                           <tr><td style={erpTd}>Total Deduction</td><td style={erpTd}>{formatMoney(toNumber(formData.bags_claim) + toNumber(formData.other_deduction) + toNumber(formData.claim_amount))}</td></tr>
                           <tr><td style={erpTd}>Round Off</td><td style={erpTd}>{formatMoney(toNumber(formData.round_off))}</td></tr>
-                          <tr><td style={erpTd}>Net Amount Payable</td><td style={erpTd}>{formatMoney(toNumber(formData.amount) - toNumber(formData.bags_claim) - toNumber(formData.other_deduction) - toNumber(formData.claim_amount) + toNumber(formData.round_off))}</td></tr>
+                          <tr><td style={erpTd}>Net Amount Payable</td><td style={erpTd}>{formatMoney(saleGrossAmountFromData(formData) - toNumber(formData.bags_claim) - toNumber(formData.other_deduction) - toNumber(formData.claim_amount) + toNumber(formData.round_off))}</td></tr>
                         </tbody>
                       </table>
 
                       <div style={erpTotalPanel}>
                         <span style={erpTotalLabel}>T O T A L</span>
-                        <strong style={erpTotalAmount}>{formatMoney(toNumber(formData.amount) - toNumber(formData.bags_claim) - toNumber(formData.other_deduction) - toNumber(formData.claim_amount) + toNumber(formData.round_off))}</strong>
+                        <strong style={erpTotalAmount}>{formatMoney(saleGrossAmountFromData(formData) - toNumber(formData.bags_claim) - toNumber(formData.other_deduction) - toNumber(formData.claim_amount) + toNumber(formData.round_off))}</strong>
                       </div>
                     </div>
                   </div>
@@ -1506,14 +1565,25 @@ export default function WarehouseTradingPage() {
 
                 {(activeVoucherType === "sale" || activeVoucherType === "receipt") && (
                   <>
-                    <Field label="Company (Debtor)">
-                      <select name="company_id" value={formData.company_id} onChange={handleChange} style={inp}>
-                        <option value="">Select Company</option>
-                        {companies.map((c) => (
-                          <option key={c.id || c._id} value={c.id || c._id}>{c.name}</option>
-                        ))}
-                      </select>
-                    </Field>
+                    {activeVoucherType === "sale" ? (
+                      <Field label="Buyer Name">
+                        <select name="buyer_id" value={formData.buyer_id || formData.company_id} onChange={handleChange} style={inp}>
+                          <option value="">Select Buyer</option>
+                          {buyerNames.map((buyer) => (
+                            <option key={buyer.id || buyer._id} value={buyer.id || buyer._id}>{buyer.name}</option>
+                          ))}
+                        </select>
+                      </Field>
+                    ) : (
+                      <Field label="Company (Debtor)">
+                        <select name="company_id" value={formData.company_id} onChange={handleChange} style={inp}>
+                          <option value="">Select Company</option>
+                          {companies.map((c) => (
+                            <option key={c.id || c._id} value={c.id || c._id}>{c.name}</option>
+                          ))}
+                        </select>
+                      </Field>
+                    )}
                     {partyOutstanding && activeVoucherType === "receipt" && (
                       <div style={{ marginTop: 8, fontSize: 13, color: "#444" }}>
                         Current outstanding: Rs.{formatMoney(partyOutstanding.outstanding || 0)}
@@ -1521,8 +1591,8 @@ export default function WarehouseTradingPage() {
                     )}
                     <Field label="Consignee">
                       <select name="consignee_id" value={formData.consignee_id} onChange={handleChange} style={inp}>
-                        <option value="">Select Consignee</option>
-                        {consignees.map((c) => (
+                        <option value="">{activeVoucherType === "sale" && !(formData.buyer_id || formData.company_id) ? "Select Buyer First" : "Select Consignee"}</option>
+                        {(activeVoucherType === "sale" ? filteredConsignees : consignees).map((c) => (
                           <option key={c.id || c._id} value={c.id || c._id}>{c.name}</option>
                         ))}
                       </select>
@@ -1560,7 +1630,7 @@ export default function WarehouseTradingPage() {
                       <input name="rate" type="number" step="0.0001" value={formData.rate} onChange={handleChange} style={inp} />
                     </Field>
                     <Field label="Amount">
-                      <input name="amount" type="number" step="0.0001" value={formData.amount} onChange={handleChange} style={inp} />
+                      <input name="amount" type="number" step="0.0001" value={activeVoucherType === "sale" ? formatMoney(saleGrossAmountFromData(formData)) : formData.amount} onChange={handleChange} style={activeVoucherType === "sale" ? readOnlyInp : inp} readOnly={activeVoucherType === "sale"} />
                     </Field>
                     {activeVoucherType === "sale" && (
                       <>
@@ -1580,13 +1650,13 @@ export default function WarehouseTradingPage() {
                           <input name="unloading_qty" type="number" step="0.0001" value={formData.unloading_qty} onChange={handleChange} style={inp} />
                         </Field>
                         <Field label="Net Receivable">
-                          <input value={formatMoney(toNumber(formData.amount) - toNumber(formData.claim_amount) - toNumber(formData.other_deduction) - toNumber(formData.adjustment_amount) - toNumber(formData.tds_amount))} readOnly style={readOnlyInp} />
+                          <input value={formatMoney(saleGrossAmountFromData(formData) - toNumber(formData.claim_amount) - toNumber(formData.other_deduction) - toNumber(formData.adjustment_amount) - toNumber(formData.tds_amount) + toNumber(formData.round_off))} readOnly style={readOnlyInp} />
                         </Field>
                         <Field label="FIFO Amount">
-                          <input value={formatMoney(formData.amount)} readOnly style={readOnlyInp} />
+                          <input value={formatMoney(saleGrossAmountFromData(formData))} readOnly style={readOnlyInp} />
                         </Field>
                         <div style={{ marginTop: 8, fontSize: 13, color: "#444" }}>
-                          Outstanding: Rs.{formatMoney(toNumber(formData.amount) - toNumber(formData.claim_amount) - toNumber(formData.other_deduction) - toNumber(formData.adjustment_amount) - toNumber(formData.tds_amount))}
+                          Outstanding: Rs.{formatMoney(saleGrossAmountFromData(formData) - toNumber(formData.claim_amount) - toNumber(formData.other_deduction) - toNumber(formData.adjustment_amount) - toNumber(formData.tds_amount) + toNumber(formData.round_off))}
                         </div>
                       </>
                     )}
@@ -1669,7 +1739,8 @@ export default function WarehouseTradingPage() {
                     <th style={th}>Warehouse</th>
                     <th style={th}>Account</th>
                     {(activeVoucherType === "purchase" || activeVoucherType === "payment") && <th style={th}>Farmer</th>}
-                    {(activeVoucherType === "sale" || activeVoucherType === "receipt") && <th style={th}>Company</th>}
+                    {(activeVoucherType === "sale" || activeVoucherType === "receipt") && <th style={th}>{activeVoucherType === "sale" ? "Buyer" : "Company"}</th>}
+                    {activeVoucherType === "sale" && <th style={th}>Consignee</th>}
                     {(activeVoucherType === "purchase" || activeVoucherType === "sale") && <th style={th}>Product</th>}
                     {(activeVoucherType === "purchase" || activeVoucherType === "sale") && <th style={th}>Qty</th>}
                     {(activeVoucherType === "purchase" || activeVoucherType === "sale") && <th style={th}>Rate</th>}
@@ -1691,7 +1762,10 @@ export default function WarehouseTradingPage() {
                           <td style={td}>{getFarmerName(item)}</td>
                         )}
                         {(activeVoucherType === "sale" || activeVoucherType === "receipt") && (
-                          <td style={td}>{companies.find(c => String(c.id || c._id) === String(item.company_id))?.name || "-"}</td>
+                          <td style={td}>{activeVoucherType === "sale" ? getBuyerName(item) : companies.find(c => String(c.id || c._id) === String(item.company_id))?.name || "-"}</td>
+                        )}
+                        {activeVoucherType === "sale" && (
+                          <td style={td}>{item.consignee_name || consignees.find((c) => String(c.id || c._id) === String(item.consignee_id))?.name || "-"}</td>
                         )}
                         {(activeVoucherType === "purchase" || activeVoucherType === "sale") && (
                           <>
