@@ -419,7 +419,7 @@ export default function WarehouseTradingPage() {
       if (activeReport === "purchase-party-ledger" && reportFilters.farmer_id) {
         params.farmer_id = reportFilters.farmer_id;
       }
-      if (activeReport === "purchase-party-ledger" && reportFilters.company_account_id) {
+      if (reportFilters.company_account_id) {
         params.company_account_id = reportFilters.company_account_id;
       }
       const res = await axios.get(`/api/wh-vouchers/report/${endpoint}`, { params });
