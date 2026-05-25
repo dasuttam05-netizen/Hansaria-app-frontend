@@ -245,6 +245,39 @@ export default function WarehouseTradingPage() {
   };
   const allowedVoucherTypes = Object.keys(voucherPermissionMap).filter((type) => hasPermission(user, voucherPermissionMap[type]));
   const allowedReports = Object.keys(reportPermissionMap).filter((type) => hasPermission(user, reportPermissionMap[type]));
+  const saleDispatchQty = toNumber(formData.quantity) || toNumber(formData.unloading_qty);
+  const saleUnloadingQty = toNumber(formData.unloading_qty);
+  const saleShortageQty = Math.max(saleDispatchQty - saleUnloadingQty, 0);
+  const saleShortageAmount = saleShortageQty * toNumber(formData.rate);
+  const saleQualityDeduction =
+    toNumber(formData.moisture) +
+    toNumber(formData.dunki) +
+    toNumber(formData.fungus) +
+    toNumber(formData.discolour) +
+    toNumber(formData.others);
+  const partySaleTotal = list
+    .filter((item) => {
+      const sameBuyer = String(getBuyerId(item) || "") === String(formData.buyer_id || formData.company_id || "");
+      const sameAccount = String(item.company_account_id || "") === String(formData.company_account_id || "");
+      return sameBuyer && (!formData.company_account_id || sameAccount);
+    })
+    .reduce((sum, item) => sum + toNumber(item.total_amount || item.net_receivable_amount || item.net_amount || item.amount), 0);
+  const tdsEligible = partySaleTotal > 5000000;
+  const autoTdsAmount = tdsEligible
+    ? Math.max(saleGrossAmountFromData(formData) - saleShortageAmount - saleQualityDeduction - toNumber(formData.adjustment_amount), 0) * 0.001
+    : 0;
+  const saleVoucherPassBills = list.filter((item) => {
+    if (editId && String(item.id || item._id) === String(editId)) return true;
+    const sameWarehouse = !formData.warehouse_id || String(item.warehouse_id || "") === String(formData.warehouse_id);
+    const sameAccount = !formData.company_account_id || String(item.company_account_id || "") === String(formData.company_account_id);
+    const hasNoUnloadingDetails =
+      !item.unloading_date &&
+      toNumber(item.shortage_quantity) === 0 &&
+      toNumber(item.claim_amount) === 0 &&
+      toNumber(item.other_deduction) === 0 &&
+      toNumber(item.tds_amount) === 0;
+    return sameWarehouse && sameAccount && hasNoUnloadingDetails;
+  });
 
   // Load initial data
   useEffect(() => {
@@ -886,6 +919,74 @@ export default function WarehouseTradingPage() {
     }
     await loadOutstanding("company", formData.company_id, formData.warehouse_id, null, formData.company_account_id);
     setShowReceiptAdjustPopup(true);
+  };
+
+  const selectSaleVoucherForPass = (voucherId) => {
+    const voucher = list.find((item) => String(item.id || item._id) === String(voucherId));
+    if (!voucher) return;
+    setFormData({
+      ...defaultForm(),
+      ...voucher,
+      buyer_id: voucher.buyer_id || voucher.company_id || "",
+      company_id: voucher.company_id || voucher.buyer_id || "",
+      unloading_qty: "",
+      unloading_date: voucher.unloading_date || new Date().toISOString().slice(0, 10),
+      moisture: voucher.moisture || "",
+      dunki: voucher.dunki || "",
+      fungus: voucher.fungus || "",
+      discolour: voucher.discolour || "",
+      others: voucher.others || "",
+      claim_amount: voucher.claim_amount || "",
+      other_deduction: voucher.other_deduction || "",
+      tds_amount: voucher.tds_amount || "",
+    });
+    setEditId(voucher.id || voucher._id);
+  };
+
+  const saveSaleVoucherPass = async () => {
+    if (!editId) {
+      alert("Please select sale bill");
+      return;
+    }
+    if (!formData.unloading_date) {
+      alert("Please enter unloading date");
+      return;
+    }
+    if (saleUnloadingQty <= 0) {
+      alert("Please enter unloading weight");
+      return;
+    }
+
+    const finalTdsAmount = tdsEligible ? autoTdsAmount : toNumber(formData.tds_amount);
+    const payload = {
+      ...formData,
+      deduction_only: true,
+      unloading_qty: saleUnloadingQty,
+      shortage_quantity: saleShortageQty,
+      shortage_amount: saleShortageAmount,
+      claim_amount: saleShortageAmount,
+      other_deduction: saleQualityDeduction,
+      total_deduction: saleQualityDeduction,
+      tds_amount: finalTdsAmount,
+      amount: saleGrossAmountFromData(formData),
+    };
+
+    setLoading(true);
+    try {
+      await axios.put(`/api/wh-vouchers/sale/${editId}`, payload);
+      alert("Sale voucher pass saved successfully");
+      setShowSaleDeductionModal(false);
+      setFormData(defaultForm());
+      setEditId(null);
+      await loadVouchers();
+      if (activeTab === "reports") await loadReport();
+      fetchNextVoucherNo(activeVoucherType);
+    } catch (err) {
+      console.error(err);
+      alert(err?.response?.data?.error || "Failed to save sale voucher pass");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const setPaymentAdjustmentAmount = (purchase, value) => {
@@ -1709,7 +1810,7 @@ export default function WarehouseTradingPage() {
                           <tr><td style={erpTd}>Claim/TDS</td><td style={erpTd}><input name="claim_amount" type="number" step="0.0001" value={formData.claim_amount} onChange={handleChange} style={erpCellInput} /></td></tr>
                           <tr><td style={{ ...erpTd, fontWeight: 700 }}>Total Deduction</td><td style={{ ...erpTd, fontWeight: 700 }}>{formatMoney(toNumber(formData.bags_claim) + toNumber(formData.other_deduction) + toNumber(formData.claim_amount))}</td></tr>
                           <tr><td style={erpTd}>Round Off</td><td style={erpTd}><input name="round_off" type="number" step="0.0001" value={formData.round_off} onChange={handleChange} style={erpCellInput} /></td></tr>
-                          <tr><td style={erpTd}>⌨️ Press F2 for Deductions</td><td style={erpTd}><button type="button" onClick={() => setShowSaleDeductionModal(true)} style={{ ...btnAction, background: "#0f766e", width: "100%" }}>F2 Deduction</button></td></tr>
+                          <tr><td style={erpTd}>F2 Voucher Pass</td><td style={erpTd}><button type="button" onClick={() => setShowSaleDeductionModal(true)} style={{ ...btnAction, background: "#0f766e", width: "100%" }}>F2 Voucher Pass</button></td></tr>
                         </tbody>
                       </table>
                       <div style={erpRemarksRow}>
@@ -2581,9 +2682,9 @@ export default function WarehouseTradingPage() {
           <div style={paymentAdjustModalStyle}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
               <div>
-                <h3 style={{ margin: 0 }}>Sale Deduction Details</h3>
+                <h3 style={{ margin: 0 }}>Sale Voucher Pass</h3>
                 <div style={{ fontSize: 13, color: "#64748b", marginTop: 4 }}>
-                  Press F2 to edit | Auto-calculated deductions
+                  Select a sale bill, enter unloading, then save shortage, deduction and TDS separately.
                 </div>
               </div>
               <button type="button" onClick={() => setShowSaleDeductionModal(false)} style={{ ...btnAction, background: "#64748b" }}>
@@ -2592,6 +2693,47 @@ export default function WarehouseTradingPage() {
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, marginTop: 14 }}>
+              <div>
+                <label style={lbl}>Warehouse</label>
+                <select name="warehouse_id" value={formData.warehouse_id} onChange={handleChange} style={inp}>
+                  <option value="">Select Warehouse</option>
+                  {warehouses.map((w) => (
+                    <option key={w.id || w._id} value={w.id || w._id}>{w.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label style={lbl}>Location</label>
+                <input value={selectedLocationName || ""} readOnly style={readOnlyInp} />
+              </div>
+              <div>
+                <label style={lbl}>Employee</label>
+                <select name="employee_id" value={formData.employee_id} onChange={handleChange} style={inp}>
+                  <option value="">Select Employee</option>
+                  {employees.map((e) => (
+                    <option key={e.id || e._id} value={e.id || e._id}>{e.name}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label style={lbl}>Account</label>
+                {renderAccountSelect(inp)}
+              </div>
+              <div style={{ gridColumn: "1 / -1" }}>
+                <label style={lbl}>Sale Bill</label>
+                <select value={editId || ""} onChange={(e) => selectSaleVoucherForPass(e.target.value)} style={inp}>
+                  <option value="">Select pending sale bill</option>
+                  {saleVoucherPassBills.map((row) => (
+                    <option key={row.id || row._id} value={row.id || row._id}>
+                      {row.voucher_no || row.id} | {getBuyerName(row)} | {getProductName(row)} | Qty {formatDecimal4(row.quantity || row.total_quantity || 0)} | Rs.{formatMoney(row.total_amount || row.amount || 0)}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label style={lbl}>Dispatch Weight</label>
+                <input type="text" value={formatDecimal4(saleDispatchQty)} readOnly style={readOnlyInp} />
+              </div>
               <div>
                 <label style={lbl}>Unloading Date</label>
                 <input 
@@ -2611,6 +2753,14 @@ export default function WarehouseTradingPage() {
                   style={inp}
                   placeholder="Weight"
                 />
+              </div>
+              <div>
+                <label style={lbl}>Shortage Weight</label>
+                <input type="text" value={formatDecimal4(saleShortageQty)} readOnly style={readOnlyInp} />
+              </div>
+              <div>
+                <label style={lbl}>Shortage Amount</label>
+                <input type="text" value={formatMoney(saleShortageAmount)} readOnly style={readOnlyInp} />
               </div>
               <div>
                 <label style={lbl}>Moisture</label>
@@ -2671,9 +2821,20 @@ export default function WarehouseTradingPage() {
                 <label style={lbl}>Total Deduction (Auto)</label>
                 <input 
                   type="text"
-                  value={formatDecimal4(toNumber(formData.moisture) + toNumber(formData.dunki) + toNumber(formData.fungus) + toNumber(formData.discolour) + toNumber(formData.others))}
+                  value={formatMoney(saleQualityDeduction)}
                   readOnly
                   style={readOnlyInp}
+                />
+              </div>
+              <div>
+                <label style={lbl}>TDS</label>
+                <input
+                  type="number"
+                  step="0.0001"
+                  value={tdsEligible ? formatMoney(autoTdsAmount) : formData.tds_amount}
+                  onChange={(e) => setFormData(prev => ({ ...prev, tds_amount: e.target.value }))}
+                  readOnly={tdsEligible}
+                  style={tdsEligible ? readOnlyInp : inp}
                 />
               </div>
             </div>
@@ -2681,29 +2842,34 @@ export default function WarehouseTradingPage() {
             <div style={{ marginTop: 16, padding: 12, background: "#f8fafc", borderRadius: 8, border: "1px solid #cbd5e1" }}>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12, fontSize: 13 }}>
                 <div>
-                  <strong>Gross Amount:</strong> Rs.{formatMoney(formData.amount)}
+                  <strong>Gross Amount:</strong> Rs.{formatMoney(saleGrossAmountFromData(formData))}
                 </div>
                 <div>
-                  <strong>Total Deduction:</strong> Rs.{formatMoney(toNumber(formData.moisture) + toNumber(formData.dunki) + toNumber(formData.fungus) + toNumber(formData.discolour) + toNumber(formData.others))}
+                  <strong>Shortage:</strong> Rs.{formatMoney(saleShortageAmount)}
                 </div>
                 <div>
-                  <strong>Claim Amount:</strong> Rs.{formatMoney(formData.claim_amount)}
+                  <strong>Deduction:</strong> Rs.{formatMoney(saleQualityDeduction)}
                 </div>
                 <div>
-                  <strong>Other Deduction:</strong> Rs.{formatMoney(formData.other_deduction)}
+                  <strong>TDS:</strong> Rs.{formatMoney(tdsEligible ? autoTdsAmount : formData.tds_amount)}
                 </div>
                 <div>
                   <strong>Round Off:</strong> Rs.{formatMoney(formData.round_off)}
                 </div>
                 <div style={{ fontWeight: 700, color: "#0f766e", fontSize: 14 }}>
-                  <strong>Net Amount Payable:</strong> Rs.{formatMoney(toNumber(formData.amount) - toNumber(formData.claim_amount) - toNumber(formData.other_deduction) - toNumber(formData.round_off))}
+                  <strong>Net Receivable:</strong> Rs.{formatMoney(saleGrossAmountFromData(formData) - saleShortageAmount - saleQualityDeduction - toNumber(formData.adjustment_amount) - (tdsEligible ? autoTdsAmount : toNumber(formData.tds_amount)) + toNumber(formData.round_off))}
                 </div>
               </div>
+              {tdsEligible && (
+                <div style={{ marginTop: 8, color: "#92400e", fontSize: 13 }}>
+                  Party sale total crossed Rs.50,00,000, so TDS is auto-calculated at 0.1%.
+                </div>
+              )}
             </div>
 
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 14 }}>
-              <button type="button" onClick={() => setShowSaleDeductionModal(false)} style={btnPrimary}>
-                Save & Close
+              <button type="button" onClick={saveSaleVoucherPass} disabled={loading} style={btnPrimary}>
+                {loading ? "Saving..." : "Final Save"}
               </button>
             </div>
           </div>
