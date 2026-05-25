@@ -130,6 +130,7 @@ export default function WarehouseTradingPage() {
   const [receiptAdjustments, setReceiptAdjustments] = useState([]);
   const [selectedReceiptId, setSelectedReceiptId] = useState(null);
   const [stockDrilldown, setStockDrilldown] = useState(null);
+  const [showPurchaseBillWise, setShowPurchaseBillWise] = useState(false);
   const [importingPurchase, setImportingPurchase] = useState(false);
   const [voucherNumberLoading, setVoucherNumberLoading] = useState(false);
   const [showSaleDeductionModal, setShowSaleDeductionModal] = useState(false);
@@ -297,9 +298,14 @@ export default function WarehouseTradingPage() {
   }, [activeTab, activeReport, reportFilters.farmer_id, reportFilters.company_account_id]);
 
   useEffect(() => {
+    if (activeReport !== "purchase-party-ledger") setShowPurchaseBillWise(false);
+  }, [activeReport]);
+
+  useEffect(() => {
     const handleLedgerRefresh = (event) => {
       if (event.key !== "F5" || activeTab !== "reports" || activeReport !== "purchase-party-ledger") return;
       event.preventDefault();
+      setShowPurchaseBillWise(true);
       loadReport();
     };
     window.addEventListener("keydown", handleLedgerRefresh);
@@ -1032,14 +1038,14 @@ export default function WarehouseTradingPage() {
       }],
     ],
     "sale-party-ledger": [
-      ["date", "Date", (item) => item.date || "-"],
-      ["party", "Party", (item) => item.party_name || item.company_name || "-"],
-      ["voucher_type", "Type", (item) => item.voucher_type || "-"],
-      ["voucher_no", "Voucher No", (item) => item.voucher_no || "-"],
-      ["warehouse", "Warehouse", (item) => getWarehouseName(item)],
+      ["date", "Date", (item) => (item.row_type === "closing" ? "" : formatLedgerDate(item.date))],
+      ["party", "Party", (item) => (item.row_type === "closing" ? `Closing Balance (${item.closing_side})` : (item.party_name || item.company_name || "-"))],
+      ["voucher_type", "Type", (item) => (item.row_type === "closing" ? "" : (item.voucher_type || "-"))],
+      ["voucher_no", "Voucher No", (item) => (item.row_type === "closing" ? "" : (item.voucher_no || "-"))],
+      ["warehouse", "Warehouse", (item) => (item.row_type === "closing" ? "" : getWarehouseName(item))],
       ["debit", "Debit", (item) => formatMoney(item.debit || 0)],
       ["credit", "Credit", (item) => formatMoney(item.credit || 0)],
-      ["balance", "Balance", (item) => formatMoney(item.balance || 0)],
+      ["balance", "Balance", (item) => formatMoney(Math.abs(item.balance || 0))],
     ],
     "warehouse-stock": [
       ["warehouse", "Warehouse", (item) => getWarehouseName(item)],
@@ -1088,11 +1094,17 @@ export default function WarehouseTradingPage() {
 
   const activeReportColumns = reportColumns[activeReport] || reportColumns.sale;
   const displayReportData = useMemo(() => {
-    if (activeReport !== "purchase-party-ledger") return reportData;
+    if (activeReport !== "purchase-party-ledger" && activeReport !== "sale-party-ledger") return reportData;
     const entries = (Array.isArray(reportData) ? reportData : []).filter((row) => row.row_type !== "closing");
     const sorted = entries.slice().sort((a, b) => {
-      const farmerCmp = String(a.farmer_name || getFarmerName(a) || "").localeCompare(String(b.farmer_name || getFarmerName(b) || ""));
-      if (farmerCmp) return farmerCmp;
+      const leftParty = activeReport === "purchase-party-ledger"
+        ? (a.farmer_name || getFarmerName(a) || "")
+        : (a.party_name || a.company_name || "");
+      const rightParty = activeReport === "purchase-party-ledger"
+        ? (b.farmer_name || getFarmerName(b) || "")
+        : (b.party_name || b.company_name || "");
+      const partyCmp = String(leftParty).localeCompare(String(rightParty));
+      if (partyCmp) return partyCmp;
       const dateCmp = String(a.date || "").localeCompare(String(b.date || ""));
       if (dateCmp) return dateCmp;
       return String(a.voucher_no || "").localeCompare(String(b.voucher_no || ""));
@@ -1107,6 +1119,7 @@ export default function WarehouseTradingPage() {
       grouped.push({
         row_type: "closing",
         farmer_name: currentFarmer,
+        party_name: currentFarmer,
         debit: farmerDebit,
         credit: farmerCredit,
         balance: running,
@@ -1114,20 +1127,28 @@ export default function WarehouseTradingPage() {
       });
     };
     sorted.forEach((row) => {
-      const farmerName = row.farmer_name || getFarmerName(row) || "Unknown Farmer";
-      if (currentFarmer && farmerName !== currentFarmer) {
+      const partyName = activeReport === "purchase-party-ledger"
+        ? (row.farmer_name || getFarmerName(row) || "Unknown Farmer")
+        : (row.party_name || row.company_name || "Unknown Party");
+      if (currentFarmer && partyName !== currentFarmer) {
         pushClosing();
         running = 0;
         farmerDebit = 0;
         farmerCredit = 0;
       }
-      currentFarmer = farmerName;
+      currentFarmer = partyName;
       const debit = toNumber(row.debit || 0);
       const credit = toNumber(row.credit || 0);
       running += debit - credit;
       farmerDebit += debit;
       farmerCredit += credit;
-      grouped.push({ ...row, farmer_name: farmerName, balance: Number(running.toFixed(4)), row_type: "entry" });
+      grouped.push({
+        ...row,
+        farmer_name: activeReport === "purchase-party-ledger" ? partyName : row.farmer_name,
+        party_name: activeReport === "sale-party-ledger" ? partyName : row.party_name,
+        balance: Number(running.toFixed(4)),
+        row_type: "entry",
+      });
     });
     pushClosing();
     return grouped;
@@ -2051,7 +2072,13 @@ export default function WarehouseTradingPage() {
                     </tbody>
                   </table>
                 </div>
+                {!showPurchaseBillWise && (
+                  <div style={{ marginTop: 10, color: "#475569", fontSize: 12 }}>
+                    Press `F5` to open Bill Wise Report.
+                  </div>
+                )}
 
+                {showPurchaseBillWise && (
                 <div style={billWisePanelStyle}>
                   <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center", marginBottom: 10 }}>
                     <strong>Bill Wise Report</strong>
@@ -2121,6 +2148,7 @@ export default function WarehouseTradingPage() {
                     )}
                   </div>
                 </div>
+                )}
               </div>
             ) : (
               <div style={tableCard}>
