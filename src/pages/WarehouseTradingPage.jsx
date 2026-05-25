@@ -983,11 +983,11 @@ export default function WarehouseTradingPage() {
     </select>
   );
 
-  const getAccountName = (item) =>
-    item.company_account_name ||
-    companyAccounts.find((account) => String(account.id || account._id) === String(item.company_account_id))?.account_name ||
-    companyAccounts.find((account) => String(account.id || account._id) === String(item.company_account_id))?.name ||
-    "-";
+  const getAccountName = (item) => {
+    const accountId = String(item.company_account_id || "");
+    const account = companyAccounts.find((account) => String(account.id || account._id) === accountId);
+    return account?.account_name || account?.name || item.company_account_name || "-";
+  };
 
   const getCompanyName = (item) =>
     item?.company_name ||
@@ -1033,7 +1033,7 @@ export default function WarehouseTradingPage() {
     "purchase-party-ledger": [
       ["date", "Date", (item) => (item.row_type === "closing" ? "" : formatLedgerDate(item.date))],
       ["farmer", "Farmer", (item) => (item.row_type === "closing" ? `Closing Balance (${item.closing_side})` : (item.farmer_name || getFarmerName(item) || "-"))],
-      ["account", "Account", (item) => (item.row_type === "closing" ? "" : (item.company_account_name || getAccountName(item)))],
+      ["account", "Account", (item) => (item.row_type === "closing" ? "" : getAccountName(item))],
       ["voucher_type", "Type", (item) => (item.row_type === "closing" ? "" : (item.voucher_type || "-"))],
       ["voucher_no", "Voucher No", (item) => (item.row_type === "closing" ? "" : (item.voucher_no || "-"))],
       ["particulars", "Particulars", (item) => (item.row_type === "closing" ? "" : (item.particulars || "-"))],
@@ -1048,7 +1048,7 @@ export default function WarehouseTradingPage() {
     "sale-party-ledger": [
       ["date", "Date", (item) => (item.row_type === "closing" ? "" : formatLedgerDate(item.date))],
       ["party", "Party", (item) => (item.row_type === "closing" ? `Closing Balance (${item.closing_side})` : (item.party_name || item.company_name || "-"))],
-      ["account", "Account", (item) => (item.row_type === "closing" ? "" : (item.company_account_name || getAccountName(item)))],
+      ["account", "Account", (item) => (item.row_type === "closing" ? "" : getAccountName(item))],
       ["voucher_type", "Type", (item) => (item.row_type === "closing" ? "" : (item.voucher_type || "-"))],
       ["voucher_no", "Voucher No", (item) => (item.row_type === "closing" ? "" : (item.voucher_no || "-"))],
       ["adjustment_details", "Adjustment Details", (item) => (item.row_type === "closing" ? "" : (item.adjustment_details || "-"))],
@@ -1187,7 +1187,7 @@ export default function WarehouseTradingPage() {
       body: displayReportData.map((row) => [
         row.row_type === "closing" ? "" : formatLedgerDate(row.date),
         row.row_type === "closing" ? `Closing Balance (${row.closing_side})` : (row.farmer_name || getFarmerName(row) || "-"),
-        row.row_type === "closing" ? "" : (row.company_account_name || getAccountName(row)),
+        row.row_type === "closing" ? "" : getAccountName(row),
         row.row_type === "closing" ? "" : (row.voucher_type || ""),
         row.row_type === "closing" ? "" : (row.voucher_no || ""),
         row.row_type === "closing" ? "" : (row.particulars || ""),
