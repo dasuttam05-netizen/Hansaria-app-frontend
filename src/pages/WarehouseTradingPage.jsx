@@ -984,9 +984,9 @@ export default function WarehouseTradingPage() {
   );
 
   const getAccountName = (item) => {
-    const accountId = String(item.company_account_id || "");
+    const accountId = String(item.company_account_id || item.account_id || item.companyAccountId || "");
     const account = companyAccounts.find((account) => String(account.id || account._id) === accountId);
-    return account?.account_name || account?.name || item.company_account_name || "-";
+    return account?.account_name || account?.name || item.company_account_name || item.account_name || item.account || "-";
   };
 
   const getCompanyName = (item) =>
@@ -1024,9 +1024,13 @@ export default function WarehouseTradingPage() {
       ],
     ],
     sale: [
+      ["date", "Date", (item) => formatLedgerDate(item.date)],
+      ["voucher_no", "Voucher No", (item) => item.voucher_no || "-"],
       ["buyer", "Buyer", (item) => getBuyerName(item)],
       ["consignee", "Consignee", (item) => item.consignee_name || consignees.find((c) => String(c.id || c._id) === String(item.consignee_id))?.name || "-"],
+      ["account", "Account", (item) => getAccountName(item)],
       ["warehouse", "Warehouse", (item) => getWarehouseName(item)],
+      ["product", "Product", (item) => getProductName(item)],
       ["total_quantity", "Total Quantity", (item) => formatDecimal4(item.total_quantity || 0)],
       ["total_amount", "Total Amount", (item) => formatMoney(item.total_amount || 0)],
     ],
@@ -1106,13 +1110,13 @@ export default function WarehouseTradingPage() {
   const displayReportData = useMemo(() => {
     if (activeReport !== "purchase-party-ledger" && activeReport !== "sale-party-ledger") return reportData;
     const entries = (Array.isArray(reportData) ? reportData : []).filter((row) => row.row_type !== "closing");
+    const ledgerPartyName = (row) => activeReport === "purchase-party-ledger"
+      ? (row.farmer_name || getFarmerName(row) || "Unknown Farmer")
+      : (row.party_name || row.buyer_name || row.company_name || "Unknown Party");
+    const ledgerGroupKey = (row) => `${ledgerPartyName(row)}::${row.company_account_id || row.company_account_name || row.account_name || ""}`;
     const sorted = entries.slice().sort((a, b) => {
-      const leftParty = activeReport === "purchase-party-ledger"
-        ? (a.farmer_name || getFarmerName(a) || "")
-        : (a.party_name || a.company_name || "");
-      const rightParty = activeReport === "purchase-party-ledger"
-        ? (b.farmer_name || getFarmerName(b) || "")
-        : (b.party_name || b.company_name || "");
+      const leftParty = ledgerGroupKey(a);
+      const rightParty = ledgerGroupKey(b);
       const partyCmp = String(leftParty).localeCompare(String(rightParty));
       if (partyCmp) return partyCmp;
       const dateCmp = String(a.date || "").localeCompare(String(b.date || ""));
@@ -1120,16 +1124,19 @@ export default function WarehouseTradingPage() {
       return String(a.voucher_no || "").localeCompare(String(b.voucher_no || ""));
     });
     const grouped = [];
-    let currentFarmer = null;
+    let currentGroup = null;
+    let currentParty = null;
+    let currentAccount = null;
     let running = 0;
     let farmerDebit = 0;
     let farmerCredit = 0;
     const pushClosing = () => {
-      if (!currentFarmer) return;
+      if (!currentGroup) return;
       grouped.push({
         row_type: "closing",
-        farmer_name: currentFarmer,
-        party_name: currentFarmer,
+        farmer_name: currentParty,
+        party_name: currentParty,
+        company_account_name: currentAccount,
         debit: farmerDebit,
         credit: farmerCredit,
         balance: running,
@@ -1137,16 +1144,17 @@ export default function WarehouseTradingPage() {
       });
     };
     sorted.forEach((row) => {
-      const partyName = activeReport === "purchase-party-ledger"
-        ? (row.farmer_name || getFarmerName(row) || "Unknown Farmer")
-        : (row.party_name || row.company_name || "Unknown Party");
-      if (currentFarmer && partyName !== currentFarmer) {
+      const partyName = ledgerPartyName(row);
+      const groupKey = ledgerGroupKey(row);
+      if (currentGroup && groupKey !== currentGroup) {
         pushClosing();
         running = 0;
         farmerDebit = 0;
         farmerCredit = 0;
       }
-      currentFarmer = partyName;
+      currentGroup = groupKey;
+      currentParty = partyName;
+      currentAccount = getAccountName(row);
       const debit = toNumber(row.debit || 0);
       const credit = toNumber(row.credit || 0);
       running += debit - credit;
@@ -1162,7 +1170,7 @@ export default function WarehouseTradingPage() {
     });
     pushClosing();
     return grouped;
-  }, [activeReport, reportData, farmers]);
+  }, [activeReport, reportData, farmers, buyerNames, companyAccounts]);
   const purchaseBillRows = activeReport === "purchase-party-ledger"
     ? displayReportData.filter((row) => row.row_type === "entry" && row.voucher_type === "Purchase")
     : [];
