@@ -19,6 +19,7 @@ const defaultForm = () => ({
   product_id: "",
   reference_type: "",
   reference_id: "",
+  lorry_no: "",
   employee_id: "",
   location_id: "",
   quantity: "",
@@ -136,6 +137,7 @@ export default function WarehouseTradingPage() {
   const [importingPurchase, setImportingPurchase] = useState(false);
   const [voucherNumberLoading, setVoucherNumberLoading] = useState(false);
   const [showSaleDeductionModal, setShowSaleDeductionModal] = useState(false);
+  const [saleBillSearch, setSaleBillSearch] = useState("");
   const selectedVoucher = list.find((item) => String(item.id || item._id) === String(selectedPaymentId));
   const selectedReceiptVoucher = list.find((item) => String(item.id || item._id) === String(selectedReceiptId));
   const selectedWarehouse = warehouses.find((w) => String(w.id || w._id) === String(formData.warehouse_id));
@@ -271,12 +273,20 @@ export default function WarehouseTradingPage() {
     const sameAccount = !formData.company_account_id || String(item.company_account_id || "") === String(formData.company_account_id);
     const hasNoUnloadingDetails =
       !item.unloading_date &&
-      toNumber(item.unloading_qty) === 0 &&
       toNumber(item.shortage_quantity) === 0 &&
       toNumber(item.claim_amount) === 0 &&
       toNumber(item.other_deduction) === 0 &&
       toNumber(item.tds_amount) === 0;
-    return sameWarehouse && sameAccount && hasNoUnloadingDetails;
+    const search = saleBillSearch.trim().toLowerCase();
+    const searchable = [
+      item.voucher_no,
+      item.lorry_no,
+      item.reference_id,
+      getBuyerName(item),
+      item.consignee_name,
+      getProductName(item),
+    ].join(" ").toLowerCase();
+    return sameWarehouse && sameAccount && hasNoUnloadingDetails && (!search || searchable.includes(search));
   });
 
   // Load initial data
@@ -929,6 +939,7 @@ export default function WarehouseTradingPage() {
       ...voucher,
       buyer_id: voucher.buyer_id || voucher.company_id || "",
       company_id: voucher.company_id || voucher.buyer_id || "",
+      lorry_no: voucher.lorry_no || voucher.reference_id || "",
       unloading_qty: "",
       unloading_date: voucher.unloading_date || new Date().toISOString().slice(0, 10),
       moisture: voucher.moisture || "",
@@ -1805,10 +1816,10 @@ export default function WarehouseTradingPage() {
                           <tr><th style={erpTh}>Particulars</th><th style={erpTh}>Amount</th></tr>
                         </thead>
                         <tbody>
-                          <tr><td style={erpTd}>Bags Claim</td><td style={erpTd}><input name="bags_claim" type="number" step="0.0001" value={formData.bags_claim} onChange={handleChange} style={erpCellInput} /></td></tr>
+                          <tr><td style={erpTd}>Lorry No</td><td style={erpTd}><input name="lorry_no" value={formData.lorry_no} onChange={handleChange} style={erpCellInput} /></td></tr>
                           <tr><td style={erpTd}>Other Deduction</td><td style={erpTd}><input name="other_deduction" type="number" step="0.0001" value={formData.other_deduction} onChange={handleChange} style={erpCellInput} /></td></tr>
                           <tr><td style={erpTd}>Claim/TDS</td><td style={erpTd}><input name="claim_amount" type="number" step="0.0001" value={formData.claim_amount} onChange={handleChange} style={erpCellInput} /></td></tr>
-                          <tr><td style={{ ...erpTd, fontWeight: 700 }}>Total Deduction</td><td style={{ ...erpTd, fontWeight: 700 }}>{formatMoney(toNumber(formData.bags_claim) + toNumber(formData.other_deduction) + toNumber(formData.claim_amount))}</td></tr>
+                          <tr><td style={{ ...erpTd, fontWeight: 700 }}>Total Deduction</td><td style={{ ...erpTd, fontWeight: 700 }}>{formatMoney(toNumber(formData.other_deduction) + toNumber(formData.claim_amount))}</td></tr>
                           <tr><td style={erpTd}>Round Off</td><td style={erpTd}><input name="round_off" type="number" step="0.0001" value={formData.round_off} onChange={handleChange} style={erpCellInput} /></td></tr>
                           <tr><td style={erpTd}>F2 Voucher Pass</td><td style={erpTd}><button type="button" onClick={() => setShowSaleDeductionModal(true)} style={{ ...btnAction, background: "#0f766e", width: "100%" }}>F2 Voucher Pass</button></td></tr>
                         </tbody>
@@ -1826,15 +1837,15 @@ export default function WarehouseTradingPage() {
                         </thead>
                         <tbody>
                           <tr><td style={erpTd}>Gross Amount</td><td style={erpTd}>{formatMoney(saleGrossAmountFromData(formData))}</td></tr>
-                          <tr><td style={erpTd}>Total Deduction</td><td style={erpTd}>{formatMoney(toNumber(formData.bags_claim) + toNumber(formData.other_deduction) + toNumber(formData.claim_amount))}</td></tr>
+                          <tr><td style={erpTd}>Total Deduction</td><td style={erpTd}>{formatMoney(toNumber(formData.other_deduction) + toNumber(formData.claim_amount))}</td></tr>
                           <tr><td style={erpTd}>Round Off</td><td style={erpTd}>{formatMoney(toNumber(formData.round_off))}</td></tr>
-                          <tr><td style={erpTd}>Net Amount Payable</td><td style={erpTd}>{formatMoney(saleGrossAmountFromData(formData) - toNumber(formData.bags_claim) - toNumber(formData.other_deduction) - toNumber(formData.claim_amount) + toNumber(formData.round_off))}</td></tr>
+                          <tr><td style={erpTd}>Net Amount Payable</td><td style={erpTd}>{formatMoney(saleGrossAmountFromData(formData) - toNumber(formData.other_deduction) - toNumber(formData.claim_amount) + toNumber(formData.round_off))}</td></tr>
                         </tbody>
                       </table>
 
                       <div style={erpTotalPanel}>
                         <span style={erpTotalLabel}>T O T A L</span>
-                        <strong style={erpTotalAmount}>{formatMoney(saleGrossAmountFromData(formData) - toNumber(formData.bags_claim) - toNumber(formData.other_deduction) - toNumber(formData.claim_amount) + toNumber(formData.round_off))}</strong>
+                        <strong style={erpTotalAmount}>{formatMoney(saleGrossAmountFromData(formData) - toNumber(formData.other_deduction) - toNumber(formData.claim_amount) + toNumber(formData.round_off))}</strong>
                       </div>
                     </div>
                   </div>
@@ -2721,14 +2732,61 @@ export default function WarehouseTradingPage() {
               </div>
               <div style={{ gridColumn: "1 / -1" }}>
                 <label style={lbl}>Sale Bill</label>
-                <select value={editId || ""} onChange={(e) => selectSaleVoucherForPass(e.target.value)} style={inp}>
-                  <option value="">Select pending sale bill</option>
-                  {saleVoucherPassBills.map((row) => (
-                    <option key={row.id || row._id} value={row.id || row._id}>
-                      {row.voucher_no || row.id} | {getBuyerName(row)} | {getProductName(row)} | Qty {formatDecimal4(row.quantity || row.total_quantity || 0)} | Rs.{formatMoney(row.total_amount || row.amount || 0)}
-                    </option>
-                  ))}
-                </select>
+                <input
+                  value={saleBillSearch}
+                  onChange={(e) => setSaleBillSearch(e.target.value)}
+                  style={inp}
+                  placeholder="Search by bill no, lorry no, buyer, consignee"
+                />
+                <div style={{ ...tableCard, maxHeight: 240, marginTop: 8 }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                    <thead>
+                      <tr>
+                        <th style={th}>S.L</th>
+                        <th style={th}>Bill</th>
+                        <th style={th}>Date</th>
+                        <th style={th}>Lorry No</th>
+                        <th style={th}>Buyer</th>
+                        <th style={th}>Consignee</th>
+                        <th style={th}>Qty</th>
+                        <th style={th}>Rate</th>
+                        <th style={th}>Amount</th>
+                        <th style={th}>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {saleVoucherPassBills.map((row, index) => {
+                        const rowId = row.id || row._id;
+                        const selected = String(rowId) === String(editId);
+                        return (
+                          <tr key={rowId} style={{ background: selected ? "#dcfce7" : index % 2 ? "#f8fafc" : "#fff" }}>
+                            <td style={td}>{index + 1}</td>
+                            <td style={td}>{row.voucher_no || "-"}</td>
+                            <td style={td}>{formatLedgerDate(row.date)}</td>
+                            <td style={td}>{row.lorry_no || row.reference_id || "-"}</td>
+                            <td style={td}>{getBuyerName(row)}</td>
+                            <td style={td}>{row.consignee_name || "-"}</td>
+                            <td style={td}>{formatDecimal4(row.quantity || row.total_quantity || 0)}</td>
+                            <td style={td}>{formatMoney(row.rate || 0)}</td>
+                            <td style={td}>{formatMoney(row.total_amount || row.amount || 0)}</td>
+                            <td style={td}>
+                              <button type="button" onClick={() => selectSaleVoucherForPass(rowId)} style={{ ...btnAction, background: selected ? "#15803d" : "#2563eb" }}>
+                                {selected ? "Selected" : "Select"}
+                              </button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {saleVoucherPassBills.length === 0 && (
+                        <tr>
+                          <td colSpan={10} style={{ ...td, textAlign: "center", padding: 14 }}>
+                            No sale bill found.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
               </div>
               <div>
                 <label style={lbl}>Dispatch Weight</label>
