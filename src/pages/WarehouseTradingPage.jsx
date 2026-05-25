@@ -267,11 +267,11 @@ export default function WarehouseTradingPage() {
     ? Math.max(saleGrossAmountFromData(formData) - saleShortageAmount - saleQualityDeduction - toNumber(formData.adjustment_amount), 0) * 0.001
     : 0;
   const saleVoucherPassBills = list.filter((item) => {
-    if (editId && String(item.id || item._id) === String(editId)) return true;
     const sameWarehouse = !formData.warehouse_id || String(item.warehouse_id || "") === String(formData.warehouse_id);
     const sameAccount = !formData.company_account_id || String(item.company_account_id || "") === String(formData.company_account_id);
     const hasNoUnloadingDetails =
       !item.unloading_date &&
+      toNumber(item.unloading_qty) === 0 &&
       toNumber(item.shortage_quantity) === 0 &&
       toNumber(item.claim_amount) === 0 &&
       toNumber(item.other_deduction) === 0 &&
