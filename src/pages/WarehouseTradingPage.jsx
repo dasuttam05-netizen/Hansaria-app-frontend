@@ -131,6 +131,8 @@ export default function WarehouseTradingPage() {
   const [selectedReceiptId, setSelectedReceiptId] = useState(null);
   const [stockDrilldown, setStockDrilldown] = useState(null);
   const [showPurchaseBillWise, setShowPurchaseBillWise] = useState(false);
+  const [showSaleBillWise, setShowSaleBillWise] = useState(false);
+  const [selectedSaleLedgerBillId, setSelectedSaleLedgerBillId] = useState("");
   const [importingPurchase, setImportingPurchase] = useState(false);
   const [voucherNumberLoading, setVoucherNumberLoading] = useState(false);
   const [showSaleDeductionModal, setShowSaleDeductionModal] = useState(false);
@@ -299,13 +301,16 @@ export default function WarehouseTradingPage() {
 
   useEffect(() => {
     if (activeReport !== "purchase-party-ledger") setShowPurchaseBillWise(false);
+    if (activeReport !== "sale-party-ledger") setShowSaleBillWise(false);
   }, [activeReport]);
 
   useEffect(() => {
     const handleLedgerRefresh = (event) => {
-      if (event.key !== "F5" || activeTab !== "reports" || activeReport !== "purchase-party-ledger") return;
+      if (event.key !== "F5" || activeTab !== "reports") return;
+      if (activeReport !== "purchase-party-ledger" && activeReport !== "sale-party-ledger") return;
       event.preventDefault();
-      setShowPurchaseBillWise(true);
+      if (activeReport === "purchase-party-ledger") setShowPurchaseBillWise(true);
+      if (activeReport === "sale-party-ledger") setShowSaleBillWise(true);
       loadReport();
     };
     window.addEventListener("keydown", handleLedgerRefresh);
@@ -508,7 +513,7 @@ export default function WarehouseTradingPage() {
     }
     if (activeVoucherType === "receipt" && name === "company_id") {
       if (value) {
-        loadOutstanding("company", value).then(() => {
+        loadOutstanding("company", value, formData.warehouse_id, null, formData.company_account_id).then(() => {
           if (toNumber(formData.amount) > 0) {
             setShowReceiptAdjustPopup(true);
           }
@@ -528,8 +533,11 @@ export default function WarehouseTradingPage() {
         });
       }
       if (activeVoucherType === "receipt" && formData.company_id) {
-        loadOutstanding("company", formData.company_id, value);
+        loadOutstanding("company", formData.company_id, value, null, formData.company_account_id);
       }
+    }
+    if (activeVoucherType === "receipt" && name === "company_account_id" && formData.company_id) {
+      loadOutstanding("company", formData.company_id, formData.warehouse_id, null, value);
     }
     if (activeVoucherType === "receipt" && name === "amount") {
       if (toNumber(value) > 0 && formData.company_id) {
@@ -876,7 +884,7 @@ export default function WarehouseTradingPage() {
       alert("Please select company");
       return;
     }
-    await loadOutstanding("company", formData.company_id, formData.warehouse_id);
+    await loadOutstanding("company", formData.company_id, formData.warehouse_id, null, formData.company_account_id);
     setShowReceiptAdjustPopup(true);
   };
 
@@ -1157,6 +1165,10 @@ export default function WarehouseTradingPage() {
     ? displayReportData.filter((row) => row.row_type === "entry" && row.voucher_type === "Purchase")
     : [];
   const selectedBill = purchaseBillRows.find((row) => String(row.purchase_id || row.voucher_no) === String(selectedLedgerBillId)) || purchaseBillRows[0] || null;
+  const saleBillRows = activeReport === "sale-party-ledger"
+    ? displayReportData.filter((row) => row.row_type === "entry" && row.voucher_type === "Sale")
+    : [];
+  const selectedSaleBill = saleBillRows.find((row) => String(row.sale_id || row.voucher_no) === String(selectedSaleLedgerBillId)) || saleBillRows[0] || null;
 
   const downloadPurchaseLedgerPdf = () => {
     if (activeReport !== "purchase-party-ledger" || !displayReportData.length) {
@@ -1735,7 +1747,7 @@ export default function WarehouseTradingPage() {
                     )}
                     {partyOutstanding && activeVoucherType === "receipt" && (
                       <div style={{ marginTop: 8, fontSize: 13, color: "#444" }}>
-                        Current outstanding: Rs.{formatMoney(partyOutstanding.outstanding || 0)}
+                        Current outstanding: Rs.{formatMoney(partyOutstanding.stats?.outstanding ?? partyOutstanding.outstanding ?? 0)}
                       </div>
                     )}
                     <Field label="Consignee">
@@ -2072,12 +2084,6 @@ export default function WarehouseTradingPage() {
                     </tbody>
                   </table>
                 </div>
-                {!showPurchaseBillWise && (
-                  <div style={{ marginTop: 10, color: "#475569", fontSize: 12 }}>
-                    Press `F5` to open Bill Wise Report.
-                  </div>
-                )}
-
                 {showPurchaseBillWise && (
                 <div style={billWisePanelStyle}>
                   <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center", marginBottom: 10 }}>
@@ -2148,6 +2154,98 @@ export default function WarehouseTradingPage() {
                     )}
                   </div>
                 </div>
+                )}
+              </div>
+            ) : activeReport === "sale-party-ledger" ? (
+              <div style={ledgerSplitStyle}>
+                <div style={tableCard}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                    <thead>
+                      <tr style={reportHeaderRowStyle}>
+                        {activeReportColumns.map(([key, label]) => (
+                          <th key={key} style={th}>{label}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {displayReportData.map((item, i) => (
+                        <tr key={item.id || `${item.voucher_type || item.row_type}-${item.voucher_no || i}-${i}`} style={{ background: item.row_type === "closing" ? "#eef6ff" : (i % 2 ? "#f8fafc" : "#fff"), fontWeight: item.row_type === "closing" ? 700 : 400 }}>
+                          {activeReportColumns.map(([key, _label, render]) => (
+                            <td key={key} style={td}>{render(item, i)}</td>
+                          ))}
+                        </tr>
+                      ))}
+                      {displayReportData.length === 0 && (
+                        <tr><td colSpan={activeReportColumns.length} style={{ ...td, textAlign: "center", padding: 20 }}>No data available.</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                {showSaleBillWise && (
+                  <div style={billWisePanelStyle}>
+                    <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center", marginBottom: 10 }}>
+                      <strong>Bill Wise Report</strong>
+                      <button type="button" onClick={loadReport} style={{ ...btnAction, background: "#0f766e" }}>F5 Refresh</button>
+                    </div>
+                    <div style={{ ...tableCard, maxHeight: 330 }}>
+                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                        <thead>
+                          <tr style={reportHeaderRowStyle}>
+                            <th style={th}>Bill</th>
+                            <th style={th}>Party</th>
+                            <th style={th}>Sale</th>
+                            <th style={th}>Receipt</th>
+                            <th style={th}>Balance</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {saleBillRows.map((row) => {
+                            const rowKey = String(row.sale_id || row.voucher_no);
+                            const isSelected = selectedSaleBill && rowKey === String(selectedSaleBill.sale_id || selectedSaleBill.voucher_no);
+                            return (
+                              <tr key={rowKey} style={{ background: isSelected ? "#e0f2fe" : "#fff" }}>
+                                <td style={td}>{row.voucher_no || "-"}</td>
+                                <td style={td}>{row.party_name || row.company_name || "-"}</td>
+                                <td style={td}>{formatMoney(row.sale_amount || row.debit || 0)}</td>
+                                <td style={td}>
+                                  <button
+                                    type="button"
+                                    onClick={() => setSelectedSaleLedgerBillId(rowKey)}
+                                    style={linkButtonStyle}
+                                  >
+                                    {formatMoney(row.receipt_amount || 0)}
+                                  </button>
+                                </td>
+                                <td style={{ ...td, fontWeight: 700, color: toNumber(row.bill_balance) > 0 ? "#b45309" : "#15803d" }}>
+                                  {formatMoney(row.bill_balance || 0)}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                          {saleBillRows.length === 0 && (
+                            <tr><td colSpan={5} style={{ ...td, textAlign: "center", padding: 18 }}>No sale bill found.</td></tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    <div style={paymentDetailBoxStyle}>
+                      <strong>{selectedSaleBill?.voucher_no || "Select a bill"}</strong>
+                      <div style={{ color: "#64748b", fontSize: 12, margin: "4px 0 8px" }}>Receipt details</div>
+                      {(selectedSaleBill?.payment_details || []).length > 0 ? (
+                        (selectedSaleBill.payment_details || []).map((detail, index) => (
+                          <div key={`${detail.receipt_voucher_no}-${index}`} style={paymentDetailRowStyle}>
+                            <span>{detail.receipt_date || "-"}</span>
+                            <span>{detail.receipt_voucher_no || "-"}</span>
+                            <strong>Rs.{formatMoney(detail.adjusted_amount || 0)}</strong>
+                          </div>
+                        ))
+                      ) : (
+                        <div style={{ color: "#64748b", fontSize: 13 }}>No receipt adjusted against this bill.</div>
+                      )}
+                    </div>
+                  </div>
                 )}
               </div>
             ) : (
