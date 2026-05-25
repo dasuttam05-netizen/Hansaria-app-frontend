@@ -573,6 +573,16 @@ export default function WarehouseTradingPage() {
         return;
       }
     }
+    if (activeVoucherType === "sale") {
+      if (!formData.warehouse_id) {
+        alert("Please select warehouse");
+        return;
+      }
+      if (!formData.company_account_id) {
+        alert("Please select account");
+        return;
+      }
+    }
     setLoading(true);
     try {
       const numericFields = [
@@ -641,6 +651,7 @@ export default function WarehouseTradingPage() {
         const qtyForFifo = Number(payload.unloading_qty || payload.quantity) || 0;
         payload.fifo_rate = qtyForFifo > 0 ? grossAmount / qtyForFifo : 0;
         payload.fifo_amount = grossAmount;
+        if (editId) payload.deduction_only = true;
       }
       if (activeVoucherType === "payment") {
         payload.adjustments = paymentAdjustments
@@ -1692,10 +1703,10 @@ export default function WarehouseTradingPage() {
                         </select>
                       </Field>
                     ) : (
-                      <Field label="Company (Debtor)">
+                      <Field label="Buyer (Debtor)">
                         <select name="company_id" value={formData.company_id} onChange={handleChange} style={inp}>
-                          <option value="">Select Company</option>
-                          {companies.map((c) => (
+                          <option value="">Select Buyer</option>
+                          {buyerNames.map((c) => (
                             <option key={c.id || c._id} value={c.id || c._id}>{c.name}</option>
                           ))}
                         </select>
@@ -1836,7 +1847,9 @@ export default function WarehouseTradingPage() {
                 </div>
               )}
               <div style={{ marginTop: 16, display: "flex", gap: 10 }}>
-                <button type="submit" disabled={loading} style={btnPrimary}>{loading ? "Saving..." : editId ? "Update Voucher" : "Save Voucher"}</button>
+                <button type="submit" disabled={loading} style={btnPrimary}>
+                  {loading ? "Saving..." : editId ? (activeVoucherType === "sale" ? "Save Deductions" : "Update Voucher") : "Save Voucher"}
+                </button>
                 {editId && (
                   <button type="button" onClick={() => { setEditId(null); setFormData(defaultForm()); setPaymentAdjustments([]); setPartyOutstanding(null); }} style={{ ...btnPrimary, background: "#64748b" }}>Cancel</button>
                 )}
@@ -1879,7 +1892,7 @@ export default function WarehouseTradingPage() {
                           <td style={td}>{getFarmerName(item)}</td>
                         )}
                         {(activeVoucherType === "sale" || activeVoucherType === "receipt") && (
-                          <td style={td}>{activeVoucherType === "sale" ? getBuyerName(item) : companies.find(c => String(c.id || c._id) === String(item.company_id))?.name || "-"}</td>
+                          <td style={td}>{activeVoucherType === "sale" ? getBuyerName(item) : (buyerNames.find(c => String(c.id || c._id) === String(item.company_id))?.name || companies.find(c => String(c.id || c._id) === String(item.company_id))?.name || "-")}</td>
                         )}
                         {activeVoucherType === "sale" && (
                           <td style={td}>{item.consignee_name || consignees.find((c) => String(c.id || c._id) === String(item.consignee_id))?.name || "-"}</td>
