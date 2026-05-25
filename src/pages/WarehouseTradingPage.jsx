@@ -2247,7 +2247,7 @@ export default function WarehouseTradingPage() {
                         (selectedSaleBill.payment_details || []).map((detail, index) => (
                           <div key={`${detail.receipt_voucher_no}-${index}`} style={paymentDetailRowStyle}>
                             <span>{detail.receipt_date || "-"}</span>
-                            <span>{detail.receipt_voucher_no || "-"}</span>
+                            <span>{detail.receipt_voucher_no || "-"}{detail.inferred_adjustment ? " (auto)" : ""}</span>
                             <strong>Rs.{formatMoney(detail.adjusted_amount || 0)}</strong>
                           </div>
                         ))
