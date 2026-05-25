@@ -229,6 +229,7 @@ export default function PartyLedgerReportPage() {
           <thead>
             <tr>
               <th style={th}>Party Name</th>
+              <th style={th}>Account</th>
               <th style={th}>Address</th>
               <th style={th}>Mobile</th>
               <th style={th}>Gross</th>
@@ -241,8 +242,9 @@ export default function PartyLedgerReportPage() {
           <tbody>
             {summary.length > 0 ? (
               summary.map((row, index) => (
-                <tr key={`${row.party_name}-${index}`}>
-                  <td style={td}>{row.party_name}</td>
+                <tr key={`${row.party_name}-${row.company_account_id || row.account_name || index}`}>
+                  <td style={td}>{row.party_name || "-"}</td>
+                  <td style={td}>{row.account_name || "-"}</td>
                   <td style={td}>{row.company_address || "-"}</td>
                   <td style={td}>{row.company_mobile || "-"}</td>
                   <td style={td}>{num(row.gross_weight)}</td>
@@ -254,7 +256,7 @@ export default function PartyLedgerReportPage() {
               ))
             ) : (
               <tr>
-                <td style={td} colSpan="8">No summary records found</td>
+                <td style={td} colSpan="9">No summary records found</td>
               </tr>
             )}
           </tbody>
