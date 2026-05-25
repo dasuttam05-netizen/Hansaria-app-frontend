@@ -1180,45 +1180,139 @@ export default function WarehouseTradingPage() {
     : [];
   const selectedSaleBill = saleBillRows.find((row) => String(row.sale_id || row.voucher_no) === String(selectedSaleLedgerBillId)) || saleBillRows[0] || null;
 
-  const downloadPurchaseLedgerPdf = () => {
-    if (activeReport !== "purchase-party-ledger" || !displayReportData.length) {
-      alert("No ledger data available");
-      return;
-    }
-    const doc = new jsPDF({ orientation: "landscape" });
-    doc.setFontSize(14);
-    doc.text("Purchase Party Ledger", 14, 14);
-    autoTable(doc, {
-      startY: 20,
-      styles: { fontSize: 8 },
-      head: [["Date", "Farmer", "Account", "Type", "Voucher No", "Particulars", "Dr", "Cr", "Balance"]],
-      body: displayReportData.map((row) => [
-        row.row_type === "closing" ? "" : formatLedgerDate(row.date),
-        row.row_type === "closing" ? `Closing Balance (${row.closing_side})` : (row.farmer_name || getFarmerName(row) || "-"),
-        row.row_type === "closing" ? "" : getAccountName(row),
-        row.row_type === "closing" ? "" : (row.voucher_type || ""),
-        row.row_type === "closing" ? "" : (row.voucher_no || ""),
-        row.row_type === "closing" ? "" : (row.particulars || ""),
-        formatMoney(row.debit || 0),
-        formatMoney(row.credit || 0),
-        formatMoney(Math.abs(row.balance || 0)),
-      ]),
-    });
-    doc.save(`purchase-party-ledger-${new Date().toISOString().slice(0, 10)}.pdf`);
+  const getAccountDetails = (item) => {
+    const accountId = String(item.company_account_id || item.account_id || item.companyAccountId || "");
+    return companyAccounts.find((account) => String(account.id || account._id) === accountId) || {};
   };
 
-  const sharePurchaseLedgerWhatsapp = () => {
-    if (activeReport !== "purchase-party-ledger" || !displayReportData.length) {
+  const getLedgerPartyDetails = (row, ledgerType = activeReport) => {
+    if (row.row_type === "closing") return { name: row.party_name || row.farmer_name || "-", address: "", mobile: "" };
+    if (ledgerType === "purchase-party-ledger") {
+      const farmerId = String(row.farmer_id || "");
+      const farmer = farmers.find((item) => String(item.id || item._id) === farmerId) || {};
+      return {
+        name: row.farmer_name || farmer.name || getFarmerName(row) || "-",
+        address: row.farmer_address || farmer.address || farmer.village || "",
+        mobile: row.farmer_mobile || farmer.mobile || "",
+      };
+    }
+    const buyerId = String(row.buyer_id || row.company_id || "");
+    const buyer = buyerNames.find((item) => String(item.id || item._id) === buyerId) || {};
+    return {
+      name: row.party_name || row.buyer_name || row.company_name || buyer.name || "-",
+      address: row.buyer_address || row.company_address || buyer.address || buyer.location || "",
+      mobile: row.buyer_mobile || row.company_mobile || buyer.mobile || "",
+    };
+  };
+
+  const getLedgerAccountDetails = (row) => {
+    const account = getAccountDetails(row);
+    return {
+      name: getAccountName(row),
+      address: row.company_account_address || row.account_address || account.address || "",
+      mobile: row.company_account_mobile || row.account_mobile || account.mobile || "",
+    };
+  };
+
+  const formatLedgerContact = ({ address, mobile }) =>
+    [address ? `Address: ${address}` : "", mobile ? `Mobile: ${mobile}` : ""].filter(Boolean).join(" | ") || "-";
+
+  const buildLedgerPdf = (ledgerType) => {
+    const title = ledgerType === "sale-party-ledger" ? "Sale Party Ledger" : "Purchase Party Ledger";
+    const partyLabel = ledgerType === "sale-party-ledger" ? "Party" : "Farmer";
+    const doc = new jsPDF({ orientation: "landscape" });
+    doc.setFontSize(14);
+    doc.text(title, 14, 14);
+    doc.setFontSize(9);
+    doc.text(`Generated: ${formatLedgerDate(new Date().toISOString().slice(0, 10))}`, 14, 20);
+    autoTable(doc, {
+      startY: 25,
+      styles: { fontSize: 7, cellPadding: 2, overflow: "linebreak" },
+      head: [["Date", partyLabel, "Party Details", "Account", "Account Details", "Type", "Voucher No", "Adjustment Details", "Warehouse", "Dr", "Cr", "Balance"]],
+      body: displayReportData.map((row) => {
+        const party = getLedgerPartyDetails(row, ledgerType);
+        const account = getLedgerAccountDetails(row);
+        return [
+          row.row_type === "closing" ? "" : formatLedgerDate(row.date),
+          row.row_type === "closing" ? `Closing Balance (${row.closing_side})` : party.name,
+          row.row_type === "closing" ? "" : formatLedgerContact(party),
+          row.row_type === "closing" ? "" : account.name,
+          row.row_type === "closing" ? "" : formatLedgerContact(account),
+          row.row_type === "closing" ? "" : (row.voucher_type || ""),
+          row.row_type === "closing" ? "" : (row.voucher_no || ""),
+          row.row_type === "closing" ? "" : (row.adjustment_details || row.particulars || ""),
+          row.row_type === "closing" ? "" : getWarehouseName(row),
+          formatMoney(row.debit || 0),
+          formatMoney(row.credit || 0),
+          formatMoney(Math.abs(row.balance || 0)),
+        ];
+      }),
+      columnStyles: {
+        2: { cellWidth: 42 },
+        4: { cellWidth: 42 },
+        7: { cellWidth: 42 },
+      },
+    });
+    return { doc, title };
+  };
+
+  const downloadLedgerPdf = (ledgerType = activeReport) => {
+    if ((ledgerType !== "purchase-party-ledger" && ledgerType !== "sale-party-ledger") || !displayReportData.length) {
       alert("No ledger data available");
       return;
     }
+    const { doc } = buildLedgerPdf(ledgerType);
+    doc.save(`${ledgerType}-${new Date().toISOString().slice(0, 10)}.pdf`);
+  };
+
+  const downloadPurchaseLedgerPdf = () => downloadLedgerPdf("purchase-party-ledger");
+  const downloadSaleLedgerPdf = () => downloadLedgerPdf("sale-party-ledger");
+
+  const shareLedgerWhatsapp = async (ledgerType = activeReport) => {
+    if ((ledgerType !== "purchase-party-ledger" && ledgerType !== "sale-party-ledger") || !displayReportData.length) {
+      alert("No ledger data available");
+      return;
+    }
+    const title = ledgerType === "sale-party-ledger" ? "Sale Party Ledger" : "Purchase Party Ledger";
     const closingRows = displayReportData.filter((row) => row.row_type === "closing");
     const summary = closingRows
-      .map((row) => `${row.farmer_name}: ${row.closing_side} ${formatMoney(Math.abs(row.balance || 0))}`)
+      .map((row) => {
+        const party = getLedgerPartyDetails(row, ledgerType);
+        const account = getLedgerAccountDetails(row);
+        return `${party.name} | ${account.name}: ${row.closing_side} ${formatMoney(Math.abs(row.balance || 0))}`;
+      })
       .join("\n");
-    const message = `Purchase Party Ledger\n\n${summary || "No closing rows"}`;
+    const detailLines = displayReportData
+      .filter((row) => row.row_type !== "closing")
+      .slice(0, 20)
+      .map((row) => {
+        const party = getLedgerPartyDetails(row, ledgerType);
+        const account = getLedgerAccountDetails(row);
+        return [
+          `${formatLedgerDate(row.date)} ${row.voucher_no || ""} ${row.voucher_type || ""}`,
+          `${party.name} (${formatLedgerContact(party)})`,
+          `Account: ${account.name} (${formatLedgerContact(account)})`,
+          `Dr ${formatMoney(row.debit || 0)} Cr ${formatMoney(row.credit || 0)} Bal ${formatMoney(Math.abs(row.balance || 0))}`,
+        ].join("\n");
+      })
+      .join("\n\n");
+    const message = `${title}\n\nSummary\n${summary || "No closing rows"}\n\nDetails\n${detailLines || "No ledger rows"}`;
+
+    const { doc } = buildLedgerPdf(ledgerType);
+    const fileName = `${ledgerType}-${new Date().toISOString().slice(0, 10)}.pdf`;
+    const pdfBlob = doc.output("blob");
+    const pdfFile = new File([pdfBlob], fileName, { type: "application/pdf" });
+    if (navigator.canShare?.({ files: [pdfFile] })) {
+      await navigator.share({ title, text: message, files: [pdfFile] });
+      return;
+    }
+
+    doc.save(fileName);
     window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, "_blank");
   };
+
+  const sharePurchaseLedgerWhatsapp = () => shareLedgerWhatsapp("purchase-party-ledger");
+  const shareSaleLedgerWhatsapp = () => shareLedgerWhatsapp("sale-party-ledger");
 
   const stockPurchaseRows = stockDrilldown?.item?.purchase_details || [];
   const stockSaleRows = stockDrilldown?.item?.sale_details || [];
@@ -2017,12 +2111,20 @@ export default function WarehouseTradingPage() {
           <div style={card}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
               <h3 style={{ marginTop: 0, marginBottom: 0 }}>{reportLabels[activeReport] || titleCase(activeReport)}</h3>
-              {activeReport === "purchase-party-ledger" && (
+              {(activeReport === "purchase-party-ledger" || activeReport === "sale-party-ledger") && (
                 <div style={{ display: "flex", gap: 8 }}>
-                  <button type="button" onClick={downloadPurchaseLedgerPdf} style={{ ...btnAction, background: "#b45309", display: "inline-flex", alignItems: "center", gap: 6 }}>
+                  <button
+                    type="button"
+                    onClick={activeReport === "sale-party-ledger" ? downloadSaleLedgerPdf : downloadPurchaseLedgerPdf}
+                    style={{ ...btnAction, background: "#b45309", display: "inline-flex", alignItems: "center", gap: 6 }}
+                  >
                     <FaFilePdf /> PDF
                   </button>
-                  <button type="button" onClick={sharePurchaseLedgerWhatsapp} style={{ ...btnAction, background: "#15803d", display: "inline-flex", alignItems: "center", gap: 6 }}>
+                  <button
+                    type="button"
+                    onClick={activeReport === "sale-party-ledger" ? shareSaleLedgerWhatsapp : sharePurchaseLedgerWhatsapp}
+                    style={{ ...btnAction, background: "#15803d", display: "inline-flex", alignItems: "center", gap: 6 }}
+                  >
                     <FaWhatsapp /> WhatsApp
                   </button>
                 </div>
