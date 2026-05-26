@@ -180,8 +180,8 @@ export default function WarehouseTradingPage() {
     companies.find((c) => String(c.id || c._id) === String(item?.company_id))?.name ||
     "-";
   const saleQtyFromData = (data) => {
-    const netWeight = toNumber(data.unloading_qty) || toNumber(data.quantity) || Math.max(toNumber(data.gross_weight) - toNumber(data.tare_weight), 0);
-    return Math.max(netWeight - toNumber(data.shortage_quantity), 0);
+    const newWeight = Math.max(toNumber(data.gross_weight) - toNumber(data.tare_weight), 0);
+    return newWeight || toNumber(data.quantity) || toNumber(data.unloading_qty);
   };
   const saleDispatchQtyFromData = (data) => {
     const newWeight = Math.max(toNumber(data.gross_weight) - toNumber(data.tare_weight), 0);
