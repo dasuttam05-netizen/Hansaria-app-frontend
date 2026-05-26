@@ -890,7 +890,7 @@ export default function WarehouseTradingPage() {
       const url = window.URL.createObjectURL(new Blob([response.data]));
       const link = document.createElement("a");
       link.href = url;
-      link.setAttribute("download", `Purchase-Voucher-${voucherId}.pdf`);
+      link.setAttribute("download", `${activeVoucherType === "sale" ? "Sale" : "Purchase"}-Voucher-${voucherId}.pdf`);
       document.body.appendChild(link);
       link.click();
       link.parentNode.removeChild(link);
@@ -2198,15 +2198,26 @@ export default function WarehouseTradingPage() {
                     {(activeVoucherType === "sale" || activeVoucherType === "receipt") && <th style={th}>{activeVoucherType === "sale" ? "Buyer" : "Company"}</th>}
                     {activeVoucherType === "sale" && <th style={th}>Consignee</th>}
                     {(activeVoucherType === "purchase" || activeVoucherType === "sale") && <th style={th}>Product</th>}
-                    {(activeVoucherType === "purchase" || activeVoucherType === "sale") && <th style={th}>Qty</th>}
+                    {(activeVoucherType === "purchase" || activeVoucherType === "sale") && <th style={th}>{activeVoucherType === "sale" ? "Dispatch Qty" : "Qty"}</th>}
+                    {activeVoucherType === "sale" && <th style={th}>Un. Date</th>}
+                    {activeVoucherType === "sale" && <th style={th}>U. Qty</th>}
                     {(activeVoucherType === "purchase" || activeVoucherType === "sale") && <th style={th}>Rate</th>}
                     <th style={th}>Amount</th>
+                    {activeVoucherType === "sale" && <th style={th}>Shortage Amount</th>}
+                    {activeVoucherType === "sale" && <th style={th}>Total Deduction</th>}
+                    {activeVoucherType === "sale" && <th style={th}>N. Receivable</th>}
                     <th style={th}>Actions</th>
                   </tr>
                 </thead>
                 <tbody>
                   {list.map((item, i) => {
                     const isSelectedRow = activeVoucherType === "payment" && String(item.id || item._id) === String(selectedPaymentId);
+                    const saleShortageValue = toNumber(item.claim_amount);
+                    const saleTotalDeductionValue =
+                      saleShortageValue +
+                      toNumber(item.other_deduction) +
+                      toNumber(item.adjustment_amount) +
+                      toNumber(item.tds_amount);
                     return (
                       <tr key={item.id || i} style={{ background: isSelectedRow ? "#e0f2fe" : i % 2 ? "#f8fafc" : "#fff" }}>
                         <td style={td}>{i + 1}</td>
@@ -2226,11 +2237,16 @@ export default function WarehouseTradingPage() {
                         {(activeVoucherType === "purchase" || activeVoucherType === "sale") && (
                           <>
                             <td style={td}>{getProductName(item)}</td>
-                            <td style={td}>{formatDecimal4(activeVoucherType === "purchase" ? item.total_qty || item.net_weight || item.quantity || 0 : item.unloading_qty || item.quantity || 0)}</td>
+                            <td style={td}>{formatDecimal4(activeVoucherType === "purchase" ? item.total_qty || item.net_weight || item.quantity || 0 : item.quantity || item.total_quantity || 0)}</td>
+                            {activeVoucherType === "sale" && <td style={td}>{formatLedgerDate(item.unloading_date)}</td>}
+                            {activeVoucherType === "sale" && <td style={td}>{formatDecimal4(item.unloading_qty || 0)}</td>}
                             <td style={td}>{item.rate || 0}</td>
                           </>
                         )}
-                        <td style={td}>{formatMoney(activeVoucherType === "purchase" ? item.net_amount_payable || item.amount || 0 : item.net_receivable_amount || item.net_amount || item.amount || 0)}</td>
+                        <td style={td}>{formatMoney(activeVoucherType === "purchase" ? item.net_amount_payable || item.amount || 0 : item.amount || item.total_amount || 0)}</td>
+                        {activeVoucherType === "sale" && <td style={td}>{formatMoney(saleShortageValue)}</td>}
+                        {activeVoucherType === "sale" && <td style={td}>{formatMoney(saleTotalDeductionValue)}</td>}
+                        {activeVoucherType === "sale" && <td style={td}>{formatMoney(item.net_receivable_amount || item.net_amount || item.amount || 0)}</td>}
                         <td style={td}>
                           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
                             <button onClick={() => handleEditVoucher(item.id || item._id)} style={btnAction} title="Edit">Edit</button>
@@ -2249,7 +2265,7 @@ export default function WarehouseTradingPage() {
                     );
                   })}
                   {list.length === 0 && (
-                    <tr><td colSpan={11} style={{ ...td, textAlign: "center", padding: 20 }}>No vouchers found.</td></tr>
+                    <tr><td colSpan={activeVoucherType === "sale" ? 17 : 11} style={{ ...td, textAlign: "center", padding: 20 }}>No vouchers found.</td></tr>
                   )}
                 </tbody>
               </table>
