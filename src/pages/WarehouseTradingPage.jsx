@@ -121,7 +121,7 @@ export default function WarehouseTradingPage() {
   const [loading, setLoading] = useState(false);
   const [list, setList] = useState([]);
   const [reportData, setReportData] = useState([]);
-  const [reportFilters, setReportFilters] = useState({ farmer_id: "", company_account_id: "" });
+  const [reportFilters, setReportFilters] = useState({ farmer_id: "", company_account_id: "", sale_buyer_id: "", sale_company_account_id: "" });
   const [selectedLedgerBillId, setSelectedLedgerBillId] = useState("");
   const [partyOutstanding, setPartyOutstanding] = useState(null);
   const [showPaymentAdjustPopup, setShowPaymentAdjustPopup] = useState(false);
@@ -366,7 +366,7 @@ export default function WarehouseTradingPage() {
     if (activeTab === "reports") {
       loadReport();
     }
-  }, [activeTab, activeReport, reportFilters.farmer_id, reportFilters.company_account_id]);
+  }, [activeTab, activeReport, reportFilters.farmer_id, reportFilters.company_account_id, reportFilters.sale_buyer_id, reportFilters.sale_company_account_id]);
 
   useEffect(() => {
     if (activeReport !== "purchase-party-ledger") setShowPurchaseBillWise(false);
@@ -384,7 +384,7 @@ export default function WarehouseTradingPage() {
     };
     window.addEventListener("keydown", handleLedgerRefresh);
     return () => window.removeEventListener("keydown", handleLedgerRefresh);
-  }, [activeTab, activeReport, reportFilters.farmer_id, reportFilters.company_account_id]);
+  }, [activeTab, activeReport, reportFilters.farmer_id, reportFilters.company_account_id, reportFilters.sale_buyer_id, reportFilters.sale_company_account_id]);
 
   useEffect(() => {
     const handleF2Key = (event) => {
@@ -498,8 +498,11 @@ export default function WarehouseTradingPage() {
       if (activeReport === "purchase-party-ledger" && reportFilters.farmer_id) {
         params.farmer_id = reportFilters.farmer_id;
       }
-      if (reportFilters.company_account_id) {
-        params.company_account_id = reportFilters.company_account_id;
+      if (activeReport === "sale-party-ledger" && reportFilters.sale_buyer_id) {
+        params.buyer_id = reportFilters.sale_buyer_id;
+      }
+      if (reportFilters.company_account_id || reportFilters.sale_company_account_id) {
+        params.company_account_id = reportFilters.company_account_id || reportFilters.sale_company_account_id;
       }
       const res = await axios.get(`/api/wh-vouchers/report/${endpoint}`, { params });
       const rows = Array.isArray(res.data) ? res.data : [];
@@ -2343,7 +2346,48 @@ export default function WarehouseTradingPage() {
                 {(reportFilters.farmer_id || reportFilters.company_account_id) && (
                   <button
                     type="button"
-                    onClick={() => setReportFilters({ farmer_id: "", company_account_id: "" })}
+                    onClick={() => setReportFilters({ farmer_id: "", company_account_id: "", sale_buyer_id: "", sale_company_account_id: "" })}
+                    style={{ ...btnAction, background: "#64748b", marginBottom: 1 }}
+                  >
+                    Clear Filters
+                  </button>
+                )}
+              </div>
+            )}
+            {activeReport === "sale-party-ledger" && (
+              <div style={{ display: "flex", gap: 12, alignItems: "end", flexWrap: "wrap", marginBottom: 14 }}>
+                <Field label="Buyer Filter">
+                  <select
+                    value={reportFilters.sale_buyer_id}
+                    onChange={(event) => setReportFilters((prev) => ({ ...prev, sale_buyer_id: event.target.value }))}
+                    style={{ ...inp, minWidth: 260 }}
+                  >
+                    <option value="">All Buyers</option>
+                    {buyerNames.map((buyer) => (
+                      <option key={buyer.id || buyer._id} value={buyer.id || buyer._id}>
+                        {buyer.name}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Account Filter">
+                  <select
+                    value={reportFilters.sale_company_account_id}
+                    onChange={(event) => setReportFilters((prev) => ({ ...prev, sale_company_account_id: event.target.value }))}
+                    style={{ ...inp, minWidth: 260 }}
+                  >
+                    <option value="">All Accounts</option>
+                    {companyAccounts.map((account) => (
+                      <option key={account.id || account._id} value={account.id || account._id}>
+                        {account.account_name || account.name}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                {(reportFilters.sale_buyer_id || reportFilters.sale_company_account_id) && (
+                  <button
+                    type="button"
+                    onClick={() => setReportFilters((prev) => ({ ...prev, sale_buyer_id: "", sale_company_account_id: "" }))}
                     style={{ ...btnAction, background: "#64748b", marginBottom: 1 }}
                   >
                     Clear Filters
