@@ -287,7 +287,10 @@ export default function WarehouseTradingPage() {
       item.consignee_name,
       getProductName(item),
     ].join(" ").toLowerCase();
-    return sameWarehouse && sameAccount && hasNoUnloadingDetails && (!search || searchable.includes(search));
+    // Ensure we only show sale vouchers here. Prefer explicit `voucher_type` when available,
+    // otherwise fall back to presence of buyer/company fields which indicate sale.
+    const isSaleType = String(item.voucher_type || "").toLowerCase() === "sale" || Boolean(item.buyer_id || item.company_id);
+    return isSaleType && sameWarehouse && sameAccount && hasNoUnloadingDetails && (!search || searchable.includes(search));
   });
 
   const saleAdjustedBills = list.filter((item) => {
