@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
+import { useNavigate } from "react-router-dom";
 import MultiSelectDropdown from "../components/MultiSelectDropdown";
 import { ToastContainer, toast, Slide } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
@@ -96,6 +97,7 @@ const collectWarehouseEmployeeIds = (warehouse, employees) => {
 };
 
 export default function WarehouseManagementPage() {
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState("warehouse"); // "warehouse" or "sale"
   const [warehouses, setWarehouses] = useState([]);
   const [locations, setLocations] = useState([]);
@@ -372,6 +374,28 @@ export default function WarehouseManagementPage() {
           }}
         >
           Sale Entry
+        </button>
+        <button
+          type="button"
+          onClick={() => navigate("/warehouse-trading?tab=reports&report=purchase-party-ledger")}
+          style={{
+            ...tabBtn,
+            background: "#e2e8f0",
+            color: "#334155",
+          }}
+        >
+          Purchase Party Ledger
+        </button>
+        <button
+          type="button"
+          onClick={() => navigate("/warehouse-trading?tab=reports&report=sale-party-ledger")}
+          style={{
+            ...tabBtn,
+            background: "#e2e8f0",
+            color: "#334155",
+          }}
+        >
+          Sale Party Ledger
         </button>
       </div>
 
