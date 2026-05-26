@@ -138,6 +138,7 @@ export default function WarehouseTradingPage() {
   const [voucherNumberLoading, setVoucherNumberLoading] = useState(false);
   const [showSaleDeductionModal, setShowSaleDeductionModal] = useState(false);
   const [saleBillSearch, setSaleBillSearch] = useState("");
+  const [showSaleAdjustedModal, setShowSaleAdjustedModal] = useState(false);
   const selectedVoucher = list.find((item) => String(item.id || item._id) === String(selectedPaymentId));
   const selectedReceiptVoucher = list.find((item) => String(item.id || item._id) === String(selectedReceiptId));
   const selectedWarehouse = warehouses.find((w) => String(w.id || w._id) === String(formData.warehouse_id));
@@ -289,6 +290,28 @@ export default function WarehouseTradingPage() {
     return sameWarehouse && sameAccount && hasNoUnloadingDetails && (!search || searchable.includes(search));
   });
 
+  const saleAdjustedBills = list.filter((item) => {
+    const sameWarehouse = !formData.warehouse_id || String(item.warehouse_id || "") === String(formData.warehouse_id);
+    const sameAccount = !formData.company_account_id || String(item.company_account_id || "") === String(formData.company_account_id);
+    const hasAdjustment =
+      toNumber(item.shortage_quantity) > 0 ||
+      toNumber(item.claim_amount) > 0 ||
+      toNumber(item.other_deduction) > 0 ||
+      toNumber(item.adjustment_amount) > 0 ||
+      toNumber(item.tds_amount) > 0 ||
+      Boolean(item.unloading_date);
+    const search = saleBillSearch.trim().toLowerCase();
+    const searchable = [
+      item.voucher_no,
+      item.lorry_no,
+      item.reference_id,
+      getBuyerName(item),
+      item.consignee_name,
+      getProductName(item),
+    ].join(" ").toLowerCase();
+    return sameWarehouse && sameAccount && hasAdjustment && (!search || searchable.includes(search));
+  });
+
   // Load initial data
   useEffect(() => {
     const requestedType = searchParams.get("type");
@@ -368,6 +391,16 @@ export default function WarehouseTradingPage() {
     };
     window.addEventListener("keydown", handleF2Key);
     return () => window.removeEventListener("keydown", handleF2Key);
+  }, [activeTab, activeVoucherType]);
+
+  useEffect(() => {
+    const handleF5SaleKey = (event) => {
+      if (event.key !== "F5" || activeTab !== "vouchers" || activeVoucherType !== "sale") return;
+      event.preventDefault();
+      setShowSaleAdjustedModal(true);
+    };
+    window.addEventListener("keydown", handleF5SaleKey);
+    return () => window.removeEventListener("keydown", handleF5SaleKey);
   }, [activeTab, activeVoucherType]);
 
   const loadData = async () => {
@@ -780,25 +813,50 @@ export default function WarehouseTradingPage() {
     }
   };
 
-  const handleEditVoucher = (voucherId) => {
-    const voucher = list.find(v => String(v.id || v._id) === String(voucherId));
-    if (voucher) {
-      setFormData({ ...defaultForm(), ...voucher });
-      setEditId(voucherId);
-      if (activeVoucherType === "payment") {
-        const existingAdjustments = Array.isArray(voucher.adjustments)
-          ? voucher.adjustments.map((item) => ({
-              purchase_id: String(item.purchase_id || item.id || ""),
-              voucher_no: item.purchase_voucher_no || item.voucher_no || "",
+  const handleEditVoucher = async (voucherId) => {
+    const voucher = list.find((v) => String(v.id || v._id) === String(voucherId));
+    if (!voucher) return;
+
+    try {
+      if (activeVoucherType === "receipt") {
+        setLoading(true);
+        const res = await axios.get(`/api/wh-vouchers/receipt/${voucherId}`);
+        const receipt = res.data;
+        setFormData({ ...defaultForm(), ...receipt });
+        const existingAdjustments = Array.isArray(receipt.adjustments)
+          ? receipt.adjustments.map((item) => ({
+              sale_id: String(item.sale_id || item.id || ""),
+              voucher_no: item.voucher_no || item.sale_voucher_no || "",
               adjusted_amount: toNumber(item.adjusted_amount),
-            })).filter((item) => item.purchase_id && item.adjusted_amount > 0)
+            })).filter((item) => item.sale_id && item.adjusted_amount > 0)
           : [];
-        setPaymentAdjustments(existingAdjustments);
-        if (voucher.farmer_id) {
-          loadOutstanding("farmer", voucher.farmer_id, voucher.warehouse_id, voucherId, voucher.company_account_id);
+        setReceiptAdjustments(existingAdjustments);
+        if (receipt.company_id) {
+          loadOutstanding("company", receipt.company_id, receipt.warehouse_id, null, receipt.company_account_id);
+        }
+      } else {
+        setFormData({ ...defaultForm(), ...voucher });
+        if (activeVoucherType === "payment") {
+          const existingAdjustments = Array.isArray(voucher.adjustments)
+            ? voucher.adjustments.map((item) => ({
+                purchase_id: String(item.purchase_id || item.id || ""),
+                voucher_no: item.purchase_voucher_no || item.voucher_no || "",
+                adjusted_amount: toNumber(item.adjusted_amount),
+              })).filter((item) => item.purchase_id && item.adjusted_amount > 0)
+            : [];
+          setPaymentAdjustments(existingAdjustments);
+          if (voucher.farmer_id) {
+            loadOutstanding("farmer", voucher.farmer_id, voucher.warehouse_id, voucherId, voucher.company_account_id);
+          }
         }
       }
+      setEditId(voucherId);
       window.scrollTo({ top: 0, behavior: "smooth" });
+    } catch (err) {
+      console.error(err);
+      alert(err?.response?.data?.error || "Failed to load voucher for edit");
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -2107,7 +2165,14 @@ export default function WarehouseTradingPage() {
           </div>
 
           <div style={card}>
-            <h3 style={{ marginTop: 0 }}>{activeVoucherType.charAt(0).toUpperCase() + activeVoucherType.slice(1)} Vouchers</h3>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              <h3 style={{ marginTop: 0 }}>{activeVoucherType.charAt(0).toUpperCase() + activeVoucherType.slice(1)} Vouchers</h3>
+              {activeVoucherType === "sale" && (
+                <button type="button" onClick={() => setShowSaleAdjustedModal(true)} style={{ ...btnAction, background: "#0f766e" }}>
+                  F5 Adjusted Sales
+                </button>
+              )}
+            </div>
             <div style={tableCard}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                 <thead>
@@ -2929,6 +2994,81 @@ export default function WarehouseTradingPage() {
               <button type="button" onClick={saveSaleVoucherPass} disabled={loading} style={btnPrimary}>
                 {loading ? "Saving..." : "Final Save"}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+      {showSaleAdjustedModal && (
+        <div style={modalOverlayStyle}>
+          <div style={paymentAdjustModalStyle}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+              <div>
+                <h3 style={{ margin: 0 }}>Adjusted Sale Vouchers</h3>
+                <div style={{ fontSize: 13, color: "#64748b", marginTop: 4 }}>
+                  Press F5 to open adjusted sale items or select a row to edit its voucher.
+                </div>
+              </div>
+              <button type="button" onClick={() => setShowSaleAdjustedModal(false)} style={{ ...btnAction, background: "#64748b" }}>
+                Close
+              </button>
+            </div>
+
+            <div style={{ ...tableCard, maxHeight: 420, overflow: "auto", marginTop: 12 }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                <thead>
+                  <tr style={reportHeaderRowStyle}>
+                    <th style={th}>Bill</th>
+                    <th style={th}>Date</th>
+                    <th style={th}>Lorry</th>
+                    <th style={th}>Buyer</th>
+                    <th style={th}>Consignee</th>
+                    <th style={th}>Qty</th>
+                    <th style={th}>Rate</th>
+                    <th style={th}>Claim</th>
+                    <th style={th}>Deduction</th>
+                    <th style={th}>TDS</th>
+                    <th style={th}>Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {saleAdjustedBills.map((row, index) => {
+                    const rowId = row.id || row._id;
+                    return (
+                      <tr key={rowId} style={{ background: index % 2 ? "#f8fafc" : "#fff" }}>
+                        <td style={td}>{row.voucher_no || "-"}</td>
+                        <td style={td}>{row.date || "-"}</td>
+                        <td style={td}>{row.lorry_no || row.reference_id || "-"}</td>
+                        <td style={td}>{getBuyerName(row)}</td>
+                        <td style={td}>{row.consignee_name || "-"}</td>
+                        <td style={td}>{formatDecimal4(row.quantity || row.unloading_qty || 0)}</td>
+                        <td style={td}>{formatMoney(row.rate || 0)}</td>
+                        <td style={td}>{formatMoney(row.claim_amount || 0)}</td>
+                        <td style={td}>{formatMoney(row.other_deduction || row.adjustment_amount || 0)}</td>
+                        <td style={td}>{formatMoney(row.tds_amount || 0)}</td>
+                        <td style={td}>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setShowSaleAdjustedModal(false);
+                              handleEditVoucher(rowId);
+                            }}
+                            style={{ ...btnAction, background: "#2563eb" }}
+                          >
+                            Edit
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {saleAdjustedBills.length === 0 && (
+                    <tr>
+                      <td colSpan={11} style={{ ...td, textAlign: "center", padding: 18 }}>
+                        No adjusted sale vouchers found.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
