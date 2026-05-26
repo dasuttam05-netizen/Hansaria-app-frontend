@@ -183,7 +183,11 @@ export default function WarehouseTradingPage() {
     const netWeight = toNumber(data.unloading_qty) || toNumber(data.quantity) || Math.max(toNumber(data.gross_weight) - toNumber(data.tare_weight), 0);
     return Math.max(netWeight - toNumber(data.shortage_quantity), 0);
   };
-  const saleGrossAmountFromData = (data) => saleQtyFromData(data) * toNumber(data.rate);
+  const saleDispatchQtyFromData = (data) => {
+    const newWeight = Math.max(toNumber(data.gross_weight) - toNumber(data.tare_weight), 0);
+    return toNumber(data.quantity) || newWeight || toNumber(data.unloading_qty);
+  };
+  const saleGrossAmountFromData = (data) => saleDispatchQtyFromData(data) * toNumber(data.rate);
   const filteredConsignees = useMemo(() => {
     const buyerId = String(formData.buyer_id || formData.company_id || "");
     if (!buyerId) return consignees;
@@ -730,7 +734,7 @@ export default function WarehouseTradingPage() {
       if (activeVoucherType === "sale") {
         payload.buyer_id = payload.buyer_id || payload.company_id || "";
         payload.company_id = payload.buyer_id;
-        payload.quantity = saleQtyFromData(formData);
+        payload.quantity = saleDispatchQtyFromData(formData);
         payload.unloading_qty = payload.quantity;
         payload.amount = saleGrossAmountFromData(formData);
         const claimAmount = Number(formData.claim_amount) || 0;
