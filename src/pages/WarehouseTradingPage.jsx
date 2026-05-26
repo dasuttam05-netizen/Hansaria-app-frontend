@@ -188,6 +188,7 @@ export default function WarehouseTradingPage() {
     return toNumber(data.quantity) || newWeight || toNumber(data.unloading_qty);
   };
   const saleGrossAmountFromData = (data) => saleDispatchQtyFromData(data) * toNumber(data.rate);
+  const saleBillAmountFromData = (data) => toNumber(data.amount) || saleGrossAmountFromData(data);
   const filteredConsignees = useMemo(() => {
     const buyerId = String(formData.buyer_id || formData.company_id || "");
     if (!buyerId) return consignees;
@@ -271,7 +272,7 @@ export default function WarehouseTradingPage() {
     .reduce((sum, item) => sum + toNumber(item.total_amount || item.net_receivable_amount || item.net_amount || item.amount), 0);
   const tdsEligible = partySaleTotal > 5000000;
   const autoTdsAmount = tdsEligible
-    ? Math.max(saleGrossAmountFromData(formData) - saleShortageAmount - saleQualityDeduction - toNumber(formData.adjustment_amount), 0) * 0.001
+    ? Math.max(saleBillAmountFromData(formData) - saleShortageAmount - saleQualityDeduction - toNumber(formData.adjustment_amount), 0) * 0.001
     : 0;
   const saleVoucherPassBills = list.filter((item) => {
     const sameWarehouse = !formData.warehouse_id || String(item.warehouse_id || "") === String(formData.warehouse_id);
@@ -554,6 +555,7 @@ export default function WarehouseTradingPage() {
       }
       if (
         activeVoucherType === "sale" &&
+        !editId &&
         ["gross_weight", "tare_weight", "quantity", "unloading_qty", "shortage_quantity", "rate"].includes(name)
       ) {
         next.amount = saleGrossAmountFromData(next).toFixed(2);
@@ -1047,7 +1049,7 @@ export default function WarehouseTradingPage() {
       other_deduction: saleQualityDeduction,
       total_deduction: saleQualityDeduction,
       tds_amount: finalTdsAmount,
-      amount: saleGrossAmountFromData(formData),
+      amount: saleBillAmountFromData(formData),
     };
 
     setLoading(true);
@@ -3016,7 +3018,7 @@ export default function WarehouseTradingPage() {
             <div style={{ marginTop: 16, padding: 12, background: "#f8fafc", borderRadius: 8, border: "1px solid #cbd5e1" }}>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12, fontSize: 13 }}>
                 <div>
-                  <strong>Gross Amount:</strong> Rs.{formatMoney(saleGrossAmountFromData(formData))}
+                  <strong>Gross Amount:</strong> Rs.{formatMoney(saleBillAmountFromData(formData))}
                 </div>
                 <div>
                   <strong>Shortage:</strong> Rs.{formatMoney(saleShortageAmount)}
@@ -3031,7 +3033,7 @@ export default function WarehouseTradingPage() {
                   <strong>Round Off:</strong> Rs.{formatMoney(formData.round_off)}
                 </div>
                 <div style={{ fontWeight: 700, color: "#0f766e", fontSize: 14 }}>
-                  <strong>Net Receivable:</strong> Rs.{formatMoney(saleGrossAmountFromData(formData) - saleShortageAmount - saleQualityDeduction - toNumber(formData.adjustment_amount) - (tdsEligible ? autoTdsAmount : toNumber(formData.tds_amount)) + toNumber(formData.round_off))}
+                  <strong>Net Receivable:</strong> Rs.{formatMoney(saleBillAmountFromData(formData) - saleShortageAmount - saleQualityDeduction - toNumber(formData.adjustment_amount) - (tdsEligible ? autoTdsAmount : toNumber(formData.tds_amount)) + toNumber(formData.round_off))}
                 </div>
               </div>
               {tdsEligible && (
