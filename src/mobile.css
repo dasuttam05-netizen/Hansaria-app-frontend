@@ -42,6 +42,10 @@ button {
     max-width: 100vw !important;
   }
 
+  * {
+    letter-spacing: 0 !important;
+  }
+
   h1 {
     font-size: 26px !important;
     line-height: 1.2 !important;
@@ -91,8 +95,21 @@ button {
   }
 
   div[style*="min-width: 320px"],
-  div[style*="minWidth: 320"] {
+  div[style*="min-width: 340px"],
+  div[style*="min-width: 360px"],
+  div[style*="minWidth: 320"],
+  div[style*="minWidth: 340"],
+  div[style*="minWidth: 360"] {
     min-width: 0 !important;
+  }
+
+  div[style*="padding: 20px"],
+  div[style*="padding: 24px"],
+  div[style*="padding: 28px"],
+  div[style*="padding: 32px"],
+  div[style*="padding: 48px"],
+  div[style*="padding: 56px"] {
+    padding: 14px !important;
   }
 
   div[style*="width: 100%"],
@@ -118,6 +135,12 @@ button {
   td {
     padding: 10px 9px !important;
     white-space: nowrap;
+  }
+
+  .dashboard-shell,
+  .app-shell {
+    width: 100% !important;
+    min-width: 0 !important;
   }
 
   .dashboard-topbar {
@@ -177,6 +200,12 @@ button {
 
   .login-form-panel {
     padding: 16px !important;
+  }
+
+  .login-form-panel > div {
+    max-width: 100% !important;
+    padding: 24px 18px !important;
+    border-radius: 16px !important;
   }
 }
 
