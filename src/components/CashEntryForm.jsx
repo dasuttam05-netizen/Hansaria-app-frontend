@@ -209,6 +209,29 @@ export default function CashEntryForm({
     ...companies.map((c) => ({ value: `party:${getRecordId(c)}`, label: `Party: ${c.name}` })),
     ...employees.map((e) => ({ value: `employee:${getRecordId(e)}`, label: `Employee: ${e.name}` })),
   ];
+  const hasOptionValue = (rows, value) =>
+    !!value && rows.some((row) => String(getRecordId(row)) === String(value));
+  const currentCompanyFallback =
+    formData.company_id && !hasOptionValue(companies, formData.company_id)
+      ? {
+          value: String(formData.company_id),
+          label: formData.company_name || formData.company || `Party ${formData.company_id}`,
+        }
+      : null;
+  const currentWarehouseFallback =
+    formData.warehouse_id && !hasOptionValue(warehouses, formData.warehouse_id)
+      ? {
+          value: String(formData.warehouse_id),
+          label: formData.warehouse_name || `Warehouse ${formData.warehouse_id}`,
+        }
+      : null;
+  const currentEmployeeFallback =
+    formData.employee_id && !hasOptionValue(employees, formData.employee_id)
+      ? {
+          value: String(formData.employee_id),
+          label: formData.employee_name || `Employee ${formData.employee_id}`,
+        }
+      : null;
 
   const selectedMode = formData.transaction_mode || "receipt";
   const modeLabel = ENTRY_MODES.find((m) => m.key === selectedMode)?.label || "Receipt";
@@ -427,6 +450,9 @@ export default function CashEntryForm({
                 }}
               >
                 <option value="">Select Employee</option>
+                {currentEmployeeFallback ? (
+                  <option value={currentEmployeeFallback.value}>{currentEmployeeFallback.label}</option>
+                ) : null}
                 {employees.map((emp) => (
                   <option key={getRecordId(emp)} value={getRecordId(emp)}>
                     {emp.name}
@@ -590,6 +616,9 @@ export default function CashEntryForm({
                         style={inputStyle}
                       >
                         <option value="">Select Company</option>
+                        {currentCompanyFallback ? (
+                          <option value={currentCompanyFallback.value}>{currentCompanyFallback.label}</option>
+                        ) : null}
                         {companies.map((c) => (
                           <option key={getRecordId(c)} value={getRecordId(c)}>
                             {c.name}
@@ -639,6 +668,9 @@ export default function CashEntryForm({
                     style={inputStyle}
                   >
                     <option value="">Select Warehouse</option>
+                    {currentWarehouseFallback ? (
+                      <option value={currentWarehouseFallback.value}>{currentWarehouseFallback.label}</option>
+                    ) : null}
                     {warehouses.map((w) => (
                       <option key={getRecordId(w)} value={getRecordId(w)}>
                         {w.name}
