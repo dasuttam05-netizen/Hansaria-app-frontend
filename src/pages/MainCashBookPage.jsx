@@ -83,6 +83,15 @@ const isMainCashLedgerEntry = (entry) => {
 };
 const isActiveLedgerStatus = (entry) =>
   String(entry?.status || "posted").toLowerCase() !== "cancelled";
+const normalizeMainOpening = (data = {}) => ({
+  main_opening_balance: Number(data?.main_opening_balance || 0),
+  main_opening_type: String(data?.main_opening_type || "dr").toLowerCase() === "cr" ? "cr" : "dr",
+  opening_locked: !!data?.opening_locked,
+  opening_locked_by: data?.opening_locked_by || null,
+  opening_locked_at: data?.opening_locked_at || null,
+  updated_by: data?.updated_by || null,
+  updated_at: data?.updated_at || null,
+});
 
 const MainCashBookPage = () => {
   const navigate = useNavigate();
@@ -101,7 +110,7 @@ const MainCashBookPage = () => {
   const [warehouses, setWarehouses] = useState([]);
   const [companies, setCompanies] = useState([]);
   const [employees, setEmployees] = useState([]);
-  const [mainOpening, setMainOpening] = useState({ main_opening_balance: 0, main_opening_type: "dr" });
+  const [mainOpening, setMainOpening] = useState(() => normalizeMainOpening());
   const [mainOpeningForm, setMainOpeningForm] = useState({ main_opening_balance: "0", main_opening_type: "dr" });
   const [mainOpeningSaving, setMainOpeningSaving] = useState(false);
   const [showDeleted, setShowDeleted] = useState(false);
@@ -144,39 +153,29 @@ const MainCashBookPage = () => {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [entriesRes, warehousesRes, companiesRes, employeesRes, mainOpeningRes] = await Promise.all([
+      const [entriesRes, warehousesRes, companiesRes, employeesRes, mainOpeningRes] = await Promise.allSettled([
         axios.get(`${API_BASE}/cash-entries`),
         axios.get(`${API_BASE}/warehouses`),
         axios.get(`${API_BASE}/companies`),
         axios.get(`${API_BASE}/employees`),
         axios.get(`${API_BASE}/cash-entries/opening/main`),
       ]);
-      setEntries(Array.isArray(entriesRes.data) ? entriesRes.data : []);
-      setWarehouses(Array.isArray(warehousesRes.data) ? warehousesRes.data : []);
-      setCompanies(Array.isArray(companiesRes.data) ? companiesRes.data : []);
-      setEmployees(Array.isArray(employeesRes.data) ? employeesRes.data : []);
-      const safeMainOpening = {
-        main_opening_balance: Number(mainOpeningRes?.data?.main_opening_balance || 0),
-        main_opening_type: String(mainOpeningRes?.data?.main_opening_type || "dr").toLowerCase() === "cr" ? "cr" : "dr",
-        opening_locked: !!mainOpeningRes?.data?.opening_locked,
-        opening_locked_by: mainOpeningRes?.data?.opening_locked_by || null,
-        opening_locked_at: mainOpeningRes?.data?.opening_locked_at || null,
-        updated_by: mainOpeningRes?.data?.updated_by || null,
-        updated_at: mainOpeningRes?.data?.updated_at || null,
-      };
-      setMainOpening(safeMainOpening);
-      setMainOpeningForm({
-        main_opening_balance: String(safeMainOpening.main_opening_balance),
-        main_opening_type: safeMainOpening.main_opening_type,
-      });
+      if (entriesRes.status === "fulfilled") setEntries(Array.isArray(entriesRes.value.data) ? entriesRes.value.data : []);
+      if (warehousesRes.status === "fulfilled") setWarehouses(Array.isArray(warehousesRes.value.data) ? warehousesRes.value.data : []);
+      if (companiesRes.status === "fulfilled") setCompanies(Array.isArray(companiesRes.value.data) ? companiesRes.value.data : []);
+      if (employeesRes.status === "fulfilled") setEmployees(Array.isArray(employeesRes.value.data) ? employeesRes.value.data : []);
+      if (mainOpeningRes.status === "fulfilled") {
+        const safeMainOpening = normalizeMainOpening(mainOpeningRes.value?.data);
+        setMainOpening(safeMainOpening);
+        setMainOpeningForm({
+          main_opening_balance: String(safeMainOpening.main_opening_balance),
+          main_opening_type: safeMainOpening.main_opening_type,
+        });
+      } else {
+        console.error("Error fetching main opening:", mainOpeningRes.reason);
+      }
     } catch (err) {
       console.error("Error fetching data:", err);
-      setEntries([]);
-      setWarehouses([]);
-      setCompanies([]);
-      setEmployees([]);
-      setMainOpening({ main_opening_balance: 0, main_opening_type: "dr" });
-      setMainOpeningForm({ main_opening_balance: "0", main_opening_type: "dr" });
     } finally {
       setLoading(false);
     }
@@ -377,6 +376,7 @@ const MainCashBookPage = () => {
 
       setEditingId(detail.id);
       setFormData({
+        id: detail.id,
         entry_date: String(detail.entry_date || "").split("T")[0],
         transaction_mode: detail.transaction_mode || "receipt",
         entry_type: detail.entry_type || "expense",
@@ -552,7 +552,7 @@ const MainCashBookPage = () => {
         expected_updated_at: mainOpening.updated_at || null,
       };
       const res = await axios.put(`${API_BASE}/cash-entries/opening/main`, payload);
-      const nextOpening = res?.data || payload;
+      const nextOpening = normalizeMainOpening(res?.data || payload);
       setMainOpening(nextOpening);
       setMainOpeningForm({
         main_opening_balance: String(Number(nextOpening.main_opening_balance || 0)),
@@ -583,10 +583,30 @@ const MainCashBookPage = () => {
   const handleToggleMainOpeningLock = async () => {
     setMainOpeningSaving(true);
     try {
+      const formOpening = {
+        main_opening_balance: Number(mainOpeningForm.main_opening_balance || 0),
+        main_opening_type: String(mainOpeningForm.main_opening_type || "dr").toLowerCase() === "cr" ? "cr" : "dr",
+      };
+      const hasUnsavedOpening =
+        !mainOpening?.opening_locked &&
+        (Number(mainOpening.main_opening_balance || 0) !== formOpening.main_opening_balance ||
+          String(mainOpening.main_opening_type || "dr") !== formOpening.main_opening_type);
+      if (hasUnsavedOpening) {
+        const saveRes = await axios.put(`${API_BASE}/cash-entries/opening/main`, {
+          ...formOpening,
+          expected_updated_at: mainOpening.updated_at || null,
+        });
+        const savedOpening = normalizeMainOpening(saveRes?.data || formOpening);
+        setMainOpening(savedOpening);
+        setMainOpeningForm({
+          main_opening_balance: String(Number(savedOpening.main_opening_balance || 0)),
+          main_opening_type: savedOpening.main_opening_type,
+        });
+      }
       const res = await axios.patch(`${API_BASE}/cash-entries/opening/main/lock`, {
         locked: !mainOpening?.opening_locked,
       });
-      const nextOpening = res?.data || {};
+      const nextOpening = normalizeMainOpening(res?.data || {});
       setMainOpening((prev) => ({ ...prev, ...nextOpening }));
       alert(nextOpening?.opening_locked ? "Opening settings locked." : "Opening settings unlocked.");
     } catch (err) {
@@ -935,6 +955,7 @@ const MainCashBookPage = () => {
         agingRows={agingRows}
         adjustments={adjustments}
         onAdjustmentChange={setAdjustments}
+        onEditVoucher={handleEdit}
         loading={formLoading}
       />
     </div>
