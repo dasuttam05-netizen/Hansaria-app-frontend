@@ -83,6 +83,10 @@ const isMainCashLedgerEntry = (entry) => {
 };
 const isActiveLedgerStatus = (entry) =>
   String(entry?.status || "posted").toLowerCase() !== "cancelled";
+const getDescriptionDetails = (entry) =>
+  [entry.description || "-", entry.adjustment_details ? `Adjustment: ${entry.adjustment_details}` : ""]
+    .filter(Boolean)
+    .join(" | ");
 const normalizeMainOpening = (data = {}) => ({
   main_opening_balance: Number(data?.main_opening_balance || 0),
   main_opening_type: String(data?.main_opening_type || "dr").toLowerCase() === "cr" ? "cr" : "dr",
@@ -259,7 +263,7 @@ const MainCashBookPage = () => {
       `Name: ${entry.warehouse_name || entry.account_name || "-"}`,
       `Employee: ${entry.employee_name || "-"}`,
       `Party: ${entry.company_name || "-"}`,
-      `Description: ${entry.description || "-"}`,
+      `Description: ${getDescriptionDetails(entry)}`,
       `Ref No: ${entry.reference_no || "-"}`,
       `Payment Mode: ${entry.payment_method || "-"}`,
       `Amount: ${Number(entry.amount || 0).toFixed(2)}`,
@@ -529,7 +533,7 @@ const MainCashBookPage = () => {
         getFundSourceLabel(entry.fund_source),
         entry.employee_name || "-",
         entry.company_name || "-",
-        entry.description || "-",
+        getDescriptionDetails(entry),
         entry.reference_no || "-",
         entry.payment_method || "-",
         entry.dr ? Number(entry.dr).toFixed(2) : "-",
@@ -935,7 +939,7 @@ const MainCashBookPage = () => {
                       <td style={td}>{getFundSourceLabel(entry.fund_source)}</td>
                       <td style={td}>{entry.employee_name || "-"}</td>
                       <td style={td}>{entry.company_name || "-"}</td>
-                      <td style={td}>{entry.description || "-"}</td>
+                      <td style={td}>{getDescriptionDetails(entry)}</td>
                       <td style={td}>{entry.reference_no || "-"}</td>
                       <td style={td}>{entry.payment_method || "-"}</td>
                       <td style={{ ...td, textAlign: "right" }}>{entry.dr ? `Rs. ${Number(entry.dr).toFixed(2)}` : "-"}</td>
