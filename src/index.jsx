@@ -3,6 +3,7 @@ import ReactDOM from "react-dom/client";
 import axios from "axios";
 import App from "./App";
 import { loadSession } from "./utils/auth";
+import "./mobile.css";
 
 // Initialize auth header from stored session before any component API calls.
 loadSession();
