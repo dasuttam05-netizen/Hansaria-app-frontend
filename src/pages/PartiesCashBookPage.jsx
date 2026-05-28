@@ -281,9 +281,10 @@ const PartiesCashBookPage = () => {
   );
 
   const handleEdit = async (entry) => {
+    let detail = entry;
     try {
       const detailRes = await axios.get(`${API_BASE}/cash-entries/${entry.id}`);
-      const detail = detailRes?.data || entry;
+      detail = detailRes?.data || entry;
       const existingAdjustments = Array.isArray(detail.adjustments)
         ? detail.adjustments.reduce((acc, item) => {
             const targetId = Number(item?.target_entry_id);
@@ -300,8 +301,11 @@ const PartiesCashBookPage = () => {
         transaction_mode: detail.transaction_mode || "receipt",
         entry_type: detail.entry_type || "expense",
         warehouse_id: detail.warehouse_id ? String(detail.warehouse_id) : "",
+        warehouse_name: detail.warehouse_name || "",
         company_id: detail.company_id ? String(detail.company_id) : "",
+        company_name: detail.company_name || "",
         employee_id: detail.employee_id ? String(detail.employee_id) : "",
+        employee_name: detail.employee_name || "",
         company_account_id: detail.company_account_id ? String(detail.company_account_id) : "",
         description: detail.description || "",
         amount: detail.amount || "",
@@ -319,7 +323,30 @@ const PartiesCashBookPage = () => {
         existingAdjustments,
       });
     } catch (err) {
-      alert("Error loading entry details: " + (err.response?.data?.error || err.message));
+      console.error("Error loading entry details:", err);
+      alert("Entry details load korte problem hoyeche, report row data diye form khola holo.");
+      setEditingId(detail.id);
+      setFormData({
+        id: detail.id,
+        entry_date: String(detail.entry_date || "").split("T")[0],
+        transaction_mode: detail.transaction_mode || "receipt",
+        entry_type: detail.entry_type || "expense",
+        warehouse_id: detail.warehouse_id ? String(detail.warehouse_id) : "",
+        warehouse_name: detail.warehouse_name || "",
+        company_id: detail.company_id ? String(detail.company_id) : "",
+        company_name: detail.company_name || "",
+        employee_id: detail.employee_id ? String(detail.employee_id) : "",
+        employee_name: detail.employee_name || "",
+        company_account_id: detail.company_account_id ? String(detail.company_account_id) : "",
+        description: detail.description || "",
+        amount: detail.amount || "",
+        payment_method: detail.payment_method || "Cash",
+        fund_source: detail.fund_source || "party_cash",
+        reference_no: detail.reference_no || "",
+        narration: detail.narration || "",
+        status: detail.status || "posted",
+      });
+      setShowForm(true);
     }
   };
 
