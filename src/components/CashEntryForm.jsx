@@ -1,5 +1,8 @@
-import React from "react";
+import React, { useEffect, useMemo, useState } from "react";
+import axios from "axios";
 import ModalWrapper from "./ModalWrapper";
+
+const API_BASE = "/api";
 
 const ENTRY_MODES = [
   { key: "journal", label: "Journal" },
@@ -194,9 +197,14 @@ export default function CashEntryForm({
   agingRows = [],
   adjustments = {},
   onAdjustmentChange = () => {},
+  onEditVoucher = null,
   loading,
 }) {
-  if (!isOpen) return null;
+  const [showAdjustmentPanel, setShowAdjustmentPanel] = useState(false);
+  const [adjustmentTab, setAdjustmentTab] = useState("pending");
+  const [pendingVoucherRows, setPendingVoucherRows] = useState([]);
+  const [allVoucherRows, setAllVoucherRows] = useState([]);
+  const [allVoucherLoading, setAllVoucherLoading] = useState(false);
   const journalNameOptions = [
     ...companies.map((c) => ({ value: `party:${getRecordId(c)}`, label: `Party: ${c.name}` })),
     ...employees.map((e) => ({ value: `employee:${getRecordId(e)}`, label: `Employee: ${e.name}` })),
@@ -276,6 +284,80 @@ export default function CashEntryForm({
       };
     })
     .filter((row) => row.adjust_now > 0);
+  const effectivePendingRows = pendingVoucherRows.length ? pendingVoucherRows : agingRows;
+  const totalOutstanding = (effectivePendingRows || []).reduce(
+    (sum, row) => sum + Number(row.pending_amount || 0),
+    0
+  );
+  const adjustmentPanelRows = adjustmentTab === "all" ? allVoucherRows : effectivePendingRows;
+  const displayRows = useMemo(
+    () =>
+      (adjustmentPanelRows || []).map((row) => {
+        const adjustNow = Number(adjustments?.[row.id] || 0);
+        const pending = Number(row.pending_amount || 0);
+        return {
+          ...row,
+          adjust_now: adjustNow,
+          pending_after: Math.max(0, pending - adjustNow),
+        };
+      }),
+    [adjustmentPanelRows, adjustments]
+  );
+
+  const loadVoucherRows = async (tab = "pending") => {
+    if (!formData.company_id) {
+      if (tab === "all") setAllVoucherRows([]);
+      else setPendingVoucherRows([]);
+      return;
+    }
+    setAllVoucherLoading(true);
+    try {
+      const res = await axios.get(`${API_BASE}/cash-entries/aging/company/${formData.company_id}`, {
+        params: {
+          entry_type: formData.entry_type || undefined,
+          source_entry_id: formData.id || undefined,
+          include_all: tab === "all" ? 1 : 0,
+        },
+      });
+      if (tab === "all") setAllVoucherRows(Array.isArray(res.data) ? res.data : []);
+      else setPendingVoucherRows(Array.isArray(res.data) ? res.data : []);
+    } catch (err) {
+      console.error("Voucher load failed:", err);
+      if (tab === "all") setAllVoucherRows([]);
+      else setPendingVoucherRows([]);
+    } finally {
+      setAllVoucherLoading(false);
+    }
+  };
+
+  const openAdjustmentPanel = async (tab = "pending") => {
+    setAdjustmentTab(tab);
+    setShowAdjustmentPanel(true);
+    await loadVoucherRows(tab);
+  };
+
+  useEffect(() => {
+    const onKeyDown = (event) => {
+      if (!isOpen) return;
+      if (event.key === "F2") {
+        event.preventDefault();
+        openAdjustmentPanel("pending");
+      }
+      if (event.key === "F5") {
+        event.preventDefault();
+        openAdjustmentPanel("pending");
+      }
+    };
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  });
+
+  useEffect(() => {
+    setPendingVoucherRows([]);
+    setAllVoucherRows([]);
+  }, [formData.company_id, formData.entry_type]);
+
+  if (!isOpen) return null;
 
   const handleAdjustmentInput = (entryId, pendingAmount, value) => {
     const nextValue = Number(value || 0);
@@ -514,6 +596,25 @@ export default function CashEntryForm({
                           </option>
                         ))}
                       </select>
+                      <div style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 4, flexWrap: "wrap" }}>
+                        <button
+                          type="button"
+                          onClick={() => openAdjustmentPanel("pending")}
+                          style={{ ...tabButtonStyle(false), borderRadius: 4, padding: "4px 8px" }}
+                        >
+                          F2 Outstanding
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => openAdjustmentPanel("pending")}
+                          style={{ ...tabButtonStyle(false), borderRadius: 4, padding: "4px 8px" }}
+                        >
+                          F5 Adjustment
+                        </button>
+                        <span style={{ fontSize: 11, color: "#475569", fontWeight: 700 }}>
+                          Outstanding: {totalOutstanding.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                        </span>
+                      </div>
                     </div>
                     <div>
                       <label style={labelStyle}>Type</label>
@@ -846,6 +947,121 @@ export default function CashEntryForm({
           </div>
         </form>
       </div>
+      {showAdjustmentPanel ? (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(15,23,42,0.35)",
+            zIndex: 10000,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 20,
+          }}
+          onClick={() => setShowAdjustmentPanel(false)}
+        >
+          <div
+            style={{
+              width: "min(1050px, 96vw)",
+              maxHeight: "82vh",
+              overflow: "hidden",
+              background: "#fff",
+              borderRadius: 8,
+              border: "1px solid #cbd5e1",
+              boxShadow: "0 20px 55px rgba(15,23,42,0.25)",
+            }}
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div style={{ ...topBarStyle, alignItems: "center" }}>
+              <div>
+                <div style={{ fontSize: 18, fontWeight: 800, color: "#0f172a" }}>Party Adjustment</div>
+                <div style={{ fontSize: 12, color: "#475569", marginTop: 2 }}>
+                  Pending: {totalOutstanding.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} | Selected: {totalAdjusted.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })} | Not Allocated: {unallocatedAmount.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <button type="button" onClick={() => openAdjustmentPanel("pending")} style={tabButtonStyle(adjustmentTab === "pending")}>Pending</button>
+                <button type="button" onClick={() => openAdjustmentPanel("all")} style={tabButtonStyle(adjustmentTab === "all")}>All Voucher</button>
+                <button type="button" onClick={() => setShowAdjustmentPanel(false)} style={cancelButtonStyle}>Close</button>
+              </div>
+            </div>
+            <div style={{ maxHeight: "66vh", overflow: "auto", padding: 10 }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                <thead>
+                  <tr style={{ background: "#eef2f7", color: "#334155" }}>
+                    <th style={{ textAlign: "left", padding: "7px 8px" }}>Voucher</th>
+                    <th style={{ textAlign: "left", padding: "7px 8px" }}>Type</th>
+                    <th style={{ textAlign: "left", padding: "7px 8px" }}>Date</th>
+                    <th style={{ textAlign: "left", padding: "7px 8px" }}>Description</th>
+                    <th style={{ textAlign: "right", padding: "7px 8px" }}>Amount</th>
+                    <th style={{ textAlign: "right", padding: "7px 8px" }}>Adjusted</th>
+                    <th style={{ textAlign: "right", padding: "7px 8px" }}>Pending</th>
+                    <th style={{ textAlign: "right", padding: "7px 8px" }}>Adjust Now</th>
+                    <th style={{ textAlign: "center", padding: "7px 8px" }}>Edit</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {!formData.company_id ? (
+                    <tr>
+                      <td colSpan={9} style={{ padding: 12, textAlign: "center", color: "#b45309", fontWeight: 700 }}>
+                        Please select Payor or Income party first.
+                      </td>
+                    </tr>
+                  ) : allVoucherLoading ? (
+                    <tr>
+                      <td colSpan={9} style={{ padding: 12, textAlign: "center", color: "#64748b" }}>Loading vouchers...</td>
+                    </tr>
+                  ) : displayRows.length > 0 ? (
+                    displayRows.map((row) => (
+                      <tr key={`adj-panel-${row.id}`} style={{ borderTop: "1px solid #e2e8f0" }}>
+                        <td style={{ padding: "7px 8px" }}>{row.voucher_no || `CE-${row.id}`}</td>
+                        <td style={{ padding: "7px 8px", textTransform: "capitalize" }}>{row.entry_type || "-"}</td>
+                        <td style={{ padding: "7px 8px" }}>{row.entry_date || "-"}</td>
+                        <td style={{ padding: "7px 8px", maxWidth: 260, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{row.description || "-"}</td>
+                        <td style={{ padding: "7px 8px", textAlign: "right" }}>{Number(row.amount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        <td style={{ padding: "7px 8px", textAlign: "right" }}>{Number(row.adjusted_total || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        <td style={{ padding: "7px 8px", textAlign: "right", fontWeight: 700 }}>{Number(row.pending_amount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        <td style={{ padding: "7px 8px", textAlign: "right" }}>
+                          <input
+                            type="number"
+                            min="0"
+                            step="0.01"
+                            disabled={Number(row.pending_amount || 0) <= 0 || String(row.entry_type) === String(formData.entry_type)}
+                            value={adjustments?.[row.id] || ""}
+                            onChange={(e) => handleAdjustmentInput(row.id, row.pending_amount, e.target.value)}
+                            style={{ width: 110, padding: "5px 6px", border: "1px solid #cbd5e1", borderRadius: 4, textAlign: "right" }}
+                          />
+                        </td>
+                        <td style={{ padding: "7px 8px", textAlign: "center" }}>
+                          {onEditVoucher ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setShowAdjustmentPanel(false);
+                                onEditVoucher(row);
+                              }}
+                              style={{ ...tabButtonStyle(false), borderRadius: 4, padding: "4px 8px" }}
+                            >
+                              Edit
+                            </button>
+                          ) : "-"}
+                        </td>
+                      </tr>
+                    ))
+                  ) : (
+                    <tr>
+                      <td colSpan={9} style={{ padding: 12, color: "#64748b", textAlign: "center" }}>
+                        No voucher found.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </ModalWrapper>
   );
 }
