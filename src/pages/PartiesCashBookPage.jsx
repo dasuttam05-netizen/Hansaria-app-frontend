@@ -69,7 +69,17 @@ const getSignedOpening = (row) => {
 };
 const isPartyLedgerEntry = (entry) => {
   const source = String(entry?.fund_source || "main_cash");
-  return source === "party_cash" || (!!entry?.company_id && source !== "employee_cash");
+  return source === "party_cash" || !!entry?.company_id;
+};
+const getDescriptionDetails = (entry) =>
+  [entry.description || "-", entry.adjustment_details ? `Adjustment: ${entry.adjustment_details}` : ""]
+    .filter(Boolean)
+    .join(" | ");
+const matchesCompanyFilter = (entry, companyId, companies = []) => {
+  if (!companyId) return true;
+  if (String(entry.company_id || "") === String(companyId)) return true;
+  const selectedCompany = companies.find((company) => String(getRecordId(company)) === String(companyId));
+  return !!selectedCompany && getCompanyLabel(selectedCompany) === entry.company_name;
 };
 const isActiveLedgerStatus = (entry) =>
   String(entry?.status || "posted").toLowerCase() !== "cancelled" &&
@@ -152,7 +162,7 @@ const PartiesCashBookPage = () => {
       .filter(isPartyLedgerEntry)
       .filter((e) => (showDeleted ? String(e.status || "").toLowerCase() === "cancelled" : isActiveLedgerStatus(e)))
       .filter((e) => !appliedFilters.warehouse_id || String(e.warehouse_id || "") === String(appliedFilters.warehouse_id))
-      .filter((e) => !appliedFilters.company_id || String(e.company_id || "") === String(appliedFilters.company_id))
+      .filter((e) => matchesCompanyFilter(e, appliedFilters.company_id, companies))
       .filter((e) => {
         const d = e.entry_date ? new Date(e.entry_date) : null;
         if (appliedFilters.start_date && d && d < new Date(appliedFilters.start_date)) return false;
@@ -160,7 +170,7 @@ const PartiesCashBookPage = () => {
         return true;
       })
       .sort((a, b) => new Date(a.entry_date) - new Date(b.entry_date));
-  }, [entries, appliedFilters, showDeleted]);
+  }, [entries, appliedFilters, showDeleted, companies]);
 
   const openingBalance = useMemo(() => {
     const selectedCompanyEntry = entries.find(
@@ -182,7 +192,7 @@ const PartiesCashBookPage = () => {
       .filter(isPartyLedgerEntry)
       .filter(isActiveLedgerStatus)
       .filter((e) => !appliedFilters.warehouse_id || String(e.warehouse_id || "") === String(appliedFilters.warehouse_id))
-      .filter((e) => !appliedFilters.company_id || String(e.company_id || "") === String(appliedFilters.company_id))
+      .filter((e) => matchesCompanyFilter(e, appliedFilters.company_id, companies))
       .filter((e) => {
         const d = e.entry_date ? new Date(e.entry_date) : null;
         return d && d < from;
@@ -199,7 +209,7 @@ const PartiesCashBookPage = () => {
       `Warehouse: ${entry.warehouse_name || "-"}`,
       `Employee: ${entry.employee_name || "-"}`,
       `Party: ${entry.company_name || "-"}`,
-      `Description: ${entry.description || "-"}`,
+      `Description: ${getDescriptionDetails(entry)}`,
       `Ref No: ${entry.reference_no || "-"}`,
       `Payment Mode: ${entry.payment_method || "-"}`,
       `Amount: ${Number(entry.amount || 0).toFixed(2)}`,
@@ -434,7 +444,7 @@ const PartiesCashBookPage = () => {
         entry.warehouse_name || "-",
         entry.employee_name || "-",
         entry.company_name || "-",
-        entry.description || "-",
+        getDescriptionDetails(entry),
         entry.reference_no || "-",
         entry.payment_method || "-",
         entry.dr ? Number(entry.dr).toFixed(2) : "-",
@@ -601,7 +611,7 @@ const PartiesCashBookPage = () => {
                       <td style={td}>{entry.warehouse_name || "-"}</td>
                       <td style={td}>{entry.employee_name || "-"}</td>
                       <td style={td}>{entry.company_name || "-"}</td>
-                      <td style={td}>{entry.description || "-"}</td>
+                      <td style={td}>{getDescriptionDetails(entry)}</td>
                       <td style={td}>{entry.reference_no || "-"}</td>
                       <td style={td}>{entry.payment_method || "-"}</td>
                       <td style={{ ...td, textAlign: "right" }}>{entry.dr ? `Rs. ${Number(entry.dr).toFixed(2)}` : "-"}</td>
