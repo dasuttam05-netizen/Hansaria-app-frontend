@@ -295,6 +295,7 @@ const PartiesCashBookPage = () => {
 
       setEditingId(detail.id);
       setFormData({
+        id: detail.id,
         entry_date: String(detail.entry_date || "").split("T")[0],
         transaction_mode: detail.transaction_mode || "receipt",
         entry_type: detail.entry_type || "expense",
@@ -613,6 +614,7 @@ const PartiesCashBookPage = () => {
         agingRows={agingRows}
         adjustments={adjustments}
         onAdjustmentChange={setAdjustments}
+        onEditVoucher={handleEdit}
         loading={formLoading}
       />
     </div>
