@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
+import { FaEye, FaFileExport, FaLock, FaPencilAlt, FaPlus, FaShieldAlt, FaTrash } from "react-icons/fa";
 import MultiSelectDropdown from "../components/MultiSelectDropdown";
 import { hasPermission, loadSession } from "../utils/auth";
 
@@ -107,6 +108,28 @@ const PERMISSION_GROUPS = [
 
 const ALL_PERMISSION_ITEMS = PERMISSION_GROUPS.flatMap((group) => group.items);
 const ACTIONS = ["view", "create", "edit", "delete"];
+const ACTION_META = {
+  access: { icon: FaShieldAlt, label: "Access" },
+  all: { icon: FaShieldAlt, label: "All" },
+  view: { icon: FaEye, label: "View" },
+  create: { icon: FaPlus, label: "Add" },
+  edit: { icon: FaPencilAlt, label: "Edit" },
+  delete: { icon: FaTrash, label: "Delete" },
+  manage: { icon: FaShieldAlt, label: "Manage" },
+  export: { icon: FaFileExport, label: "Export" },
+};
+
+const actionKindFromOption = (option = {}) => {
+  const key = String(option.id || "").split(":").pop();
+  const label = String(option.label || "").toLowerCase();
+  if (label.includes("all")) return "all";
+  if (label.includes("create") || label.includes("add")) return "create";
+  if (label.includes("edit") || label.includes("manage")) return label.includes("manage") ? "manage" : "edit";
+  if (label.includes("delete")) return "delete";
+  if (label.includes("export")) return "export";
+  if (label.includes("view")) return "view";
+  return ACTION_META[key] ? key : "access";
+};
 
 const getActionOptions = (groupKey, item) => {
   if (item.allAccess) {
@@ -162,7 +185,24 @@ const getActionOptions = (groupKey, item) => {
     if (item.key === "employees_non_admin_edit") {
       return [{ id: `${item.key}:edit`, label: "Edit", permission: item.permissions[0] || null }];
     }
-    return [{ id: `${item.key}:view`, label: "View", permission: item.permissions[0] || null }];
+    const basePermission = item.permissions[0] || null;
+    const baseName = basePermission ? basePermission.replace(/\.manage$|\.view$/g, "") : item.key;
+    return ACTIONS.map((action) => ({
+      id: `${item.key}:${action}`,
+      label: action[0].toUpperCase() + action.slice(1),
+      permissions: [`${baseName}.${action}`, basePermission].filter(Boolean),
+    }));
+  }
+  if (groupKey === "reports") {
+    const basePermission = item.permissions[0] || null;
+    return [
+      ...ACTIONS.map((action) => ({
+        id: `${item.key}:${action}`,
+        label: action[0].toUpperCase() + action.slice(1),
+        permissions: [`${basePermission}.${action}`, basePermission].filter(Boolean),
+      })),
+      { id: `${item.key}:export`, label: "Export", permissions: [`${basePermission}.export`, basePermission].filter(Boolean) },
+    ];
   }
   return [{ id: item.key, label: item.label, permission: item.permissions[0] || null }];
 };
@@ -317,6 +357,7 @@ export default function EmployeeManagementPage() {
   const [editRoleId, setEditRoleId] = useState(null);
   const [isSubmittingEmployee, setIsSubmittingEmployee] = useState(false);
   const [isSubmittingRole, setIsSubmittingRole] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const fetchEmployees = async () => {
   const res = await axios.get("/api/employees");
@@ -393,10 +434,19 @@ export default function EmployeeManagementPage() {
     return selected.length ? `${countEnabledToggles(employeeToggles)} access selected` : "No access selected";
   }, [employeeToggles]);
 
+  const mergeSelectedOptions = (options, selectedIds, fallbackLabel) => {
+    const existing = new Set((options || []).map((item) => String(item.value)));
+    const fallbackOptions = normalizeIdArray(selectedIds)
+      .filter((id) => !existing.has(String(id)))
+      .map((id) => ({ value: String(id), label: `${fallbackLabel} ${id}` }));
+    return [...fallbackOptions, ...(options || [])];
+  };
+
   const resetEmployeeForm = () => {
     setFormData(createDefaultFormData());
     setEmployeeToggles(togglesFromPermissions(["dashboard.view"]));
     setEditId(null);
+    setShowPassword(false);
     setShowEmployeeForm(false);
   };
 
@@ -429,6 +479,24 @@ export default function EmployeeManagementPage() {
   const handleRoleToggle = (key) => {
     setRoleForm((prev) => ({ ...prev, toggles: { ...prev.toggles, [key]: !prev.toggles[key] } }));
   };
+
+  const allToggleMap = () =>
+    ALL_ACTION_OPTIONS.reduce((acc, option) => {
+      acc[option.id] = true;
+      return acc;
+    }, {});
+
+  const viewOnlyToggleMap = () =>
+    ALL_ACTION_OPTIONS.reduce((acc, option) => {
+      acc[option.id] = ["view", "access"].includes(actionKindFromOption(option));
+      return acc;
+    }, {});
+
+  const clearToggleMap = () =>
+    ALL_ACTION_OPTIONS.reduce((acc, option) => {
+      acc[option.id] = false;
+      return acc;
+    }, {});
 
   const setAllLocations = () => {
     setFormData((prev) => ({
@@ -494,7 +562,7 @@ export default function EmployeeManagementPage() {
 
     // Keep ObjectId strings
     assigned_warehouse_ids:
-      formData.assigned_warehouse_ids || [],
+      normalizeIdArray(formData.assigned_warehouse_ids),
   };
 
   // Required field validation
@@ -586,7 +654,7 @@ export default function EmployeeManagementPage() {
     }
   };
 
-  const handleEditEmployee = (employee) => {
+  const handleEditEmployee = async (employee) => {
     const recordId = employeeRecordId(employee);
     if (!employee || recordId === "" || recordId == null) {
       alert("Invalid employee data. Cannot edit.");
@@ -594,20 +662,29 @@ export default function EmployeeManagementPage() {
       return;
     }
 
+    let detail = employee;
+    try {
+      const detailRes = await axios.get(`/api/employees/${recordId}`);
+      detail = normalizeData(detailRes.data) || employee;
+    } catch (err) {
+      console.error("Employee detail load failed:", err);
+      alert("Employee details refresh korte problem hoyeche, list data diye edit form khola holo.");
+    }
+
     const employeeIsAdmin =
-      String(employee?.role || "").toLowerCase() === "admin" ||
-      (Array.isArray(employee?.permissions) && employee.permissions.includes("all"));
+      String(detail?.role || "").toLowerCase() === "admin" ||
+      (Array.isArray(detail?.permissions) && detail.permissions.includes("all"));
     if (!isAdminUser && employeeIsAdmin) {
       alert("Only admin can edit admin account");
       return;
     }
 
-    const assignedWarehouseIds = employee.all_warehouse_access
+    const assignedWarehouseIds = detail.all_warehouse_access && allWarehouseIds.length
       ? allWarehouseIds
-      : collectEmployeeWarehouseIds(employee, warehouses);
-    const safeEditLocationIds = normalizeIdArray(employee.location_ids);
-    const fallbackLocationId = normalizeId(employee.location_id);
-    const finalEditLocationIds = employee.all_location_access
+      : collectEmployeeWarehouseIds(detail, warehouses);
+    const safeEditLocationIds = normalizeIdArray(detail.location_ids);
+    const fallbackLocationId = normalizeId(detail.location_id);
+    const finalEditLocationIds = detail.all_location_access && allLocationIds.length
       ? allLocationIds
       : safeEditLocationIds.length
       ? safeEditLocationIds
@@ -616,22 +693,22 @@ export default function EmployeeManagementPage() {
       : [];
 
     setFormData({
-      name: employee.name || "",
-      mobile: employee.mobile || "",
-      address: employee.address || "",
-      username: employee.username || "",
+      name: detail.name || "",
+      mobile: detail.mobile || "",
+      address: detail.address || "",
+      username: detail.username || "",
       password: "",
       location_id: fallbackLocationId,
       location_ids: finalEditLocationIds,
-      all_location_access: !!employee.all_location_access,
-      role: employee.role || "",
-      permissions: employee.permissions || [],
-      opening_balance: String(employee.opening_balance || 0),
-      opening_balance_type: employee.opening_balance_type || "dr",
+      all_location_access: !!detail.all_location_access,
+      role: detail.role || "",
+      permissions: detail.permissions || [],
+      opening_balance: String(detail.opening_balance || 0),
+      opening_balance_type: detail.opening_balance_type || "dr",
       assigned_warehouse_ids: assignedWarehouseIds,
-      all_warehouse_access: !!employee.all_warehouse_access,
+      all_warehouse_access: !!detail.all_warehouse_access,
     });
-    setEmployeeToggles(togglesFromPermissions(employee.permissions || []));
+    setEmployeeToggles(togglesFromPermissions(detail.permissions || []));
     setEditId(String(recordId));
     setShowEmployeeForm(true);
   };
@@ -652,6 +729,34 @@ export default function EmployeeManagementPage() {
       console.error("Delete error:", err);
       alert(err.response?.data?.error || "Failed to delete employee");
     }
+  };
+
+  const handleViewEmployee = (employee) => {
+    const assignedWarehouseIds = collectEmployeeWarehouseIds(employee, warehouses);
+    const employeeLocationIds = Array.isArray(employee.location_ids) && employee.location_ids.length
+      ? normalizeIdArray(employee.location_ids)
+      : employee.location_id
+      ? [normalizeId(employee.location_id)]
+      : [];
+    const assignedNames = assignedWarehouseIds
+      .map((warehouseId) => warehouses.find((item) => String(item._id || item.id) === String(warehouseId))?.name)
+      .filter(Boolean)
+      .join(", ");
+    const locationNames = employeeLocationIds
+      .map((id) => locations.find((item) => String(item._id || item.id) === String(id))?.name)
+      .filter(Boolean)
+      .join(", ");
+    alert(
+      [
+        `Name: ${employee.name || "-"}`,
+        `Mobile: ${employee.mobile || "-"}`,
+        `Username: ${employee.username || "-"}`,
+        `Role: ${employee.role || "Custom Role"}`,
+        `Location: ${employee.all_location_access ? "All Locations" : locationNames || "-"}`,
+        `Warehouse: ${employee.all_warehouse_access ? "All Warehouses" : assignedNames || "-"}`,
+        `Security: ${summarizeRoleAccess({ permissions: employee.permissions || [], is_admin: false })}`,
+      ].join("\n")
+    );
   };
 
   const handleEditRole = (role) => {
@@ -773,9 +878,18 @@ export default function EmployeeManagementPage() {
                   </td>
                   <td style={tdStyle}>{hasAllWarehouses ? "All Warehouses" : assignedNames || "-"}</td>
                   <td style={tdStyle}>
-                    {canEditThisEmployee ? <button type="button" onClick={() => handleEditEmployee(employee)} style={miniBlue}>Edit</button> : null}
+                    <button type="button" onClick={() => handleViewEmployee(employee)} style={iconButton("#0f766e")} title="View">
+                      <FaEye />
+                    </button>
+                    {canEditThisEmployee ? (
+                      <button type="button" onClick={() => handleEditEmployee(employee)} style={iconButton("#2563eb")} title="Edit">
+                        <FaPencilAlt />
+                      </button>
+                    ) : null}
                     {canDeleteEmployee && employeeRecordId(employee) ? (
-                      <button type="button" onClick={() => handleDeleteEmployee(String(employeeRecordId(employee)))} style={miniRed}>Delete</button>
+                      <button type="button" onClick={() => handleDeleteEmployee(String(employeeRecordId(employee)))} style={iconButton("#dc2626")} title="Delete">
+                        <FaTrash />
+                      </button>
                     ) : null}
                   </td>
                 </tr>
@@ -792,7 +906,39 @@ export default function EmployeeManagementPage() {
               <Field label="Name"><input name="name" value={formData.name} onChange={handleEmployeeChange} style={inputStyle} /></Field>
               <Field label="Mobile"><input name="mobile" value={formData.mobile} onChange={handleEmployeeChange} style={inputStyle} /></Field>
               <Field label="Username"><input name="username" value={formData.username} onChange={handleEmployeeChange} style={inputStyle} /></Field>
-              <Field label="Password"><input type="password" name="password" value={formData.password} onChange={handleEmployeeChange} style={inputStyle} /></Field>
+              <Field label="Password">
+                <div style={{ position: "relative" }}>
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    name="password"
+                    value={formData.password}
+                    onChange={handleEmployeeChange}
+                    placeholder={editId ? "Leave blank to keep current password" : "Password"}
+                    style={{ ...inputStyle, paddingLeft: editId ? 34 : inputStyle.padding, paddingRight: 42 }}
+                  />
+                  {editId ? <FaLock style={{ position: "absolute", left: 12, top: 12, color: "#64748b", fontSize: 13 }} /> : null}
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((prev) => !prev)}
+                    title={showPassword ? "Hide password" : "Show password"}
+                    style={{
+                      position: "absolute",
+                      right: 8,
+                      top: 7,
+                      width: 30,
+                      height: 30,
+                      border: "none",
+                      borderRadius: 8,
+                      background: "#e2e8f0",
+                      color: "#334155",
+                      cursor: "pointer",
+                    }}
+                  >
+                    <FaEye />
+                  </button>
+                </div>
+                {editId ? <div style={{ marginTop: 5, fontSize: 11, color: "#64748b", fontWeight: 700 }}>Current password is preserved unless you type a new one.</div> : null}
+              </Field>
               <Field label="Role">
                 <select
                   name="role"
@@ -817,7 +963,7 @@ export default function EmployeeManagementPage() {
                 </div>
                 <MultiSelectDropdown
                   label="Location"
-                  options={locationOptions}
+                  options={mergeSelectedOptions(locationOptions, formData.location_ids, "Saved Location")}
                   value={formData.location_ids}
                   onChange={(next) =>
                     setFormData((prev) => ({
@@ -855,7 +1001,7 @@ export default function EmployeeManagementPage() {
                 </div>
                 <MultiSelectDropdown
                   label="Assigned Warehouses"
-                  options={warehouseOptions}
+                  options={mergeSelectedOptions(warehouseOptions, formData.assigned_warehouse_ids, "Saved Warehouse")}
                   value={formData.assigned_warehouse_ids}
                   onChange={(next) =>
                     setFormData((prev) => ({
@@ -876,7 +1022,12 @@ export default function EmployeeManagementPage() {
                   <div style={{ fontWeight: 800, marginBottom: 4 }}>Access Control</div>
                   <div style={{ color: "#64748b", fontSize: 13 }}>Tick only the modules this employee can use.</div>
                 </div>
-                <span style={accessCountBadge}>{permissionSummary}</span>
+                <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                  <button type="button" onClick={() => setEmployeeToggles(allToggleMap())} style={miniGreen} disabled={!isAdminUser}>Full Access</button>
+                  <button type="button" onClick={() => setEmployeeToggles(viewOnlyToggleMap())} style={miniSlate} disabled={!isAdminUser}>View Only</button>
+                  <button type="button" onClick={() => setEmployeeToggles(clearToggleMap())} style={miniRedSoft} disabled={!isAdminUser}>Clear</button>
+                  <span style={accessCountBadge}>{permissionSummary}</span>
+                </div>
               </div>
               <div style={groupGrid}>
                 {PERMISSION_GROUPS.map((group) => (
@@ -887,15 +1038,13 @@ export default function EmployeeManagementPage() {
                         <div style={checkLabel}>{item.label}</div>
                         <div style={actionRowWrap}>
                               {getActionOptions(group.key, item).map((option) => (
-                                <label key={option.id} style={checkRow}>
-                                  <input
-                                    type="checkbox"
-                                    checked={!!employeeToggles[option.id]}
-                                    onChange={() => handleEmployeeToggle(option.id)}
-                                    disabled={!isAdminUser}
-                                  />
-                                  <span>{option.label}</span>
-                                </label>
+                                <PermissionToggle
+                                  key={option.id}
+                                  option={option}
+                                  checked={!!employeeToggles[option.id]}
+                                  onChange={() => handleEmployeeToggle(option.id)}
+                                  disabled={!isAdminUser}
+                                />
                               ))}
                         </div>
                       </div>
@@ -936,8 +1085,8 @@ export default function EmployeeManagementPage() {
                     <td style={tdStyle}>{role.is_admin ? "Administrator" : "Limited Role"}</td>
                     <td style={tdStyle}>{summarizeRoleAccess(role)}</td>
                     <td style={tdStyle}>
-                      <button type="button" onClick={() => handleEditRole(role)} style={miniBlue}>Edit</button>
-                      {role.id ? <button type="button" onClick={() => handleDeleteRole(role.id)} style={miniRed}>Delete</button> : null}
+                      <button type="button" onClick={() => handleEditRole(role)} style={iconButton("#2563eb")} title="Edit Role"><FaPencilAlt /></button>
+                      {role.id ? <button type="button" onClick={() => handleDeleteRole(role.id)} style={iconButton("#dc2626")} title="Delete Role"><FaTrash /></button> : null}
                     </td>
                   </tr>
                 ))}
@@ -956,6 +1105,12 @@ export default function EmployeeManagementPage() {
                   </label>
                 </div>
                 {!roleForm.is_admin ? (
+                  <>
+                  <div style={{ ...accessToolbar, marginBottom: 12 }}>
+                    <button type="button" onClick={() => setRoleForm((prev) => ({ ...prev, toggles: allToggleMap() }))} style={miniGreen}>Full Access</button>
+                    <button type="button" onClick={() => setRoleForm((prev) => ({ ...prev, toggles: viewOnlyToggleMap() }))} style={miniSlate}>View Only</button>
+                    <button type="button" onClick={() => setRoleForm((prev) => ({ ...prev, toggles: clearToggleMap() }))} style={miniRedSoft}>Clear</button>
+                  </div>
                   <div style={groupGrid}>
                     {PERMISSION_GROUPS.map((group) => (
                       <div key={group.key} style={groupCard}>
@@ -965,10 +1120,12 @@ export default function EmployeeManagementPage() {
                             <div style={checkLabel}>{item.label}</div>
                             <div style={actionRowWrap}>
                               {getActionOptions(group.key, item).map((option) => (
-                                <label key={option.id} style={checkRow}>
-                                  <input type="checkbox" checked={!!roleForm.toggles[option.id]} onChange={() => handleRoleToggle(option.id)} />
-                                  <span>{option.label}</span>
-                                </label>
+                                <PermissionToggle
+                                  key={option.id}
+                                  option={option}
+                                  checked={!!roleForm.toggles[option.id]}
+                                  onChange={() => handleRoleToggle(option.id)}
+                                />
                               ))}
                             </div>
                           </div>
@@ -976,6 +1133,7 @@ export default function EmployeeManagementPage() {
                       </div>
                     ))}
                   </div>
+                  </>
                 ) : null}
                 <div style={actionRow}>
                   <button type="submit" disabled={isSubmittingRole} style={{...primaryButton, opacity: isSubmittingRole ? 0.6 : 1, cursor: isSubmittingRole ? 'not-allowed' : 'pointer'}}>{isSubmittingRole ? 'Saving...' : 'Save Role'}</button>
@@ -1013,6 +1171,24 @@ function Field({ label, children }) {
   );
 }
 
+function PermissionToggle({ option, checked, onChange, disabled = false }) {
+  const kind = actionKindFromOption(option);
+  const meta = ACTION_META[kind] || ACTION_META.access;
+  const Icon = meta.icon;
+  return (
+    <button
+      type="button"
+      onClick={onChange}
+      disabled={disabled}
+      title={option.label}
+      style={permissionPill(checked, disabled, kind)}
+    >
+      <Icon style={{ fontSize: 12 }} />
+      <span>{meta.label}</span>
+    </button>
+  );
+}
+
 const pageStyle = { padding: 14, fontFamily: "Segoe UI, Arial, sans-serif" };
 const heroCard = { background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, padding: 18, marginBottom: 16, boxShadow: "0 10px 24px rgba(15,23,42,0.08)", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" };
 const tableCardStyle = { background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, overflowX: "auto", boxShadow: "0 10px 24px rgba(15,23,42,0.08)" };
@@ -1038,6 +1214,7 @@ const miniBlue = { border: "none", background: "#2563eb", color: "#fff", borderR
 const miniRed = { border: "none", background: "#dc2626", color: "#fff", borderRadius: 8, padding: "6px 10px", cursor: "pointer" };
 const miniGreen = { border: "none", background: "#0f766e", color: "#fff", borderRadius: 8, padding: "7px 11px", cursor: "pointer", fontWeight: 700 };
 const miniSlate = { border: "none", background: "#475569", color: "#fff", borderRadius: 8, padding: "7px 11px", cursor: "pointer", fontWeight: 700 };
+const miniRedSoft = { border: "none", background: "#fee2e2", color: "#991b1b", borderRadius: 8, padding: "7px 11px", cursor: "pointer", fontWeight: 800 };
 const inlineCardWrap = { marginTop: 16 };
 const modalCard = { width: "100%", maxWidth: 1180, overflowY: "auto", background: "#f8fafc", borderRadius: 18, padding: 20, boxShadow: "0 10px 24px rgba(15,23,42,0.08)", border: "1px solid #e2e8f0" };
 const formGrid = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16 };
@@ -1055,3 +1232,44 @@ const checkBlock = { padding: "4px 0 8px" };
 const checkLabel = { fontWeight: 700, color: "#0f172a", marginBottom: 4 };
 const actionRowWrap = { display: "flex", gap: 10, flexWrap: "wrap" };
 const actionRow = { display: "flex", justifyContent: "flex-end", gap: 12, marginTop: 16, flexWrap: "wrap" };
+const iconButton = (background) => ({
+  width: 32,
+  height: 32,
+  border: "none",
+  borderRadius: 8,
+  background,
+  color: "#fff",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  cursor: "pointer",
+  marginRight: 8,
+});
+const permissionColors = {
+  view: ["#eff6ff", "#1d4ed8", "#bfdbfe"],
+  create: ["#ecfdf5", "#047857", "#a7f3d0"],
+  edit: ["#fff7ed", "#b45309", "#fed7aa"],
+  delete: ["#fef2f2", "#b91c1c", "#fecaca"],
+  export: ["#f0fdfa", "#0f766e", "#99f6e4"],
+  manage: ["#f8fafc", "#334155", "#cbd5e1"],
+  access: ["#f8fafc", "#334155", "#cbd5e1"],
+  all: ["#f5f3ff", "#6d28d9", "#ddd6fe"],
+};
+const permissionPill = (checked, disabled, kind = "access") => {
+  const [bg, color, border] = permissionColors[kind] || permissionColors.access;
+  return {
+    display: "inline-flex",
+    alignItems: "center",
+    gap: 6,
+    minHeight: 28,
+    border: `1px solid ${checked ? color : border}`,
+    borderRadius: 8,
+    background: checked ? bg : "#fff",
+    color: checked ? color : "#475569",
+    padding: "5px 8px",
+    fontSize: 12,
+    fontWeight: 800,
+    cursor: disabled ? "not-allowed" : "pointer",
+    opacity: disabled ? 0.55 : 1,
+  };
+};
