@@ -38,6 +38,7 @@ import FarmerManagementPage from "./pages/FarmerManagementPage";
 import WarehouseTradingPage from "./pages/WarehouseTradingPage";
 import ExpensesPendingPage from "./pages/ExpensesPendingPage";
 import CashActivityLogPage from "./pages/CashActivityLogPage";
+import "./mobile.css";
 
 import ProtectedRoute from "./components/ProtectedRoute";
 import { loadSession } from "./utils/auth";
