@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Hansaria app icon">
+  <rect width="512" height="512" rx="96" fill="#0f766e"/>
+  <path fill="#f8fafc" d="M116 154c0-22 18-40 40-40h200c22 0 40 18 40 40v204c0 22-18 40-40 40H156c-22 0-40-18-40-40V154zm56 14v76h64v-76h-64zm104 0v76h64v-76h-64zm-104 116v60h168v-60H172z"/>
+  <path fill="#99f6e4" d="M142 102h228c16 0 30 13 30 30v20H112v-20c0-17 13-30 30-30z"/>
+</svg>
