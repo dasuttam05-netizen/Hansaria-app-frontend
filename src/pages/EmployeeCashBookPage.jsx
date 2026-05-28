@@ -255,27 +255,35 @@ const EmployeeCashBookPage = () => {
     return [wh ? `Warehouse: ${wh.label}` : null, em ? `Employee: ${em.label}` : null].filter(Boolean).join(" | ") || "All Employees";
   }, [appliedFilters, warehouseOptions, employeeOptions]);
 
-  const handleEdit = (entry) => {
-    setEditingId(entry.id);
+  const handleEdit = async (entry) => {
+    let detail = entry;
+    try {
+      const detailRes = await axios.get(`${API_BASE}/cash-entries/${entry.id}`);
+      detail = detailRes?.data || entry;
+    } catch (err) {
+      console.error("Entry detail load failed:", err);
+    }
+    setEditingId(detail.id);
     setFormData({
-      entry_date: String(entry.entry_date || "").split("T")[0],
-      transaction_mode: entry.transaction_mode || "receipt",
-      entry_type: entry.entry_type || "expense",
-      warehouse_id: entry.warehouse_id ? String(entry.warehouse_id) : "",
-      company_id: entry.company_id ? String(entry.company_id) : "",
-      company_account_id: entry.company_account_id ? String(entry.company_account_id) : "",
-      employee_id: entry.employee_id ? String(entry.employee_id) : "",
-      description: entry.description || "",
-      amount: entry.amount || "",
-      payment_method: entry.payment_method || "Cash",
-      fund_source: entry.fund_source || "employee_cash",
-      reference_no: entry.reference_no || "",
-      narration: entry.narration || "",
-      status: entry.status || "posted",
+      id: detail.id,
+      entry_date: String(detail.entry_date || "").split("T")[0],
+      transaction_mode: detail.transaction_mode || "receipt",
+      entry_type: detail.entry_type || "expense",
+      warehouse_id: detail.warehouse_id ? String(detail.warehouse_id) : "",
+      company_id: detail.company_id ? String(detail.company_id) : "",
+      company_account_id: detail.company_account_id ? String(detail.company_account_id) : "",
+      employee_id: detail.employee_id ? String(detail.employee_id) : "",
+      description: detail.description || "",
+      amount: detail.amount || "",
+      payment_method: detail.payment_method || "Cash",
+      fund_source: detail.fund_source || "employee_cash",
+      reference_no: detail.reference_no || "",
+      narration: detail.narration || "",
+      status: detail.status || "posted",
     });
     setShowForm(true);
-    const existingAdjustments = Array.isArray(entry.adjustments)
-      ? entry.adjustments.reduce((acc, item) => {
+    const existingAdjustments = Array.isArray(detail.adjustments)
+      ? detail.adjustments.reduce((acc, item) => {
           const targetId = Number(item?.target_entry_id);
           const amount = Number(item?.adjusted_amount || 0);
           if (targetId > 0 && amount > 0) acc[targetId] = amount;
@@ -569,6 +577,7 @@ const EmployeeCashBookPage = () => {
         agingRows={agingRows}
         adjustments={adjustments}
         onAdjustmentChange={setAdjustments}
+        onEditVoucher={handleEdit}
         loading={formLoading}
       />
     </div>
