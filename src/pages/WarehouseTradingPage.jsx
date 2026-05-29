@@ -124,6 +124,7 @@ export default function WarehouseTradingPage() {
   const [list, setList] = useState([]);
   const [reportData, setReportData] = useState([]);
   const [warehouseStockReport, setWarehouseStockReport] = useState([]);
+  const [availableSaleStock, setAvailableSaleStock] = useState(null);
   const [reportFilters, setReportFilters] = useState({ farmer_id: "", company_account_id: "", sale_buyer_id: "", sale_company_account_id: "" });
   const [selectedLedgerBillId, setSelectedLedgerBillId] = useState("");
   const [partyOutstanding, setPartyOutstanding] = useState(null);
@@ -295,7 +296,11 @@ export default function WarehouseTradingPage() {
     String(item.warehouse_id || "") === String(formData.warehouse_id || "") &&
     String(item.product_id || "") === String(formData.product_id || "")
   );
-  const selectedWarehouseBalanceQty = selectedWarehouseStockRow ? toNumber(selectedWarehouseStockRow.stock_qty) : null;
+  const selectedWarehouseBalanceQty = availableSaleStock !== null
+    ? toNumber(availableSaleStock)
+    : selectedWarehouseStockRow
+      ? toNumber(selectedWarehouseStockRow.stock_qty)
+      : null;
   const saleNetReceivablePreview =
     saleGrossAmountFromData(formData) -
     toNumber(formData.claim_amount) -
@@ -442,6 +447,33 @@ export default function WarehouseTradingPage() {
     window.addEventListener("keydown", handleF5SaleKey);
     return () => window.removeEventListener("keydown", handleF5SaleKey);
   }, [activeTab, activeVoucherType]);
+
+  useEffect(() => {
+    if (activeTab !== "vouchers" || activeVoucherType !== "sale" || !formData.warehouse_id || !formData.product_id) {
+      setAvailableSaleStock(null);
+      return;
+    }
+
+    let cancelled = false;
+    axios
+      .get("/api/wh-vouchers/available-sale-stock", {
+        params: {
+          warehouse_id: formData.warehouse_id,
+          product_id: formData.product_id,
+          exclude_sale_id: editId || undefined,
+        },
+      })
+      .then((res) => {
+        if (!cancelled) setAvailableSaleStock(res.data?.stock_qty ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setAvailableSaleStock(null);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeTab, activeVoucherType, formData.warehouse_id, formData.product_id, editId]);
 
   const loadData = async () => {
     try {
