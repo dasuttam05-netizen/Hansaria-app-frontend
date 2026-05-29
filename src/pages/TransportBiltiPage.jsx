@@ -213,7 +213,6 @@ export default function TransportBiltiPage() {
 
       const sourceDate =
         row.outward_entry_date ||
-        row.sale_unloading_date ||
         row.sale_entry_date ||
         row.outward_date;
       const sourceQty =
@@ -222,7 +221,7 @@ export default function TransportBiltiPage() {
         row.sale_unloading_qty ||
         row.sale_quantity;
       const sourceRate = row.outward_master_rate || row.sale_master_rate;
-      const dispatchDate = row.dispatch_date || sourceDate || "";
+      const dispatchDate = row.dispatch_date || row.sale_unloading_date || sourceDate || "";
 
       setFormData({
         id: row.id || "",
