@@ -75,6 +75,8 @@ export default function DashboardPage() {
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
   const [openTopbarMenu, setOpenTopbarMenu] = useState(null);
   const [activeStockTab, setActiveStockTab] = useState("warehouse_stock");
+  const [stockReportQuery, setStockReportQuery] = useState("");
+  const [stockReportWarehouse, setStockReportWarehouse] = useState("all");
 
   const [showListPopup, setShowListPopup] = useState({
     show: false,
@@ -672,8 +674,56 @@ export default function DashboardPage() {
     return (item || "").toString().toLowerCase().includes(searchText.toLowerCase());
   });
 
+  const stockReportNeedle = stockReportQuery.trim().toLowerCase();
+  const matchesStockSearch = (...values) =>
+    !stockReportNeedle ||
+    values
+      .filter((value) => value !== null && value !== undefined)
+      .join(" ")
+      .toLowerCase()
+      .includes(stockReportNeedle);
+  const matchesStockWarehouse = (warehouseName) =>
+    stockReportWarehouse === "all" || String(warehouseName || "") === stockReportWarehouse;
+
+  const stockWarehouseOptions = Array.from(
+    new Set(
+      [
+        ...warehouseStock.map((row) => row.warehouse),
+        ...partyStock.map((row) => row.warehouse_name),
+        ...monthEndRentSummary.map((row) => row.warehouse_name),
+      ]
+        .map((value) => String(value || "").trim())
+        .filter(Boolean)
+    )
+  ).sort((a, b) => a.localeCompare(b));
+
+  const filteredWarehouseStock = warehouseStock.filter(
+    (row) => matchesStockWarehouse(row.warehouse) && matchesStockSearch(row.warehouse, row.stock)
+  );
+
+  const filteredCompanyStock = partyStock.filter((row) => {
+    const partyName = row.party_name || row.party;
+    const warehouseName = row.warehouse_name;
+    return (
+      matchesStockWarehouse(warehouseName) &&
+      matchesStockSearch(
+        partyName,
+        warehouseName,
+        row.gross_qty,
+        row.available_balance_qty
+      )
+    );
+  });
+
+  const filteredMonthEndRentSummary = monthEndRentSummary.filter((row) => {
+    return (
+      matchesStockWarehouse(row.warehouse_name) &&
+      matchesStockSearch(row.party_name, row.warehouse_name, row.total_rent, row.total_entries)
+    );
+  });
+
   const warehouseWiseRent = Object.values(
-    monthEndRentSummary.reduce((acc, row) => {
+    filteredMonthEndRentSummary.reduce((acc, row) => {
       const key = row.warehouse_name || "Unknown";
       if (!acc[key]) {
         acc[key] = {
@@ -689,7 +739,7 @@ export default function DashboardPage() {
   ).sort((a, b) => b.total_rent - a.total_rent);
 
   const partyWiseRent = Object.values(
-    monthEndRentSummary.reduce((acc, row) => {
+    filteredMonthEndRentSummary.reduce((acc, row) => {
       const key = row.party_name || "Unknown";
       if (!acc[key]) {
         acc[key] = {
@@ -704,7 +754,7 @@ export default function DashboardPage() {
     }, {})
   ).sort((a, b) => b.total_rent - a.total_rent);
 
-  const totalWarehouseStock = warehouseStock.reduce(
+  const totalWarehouseStock = filteredWarehouseStock.reduce(
     (sum, row) => sum + Number(row.stock || 0),
     0
   );
@@ -717,7 +767,7 @@ export default function DashboardPage() {
     (sum, row) => sum + Number(row.total_rent || 0),
     0
   );
-  const totalRentCollected = monthEndRentSummary.reduce(
+  const totalRentCollected = filteredMonthEndRentSummary.reduce(
     (sum, row) => sum + Number(row.total_rent || 0),
     0
   );
@@ -807,7 +857,7 @@ export default function DashboardPage() {
   ];
 
   const partyStockSummary = Object.values(
-    partyStock.reduce((acc, row) => {
+    filteredCompanyStock.reduce((acc, row) => {
       const key = row.party_name || row.party || "Unknown";
       if (!acc[key]) {
         acc[key] = {
@@ -1107,11 +1157,51 @@ export default function DashboardPage() {
                 </div>
                 <div className="report-highlight-card">
                   <span>Total Current Rent</span>
-                  <strong>{Number(totalWarehouseRent + totalPartyRent).toFixed(2)}</strong>
+                  <strong>{Number(totalRentCollected).toFixed(2)}</strong>
                 </div>
               </div>
 
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
+              <div className="stock-report-filter-panel">
+                <div className="stock-filter-field stock-filter-search">
+                  <span>Search</span>
+                  <input
+                    type="search"
+                    value={stockReportQuery}
+                    onChange={(event) => setStockReportQuery(event.target.value)}
+                    placeholder="Party, warehouse, amount..."
+                  />
+                </div>
+                <div className="stock-filter-field">
+                  <span>Warehouse</span>
+                  <select
+                    value={stockReportWarehouse}
+                    onChange={(event) => setStockReportWarehouse(event.target.value)}
+                  >
+                    <option value="all">All Warehouses</option>
+                    {stockWarehouseOptions.map((warehouseName) => (
+                      <option key={warehouseName} value={warehouseName}>
+                        {warehouseName}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="stock-filter-summary">
+                  <span>{filteredWarehouseStock.length} stock rows</span>
+                  <span>{filteredMonthEndRentSummary.length} rent rows</span>
+                </div>
+                <button
+                  type="button"
+                  className="stock-filter-reset"
+                  onClick={() => {
+                    setStockReportQuery("");
+                    setStockReportWarehouse("all");
+                  }}
+                >
+                  Reset
+                </button>
+              </div>
+
+              <div className="stock-report-tab-row">
                 {[
                   { key: "warehouse_stock", label: "Warehouse Stock" },
                   { key: "party_stock", label: "Party Stock" },
@@ -1151,7 +1241,7 @@ export default function DashboardPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {warehouseStock.length > 0 ? warehouseStock.slice(0, 5).map((row, idx) => (
+                      {filteredWarehouseStock.length > 0 ? filteredWarehouseStock.slice(0, 8).map((row, idx) => (
                         <tr key={row.warehouse || idx}>
                           <td>{idx + 1}</td>
                           <td>{row.warehouse}</td>
@@ -1184,7 +1274,7 @@ export default function DashboardPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {partyStockSummary.length > 0 ? partyStockSummary.slice(0, 5).map((row, idx) => (
+                      {partyStockSummary.length > 0 ? partyStockSummary.slice(0, 8).map((row, idx) => (
                         <tr key={row.party_name || idx}>
                           <td>{idx + 1}</td>
                           <td>{row.party_name}</td>
@@ -1222,7 +1312,7 @@ export default function DashboardPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {partyStock.length > 0 ? partyStock.slice(0, 5).map((row, idx) => (
+                      {filteredCompanyStock.length > 0 ? filteredCompanyStock.slice(0, 8).map((row, idx) => (
                         <tr key={`${row.party_name || row.party}-${idx}`}>
                           <td>{idx + 1}</td>
                           <td>{row.party_name || row.party}</td>
@@ -1257,7 +1347,7 @@ export default function DashboardPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {warehouseWiseRent.length > 0 ? warehouseWiseRent.slice(0, 5).map((row, idx) => (
+                      {warehouseWiseRent.length > 0 ? warehouseWiseRent.slice(0, 8).map((row, idx) => (
                         <tr key={`${row.warehouse_name}-${idx}`}>
                           <td>{idx + 1}</td>
                           <td>{row.warehouse_name}</td>
@@ -1288,7 +1378,7 @@ export default function DashboardPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {partyWiseRent.length > 0 ? partyWiseRent.slice(0, 5).map((row, idx) => (
+                      {partyWiseRent.length > 0 ? partyWiseRent.slice(0, 8).map((row, idx) => (
                         <tr key={`${row.party_name}-${idx}`}>
                           <td>{idx + 1}</td>
                           <td>{row.party_name}</td>
