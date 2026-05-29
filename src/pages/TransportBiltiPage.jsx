@@ -189,6 +189,13 @@ export default function TransportBiltiPage() {
     setFormData(emptyForm);
   };
 
+  const clearSelection = () => {
+    setMeta(null);
+    setSelectedOutwardId("");
+    setSelectedSaleId("");
+    setFormData(emptyForm);
+  };
+
   const switchMode = (nextMode) => {
     setMode(nextMode);
     resetForm();
@@ -244,11 +251,11 @@ export default function TransportBiltiPage() {
 
       if (row.sale_id) {
         setMode("sale");
-        setSelectedSaleId(String(row.id || row.sale_id));
+        setSelectedSaleId(String(row.sale_id));
         setSelectedOutwardId("");
       } else if (row.outward_id) {
         setMode("outward");
-        setSelectedOutwardId(String(row.id || row.outward_id));
+        setSelectedOutwardId(String(row.outward_id));
         setSelectedSaleId("");
       } else {
         setMode("manual");
@@ -792,6 +799,23 @@ const downloadPDF = () => {
             style={{ ...input, marginBottom: 10 }}
             placeholder="Search by voucher, lorry no, party, warehouse"
           />
+          {selectedOutwardId && (
+            <div style={{ position: "relative", marginBottom: 14, padding: 12, borderRadius: 12, border: "1px solid #fecaca", background: "#fef2f2" }}>
+              <button
+                type="button"
+                onClick={clearSelection}
+                style={{ position: "absolute", top: 10, right: 10, border: "none", background: "transparent", color: "#dc2626", fontSize: 18, cursor: "pointer", lineHeight: 1 }}
+              >
+                ×
+              </button>
+              <div style={{ fontWeight: 700, color: "#991b1b", marginBottom: 6 }}>
+                Selected Outward: {formData.voucher_no || "-"}
+              </div>
+              <div style={{ color: "#475569", fontSize: 13 }}>
+                {formData.warehouse_name || "-"} • {formData.buyer_name || "-"} • {formData.lorry_no || "-"}
+              </div>
+            </div>
+          )}
           <div style={{ overflowX: "auto", border: "1px solid #e2e8f0", borderRadius: 8 }}>
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 860 }}>
               <thead>
@@ -856,6 +880,23 @@ const downloadPDF = () => {
             style={{ ...input, marginBottom: 10 }}
             placeholder="Search by bill no, lorry no, buyer, consignee, warehouse"
           />
+          {selectedSaleId && (
+            <div style={{ position: "relative", marginBottom: 14, padding: 12, borderRadius: 12, border: "1px solid #fecaca", background: "#fef2f2" }}>
+              <button
+                type="button"
+                onClick={clearSelection}
+                style={{ position: "absolute", top: 10, right: 10, border: "none", background: "transparent", color: "#dc2626", fontSize: 18, cursor: "pointer", lineHeight: 1 }}
+              >
+                ×
+              </button>
+              <div style={{ fontWeight: 700, color: "#991b1b", marginBottom: 6 }}>
+                Selected Sale Bill: {formData.voucher_no || "-"}
+              </div>
+              <div style={{ color: "#475569", fontSize: 13 }}>
+                {formData.warehouse_name || "-"} • {formData.buyer_name || "-"} • {formData.lorry_no || "-"}
+              </div>
+            </div>
+          )}
           <div style={{ overflowX: "auto", border: "1px solid #e2e8f0", borderRadius: 8 }}>
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 920 }}>
               <thead>
