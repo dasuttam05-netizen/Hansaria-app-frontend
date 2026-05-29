@@ -131,6 +131,8 @@ export default function WarehouseTradingPage() {
   const [receiptAdjustments, setReceiptAdjustments] = useState([]);
   const [selectedReceiptId, setSelectedReceiptId] = useState(null);
   const [stockDrilldown, setStockDrilldown] = useState(null);
+  const [stockDrilldownFromDate, setStockDrilldownFromDate] = useState("");
+  const [stockDrilldownToDate, setStockDrilldownToDate] = useState("");
   const [showPurchaseBillWise, setShowPurchaseBillWise] = useState(false);
   const [showSaleBillWise, setShowSaleBillWise] = useState(false);
   const [selectedSaleLedgerBillId, setSelectedSaleLedgerBillId] = useState("");
@@ -195,6 +197,8 @@ export default function WarehouseTradingPage() {
     return consignees.filter((c) => String(c.buyer_id || "") === buyerId);
   }, [consignees, formData.buyer_id, formData.company_id]);
   const openStockDrilldown = (item, mode) => {
+    setStockDrilldownFromDate("");
+    setStockDrilldownToDate("");
     setStockDrilldown({ item, mode });
   };
   const purchaseDeductionTotal = purchaseDeductionFields.reduce((sum, field) => sum + toNumber(formData[field.key]), 0);
@@ -1496,23 +1500,158 @@ export default function WarehouseTradingPage() {
   const sharePurchaseLedgerWhatsapp = () => shareLedgerWhatsapp("purchase-party-ledger");
   const shareSaleLedgerWhatsapp = () => shareLedgerWhatsapp("sale-party-ledger");
 
-  const stockPurchaseRows = stockDrilldown?.item?.purchase_details || [];
-  const stockSaleRows = stockDrilldown?.item?.sale_details || [];
-  const stockDrilldownRows =
-    stockDrilldown?.mode === "purchase"
-      ? stockPurchaseRows.map((row) => ({ ...row, type: "Purchase" }))
-      : stockDrilldown?.mode === "sale"
-        ? stockSaleRows.map((row) => ({ ...row, type: "Sale" }))
-        : [
-            ...stockPurchaseRows.map((row) => ({ ...row, type: "Purchase" })),
-            ...stockSaleRows.map((row) => ({ ...row, type: "Sale" })),
-          ].sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")));
+  const stockPurchaseRows = useMemo(() => stockDrilldown?.item?.purchase_details || [], [stockDrilldown]);
+  const stockSaleRows = useMemo(() => stockDrilldown?.item?.sale_details || [], [stockDrilldown]);
+  const stockDrilldownAllRows = useMemo(() => {
+    if (!stockDrilldown?.item) return [];
+
+    const rows = [
+      ...stockPurchaseRows.map((row) => ({
+        ...row,
+        type: "Purchase",
+        inward_qty: toNumber(row.qty),
+        outward_qty: 0,
+        inward_rate: toNumber(row.rate),
+        outward_rate: 0,
+        inward_amount: toNumber(row.amount),
+        outward_amount: 0,
+      })),
+      ...stockSaleRows.map((row) => ({
+        ...row,
+        type: "Sale",
+        inward_qty: 0,
+        outward_qty: toNumber(row.qty),
+        inward_rate: 0,
+        outward_rate: toNumber(row.rate),
+        inward_amount: 0,
+        outward_amount: toNumber(row.amount),
+      })),
+    ].sort((a, b) => {
+      const dateCmp = String(a.date || "").localeCompare(String(b.date || ""));
+      if (dateCmp) return dateCmp;
+      const typeCmp = a.type === b.type ? 0 : a.type === "Purchase" ? -1 : 1;
+      if (typeCmp) return typeCmp;
+      return String(a.voucher_no || "").localeCompare(String(b.voucher_no || ""));
+    });
+
+    let runningQty = 0;
+    let runningPurchaseQty = 0;
+    let runningPurchaseAmount = 0;
+    return rows.map((row) => {
+      runningQty += toNumber(row.inward_qty) - toNumber(row.outward_qty);
+      runningPurchaseQty += toNumber(row.inward_qty);
+      runningPurchaseAmount += toNumber(row.inward_amount);
+      const avgRate = runningPurchaseQty > 0 ? runningPurchaseAmount / runningPurchaseQty : 0;
+      return {
+        ...row,
+        balance_qty: Number(runningQty.toFixed(4)),
+        day_avg_rate: Number(avgRate.toFixed(2)),
+        stock_value: Number((runningQty * avgRate).toFixed(2)),
+      };
+    });
+  }, [stockDrilldown, stockPurchaseRows, stockSaleRows]);
+
+  const stockDrilldownRows = stockDrilldownAllRows.filter((row) => {
+    if (stockDrilldown?.mode === "purchase" && row.type !== "Purchase") return false;
+    if (stockDrilldown?.mode === "sale" && row.type !== "Sale") return false;
+    const date = String(row.date || "").slice(0, 10);
+    if (stockDrilldownFromDate && date < stockDrilldownFromDate) return false;
+    if (stockDrilldownToDate && date > stockDrilldownToDate) return false;
+    return true;
+  });
+
+  const stockDrilldownTotals = stockDrilldownRows.reduce(
+    (acc, row) => {
+      acc.inward_qty += toNumber(row.inward_qty);
+      acc.outward_qty += toNumber(row.outward_qty);
+      acc.inward_amount += toNumber(row.inward_amount);
+      acc.outward_amount += toNumber(row.outward_amount);
+      acc.balance_qty = toNumber(row.balance_qty);
+      acc.avg_rate = toNumber(row.day_avg_rate);
+      acc.stock_value = toNumber(row.stock_value);
+      return acc;
+    },
+    { inward_qty: 0, outward_qty: 0, inward_amount: 0, outward_amount: 0, balance_qty: 0, avg_rate: 0, stock_value: 0 }
+  );
+
   const stockDrilldownTitle =
     stockDrilldown?.mode === "purchase"
       ? "Purchase Qty Details"
       : stockDrilldown?.mode === "sale"
         ? "Sale Qty Details"
         : "Stock Qty Full Details";
+
+  const downloadStockDrilldownPdf = () => {
+    if (!stockDrilldown) return;
+    const doc = new jsPDF({ orientation: "landscape" });
+    const title = stockDrilldownTitle;
+    const subtitle = `${getWarehouseName(stockDrilldown.item)} | ${getAccountName(stockDrilldown.item)} | ${getProductName(stockDrilldown.item)}`;
+    doc.setFontSize(14);
+    doc.text(title, 14, 14);
+    doc.setFontSize(9);
+    doc.text(subtitle, 14, 20);
+    const filterText = [
+      stockDrilldownFromDate ? `From: ${formatLedgerDate(stockDrilldownFromDate)}` : "",
+      stockDrilldownToDate ? `To: ${formatLedgerDate(stockDrilldownToDate)}` : "",
+    ].filter(Boolean).join("  ");
+    if (filterText) doc.text(filterText, 14, 26);
+
+    autoTable(doc, {
+      startY: filterText ? 31 : 26,
+      styles: { fontSize: 7, cellPadding: 1.8, overflow: "linebreak" },
+      headStyles: { fillColor: [8, 122, 115], textColor: 255 },
+      footStyles: { fillColor: [239, 246, 255], textColor: 15, fontStyle: "bold" },
+      head: [[
+        "Date",
+        "Type",
+        "Voucher No",
+        "Party",
+        "Inward Qty",
+        "In Rate",
+        "In Value",
+        "Outward Qty",
+        "Out Rate",
+        "Out Value",
+        "Balance Qty",
+        "Avg Rate",
+        "Stock Value",
+      ]],
+      body: stockDrilldownRows.map((row) => [
+        formatLedgerDate(row.date),
+        row.type,
+        row.voucher_no || "-",
+        row.party_name || "-",
+        row.inward_qty ? formatDecimal4(row.inward_qty) : "",
+        row.inward_rate ? formatMoney(row.inward_rate) : "",
+        row.inward_amount ? formatMoney(row.inward_amount) : "",
+        row.outward_qty ? formatDecimal4(row.outward_qty) : "",
+        row.outward_rate ? formatMoney(row.outward_rate) : "",
+        row.outward_amount ? formatMoney(row.outward_amount) : "",
+        formatDecimal4(row.balance_qty),
+        formatMoney(row.day_avg_rate),
+        formatMoney(row.stock_value),
+      ]),
+      foot: [[
+        "Total",
+        "",
+        "",
+        "",
+        formatDecimal4(stockDrilldownTotals.inward_qty),
+        "",
+        formatMoney(stockDrilldownTotals.inward_amount),
+        formatDecimal4(stockDrilldownTotals.outward_qty),
+        "",
+        formatMoney(stockDrilldownTotals.outward_amount),
+        formatDecimal4(stockDrilldownTotals.balance_qty),
+        formatMoney(stockDrilldownTotals.avg_rate),
+        formatMoney(stockDrilldownTotals.stock_value),
+      ]],
+      columnStyles: {
+        3: { cellWidth: 42 },
+      },
+    });
+    doc.save(`stock-qty-details-${new Date().toISOString().slice(0, 10)}.pdf`);
+  };
 
   return (
     <div style={{ fontFamily: "Segoe UI, Arial, sans-serif", padding: "16px" }}>
@@ -3152,17 +3291,51 @@ export default function WarehouseTradingPage() {
                   {getWarehouseName(stockDrilldown.item)} | {getAccountName(stockDrilldown.item)} | {getProductName(stockDrilldown.item)}
                 </div>
               </div>
-              <button type="button" onClick={() => setStockDrilldown(null)} style={{ ...btnAction, background: "#64748b" }}>
-                Close
-              </button>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                <button type="button" onClick={downloadStockDrilldownPdf} style={{ ...btnAction, background: "#0f766e" }}>
+                  PDF
+                </button>
+                <button type="button" onClick={() => setStockDrilldown(null)} style={{ ...btnAction, background: "#64748b" }}>
+                  Close
+                </button>
+              </div>
             </div>
 
             <div style={stockSummaryGridStyle}>
-              <div style={stockMetricStyle}><span>Purchase Qty</span><strong>{formatDecimal4(stockDrilldown.item.purchase_qty || 0)}</strong></div>
-              <div style={stockMetricStyle}><span>Sale Qty</span><strong>{formatDecimal4(stockDrilldown.item.sale_qty || 0)}</strong></div>
-              <div style={stockMetricStyle}><span>Stock Qty</span><strong>{formatDecimal4(stockDrilldown.item.stock_qty || 0)}</strong></div>
-              <div style={stockMetricStyle}><span>Avg Rate</span><strong>{formatMoney(stockDrilldown.item.avg_rate || 0)}</strong></div>
-              <div style={stockMetricStyle}><span>Stock Amount</span><strong>{formatMoney(stockDrilldown.item.stock_amount || 0)}</strong></div>
+              <div style={stockMetricStyle}><span>Inward Qty</span><strong>{formatDecimal4(stockDrilldownTotals.inward_qty || 0)}</strong></div>
+              <div style={stockMetricStyle}><span>Outward Qty</span><strong>{formatDecimal4(stockDrilldownTotals.outward_qty || 0)}</strong></div>
+              <div style={stockMetricStyle}><span>Balance Qty</span><strong>{formatDecimal4(stockDrilldownTotals.balance_qty || 0)}</strong></div>
+              <div style={stockMetricStyle}><span>Day Wise Avg Rate</span><strong>{formatMoney(stockDrilldownTotals.avg_rate || 0)}</strong></div>
+              <div style={stockMetricStyle}><span>Stock Amount</span><strong>{formatMoney(stockDrilldownTotals.stock_value || 0)}</strong></div>
+            </div>
+
+            <div style={stockFilterBarStyle}>
+              <Field label="From Date">
+                <input
+                  type="date"
+                  value={stockDrilldownFromDate}
+                  onChange={(event) => setStockDrilldownFromDate(event.target.value)}
+                  style={inp}
+                />
+              </Field>
+              <Field label="To Date">
+                <input
+                  type="date"
+                  value={stockDrilldownToDate}
+                  onChange={(event) => setStockDrilldownToDate(event.target.value)}
+                  style={inp}
+                />
+              </Field>
+              <button
+                type="button"
+                onClick={() => {
+                  setStockDrilldownFromDate("");
+                  setStockDrilldownToDate("");
+                }}
+                style={{ ...btnAction, background: "#475569", alignSelf: "end", minHeight: 38 }}
+              >
+                Reset Filter
+              </button>
             </div>
 
             <div style={{ ...tableCard, maxHeight: "58vh", marginTop: 14 }}>
@@ -3173,9 +3346,15 @@ export default function WarehouseTradingPage() {
                     <th style={th}>Type</th>
                     <th style={th}>Voucher No</th>
                     <th style={th}>Party</th>
-                    <th style={th}>Qty</th>
-                    <th style={th}>Rate</th>
-                    <th style={th}>Amount</th>
+                    <th style={th}>Inward Qty</th>
+                    <th style={th}>In Rate</th>
+                    <th style={th}>In Value</th>
+                    <th style={th}>Outward Qty</th>
+                    <th style={th}>Out Rate</th>
+                    <th style={th}>Out Value</th>
+                    <th style={th}>Balance Qty</th>
+                    <th style={th}>Avg Rate</th>
+                    <th style={th}>Stock Value</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -3185,15 +3364,37 @@ export default function WarehouseTradingPage() {
                       <td style={{ ...td, fontWeight: 700, color: row.type === "Purchase" ? "#0f766e" : "#b45309" }}>{row.type}</td>
                       <td style={td}>{row.voucher_no || "-"}</td>
                       <td style={td}>{row.party_name || "-"}</td>
-                      <td style={td}>{formatDecimal4(row.qty || 0)}</td>
-                      <td style={td}>{formatMoney(row.rate || 0)}</td>
-                      <td style={td}>{formatMoney(row.amount || 0)}</td>
+                      <td style={td}>{row.inward_qty ? formatDecimal4(row.inward_qty) : ""}</td>
+                      <td style={td}>{row.inward_rate ? formatMoney(row.inward_rate) : ""}</td>
+                      <td style={td}>{row.inward_amount ? formatMoney(row.inward_amount) : ""}</td>
+                      <td style={td}>{row.outward_qty ? formatDecimal4(row.outward_qty) : ""}</td>
+                      <td style={td}>{row.outward_rate ? formatMoney(row.outward_rate) : ""}</td>
+                      <td style={td}>{row.outward_amount ? formatMoney(row.outward_amount) : ""}</td>
+                      <td style={{ ...td, fontWeight: 800 }}>{formatDecimal4(row.balance_qty || 0)}</td>
+                      <td style={td}>{formatMoney(row.day_avg_rate || 0)}</td>
+                      <td style={{ ...td, fontWeight: 800 }}>{formatMoney(row.stock_value || 0)}</td>
                     </tr>
                   ))}
                   {stockDrilldownRows.length === 0 && (
-                    <tr><td colSpan={7} style={{ ...td, textAlign: "center", padding: 20 }}>No stock detail available.</td></tr>
+                    <tr><td colSpan={13} style={{ ...td, textAlign: "center", padding: 20 }}>No stock detail available.</td></tr>
                   )}
                 </tbody>
+                {stockDrilldownRows.length > 0 && (
+                  <tfoot>
+                    <tr style={{ background: "#f1f5f9", fontWeight: 800 }}>
+                      <td style={td} colSpan={4}>Total</td>
+                      <td style={td}>{formatDecimal4(stockDrilldownTotals.inward_qty)}</td>
+                      <td style={td}></td>
+                      <td style={td}>{formatMoney(stockDrilldownTotals.inward_amount)}</td>
+                      <td style={td}>{formatDecimal4(stockDrilldownTotals.outward_qty)}</td>
+                      <td style={td}></td>
+                      <td style={td}>{formatMoney(stockDrilldownTotals.outward_amount)}</td>
+                      <td style={td}>{formatDecimal4(stockDrilldownTotals.balance_qty)}</td>
+                      <td style={td}>{formatMoney(stockDrilldownTotals.avg_rate)}</td>
+                      <td style={td}>{formatMoney(stockDrilldownTotals.stock_value)}</td>
+                    </tr>
+                  </tfoot>
+                )}
               </table>
             </div>
           </div>
@@ -3280,6 +3481,17 @@ const stockSummaryGridStyle = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
   gap: 10,
+};
+const stockFilterBarStyle = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+  gap: 12,
+  alignItems: "end",
+  marginTop: 14,
+  padding: 12,
+  border: "1px solid #dbe4ef",
+  borderRadius: 8,
+  background: "#f8fafc",
 };
 const stockMetricStyle = {
   border: "1px solid #dbe4ef",
