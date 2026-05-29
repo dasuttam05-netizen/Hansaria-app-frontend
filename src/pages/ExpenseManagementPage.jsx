@@ -1464,10 +1464,8 @@ const ExpenseItemRow = React.memo(function ExpenseItemRow({ item, index, onItemC
           className="expense-item-input expense-item-particular"
           type="text"
           value={asTextValue(item.particular_name)}
-          onChange={(e) => {
-            onItemChange(item.row_key, "particular_name", e.target.value);
-          }}
-          style={compactInputStyle}
+          readOnly
+          style={{ ...compactInputStyle, background: "#f8fafc", fontWeight: 700 }}
         />
       </td>
       <td className="expense-item-cell" style={compactCellStyle}>
