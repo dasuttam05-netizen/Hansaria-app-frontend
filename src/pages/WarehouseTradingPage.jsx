@@ -29,6 +29,8 @@ const defaultForm = () => ({
   amount: "",
   claim_amount: "",
   other_deduction: "",
+  cd_percent: "",
+  cd_amount: "",
   adjustment_amount: "",
   tds_amount: "",
   net_amount: "",
@@ -121,6 +123,7 @@ export default function WarehouseTradingPage() {
   const [loading, setLoading] = useState(false);
   const [list, setList] = useState([]);
   const [reportData, setReportData] = useState([]);
+  const [warehouseStockReport, setWarehouseStockReport] = useState([]);
   const [reportFilters, setReportFilters] = useState({ farmer_id: "", company_account_id: "", sale_buyer_id: "", sale_company_account_id: "" });
   const [selectedLedgerBillId, setSelectedLedgerBillId] = useState("");
   const [partyOutstanding, setPartyOutstanding] = useState(null);
@@ -267,6 +270,7 @@ export default function WarehouseTradingPage() {
     toNumber(formData.fungus) +
     toNumber(formData.discolour) +
     toNumber(formData.others);
+  const saleCashDiscountAmount = Number((saleBillAmountFromData(formData) * toNumber(formData.cd_percent) / 100).toFixed(2));
   const partySaleTotal = list
     .filter((item) => {
       const sameBuyer = String(getBuyerId(item) || "") === String(formData.buyer_id || formData.company_id || "");
@@ -276,8 +280,30 @@ export default function WarehouseTradingPage() {
     .reduce((sum, item) => sum + toNumber(item.total_amount || item.net_receivable_amount || item.net_amount || item.amount), 0);
   const tdsEligible = partySaleTotal > 5000000;
   const autoTdsAmount = tdsEligible
-    ? Math.max(saleBillAmountFromData(formData) - saleShortageAmount - saleQualityDeduction - toNumber(formData.adjustment_amount), 0) * 0.001
+    ? Math.max(saleBillAmountFromData(formData) - saleShortageAmount - saleQualityDeduction - saleCashDiscountAmount - toNumber(formData.adjustment_amount), 0) * 0.001
     : 0;
+  const selectedBuyerSaleRows = list.filter((item) => {
+    const sameBuyer = String(getBuyerId(item) || "") === String(formData.buyer_id || formData.company_id || "");
+    const sameAccount = !formData.company_account_id || String(item.company_account_id || "") === String(formData.company_account_id || "");
+    return activeVoucherType === "sale" && sameBuyer && sameAccount;
+  });
+  const selectedBuyerSaleQty = selectedBuyerSaleRows.reduce((sum, item) => sum + toNumber(item.quantity || item.total_quantity || item.unloading_qty), 0);
+  const selectedBuyerSaleAmount = selectedBuyerSaleRows.reduce((sum, item) => sum + toNumber(item.net_receivable_amount || item.net_amount || item.amount), 0);
+  const selectedBuyerPendingAmount = (partyOutstanding?.sales || []).reduce((sum, item) => sum + toNumber(item.pending_amount), 0);
+  const selectedBuyerBalanceAmount = toNumber(partyOutstanding?.stats?.outstanding ?? partyOutstanding?.outstanding ?? selectedBuyerPendingAmount);
+  const selectedWarehouseStockRow = warehouseStockReport.find((item) =>
+    String(item.warehouse_id || "") === String(formData.warehouse_id || "") &&
+    String(item.product_id || "") === String(formData.product_id || "")
+  );
+  const selectedWarehouseBalanceQty = selectedWarehouseStockRow ? toNumber(selectedWarehouseStockRow.stock_qty) : null;
+  const saleNetReceivablePreview =
+    saleGrossAmountFromData(formData) -
+    toNumber(formData.claim_amount) -
+    toNumber(formData.other_deduction) -
+    saleCashDiscountAmount -
+    toNumber(formData.adjustment_amount) -
+    (tdsEligible ? autoTdsAmount : toNumber(formData.tds_amount)) +
+    toNumber(formData.round_off);
   const saleVoucherPassBills = list.filter((item) => {
     const sameWarehouse = !formData.warehouse_id || String(item.warehouse_id || "") === String(formData.warehouse_id);
     const sameAccount = !formData.company_account_id || String(item.company_account_id || "") === String(formData.company_account_id);
@@ -286,6 +312,7 @@ export default function WarehouseTradingPage() {
       toNumber(item.shortage_quantity) === 0 &&
       toNumber(item.claim_amount) === 0 &&
       toNumber(item.other_deduction) === 0 &&
+      toNumber(item.cd_amount) === 0 &&
       toNumber(item.tds_amount) === 0;
     const search = saleBillSearch.trim().toLowerCase();
     const searchable = [
@@ -309,6 +336,7 @@ export default function WarehouseTradingPage() {
       toNumber(item.shortage_quantity) > 0 ||
       toNumber(item.claim_amount) > 0 ||
       toNumber(item.other_deduction) > 0 ||
+      toNumber(item.cd_amount) > 0 ||
       toNumber(item.adjustment_amount) > 0 ||
       toNumber(item.tds_amount) > 0 ||
       Boolean(item.unloading_date);
@@ -438,6 +466,10 @@ export default function WarehouseTradingPage() {
       setProducts(Array.isArray(dataOf(pRes)) ? dataOf(pRes) : []);
       setEmployees(Array.isArray(dataOf(eRes)) ? dataOf(eRes) : []);
       setLocations(Array.isArray(dataOf(lRes)) ? dataOf(lRes) : []);
+      axios
+        .get("/api/wh-vouchers/report/warehouse-stock")
+        .then((res) => setWarehouseStockReport(Array.isArray(res.data) ? res.data : []))
+        .catch(() => setWarehouseStockReport([]));
     } catch (err) {
       console.error(err);
     }
@@ -564,6 +596,10 @@ export default function WarehouseTradingPage() {
       ) {
         next.amount = saleGrossAmountFromData(next).toFixed(2);
       }
+      if (activeVoucherType === "sale" && name === "cd_percent") {
+        const gross = saleGrossAmountFromData(next);
+        next.cd_amount = (gross * toNumber(value) / 100).toFixed(2);
+      }
       return next;
     });
 
@@ -616,6 +652,13 @@ export default function WarehouseTradingPage() {
         setShowReceiptAdjustPopup(false);
       }
     }
+    if (activeVoucherType === "sale" && (name === "buyer_id" || name === "company_id")) {
+      if (value) {
+        loadOutstanding("company", value, formData.warehouse_id, null, formData.company_account_id);
+      } else {
+        setPartyOutstanding(null);
+      }
+    }
     if (name === "warehouse_id") {
       if (activeVoucherType === "payment" && formData.farmer_id) {
         loadOutstanding("farmer", formData.farmer_id, value, editId, formData.company_account_id).then(() => {
@@ -627,9 +670,12 @@ export default function WarehouseTradingPage() {
       if (activeVoucherType === "receipt" && formData.company_id) {
         loadOutstanding("company", formData.company_id, value, null, formData.company_account_id);
       }
+      if (activeVoucherType === "sale" && (formData.buyer_id || formData.company_id)) {
+        loadOutstanding("company", formData.buyer_id || formData.company_id, value, null, formData.company_account_id);
+      }
     }
-    if (activeVoucherType === "receipt" && name === "company_account_id" && formData.company_id) {
-      loadOutstanding("company", formData.company_id, formData.warehouse_id, null, value);
+    if ((activeVoucherType === "receipt" || activeVoucherType === "sale") && name === "company_account_id" && (formData.company_id || formData.buyer_id)) {
+      loadOutstanding("company", formData.company_id || formData.buyer_id, formData.warehouse_id, null, value);
     }
     if (activeVoucherType === "receipt" && name === "amount") {
       if (toNumber(value) > 0 && formData.company_id) {
@@ -699,6 +745,8 @@ export default function WarehouseTradingPage() {
         "amount",
         "claim_amount",
         "other_deduction",
+        "cd_percent",
+        "cd_amount",
         "adjustment_amount",
         "tds_amount",
         "net_receivable_amount",
@@ -743,13 +791,15 @@ export default function WarehouseTradingPage() {
         payload.quantity = saleDispatchQtyFromData(formData);
         payload.unloading_qty = payload.quantity;
         payload.amount = saleGrossAmountFromData(formData);
+        const grossAmount = payload.amount;
         const claimAmount = Number(formData.claim_amount) || 0;
         const otherDeduction = Number(formData.other_deduction) || 0;
+        const cdAmount = Number(payload.cd_amount) || Number((grossAmount * (Number(formData.cd_percent) || 0) / 100).toFixed(2)) || 0;
         const adjustmentAmount = Number(formData.adjustment_amount) || 0;
         const tdsAmount = Number(formData.tds_amount) || 0;
         const roundOff = Number(formData.round_off) || 0;
-        const grossAmount = payload.amount;
-        const netAmount = grossAmount - claimAmount - otherDeduction - adjustmentAmount - tdsAmount + roundOff;
+        payload.cd_amount = cdAmount;
+        const netAmount = grossAmount - claimAmount - otherDeduction - cdAmount - adjustmentAmount - tdsAmount + roundOff;
         payload.net_amount = netAmount;
         payload.net_amount_payable = netAmount;
         payload.net_receivable_amount = netAmount;
@@ -1023,6 +1073,8 @@ export default function WarehouseTradingPage() {
       others: voucher.others || "",
       claim_amount: voucher.claim_amount || "",
       other_deduction: voucher.other_deduction || "",
+      cd_percent: voucher.cd_percent || "",
+      cd_amount: voucher.cd_amount || "",
       tds_amount: voucher.tds_amount || "",
     });
     setEditId(voucher.id || voucher._id);
@@ -1043,6 +1095,7 @@ export default function WarehouseTradingPage() {
     }
 
     const finalTdsAmount = tdsEligible ? autoTdsAmount : toNumber(formData.tds_amount);
+    const finalCdAmount = Number((saleBillAmountFromData(formData) * toNumber(formData.cd_percent) / 100).toFixed(2));
     const payload = {
       ...formData,
       deduction_only: true,
@@ -1051,7 +1104,8 @@ export default function WarehouseTradingPage() {
       shortage_amount: saleShortageAmount,
       claim_amount: saleShortageAmount,
       other_deduction: saleQualityDeduction,
-      total_deduction: saleQualityDeduction,
+      cd_amount: finalCdAmount,
+      total_deduction: saleQualityDeduction + finalCdAmount,
       tds_amount: finalTdsAmount,
       amount: saleBillAmountFromData(formData),
     };
@@ -1576,10 +1630,13 @@ export default function WarehouseTradingPage() {
 
   const stockDrilldownTitle =
     stockDrilldown?.mode === "purchase"
-      ? "Purchase Qty Details"
+      ? "Purchase Qty / Inward Details"
       : stockDrilldown?.mode === "sale"
-        ? "Sale Qty Details"
+        ? "Sale Qty / Outward Details"
         : "Stock Qty Full Details";
+  const isStockDrilldownPurchase = stockDrilldown?.mode === "purchase";
+  const isStockDrilldownSale = stockDrilldown?.mode === "sale";
+  const isStockDrilldownCombined = !isStockDrilldownPurchase && !isStockDrilldownSale;
 
   const downloadStockDrilldownPdf = () => {
     if (!stockDrilldown) return;
@@ -1596,56 +1653,64 @@ export default function WarehouseTradingPage() {
     ].filter(Boolean).join("  ");
     if (filterText) doc.text(filterText, 14, 26);
 
+    const headRow = [
+      "Date",
+      "Type",
+      "Voucher No",
+      "Party",
+      ...(isStockDrilldownSale ? [] : ["Inward Qty", "In Rate", "In Value"]),
+      ...(isStockDrilldownPurchase ? [] : ["Outward Qty", "Out Rate", "Out Value"]),
+      isStockDrilldownCombined ? "Stock Qty" : "Balance Qty",
+      "Purchase Avg Rate",
+      "Stock Value",
+    ];
+    const bodyRows = stockDrilldownRows.map((row) => [
+      formatLedgerDate(row.date),
+      row.type,
+      row.voucher_no || "-",
+      row.party_name || "-",
+      ...(isStockDrilldownSale ? [] : [
+        row.inward_qty ? formatDecimal4(row.inward_qty) : "",
+        row.inward_rate ? formatMoney(row.inward_rate) : "",
+        row.inward_amount ? formatMoney(row.inward_amount) : "",
+      ]),
+      ...(isStockDrilldownPurchase ? [] : [
+        row.outward_qty ? formatDecimal4(row.outward_qty) : "",
+        row.outward_rate ? formatMoney(row.outward_rate) : "",
+        row.outward_amount ? formatMoney(row.outward_amount) : "",
+      ]),
+      formatDecimal4(row.balance_qty),
+      formatMoney(row.day_avg_rate),
+      formatMoney(row.stock_value),
+    ]);
+    const footRow = [
+      "Total",
+      "",
+      "",
+      "",
+      ...(isStockDrilldownSale ? [] : [
+        formatDecimal4(stockDrilldownTotals.inward_qty),
+        "",
+        formatMoney(stockDrilldownTotals.inward_amount),
+      ]),
+      ...(isStockDrilldownPurchase ? [] : [
+        formatDecimal4(stockDrilldownTotals.outward_qty),
+        "",
+        formatMoney(stockDrilldownTotals.outward_amount),
+      ]),
+      formatDecimal4(stockDrilldownTotals.balance_qty),
+      formatMoney(stockDrilldownTotals.avg_rate),
+      formatMoney(stockDrilldownTotals.stock_value),
+    ];
+
     autoTable(doc, {
       startY: filterText ? 31 : 26,
       styles: { fontSize: 7, cellPadding: 1.8, overflow: "linebreak" },
       headStyles: { fillColor: [8, 122, 115], textColor: 255 },
       footStyles: { fillColor: [239, 246, 255], textColor: 15, fontStyle: "bold" },
-      head: [[
-        "Date",
-        "Type",
-        "Voucher No",
-        "Party",
-        "Inward Qty",
-        "In Rate",
-        "In Value",
-        "Outward Qty",
-        "Out Rate",
-        "Out Value",
-        "Balance Qty",
-        "Avg Rate",
-        "Stock Value",
-      ]],
-      body: stockDrilldownRows.map((row) => [
-        formatLedgerDate(row.date),
-        row.type,
-        row.voucher_no || "-",
-        row.party_name || "-",
-        row.inward_qty ? formatDecimal4(row.inward_qty) : "",
-        row.inward_rate ? formatMoney(row.inward_rate) : "",
-        row.inward_amount ? formatMoney(row.inward_amount) : "",
-        row.outward_qty ? formatDecimal4(row.outward_qty) : "",
-        row.outward_rate ? formatMoney(row.outward_rate) : "",
-        row.outward_amount ? formatMoney(row.outward_amount) : "",
-        formatDecimal4(row.balance_qty),
-        formatMoney(row.day_avg_rate),
-        formatMoney(row.stock_value),
-      ]),
-      foot: [[
-        "Total",
-        "",
-        "",
-        "",
-        formatDecimal4(stockDrilldownTotals.inward_qty),
-        "",
-        formatMoney(stockDrilldownTotals.inward_amount),
-        formatDecimal4(stockDrilldownTotals.outward_qty),
-        "",
-        formatMoney(stockDrilldownTotals.outward_amount),
-        formatDecimal4(stockDrilldownTotals.balance_qty),
-        formatMoney(stockDrilldownTotals.avg_rate),
-        formatMoney(stockDrilldownTotals.stock_value),
-      ]],
+      head: [headRow],
+      body: bodyRows,
+      foot: [footRow],
       columnStyles: {
         3: { cellWidth: 42 },
       },
@@ -2027,8 +2092,17 @@ export default function WarehouseTradingPage() {
                         <tbody>
                           <tr><td style={erpTd}>Lorry No</td><td style={erpTd}><input name="lorry_no" value={formData.lorry_no} onChange={handleChange} style={erpCellInput} /></td></tr>
                           <tr><td style={erpTd}>Other Deduction</td><td style={erpTd}><input name="other_deduction" type="number" step="0.0001" value={formData.other_deduction} onChange={handleChange} style={erpCellInput} /></td></tr>
+                          <tr>
+                            <td style={erpTd}>CD %</td>
+                            <td style={erpTd}>
+                              <div style={{ display: "grid", gridTemplateColumns: "80px 1fr", gap: 6 }}>
+                                <input name="cd_percent" type="number" step="0.0001" value={formData.cd_percent} onChange={handleChange} style={erpCellInput} />
+                                <input value={formatMoney(saleCashDiscountAmount)} readOnly style={{ ...erpCellInput, ...erpReadOnlyCell }} />
+                              </div>
+                            </td>
+                          </tr>
                           <tr><td style={erpTd}>Claim/TDS</td><td style={erpTd}><input name="claim_amount" type="number" step="0.0001" value={formData.claim_amount} onChange={handleChange} style={erpCellInput} /></td></tr>
-                          <tr><td style={{ ...erpTd, fontWeight: 700 }}>Total Deduction</td><td style={{ ...erpTd, fontWeight: 700 }}>{formatMoney(toNumber(formData.other_deduction) + toNumber(formData.claim_amount))}</td></tr>
+                          <tr><td style={{ ...erpTd, fontWeight: 700 }}>Total Deduction</td><td style={{ ...erpTd, fontWeight: 700 }}>{formatMoney(toNumber(formData.other_deduction) + toNumber(formData.claim_amount) + saleCashDiscountAmount)}</td></tr>
                           <tr><td style={erpTd}>Round Off</td><td style={erpTd}><input name="round_off" type="number" step="0.0001" value={formData.round_off} onChange={handleChange} style={erpCellInput} /></td></tr>
                           <tr><td style={erpTd}>F2 Voucher Pass</td><td style={erpTd}><button type="button" onClick={() => setShowSaleDeductionModal(true)} style={{ ...btnAction, background: "#0f766e", width: "100%" }}>F2 Voucher Pass</button></td></tr>
                         </tbody>
@@ -2037,6 +2111,26 @@ export default function WarehouseTradingPage() {
                         <label style={erpLabel}>Narration</label>
                         <textarea name="description" value={formData.description} onChange={handleChange} rows={2} style={erpTextarea} />
                       </div>
+                      {activeVoucherType === "sale" && (
+                        <div style={smartInfoGridStyle}>
+                          <div style={smartInfoBoxStyle}>
+                            <span>Buyer Sale Qty</span>
+                            <strong>{formatDecimal4(selectedBuyerSaleQty)}</strong>
+                          </div>
+                          <div style={smartInfoBoxStyle}>
+                            <span>Balance Amount</span>
+                            <strong>{formatMoney(selectedBuyerBalanceAmount)}</strong>
+                          </div>
+                          <div style={smartInfoBoxStyle}>
+                            <span>Pending Amount</span>
+                            <strong>{formatMoney(selectedBuyerPendingAmount)}</strong>
+                          </div>
+                          <div style={smartInfoBoxStyle}>
+                            <span>Warehouse Balance Qty</span>
+                            <strong>{selectedWarehouseBalanceQty === null ? "-" : formatDecimal4(selectedWarehouseBalanceQty)}</strong>
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     <div>
@@ -2046,15 +2140,16 @@ export default function WarehouseTradingPage() {
                         </thead>
                         <tbody>
                           <tr><td style={erpTd}>Gross Amount</td><td style={erpTd}>{formatMoney(saleGrossAmountFromData(formData))}</td></tr>
-                          <tr><td style={erpTd}>Total Deduction</td><td style={erpTd}>{formatMoney(toNumber(formData.other_deduction) + toNumber(formData.claim_amount))}</td></tr>
+                          <tr><td style={erpTd}>Cash Discount</td><td style={erpTd}>{formatMoney(saleCashDiscountAmount)}</td></tr>
+                          <tr><td style={erpTd}>Total Deduction</td><td style={erpTd}>{formatMoney(toNumber(formData.other_deduction) + toNumber(formData.claim_amount) + saleCashDiscountAmount)}</td></tr>
                           <tr><td style={erpTd}>Round Off</td><td style={erpTd}>{formatMoney(toNumber(formData.round_off))}</td></tr>
-                          <tr><td style={erpTd}>Net Amount Payable</td><td style={erpTd}>{formatMoney(saleGrossAmountFromData(formData) - toNumber(formData.other_deduction) - toNumber(formData.claim_amount) + toNumber(formData.round_off))}</td></tr>
+                          <tr><td style={erpTd}>Net Amount Payable</td><td style={erpTd}>{formatMoney(saleNetReceivablePreview)}</td></tr>
                         </tbody>
                       </table>
 
                       <div style={erpTotalPanel}>
                         <span style={erpTotalLabel}>T O T A L</span>
-                        <strong style={erpTotalAmount}>{formatMoney(saleGrossAmountFromData(formData) - toNumber(formData.other_deduction) - toNumber(formData.claim_amount) + toNumber(formData.round_off))}</strong>
+                        <strong style={erpTotalAmount}>{formatMoney(saleNetReceivablePreview)}</strong>
                       </div>
                     </div>
                   </div>
@@ -2226,6 +2321,12 @@ export default function WarehouseTradingPage() {
                         <Field label="Other Deduction">
                           <input name="other_deduction" type="number" step="0.0001" value={formData.other_deduction} onChange={handleChange} style={inp} />
                         </Field>
+                        <Field label="CD %">
+                          <input name="cd_percent" type="number" step="0.0001" value={formData.cd_percent} onChange={handleChange} style={inp} />
+                        </Field>
+                        <Field label="CD Amount">
+                          <input value={formatMoney(saleCashDiscountAmount)} readOnly style={readOnlyInp} />
+                        </Field>
                         <Field label="Adjustment Amount">
                           <input name="adjustment_amount" type="number" step="0.0001" value={formData.adjustment_amount} onChange={handleChange} style={inp} />
                         </Field>
@@ -2236,13 +2337,19 @@ export default function WarehouseTradingPage() {
                           <input name="unloading_qty" type="number" step="0.0001" value={formData.unloading_qty} onChange={handleChange} style={inp} />
                         </Field>
                         <Field label="Net Receivable">
-                          <input value={formatMoney(saleGrossAmountFromData(formData) - toNumber(formData.claim_amount) - toNumber(formData.other_deduction) - toNumber(formData.adjustment_amount) - toNumber(formData.tds_amount) + toNumber(formData.round_off))} readOnly style={readOnlyInp} />
+                          <input value={formatMoney(saleNetReceivablePreview)} readOnly style={readOnlyInp} />
                         </Field>
                         <Field label="FIFO Amount">
                           <input value={formatMoney(saleGrossAmountFromData(formData))} readOnly style={readOnlyInp} />
                         </Field>
                         <div style={{ marginTop: 8, fontSize: 13, color: "#444" }}>
-                          Outstanding: Rs.{formatMoney(saleGrossAmountFromData(formData) - toNumber(formData.claim_amount) - toNumber(formData.other_deduction) - toNumber(formData.adjustment_amount) - toNumber(formData.tds_amount) + toNumber(formData.round_off))}
+                          Outstanding: Rs.{formatMoney(saleNetReceivablePreview)}
+                        </div>
+                        <div style={smartInfoGridStyle}>
+                          <div style={smartInfoBoxStyle}><span>Buyer Sale Qty</span><strong>{formatDecimal4(selectedBuyerSaleQty)}</strong></div>
+                          <div style={smartInfoBoxStyle}><span>Balance Amount</span><strong>{formatMoney(selectedBuyerBalanceAmount)}</strong></div>
+                          <div style={smartInfoBoxStyle}><span>Pending Amount</span><strong>{formatMoney(selectedBuyerPendingAmount)}</strong></div>
+                          <div style={smartInfoBoxStyle}><span>Warehouse Balance Qty</span><strong>{selectedWarehouseBalanceQty === null ? "-" : formatDecimal4(selectedWarehouseBalanceQty)}</strong></div>
                         </div>
                       </>
                     )}
@@ -2355,6 +2462,7 @@ export default function WarehouseTradingPage() {
                     const saleTotalDeductionValue =
                       saleShortageValue +
                       toNumber(item.other_deduction) +
+                      toNumber(item.cd_amount) +
                       toNumber(item.adjustment_amount) +
                       toNumber(item.tds_amount);
                     return (
@@ -3152,10 +3260,24 @@ export default function WarehouseTradingPage() {
                 <label style={lbl}>Total Deduction (Auto)</label>
                 <input 
                   type="text"
-                  value={formatMoney(saleQualityDeduction)}
+                  value={formatMoney(saleQualityDeduction + saleCashDiscountAmount)}
                   readOnly
                   style={readOnlyInp}
                 />
+              </div>
+              <div>
+                <label style={lbl}>CD %</label>
+                <input
+                  type="number"
+                  step="0.0001"
+                  value={formData.cd_percent}
+                  onChange={(e) => setFormData(prev => ({ ...prev, cd_percent: e.target.value, cd_amount: (saleBillAmountFromData(prev) * toNumber(e.target.value) / 100).toFixed(2) }))}
+                  style={inp}
+                />
+              </div>
+              <div>
+                <label style={lbl}>CD Amount</label>
+                <input type="text" value={formatMoney(saleCashDiscountAmount)} readOnly style={readOnlyInp} />
               </div>
               <div>
                 <label style={lbl}>TDS</label>
@@ -3182,13 +3304,16 @@ export default function WarehouseTradingPage() {
                   <strong>Deduction:</strong> Rs.{formatMoney(saleQualityDeduction)}
                 </div>
                 <div>
+                  <strong>Cash Discount:</strong> Rs.{formatMoney(saleCashDiscountAmount)}
+                </div>
+                <div>
                   <strong>TDS:</strong> Rs.{formatMoney(tdsEligible ? autoTdsAmount : formData.tds_amount)}
                 </div>
                 <div>
                   <strong>Round Off:</strong> Rs.{formatMoney(formData.round_off)}
                 </div>
                 <div style={{ fontWeight: 700, color: "#0f766e", fontSize: 14 }}>
-                  <strong>Net Receivable:</strong> Rs.{formatMoney(saleBillAmountFromData(formData) - saleShortageAmount - saleQualityDeduction - toNumber(formData.adjustment_amount) - (tdsEligible ? autoTdsAmount : toNumber(formData.tds_amount)) + toNumber(formData.round_off))}
+                  <strong>Net Receivable:</strong> Rs.{formatMoney(saleNetReceivablePreview)}
                 </div>
               </div>
               {tdsEligible && (
@@ -3302,10 +3427,14 @@ export default function WarehouseTradingPage() {
             </div>
 
             <div style={stockSummaryGridStyle}>
-              <div style={stockMetricStyle}><span>Inward Qty</span><strong>{formatDecimal4(stockDrilldownTotals.inward_qty || 0)}</strong></div>
-              <div style={stockMetricStyle}><span>Outward Qty</span><strong>{formatDecimal4(stockDrilldownTotals.outward_qty || 0)}</strong></div>
-              <div style={stockMetricStyle}><span>Balance Qty</span><strong>{formatDecimal4(stockDrilldownTotals.balance_qty || 0)}</strong></div>
-              <div style={stockMetricStyle}><span>Day Wise Avg Rate</span><strong>{formatMoney(stockDrilldownTotals.avg_rate || 0)}</strong></div>
+              {isStockDrilldownSale ? null : (
+                <div style={stockMetricStyle}><span>Purchase / Inward Qty</span><strong>{formatDecimal4(stockDrilldownTotals.inward_qty || 0)}</strong></div>
+              )}
+              {isStockDrilldownPurchase ? null : (
+                <div style={stockMetricStyle}><span>Sale / Outward Qty</span><strong>{formatDecimal4(stockDrilldownTotals.outward_qty || 0)}</strong></div>
+              )}
+              <div style={stockMetricStyle}><span>{isStockDrilldownCombined ? "Stock Qty" : "Balance Qty"}</span><strong>{formatDecimal4(stockDrilldownTotals.balance_qty || 0)}</strong></div>
+              <div style={stockMetricStyle}><span>Purchase Avg Rate</span><strong>{formatMoney(stockDrilldownTotals.avg_rate || 0)}</strong></div>
               <div style={stockMetricStyle}><span>Stock Amount</span><strong>{formatMoney(stockDrilldownTotals.stock_value || 0)}</strong></div>
             </div>
 
@@ -3338,7 +3467,7 @@ export default function WarehouseTradingPage() {
               </button>
             </div>
 
-            <div style={{ ...tableCard, maxHeight: "58vh", marginTop: 14 }}>
+            <div style={{ ...tableCard, maxHeight: "66vh", marginTop: 14 }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                 <thead>
                   <tr style={reportHeaderRowStyle}>
@@ -3346,14 +3475,22 @@ export default function WarehouseTradingPage() {
                     <th style={th}>Type</th>
                     <th style={th}>Voucher No</th>
                     <th style={th}>Party</th>
-                    <th style={th}>Inward Qty</th>
-                    <th style={th}>In Rate</th>
-                    <th style={th}>In Value</th>
-                    <th style={th}>Outward Qty</th>
-                    <th style={th}>Out Rate</th>
-                    <th style={th}>Out Value</th>
-                    <th style={th}>Balance Qty</th>
-                    <th style={th}>Avg Rate</th>
+                    {isStockDrilldownSale ? null : (
+                      <>
+                        <th style={th}>Inward Qty</th>
+                        <th style={th}>In Rate</th>
+                        <th style={th}>In Value</th>
+                      </>
+                    )}
+                    {isStockDrilldownPurchase ? null : (
+                      <>
+                        <th style={th}>Outward Qty</th>
+                        <th style={th}>Out Rate</th>
+                        <th style={th}>Out Value</th>
+                      </>
+                    )}
+                    <th style={th}>{isStockDrilldownCombined ? "Stock Qty" : "Balance Qty"}</th>
+                    <th style={th}>Purchase Avg Rate</th>
                     <th style={th}>Stock Value</th>
                   </tr>
                 </thead>
@@ -3364,31 +3501,47 @@ export default function WarehouseTradingPage() {
                       <td style={{ ...td, fontWeight: 700, color: row.type === "Purchase" ? "#0f766e" : "#b45309" }}>{row.type}</td>
                       <td style={td}>{row.voucher_no || "-"}</td>
                       <td style={td}>{row.party_name || "-"}</td>
-                      <td style={td}>{row.inward_qty ? formatDecimal4(row.inward_qty) : ""}</td>
-                      <td style={td}>{row.inward_rate ? formatMoney(row.inward_rate) : ""}</td>
-                      <td style={td}>{row.inward_amount ? formatMoney(row.inward_amount) : ""}</td>
-                      <td style={td}>{row.outward_qty ? formatDecimal4(row.outward_qty) : ""}</td>
-                      <td style={td}>{row.outward_rate ? formatMoney(row.outward_rate) : ""}</td>
-                      <td style={td}>{row.outward_amount ? formatMoney(row.outward_amount) : ""}</td>
+                      {isStockDrilldownSale ? null : (
+                        <>
+                          <td style={td}>{row.inward_qty ? formatDecimal4(row.inward_qty) : ""}</td>
+                          <td style={td}>{row.inward_rate ? formatMoney(row.inward_rate) : ""}</td>
+                          <td style={td}>{row.inward_amount ? formatMoney(row.inward_amount) : ""}</td>
+                        </>
+                      )}
+                      {isStockDrilldownPurchase ? null : (
+                        <>
+                          <td style={td}>{row.outward_qty ? formatDecimal4(row.outward_qty) : ""}</td>
+                          <td style={td}>{row.outward_rate ? formatMoney(row.outward_rate) : ""}</td>
+                          <td style={td}>{row.outward_amount ? formatMoney(row.outward_amount) : ""}</td>
+                        </>
+                      )}
                       <td style={{ ...td, fontWeight: 800 }}>{formatDecimal4(row.balance_qty || 0)}</td>
                       <td style={td}>{formatMoney(row.day_avg_rate || 0)}</td>
                       <td style={{ ...td, fontWeight: 800 }}>{formatMoney(row.stock_value || 0)}</td>
                     </tr>
                   ))}
                   {stockDrilldownRows.length === 0 && (
-                    <tr><td colSpan={13} style={{ ...td, textAlign: "center", padding: 20 }}>No stock detail available.</td></tr>
+                    <tr><td colSpan={isStockDrilldownCombined ? 13 : 10} style={{ ...td, textAlign: "center", padding: 20 }}>No stock detail available.</td></tr>
                   )}
                 </tbody>
                 {stockDrilldownRows.length > 0 && (
                   <tfoot>
                     <tr style={{ background: "#f1f5f9", fontWeight: 800 }}>
                       <td style={td} colSpan={4}>Total</td>
-                      <td style={td}>{formatDecimal4(stockDrilldownTotals.inward_qty)}</td>
-                      <td style={td}></td>
-                      <td style={td}>{formatMoney(stockDrilldownTotals.inward_amount)}</td>
-                      <td style={td}>{formatDecimal4(stockDrilldownTotals.outward_qty)}</td>
-                      <td style={td}></td>
-                      <td style={td}>{formatMoney(stockDrilldownTotals.outward_amount)}</td>
+                      {isStockDrilldownSale ? null : (
+                        <>
+                          <td style={td}>{formatDecimal4(stockDrilldownTotals.inward_qty)}</td>
+                          <td style={td}></td>
+                          <td style={td}>{formatMoney(stockDrilldownTotals.inward_amount)}</td>
+                        </>
+                      )}
+                      {isStockDrilldownPurchase ? null : (
+                        <>
+                          <td style={td}>{formatDecimal4(stockDrilldownTotals.outward_qty)}</td>
+                          <td style={td}></td>
+                          <td style={td}>{formatMoney(stockDrilldownTotals.outward_amount)}</td>
+                        </>
+                      )}
                       <td style={td}>{formatDecimal4(stockDrilldownTotals.balance_qty)}</td>
                       <td style={td}>{formatMoney(stockDrilldownTotals.avg_rate)}</td>
                       <td style={td}>{formatMoney(stockDrilldownTotals.stock_value)}</td>
@@ -3468,14 +3621,14 @@ const paymentAdjustModalStyle = {
   padding: 18,
 };
 const stockDrilldownModalStyle = {
-  width: "min(1120px, 96vw)",
-  maxHeight: "90vh",
+  width: "min(1380px, 98vw)",
+  maxHeight: "96vh",
   overflow: "auto",
   background: "#fff",
   borderRadius: 8,
   border: "1px solid #cbd5e1",
   boxShadow: "0 20px 45px rgba(15, 23, 42, 0.25)",
-  padding: 18,
+  padding: 20,
 };
 const stockSummaryGridStyle = {
   display: "grid",
@@ -3500,6 +3653,22 @@ const stockMetricStyle = {
   padding: "10px 12px",
   display: "grid",
   gap: 5,
+};
+const smartInfoGridStyle = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+  gap: 8,
+  marginTop: 10,
+};
+const smartInfoBoxStyle = {
+  border: "1px solid #bbf7d0",
+  borderRadius: 8,
+  background: "#f0fdf4",
+  padding: "8px 10px",
+  display: "grid",
+  gap: 4,
+  color: "#14532d",
+  fontSize: 12,
 };
 const reportHeaderRowStyle = { background: "#087a73", color: "#fff" };
 const lbl = { display: "block", marginBottom: 6, fontWeight: 600, fontSize: 13, color: "#334155" };
