@@ -808,7 +808,7 @@ export default function ExpenseManagementPage() {
   };
 
   return (
-    <div style={pageStyle}>
+    <div className="expense-page" style={pageStyle}>
       {!canAccessPage ? (
         <div style={{ ...listCardStyle, padding: "24px", textAlign: "center", color: "#64748b" }}>
           You do not have access to this page.
@@ -817,7 +817,7 @@ export default function ExpenseManagementPage() {
         <>
       <ToastContainer position="top-right" autoClose={2500} hideProgressBar transition={Slide} />
 
-      <div style={headerCardStyle}>
+      <div className="expense-header-card" style={headerCardStyle}>
         <div>
           <h2 style={{ margin: 0, color: "#0f172a" }}>Expense Entry</h2>
           <p style={{ margin: "6px 0 0", color: "#64748b", fontSize: "14px" }}>
@@ -841,18 +841,18 @@ export default function ExpenseManagementPage() {
       </div>
 
       {showForm && (
-        <div style={overlayStyle}>
-          <div style={modalStyle}>
-            <button onClick={resetForm} style={closeButtonStyle}>
+        <div className="expense-form-overlay" style={overlayStyle}>
+          <div className="expense-form-modal" style={modalStyle}>
+            <button className="expense-form-close" onClick={resetForm} style={closeButtonStyle}>
               X
             </button>
 
-            <h3 style={{ marginTop: 0, color: "#0f172a" }}>
+            <h3 className="expense-form-title" style={{ marginTop: 0, color: "#0f172a" }}>
               {editId ? "View Expense Entry" : "New Expense Entry"}
             </h3>
 
-            <form onSubmit={handleSubmit}>
-              <div style={formGridStyle}>
+            <form className="expense-entry-form" onSubmit={handleSubmit}>
+              <div className="expense-form-grid" style={formGridStyle}>
                 <Field label="Location">
                   <select
                     name="location_id"
@@ -1208,10 +1208,10 @@ export default function ExpenseManagementPage() {
                 </Field>
               </div>
 
-              <div style={itemsCardStyle}>
-                <div style={sectionTitleStyle}>Expense Particulars</div>
-                <div style={{ overflowX: "auto" }}>
-                  <table style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0 }}>
+              <div className="expense-items-card" style={itemsCardStyle}>
+                <div className="expense-section-title" style={sectionTitleStyle}>Expense Particulars</div>
+                <div className="expense-items-table-wrap" style={{ overflowX: "auto" }}>
+                  <table className="expense-items-table" style={{ width: "100%", borderCollapse: "separate", borderSpacing: 0 }}>
                     <thead>
                       <tr>
                         <th style={compactHeadStyle}>#</th>
@@ -1235,7 +1235,7 @@ export default function ExpenseManagementPage() {
                 </div>
               </div>
 
-              <div style={formGridStyle}>
+              <div className="expense-form-grid" style={formGridStyle}>
                 <Field label="Receive Cash From Party">
                   <input
                     type="number"
@@ -1287,7 +1287,7 @@ export default function ExpenseManagementPage() {
                 />
               </Field>
 
-              <div style={actionBarStyle}>
+              <div className="expense-action-bar" style={actionBarStyle}>
                 <button
                   type="submit"
                   disabled={editId ? !canEdit : !canCreate}
@@ -1448,8 +1448,8 @@ export default function ExpenseManagementPage() {
 
 function Field({ label, children }) {
   return (
-    <div>
-      <label style={labelStyle}>{label}</label>
+    <div className="expense-field">
+      <label className="expense-field-label" style={labelStyle}>{label}</label>
       {children}
     </div>
   );
@@ -1458,9 +1458,10 @@ function Field({ label, children }) {
 const ExpenseItemRow = React.memo(function ExpenseItemRow({ item, index, onItemChange }) {
   return (
     <tr>
-      <td style={compactIndexStyle}>{index + 1}</td>
-      <td style={compactCellStyle}>
+      <td className="expense-item-index" style={compactIndexStyle}>{index + 1}</td>
+      <td className="expense-item-cell" style={compactCellStyle}>
         <input
+          className="expense-item-input expense-item-particular"
           type="text"
           value={asTextValue(item.particular_name)}
           onChange={(e) => {
@@ -1469,8 +1470,9 @@ const ExpenseItemRow = React.memo(function ExpenseItemRow({ item, index, onItemC
           style={compactInputStyle}
         />
       </td>
-      <td style={compactCellStyle}>
+      <td className="expense-item-cell" style={compactCellStyle}>
         <input
+          className="expense-item-input"
           type="text"
           inputMode="decimal"
           value={asTextValue(item.bags)}
@@ -1482,8 +1484,9 @@ const ExpenseItemRow = React.memo(function ExpenseItemRow({ item, index, onItemC
           placeholder="Bags"
         />
       </td>
-      <td style={compactCellStyle}>
+      <td className="expense-item-cell" style={compactCellStyle}>
         <input
+          className="expense-item-input"
           type="text"
           inputMode="decimal"
           value={asTextValue(item.rate)}
@@ -1495,8 +1498,9 @@ const ExpenseItemRow = React.memo(function ExpenseItemRow({ item, index, onItemC
           placeholder="Rate"
         />
       </td>
-      <td style={compactCellStyle}>
+      <td className="expense-item-cell" style={compactCellStyle}>
         <input
+          className="expense-item-input"
           type="number"
           value={item.amount}
           readOnly
