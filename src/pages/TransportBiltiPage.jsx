@@ -9,6 +9,7 @@ export default function TransportBiltiPage() {
 
   const [mode, setMode] = useState("outward");
   const [outwardList, setOutwardList] = useState([]);
+  const [saleList, setSaleList] = useState([]);
   const [transporters, setTransporters] = useState([]);
   const [companies, setCompanies] = useState([]);
   const [companyAccounts, setCompanyAccounts] = useState([]);
@@ -16,6 +17,8 @@ export default function TransportBiltiPage() {
   const [consignees, setConsignees] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
   const [selectedOutwardId, setSelectedOutwardId] = useState("");
+  const [selectedSaleId, setSelectedSaleId] = useState("");
+  const [sourceSearch, setSourceSearch] = useState("");
   const [meta, setMeta] = useState(null);
 
   const emptyForm = {
@@ -92,6 +95,22 @@ export default function TransportBiltiPage() {
     cursor: "pointer",
   };
 
+  const sourceTh = {
+    padding: "8px 10px",
+    borderBottom: "1px solid #cbd5e1",
+    background: "#f1f5f9",
+    textAlign: "left",
+    color: "#334155",
+    fontSize: 12,
+  };
+
+  const sourceTd = {
+    padding: "8px 10px",
+    borderBottom: "1px solid #e2e8f0",
+    color: "#0f172a",
+    fontSize: 12,
+  };
+
   const num = (v) => {
     const n = Number(v);
     return Number.isFinite(n) ? n : 0;
@@ -119,6 +138,7 @@ export default function TransportBiltiPage() {
   const loadMasterData = async () => {
     const [
       outwardRes,
+      saleRes,
       transportRes,
       companyRes,
       accountRes,
@@ -127,6 +147,7 @@ export default function TransportBiltiPage() {
       warehouseRes,
     ] = await Promise.all([
       axios.get(`${API_BASE}/transport-bilti/outward-list`),
+      axios.get(`${API_BASE}/transport-bilti/sale-list`),
       axios.get(`${API_BASE}/transporters`),
       axios.get(`${API_BASE}/companies`),
       axios.get(`${API_BASE}/company-accounts`),
@@ -136,6 +157,7 @@ export default function TransportBiltiPage() {
     ]);
 
     setOutwardList(outwardRes.data || []);
+    setSaleList(saleRes.data || []);
     setTransporters(transportRes.data || []);
     setCompanies(companyRes.data || []);
     setCompanyAccounts(accountRes.data || []);
@@ -162,6 +184,8 @@ export default function TransportBiltiPage() {
   const resetForm = () => {
     setMeta(null);
     setSelectedOutwardId("");
+    setSelectedSaleId("");
+    setSourceSearch("");
     setFormData(emptyForm);
   };
 
@@ -170,15 +194,20 @@ export default function TransportBiltiPage() {
     resetForm();
   };
 
-  const loadBilti = async (id) => {
+  const loadBilti = async (id, source = "") => {
     if (!id) return;
 
     try {
-      const res = await axios.get(`${API_BASE}/transport-bilti/${id}`);
+      const res = await axios.get(`${API_BASE}/transport-bilti/${id}`, {
+        params: source ? { source } : undefined,
+      });
       const row = res.data;
       setMeta(row);
 
-      const dispatchDate = row.dispatch_date || row.outward_entry_date || row.outward_date || "";
+      const sourceDate = row.outward_entry_date || row.sale_entry_date || row.outward_date;
+      const sourceQty = row.outward_quantity || row.outward_weight || row.sale_unloading_qty || row.sale_quantity;
+      const sourceRate = row.outward_master_rate || row.sale_master_rate;
+      const dispatchDate = row.dispatch_date || sourceDate || "";
 
       setFormData({
         id: row.id || "",
@@ -187,24 +216,24 @@ export default function TransportBiltiPage() {
         company_account_id: "",
         warehouse_id: "",
         dispatch_date: dispatchDate,
-        outward_date: row.outward_entry_date || row.outward_date || "",
+        outward_date: sourceDate || "",
         destination: row.destination || "",
         days:
           row.days !== undefined && row.days !== null && row.days !== ""
             ? row.days
-            : calcBiltiDays(row.outward_entry_date || row.outward_date, dispatchDate),
-        voucher_no: row.outward_voucher_no || row.voucher_no || "",
-        company_name: row.outward_company_name || row.company_name || "",
-        account_name: row.outward_account_name || row.account_name || "",
-        warehouse_name: row.outward_warehouse_name || row.warehouse_name || "",
-        product_name: row.outward_product_name || row.product_name || "",
-        lorry_no: row.outward_lorry_no || row.lorry_no || "",
-        buyer_name: row.outward_buyer_name || row.buyer_name || "",
-        consignee_name: row.outward_consignee_name || row.consignee_name || "",
-        outward_qty: row.outward_qty ?? num(row.outward_quantity || row.outward_weight),
-        dispatch_qty: row.dispatch_qty ?? num(row.outward_quantity || row.outward_weight),
+            : calcBiltiDays(sourceDate, dispatchDate),
+        voucher_no: row.outward_voucher_no || row.sale_voucher_no || row.voucher_no || "",
+        company_name: row.outward_company_name || row.sale_buyer_name || row.company_name || "",
+        account_name: row.outward_account_name || row.sale_account_name || row.account_name || "",
+        warehouse_name: row.outward_warehouse_name || row.sale_warehouse_name || row.warehouse_name || "",
+        product_name: row.outward_product_name || row.sale_product_name || row.product_name || "",
+        lorry_no: row.outward_lorry_no || row.sale_lorry_no || row.lorry_no || "",
+        buyer_name: row.outward_buyer_name || row.sale_buyer_name || row.buyer_name || "",
+        consignee_name: row.outward_consignee_name || row.sale_consignee_name || row.consignee_name || "",
+        outward_qty: row.outward_qty ?? num(sourceQty),
+        dispatch_qty: row.dispatch_qty ?? num(sourceQty),
         shortage_free_kg: String(row.shortage_free_kg ?? 100),
-        outward_rate: row.outward_rate ?? num(row.outward_master_rate),
+        outward_rate: row.outward_rate ?? num(sourceRate),
         transport_rate: row.transport_rate ?? "",
         detain_amount: row.detain_amount ?? "",
         others_exp: row.others_exp ?? "",
@@ -213,12 +242,18 @@ export default function TransportBiltiPage() {
         narration: row.narration || "",
       });
 
-      if (row.outward_id) {
+      if (row.sale_id) {
+        setMode("sale");
+        setSelectedSaleId(String(row.id || row.sale_id));
+        setSelectedOutwardId("");
+      } else if (row.outward_id) {
         setMode("outward");
         setSelectedOutwardId(String(row.id || row.outward_id));
+        setSelectedSaleId("");
       } else {
         setMode("manual");
         setSelectedOutwardId("");
+        setSelectedSaleId("");
       }
     } catch (err) {
       console.error(err);
@@ -271,6 +306,41 @@ export default function TransportBiltiPage() {
     if (!selectedBuyer?.id) return consignees;
     return consignees.filter((c) => Number(c.buyer_id) === Number(selectedBuyer.id));
   }, [consignees, selectedBuyer]);
+
+  const pendingOutwardList = useMemo(() => {
+    const search = sourceSearch.trim().toLowerCase();
+    return outwardList.filter((row) => {
+      if (row.bilti_id) return false;
+      const searchable = [
+        row.voucher_no,
+        row.company_name,
+        row.account_name,
+        row.warehouse_name,
+        row.product_name,
+        row.lorry_no,
+        row.buyer_name,
+        row.consignee_name,
+      ].join(" ").toLowerCase();
+      return !search || searchable.includes(search);
+    });
+  }, [outwardList, sourceSearch]);
+
+  const pendingSaleList = useMemo(() => {
+    const search = sourceSearch.trim().toLowerCase();
+    return saleList.filter((row) => {
+      if (row.bilti_id) return false;
+      const searchable = [
+        row.voucher_no,
+        row.warehouse_name,
+        row.product_name,
+        row.lorry_no,
+        row.buyer_name,
+        row.consignee_name,
+        row.account_name,
+      ].join(" ").toLowerCase();
+      return !search || searchable.includes(search);
+    });
+  }, [saleList, sourceSearch]);
 
   const calculation = useMemo(() => {
     const outwardQty = num(formData.outward_qty);
@@ -371,8 +441,10 @@ export default function TransportBiltiPage() {
       const res = await axios.post(`${API_BASE}/transport-bilti/save`, {
         ...formData,
         outward_id: mode === "outward" ? selectedOutwardId : null,
+        sale_id: mode === "sale" ? selectedSaleId : null,
       });
       alert(res.data.message || "Bilti saved successfully");
+      await loadMasterData();
       if (res.data.id) {
         loadBilti(res.data.id);
       }
@@ -393,12 +465,16 @@ export default function TransportBiltiPage() {
       const res = await axios.post(`${API_BASE}/transport-bilti/save`, {
         ...formData,
         outward_id: mode === "outward" ? selectedOutwardId : null,
+        sale_id: mode === "sale" ? selectedSaleId : null,
       });
       alert("Bilti edited successfully");
+      await loadMasterData();
       if (res.data.id) {
         loadBilti(res.data.id);
       } else if (mode === "outward" && selectedOutwardId) {
         loadBilti(selectedOutwardId);
+      } else if (mode === "sale" && selectedSaleId) {
+        loadBilti(selectedSaleId, "sale");
       }
     } catch (err) {
       console.error(err);
@@ -698,6 +774,9 @@ const downloadPDF = () => {
           <button onClick={() => switchMode("outward")} style={{ ...btn, background: mode === "outward" ? "#0f766e" : "#64748b" }}>
             From Outward
           </button>
+          <button onClick={() => switchMode("sale")} style={{ ...btn, background: mode === "sale" ? "#0f766e" : "#64748b" }}>
+            From Warehouse Sale
+          </button>
           <button onClick={() => switchMode("manual")} style={{ ...btn, background: mode === "manual" ? "#0f766e" : "#64748b" }}>
             Manual Bilti
           </button>
@@ -706,22 +785,131 @@ const downloadPDF = () => {
 
       {mode === "outward" && (
         <div style={{ ...card, marginBottom: 16 }}>
-          <label style={label}>Select Outward</label>
-          <select
-            value={selectedOutwardId}
-            onChange={(e) => {
-              setSelectedOutwardId(e.target.value);
-              loadBilti(e.target.value);
-            }}
-            style={input}
-          >
-            <option value="">Select Outward</option>
-            {outwardList.map((row) => (
-              <option key={row.id} value={row.bilti_id || row.id}>
-                {row.voucher_no || `OUT-${row.id}`} | {row.company_name} | {row.lorry_no}
-              </option>
-            ))}
-          </select>
+          <label style={label}>Pending Outward</label>
+          <input
+            value={sourceSearch}
+            onChange={(e) => setSourceSearch(e.target.value)}
+            style={{ ...input, marginBottom: 10 }}
+            placeholder="Search by voucher, lorry no, party, warehouse"
+          />
+          <div style={{ overflowX: "auto", border: "1px solid #e2e8f0", borderRadius: 8 }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 860 }}>
+              <thead>
+                <tr>
+                  <th style={sourceTh}>S.L</th>
+                  <th style={sourceTh}>Voucher</th>
+                  <th style={sourceTh}>Date</th>
+                  <th style={sourceTh}>Lorry No</th>
+                  <th style={sourceTh}>Party</th>
+                  <th style={sourceTh}>Warehouse</th>
+                  <th style={sourceTh}>Product</th>
+                  <th style={sourceTh}>Weight</th>
+                  <th style={sourceTh}>Rate</th>
+                  <th style={sourceTh}>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pendingOutwardList.map((row, index) => (
+                  <tr key={row.id} style={{ background: index % 2 ? "#f8fafc" : "#fff" }}>
+                    <td style={sourceTd}>{index + 1}</td>
+                    <td style={sourceTd}>{row.voucher_no || `OUT-${row.id}`}</td>
+                    <td style={sourceTd}>{formatDate(row.date)}</td>
+                    <td style={sourceTd}>{row.lorry_no || "-"}</td>
+                    <td style={sourceTd}>{row.company_name || row.account_name || "-"}</td>
+                    <td style={sourceTd}>{row.warehouse_name || "-"}</td>
+                    <td style={sourceTd}>{row.product_name || "-"}</td>
+                    <td style={sourceTd}>{num(row.quantity || row.weight).toFixed(4)}</td>
+                    <td style={sourceTd}>{num(row.rate).toFixed(2)}</td>
+                    <td style={sourceTd}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedOutwardId(String(row.id));
+                          loadBilti(row.id);
+                        }}
+                        style={{ ...btn, background: "#2563eb", padding: "7px 12px" }}
+                      >
+                        Select
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {pendingOutwardList.length === 0 && (
+                  <tr>
+                    <td colSpan={10} style={{ ...sourceTd, textAlign: "center", padding: 14 }}>
+                      No pending outward found.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {mode === "sale" && (
+        <div style={{ ...card, marginBottom: 16 }}>
+          <label style={label}>Pending Warehouse Sale</label>
+          <input
+            value={sourceSearch}
+            onChange={(e) => setSourceSearch(e.target.value)}
+            style={{ ...input, marginBottom: 10 }}
+            placeholder="Search by bill no, lorry no, buyer, consignee, warehouse"
+          />
+          <div style={{ overflowX: "auto", border: "1px solid #e2e8f0", borderRadius: 8 }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 920 }}>
+              <thead>
+                <tr>
+                  <th style={sourceTh}>S.L</th>
+                  <th style={sourceTh}>Bill</th>
+                  <th style={sourceTh}>Date</th>
+                  <th style={sourceTh}>Lorry No</th>
+                  <th style={sourceTh}>Buyer</th>
+                  <th style={sourceTh}>Consignee</th>
+                  <th style={sourceTh}>Warehouse</th>
+                  <th style={sourceTh}>Product</th>
+                  <th style={sourceTh}>Qty</th>
+                  <th style={sourceTh}>Rate</th>
+                  <th style={sourceTh}>Action</th>
+                </tr>
+              </thead>
+              <tbody>
+                {pendingSaleList.map((row, index) => (
+                  <tr key={row.id} style={{ background: index % 2 ? "#f8fafc" : "#fff" }}>
+                    <td style={sourceTd}>{index + 1}</td>
+                    <td style={sourceTd}>{row.voucher_no || `SAL-${row.id}`}</td>
+                    <td style={sourceTd}>{formatDate(row.date)}</td>
+                    <td style={sourceTd}>{row.lorry_no || "-"}</td>
+                    <td style={sourceTd}>{row.buyer_name || "-"}</td>
+                    <td style={sourceTd}>{row.consignee_name || "-"}</td>
+                    <td style={sourceTd}>{row.warehouse_name || "-"}</td>
+                    <td style={sourceTd}>{row.product_name || "-"}</td>
+                    <td style={sourceTd}>{num(row.unloading_qty || row.quantity).toFixed(4)}</td>
+                    <td style={sourceTd}>{num(row.rate).toFixed(2)}</td>
+                    <td style={sourceTd}>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSelectedSaleId(String(row.id));
+                          loadBilti(row.id, "sale");
+                        }}
+                        style={{ ...btn, background: "#2563eb", padding: "7px 12px" }}
+                      >
+                        Select
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+                {pendingSaleList.length === 0 && (
+                  <tr>
+                    <td colSpan={11} style={{ ...sourceTd, textAlign: "center", padding: 14 }}>
+                      No pending warehouse sale found.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
 
@@ -873,7 +1061,7 @@ const downloadPDF = () => {
                 <input type="number" name="outward_qty" value={formData.outward_qty} onChange={handleChange} style={input} />
               </div>
               <div>
-                <label style={label}>Dispatch Weight</label>
+                <label style={label}>Unloading / Dispatch Weight</label>
                 <input type="number" name="dispatch_qty" value={formData.dispatch_qty} onChange={handleChange} style={input} />
               </div>
               <div>
