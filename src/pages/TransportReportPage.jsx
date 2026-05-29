@@ -125,9 +125,9 @@ export default function TransportReportPage() {
         row.bilti_no,
         row.transporter_name || "",
         formatDisplayDate(row.dispatch_date),
-        row.voucher_no || row.outward_voucher_no || "",
-        row.company_name || row.outward_company_name || "",
-        row.lorry_no || row.outward_lorry_no || "",
+        row.voucher_no || row.outward_voucher_no || row.sale_voucher_no || "",
+        row.company_name || row.outward_company_name || row.sale_buyer_name || "",
+        row.lorry_no || row.outward_lorry_no || row.sale_lorry_no || "",
         row.destination,
         num(row.gross_freight),
         num(row.shortage_amount),
@@ -240,10 +240,10 @@ export default function TransportReportPage() {
                     <td style={td}>{row.bilti_no}</td>
                     <td style={td}>{row.transporter_name}</td>
                   <td style={td}>{formatDisplayDate(row.dispatch_date)}</td>
-                    <td style={td}>{row.voucher_no || row.outward_voucher_no || ""}</td>
-                    <td style={td}>{row.company_name || row.outward_company_name || ""}</td>
-                    <td style={td}>{row.warehouse_name || row.outward_warehouse_name || ""}</td>
-                    <td style={td}>{row.lorry_no || row.outward_lorry_no || ""}</td>
+                    <td style={td}>{row.voucher_no || row.outward_voucher_no || row.sale_voucher_no || ""}</td>
+                    <td style={td}>{row.company_name || row.outward_company_name || row.sale_buyer_name || ""}</td>
+                    <td style={td}>{row.warehouse_name || row.outward_warehouse_name || row.sale_warehouse_name || ""}</td>
+                    <td style={td}>{row.lorry_no || row.outward_lorry_no || row.sale_lorry_no || ""}</td>
                     <td style={td}>{row.destination}</td>
                     <td style={td}>{row.days}</td>
                     <td style={td}>{num(row.outward_qty)}</td>
