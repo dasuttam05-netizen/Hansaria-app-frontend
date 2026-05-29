@@ -1298,3 +1298,169 @@ body {
   font-weight: 800;
   color: #0f172a !important;
 }
+
+@media (max-width: 768px) {
+  .dashboard-sidebar {
+    width: min(86vw, 340px) !important;
+  }
+
+  .dashboard-brand {
+    font-size: 24px !important;
+  }
+
+  .sidebar-nav-item,
+  .sidebar-submenu-item {
+    min-height: 48px !important;
+    font-size: 15px !important;
+  }
+
+  .dashboard-topbar {
+    padding: 18px 16px !important;
+    gap: 16px !important;
+  }
+
+  .dashboard-topbar-info h3 {
+    font-size: 20px !important;
+  }
+
+  .topbar-badge,
+  .topbar-link-btn,
+  .topbar-dropdown-title,
+  .logout-btn {
+    font-size: 15px !important;
+  }
+
+  .topbar-dropdown-meta {
+    font-size: 13px !important;
+  }
+
+  .mobile-menu-button {
+    width: 52px !important;
+    height: 52px !important;
+    border-radius: 16px !important;
+    font-size: 20px !important;
+  }
+
+  .dashboard-logo {
+    height: 56px !important;
+  }
+
+  .dashboard-content {
+    padding: 176px 14px 104px !important;
+  }
+
+  .dashboard-section {
+    margin-bottom: 22px !important;
+  }
+
+  .section-header h2 {
+    font-size: 24px !important;
+  }
+
+  .section-header p,
+  .hero-panel p {
+    font-size: 16px !important;
+    line-height: 1.55 !important;
+  }
+
+  .hero-panel {
+    padding: 22px !important;
+    gap: 18px !important;
+  }
+
+  .hero-panel h1 {
+    font-size: 31px !important;
+  }
+
+  .hero-stat-grid {
+    width: 100% !important;
+  }
+
+  .hero-stat strong,
+  .hero-stat-item strong {
+    font-size: 34px !important;
+  }
+
+  .hero-stat span,
+  .hero-stat-item span,
+  .eyebrow {
+    font-size: 14px !important;
+  }
+
+  .metric-grid {
+    gap: 14px !important;
+  }
+
+  .overview-card {
+    min-height: 76px !important;
+    padding: 16px 18px !important;
+    border-radius: 18px !important;
+  }
+
+  .overview-head-simple {
+    gap: 14px !important;
+  }
+
+  .overview-icon {
+    width: 46px !important;
+    height: 46px !important;
+    font-size: 20px !important;
+  }
+
+  .overview-head-simple .title {
+    font-size: 18px !important;
+  }
+
+  .overview-count {
+    font-size: 14px !important;
+  }
+
+  .overview-arrow {
+    width: 34px !important;
+    height: 34px !important;
+    font-size: 13px !important;
+  }
+
+  .report-highlight-row {
+    gap: 14px !important;
+  }
+
+  .report-highlight-card {
+    padding: 18px !important;
+    border-radius: 18px !important;
+  }
+
+  .report-highlight-card span {
+    font-size: 13px !important;
+  }
+
+  .report-highlight-card strong {
+    font-size: 34px !important;
+  }
+
+  .table-card > div[style*="display: flex"] {
+    gap: 10px !important;
+  }
+
+  .table-card button {
+    min-height: 46px !important;
+    padding: 11px 15px !important;
+    font-size: 15px !important;
+  }
+
+  .dashboard-table {
+    min-width: 780px !important;
+    font-size: 16px !important;
+  }
+
+  .dashboard-table th,
+  .dashboard-table td {
+    padding: 14px 14px !important;
+  }
+
+  .table-view-button {
+    min-width: 112px !important;
+    height: 44px !important;
+    font-size: 14px !important;
+  }
+}
