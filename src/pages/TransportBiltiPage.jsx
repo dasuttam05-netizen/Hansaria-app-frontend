@@ -147,7 +147,7 @@ export default function TransportBiltiPage() {
       warehouseRes,
     ] = await Promise.all([
       axios.get(`${API_BASE}/transport-bilti/outward-list`),
-      axios.get(`${API_BASE}/transport-bilti/sale-list`),
+      axios.get(`${API_BASE}/wh-vouchers/sale`),
       axios.get(`${API_BASE}/transporters`),
       axios.get(`${API_BASE}/companies`),
       axios.get(`${API_BASE}/company-accounts`),
@@ -343,7 +343,7 @@ export default function TransportBiltiPage() {
         row.lorry_no,
         row.buyer_name,
         row.consignee_name,
-        row.account_name,
+        row.account_name || row.company_account_name,
       ].join(" ").toLowerCase();
       return !search || searchable.includes(search);
     });
