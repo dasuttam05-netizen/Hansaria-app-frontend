@@ -30,7 +30,7 @@ button {
 
 @media (max-width: 768px) {
   body {
-    font-size: 16px;
+    font-size: 18px;
   }
 
   #root {
@@ -47,17 +47,17 @@ button {
   }
 
   h1 {
-    font-size: 26px !important;
+    font-size: 30px !important;
     line-height: 1.2 !important;
   }
 
   h2 {
-    font-size: 22px !important;
+    font-size: 25px !important;
     line-height: 1.25 !important;
   }
 
   h3 {
-    font-size: 18px !important;
+    font-size: 21px !important;
     line-height: 1.3 !important;
   }
 
@@ -65,11 +65,13 @@ button {
   input,
   select,
   textarea {
-    min-height: 44px !important;
-    font-size: 16px !important;
+    min-height: 52px !important;
+    font-size: 18px !important;
+    line-height: 1.35 !important;
   }
 
   button {
+    padding: 12px 16px !important;
     white-space: normal !important;
   }
 
@@ -78,11 +80,34 @@ button {
   textarea {
     width: 100% !important;
     max-width: 100% !important;
+    padding: 13px 14px !important;
   }
 
   form,
   label {
     max-width: 100% !important;
+  }
+
+  label,
+  legend,
+  form span,
+  form p,
+  form small {
+    font-size: 16px !important;
+    line-height: 1.4 !important;
+  }
+
+  form {
+    gap: 16px !important;
+  }
+
+  form > div,
+  form fieldset,
+  .form-grid,
+  .filter-row,
+  .filters,
+  .toolbar {
+    gap: 14px !important;
   }
 
   div[style*="grid-template-columns"] {
@@ -128,12 +153,12 @@ button {
   table {
     min-width: 720px !important;
     width: max-content !important;
-    font-size: 14px !important;
+    font-size: 16px !important;
   }
 
   th,
   td {
-    padding: 10px 9px !important;
+    padding: 13px 12px !important;
     white-space: nowrap;
   }
 
@@ -144,12 +169,12 @@ button {
   }
 
   .dashboard-topbar {
-    min-height: 138px;
-    padding: 14px !important;
+    min-height: 154px;
+    padding: 16px !important;
   }
 
   .dashboard-content {
-    padding: 156px 12px 88px !important;
+    padding: 170px 14px 96px !important;
   }
 
   .dashboard-panel,
@@ -159,7 +184,7 @@ button {
   .table-card,
   .chart-card {
     border-radius: 14px !important;
-    padding: 14px !important;
+    padding: 18px !important;
   }
 
   .dashboard-sidebar {
@@ -184,7 +209,7 @@ button {
   }
 
   .hero-panel h1 {
-    font-size: 25px !important;
+    font-size: 30px !important;
   }
 
   .hero-stat-grid {
@@ -199,27 +224,27 @@ button {
   }
 
   .login-form-panel {
-    padding: 16px !important;
+    padding: 18px !important;
   }
 
   .login-form-panel > div {
     max-width: 100% !important;
-    padding: 24px 18px !important;
+    padding: 28px 20px !important;
     border-radius: 16px !important;
   }
 }
 
 @media (max-width: 420px) {
   h1 {
-    font-size: 24px !important;
+    font-size: 28px !important;
   }
 
   h2 {
-    font-size: 20px !important;
+    font-size: 23px !important;
   }
 
   table {
-    min-width: 680px !important;
+    min-width: 720px !important;
   }
 
   .dashboard-content {
