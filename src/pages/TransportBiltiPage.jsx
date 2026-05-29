@@ -211,8 +211,16 @@ export default function TransportBiltiPage() {
       const row = res.data;
       setMeta(row);
 
-      const sourceDate = row.outward_entry_date || row.sale_entry_date || row.outward_date;
-      const sourceQty = row.outward_quantity || row.outward_weight || row.sale_unloading_qty || row.sale_quantity;
+      const sourceDate =
+        row.outward_entry_date ||
+        row.sale_unloading_date ||
+        row.sale_entry_date ||
+        row.outward_date;
+      const sourceQty =
+        row.outward_quantity ||
+        row.outward_weight ||
+        row.sale_unloading_qty ||
+        row.sale_quantity;
       const sourceRate = row.outward_master_rate || row.sale_master_rate;
       const dispatchDate = row.dispatch_date || sourceDate || "";
 
