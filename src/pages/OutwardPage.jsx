@@ -139,16 +139,20 @@ export default function OutwardPage() {
         ? assignedWarehouses.find((w) => sameId(getRecordId(w), formData.warehouse_id))
         : assignedWarehouses[0];
       const warehouseLocationId = getRecordId(selectedWarehouse?.location_id);
+      const isMissingEmployeeData = !emp && assignedWarehouses.length === 0;
 
       setFormData((prev) => ({
         ...prev,
-        location_id: warehouseLocationId || getRecordId(emp?.location_id),
+        location_id:
+          isMissingEmployeeData && prev.location_id
+            ? prev.location_id
+            : warehouseLocationId || getRecordId(emp?.location_id) || prev.location_id,
         warehouse_id:
           currentWarehouseIsValid
             ? prev.warehouse_id
             : assignedWarehouses.length > 0
             ? getRecordId(assignedWarehouses[0])
-            : "",
+            : prev.warehouse_id,
       }));
     }
   }, [formData.employee_id, employees, warehouses, editData]);
@@ -392,6 +396,22 @@ export default function OutwardPage() {
       setEmployees((prev) => [
         ...(Array.isArray(prev) ? prev : []),
         { id: empId, name: row.employee_name || `Employee ${empId}` },
+      ]);
+    }
+
+    const locId = getRecordId(row.location_id);
+    if (locId && !locations.some((l) => sameId(getRecordId(l), locId))) {
+      setLocations((prev) => [
+        ...(Array.isArray(prev) ? prev : []),
+        { id: locId, name: row.location_name || `Location ${locId}` },
+      ]);
+    }
+
+    const whId = getRecordId(row.warehouse_id);
+    if (whId && !warehouses.some((w) => sameId(getRecordId(w), whId))) {
+      setWarehouses((prev) => [
+        ...(Array.isArray(prev) ? prev : []),
+        { id: whId, name: row.warehouse_name || `Warehouse ${whId}`, location_id: locId || null },
       ]);
     }
 
