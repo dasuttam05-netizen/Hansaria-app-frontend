@@ -768,7 +768,7 @@ Consignee: ${row.consignee_name}`;
             </p>
           </div>
 
-          <div style={{ minWidth: "220px", flex: "1 1 220px", display: "flex", alignItems: "center" }}>
+          <div style={{ minWidth: "220px", flex: "1 1 220px", display: "flex", alignItems: "center", justifyContent: "flex-end" }}>
             <button
               onClick={() => {
                 setEditData(null);
@@ -778,50 +778,60 @@ Consignee: ${row.consignee_name}`;
               disabled={!canCreate}
               style={{
                 ...btnStyle,
-                width: "100%",
                 background: canCreate ? "#0f766e" : "#94a3b8",
                 color: "#fff",
-                padding: "14px 18px",
+                padding: "12px 16px",
                 borderRadius: "14px",
-                fontSize: "14px",
-                boxShadow: canCreate ? "0 14px 26px rgba(16, 185, 129, 0.24)" : "none",
+                fontSize: "13px",
+                width: "auto",
+                minWidth: "160px",
+                boxShadow: canCreate ? "0 10px 20px rgba(16, 185, 129, 0.2)" : "none",
               }}
             >
-              Add New Outward
+              Add Outward
             </button>
           </div>
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "12px", marginTop: "18px" }}>
           {[
-            { title: "Total Entries", value: outwards.length, note: "Loaded outward records" },
-            { title: "All", value: outwards.length, note: "Show all entries" },
-            { title: "Pending", value: pendingCount, note: "Not adjusted" },
-            { title: "Settled", value: totalSettlementsCount, note: `${totalSettlementWeight.toFixed(2)} wt` },
-          ].map((item) => (
-            <div
-              key={item.title}
-              style={{
-                borderRadius: "18px",
-                border: "1px solid rgba(15, 23, 42, 0.08)",
-                background: "#fff",
-                padding: "18px 16px",
-                display: "flex",
-                flexDirection: "column",
-                justifyContent: "space-between",
-                minHeight: "120px",
-                boxShadow: "0 10px 20px rgba(15, 23, 42, 0.04)",
-              }}
-            >
-              <div>
-                <div style={{ fontSize: "11px", color: "#64748b", fontWeight: 700, marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.08em" }}>
-                  {item.title}
+            { title: "Total Entries", key: "all", value: outwards.length, note: "Loaded outward records" },
+            { title: "All", key: "all", value: outwards.length, note: "Show all entries" },
+            { title: "Pending", key: "pending", value: pendingCount, note: "Not adjusted" },
+            { title: "Adjusted", key: "adjusted", value: adjustedCount, note: "Partial/completed" },
+            { title: "Settled", key: "settled", value: totalSettlementsCount, note: `Settlement details • ${totalSettlementWeight.toFixed(2)} wt` },
+          ].map((item) => {
+            const isActive = filterView === item.key;
+            return (
+              <div
+                key={item.title}
+                onClick={() => setFilterView(item.key)}
+                style={{
+                  borderRadius: "18px",
+                  border: isActive ? "1px solid #0ea5a4" : "1px solid rgba(15, 23, 42, 0.08)",
+                  background: isActive ? "rgba(14, 165, 164, 0.08)" : "#fff",
+                  padding: "18px 16px",
+                  display: "flex",
+                  flexDirection: "column",
+                  justifyContent: "space-between",
+                  minHeight: "120px",
+                  boxShadow: "0 10px 20px rgba(15, 23, 42, 0.04)",
+                  cursor: "pointer",
+                }}
+              >
+                <div>
+                  <div style={{ fontSize: "11px", color: "#64748b", fontWeight: 700, marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                    {item.title}
+                  </div>
+                  <div style={{ fontSize: "30px", fontWeight: 800, color: "#0f172a", lineHeight: 1 }}>{item.value}</div>
                 </div>
-                <div style={{ fontSize: "30px", fontWeight: 800, color: "#0f172a", lineHeight: 1 }}>{item.value}</div>
+                <div style={{ fontSize: "12px", color: "#475569" }}>{item.note}</div>
               </div>
-              <div style={{ fontSize: "12px", color: "#475569" }}>{item.note}</div>
-            </div>
-          ))}
+            );
+          })}
+        </div>
+        <div style={{ marginTop: "12px", color: "#475569", fontSize: "13px" }}>
+          Click any summary box above to show the matching outward details below.
         </div>
       </div>
 
@@ -1223,31 +1233,6 @@ Consignee: ${row.consignee_name}`;
           <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "12px", justifyContent: "space-between" }}>
             <h3 style={{ margin: 0, color: "#0f172a", fontSize: "22px", fontWeight: 800 }}>Outward Entries</h3>
             <div style={{ color: "#64748b", fontSize: "13px" }}>Use row actions to edit, copy, adjust, or settle records quickly.</div>
-          </div>
-          <div style={{ marginTop: "12px", display: "flex", flexWrap: "wrap", gap: "10px" }}>
-            {[
-              { label: "✎ Edit", color: "#e0f2fe" },
-              { label: "⧉ Copy", color: "#eef2ff" },
-              { label: "⚙ Adjust", color: "#ffedd5" },
-              { label: "₹ Settlement", color: "#dcfce7" },
-            ].map((item) => (
-              <span
-                key={item.label}
-                style={{
-                  display: "inline-flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                  padding: "8px 12px",
-                  borderRadius: "999px",
-                  background: item.color,
-                  color: "#0f172a",
-                  fontSize: "13px",
-                  fontWeight: 600,
-                }}
-              >
-                {item.label}
-              </span>
-            ))}
           </div>
         </div>
         <div style={{ overflowX: "auto", overflowY: "auto", maxHeight: "78vh" }}>
