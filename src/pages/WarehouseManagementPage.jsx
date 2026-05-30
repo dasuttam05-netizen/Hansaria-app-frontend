@@ -17,6 +17,8 @@ const emptyForm = () => ({
   location_id: "",
   employee_id: "",
   employee_ids: [],
+  opening_balance: "0",
+  opening_balance_type: "dr",
 });
 
 const emptySaleForm = () => ({
@@ -174,6 +176,11 @@ export default function WarehouseManagementPage() {
         location_id: formData.location_id || null,
         employee_id: safeEmployeeIds[0] || null,
         employee_ids: safeEmployeeIds,
+        opening_balance: Number(formData.opening_balance || 0),
+        opening_balance_type:
+          String(formData.opening_balance_type || "dr").toLowerCase() === "cr"
+            ? "cr"
+            : "dr",
       };
       if (editId) {
         await axios.put(`${API_URL}/${editId}`, payload);
@@ -208,6 +215,8 @@ export default function WarehouseManagementPage() {
       location_id: normalizeId(w.location_id),
       employee_id: safeEmployeeIds[0] || "",
       employee_ids: safeEmployeeIds,
+      opening_balance: String(w.opening_balance ?? 0),
+      opening_balance_type: String(w.opening_balance_type || "dr"),
     });
     setEditId(w.id);
     setShowForm(true);
@@ -456,6 +465,27 @@ export default function WarehouseManagementPage() {
                     placeholder={formData.location_id ? "Select Employees" : "Select Location First (Optional)"}
                   />
                 </Field>
+                <Field label="Opening Balance">
+                  <input
+                    name="opening_balance"
+                    value={formData.opening_balance}
+                    onChange={handleChange}
+                    type="number"
+                    step="0.01"
+                    style={inp}
+                  />
+                </Field>
+                <Field label="Balance Type">
+                  <select
+                    name="opening_balance_type"
+                    value={formData.opening_balance_type}
+                    onChange={handleChange}
+                    style={inp}
+                  >
+                    <option value="dr">Dr</option>
+                    <option value="cr">Cr</option>
+                  </select>
+                </Field>
                 <div style={{ gridColumn: "1 / -1" }}>
                   <Field label="Address">
                     <textarea name="address" value={formData.address} onChange={handleChange} rows={3} style={{ ...inp, minHeight: 72, resize: "vertical" }} />
@@ -482,6 +512,7 @@ export default function WarehouseManagementPage() {
                     <th style={th}>Name</th>
                     <th style={th}>Address</th>
                     <th style={th}>Location</th>
+                    <th style={th}>Opening</th>
                     <th style={th}>Employee</th>
                     <th style={th}>Actions</th>
                   </tr>
@@ -506,6 +537,7 @@ export default function WarehouseManagementPage() {
                         <td style={td}>{w.name || "-"}</td>
                         <td style={td}>{w.address || "-"}</td>
                         <td style={td}>{locationName}</td>
+                        <td style={td}>{`${Number(w.opening_balance ?? 0).toFixed(2)} ${String(w.opening_balance_type || "dr").toUpperCase()}`}</td>
                         <td style={td}>{employeeName}</td>
                         <td style={td}>
                           <button type="button" onClick={() => handleEdit(w)} style={{ ...mini, background: "#2563eb" }}>Edit</button>{" "}
@@ -515,7 +547,7 @@ export default function WarehouseManagementPage() {
                     );
                   })}
                   {warehouses.length === 0 ? (
-                    <tr><td colSpan={6} style={{ ...td, textAlign: "center", padding: "20px" }}>No warehouses found.</td></tr>
+                    <tr><td colSpan={7} style={{ ...td, textAlign: "center", padding: "20px" }}>No warehouses found.</td></tr>
                   ) : null}
                 </tbody>
               </table>
