@@ -102,6 +102,24 @@ export default function AdjustmentPage({ outward }) {
     };
   };
 
+  const visibleInwardList = useMemo(() => {
+    const hiddenKeys = new Set(
+      adjustments.map((item) =>
+        item.source_type === "palti_lorry"
+          ? `palti:${item.palti_lorry_id}`
+          : `inward:${item.inward_id}`
+      )
+    );
+
+    return inwardList.filter((row) => {
+      const rowKey =
+        (row.source_type || "inward") === "palti_lorry"
+          ? `palti:${row.id}`
+          : `inward:${row.id}`;
+      return !hiddenKeys.has(rowKey);
+    });
+  }, [inwardList, adjustments]);
+
   const loadCompanyList = async () => {
     if (!outward?.warehouse_id && !outward?.location_id) return setCompanyList([]);
     try {
@@ -326,6 +344,28 @@ export default function AdjustmentPage({ outward }) {
       </div>
 
       <div style={cardStyle}>
+        <h3 style={sectionTitle}>Settlement Summary</h3>
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+          <div style={{ flex: "1 1 220px", background: "#ecfeff", border: "1px solid #67e8f9", borderRadius: 10, padding: 12 }}>
+            <div style={{ fontWeight: 700, marginBottom: 8 }}>Settlement Items</div>
+            <div>{adjustments.length} item{adjustments.length === 1 ? "" : "s"}</div>
+          </div>
+          <div style={{ flex: "1 1 220px", background: "#f0fdf4", border: "1px solid #86efac", borderRadius: 10, padding: 12 }}>
+            <div style={{ fontWeight: 700, marginBottom: 8 }}>Total Settlement Qty</div>
+            <div>{num(totalDraftAdjusted)}</div>
+          </div>
+          <div style={{ flex: "1 1 220px", background: "#fef3c7", border: "1px solid #fde68a", borderRadius: 10, padding: 12 }}>
+            <div style={{ fontWeight: 700, marginBottom: 8 }}>Remaining To Adjust</div>
+            <div>{num(remainingQty)}</div>
+          </div>
+          <div style={{ flex: "1 1 220px", background: "#e0f2fe", border: "1px solid #7dd3fc", borderRadius: 10, padding: 12 }}>
+            <div style={{ fontWeight: 700, marginBottom: 8 }}>Outward Remaining</div>
+            <div>{num(currentRemaining)}</div>
+          </div>
+        </div>
+      </div>
+
+      <div style={cardStyle}>
         <h3 style={sectionTitle}>
           {isPaltiSource ? "Available Palti Lorry List" : "Available Inward Lorry List"}
         </h3>
@@ -348,8 +388,8 @@ export default function AdjustmentPage({ outward }) {
             </tr>
           </thead>
           <tbody>
-            {inwardList.length > 0 ? (
-              inwardList.map((row) => (
+            {visibleInwardList.length > 0 ? (
+              visibleInwardList.map((row) => (
                 <tr
                   key={`${row.source_type || sourceType}-${row.id}`}
                   onClick={() => {
@@ -412,9 +452,9 @@ export default function AdjustmentPage({ outward }) {
       </div>
 
       <div style={cardStyle}>
-        <h3 style={sectionTitle}>Draft Adjustment List</h3>
+        <h3 style={sectionTitle}>Settlement Draft List</h3>
         <div style={{ marginBottom: 10, color: isDraftExactMatch ? "#166534" : "#b45309", fontWeight: 800 }}>
-          Required: {num(adjustmentTargetQty)} | Current Draft Total: {num(totalDraftAdjusted)}
+          Required: {num(adjustmentTargetQty)} | Current Settlement Total: {num(totalDraftAdjusted)}
         </div>
         <table style={tableStyle}>
           <thead>
@@ -461,7 +501,7 @@ export default function AdjustmentPage({ outward }) {
             marginTop: 14,
           }}
         >
-          Final Save
+          Save Settlement
         </button>
       </div>
 
