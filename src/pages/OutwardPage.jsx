@@ -731,127 +731,97 @@ Consignee: ${row.consignee_name}`;
       <div
         style={{
           ...cardStyle,
-          padding: "12px 18px",
+          padding: "18px",
           marginBottom: "16px",
-          display: "flex",
-          justifyContent: "space-between",
-          alignItems: "stretch",
-          flexWrap: "wrap",
-          gap: "12px",
-          background: "linear-gradient(90deg, #d8f1fb 0%, #e7f4fa 22%, #edf6fb 48%, #d9edf9 100%)",
+          background: "linear-gradient(90deg, #d8f1fb 0%, #eef6fb 50%, #fdfefe 100%)",
           border: "1px solid #9dd8fb",
-          borderRadius: "16px",
-          boxShadow: "0 10px 24px rgba(14, 165, 233, 0.08)",
+          borderRadius: "20px",
+          boxShadow: "0 16px 40px rgba(14, 165, 233, 0.12)",
         }}
       >
-        <div style={{ display: "flex", flexDirection: "column", justifyContent: "center", minHeight: "64px" }}>
-          <div
-            style={{
-              display: "inline-flex",
-              alignItems: "center",
-              justifyContent: "center",
-              width: "80px",
-              height: "28px",
-              borderRadius: "999px",
-              border: "1px solid #8ed8ff",
-              background: "rgba(255,255,255,0.18)",
-              color: "#1e293b",
-              fontSize: "12px",
-              fontWeight: 700,
-              marginBottom: "6px",
-            }}
-          >
-            OUTWARD
-          </div>
-          <h2 style={{ margin: 0, color: "#0f172a", fontSize: "22px", fontWeight: 800 }}>
-            Outward Management
-          </h2>
-        </div>
-
-        <div style={{ display: "grid", gridTemplateColumns: "minmax(220px, 200px) minmax(320px, 1fr)", gap: 12, alignItems: "start" }}>
-          <div style={{ display: "grid", gap: 12 }}>
+        <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", gap: "16px", alignItems: "flex-start" }}>
+          <div style={{ minWidth: 0, flex: "1 1 260px" }}>
             <div
               style={{
-                background: "#fff",
-                borderRadius: "18px",
-                border: "1px solid #e5e7f0",
-                boxShadow: "0 12px 28px rgba(15, 23, 42, 0.08)",
-                padding: "18px 16px",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: "96px",
+                height: "32px",
+                borderRadius: "999px",
+                border: "1px solid rgba(14, 165, 233, 0.25)",
+                background: "#ffffff",
+                color: "#0f172a",
+                fontSize: "12px",
+                fontWeight: 700,
+                letterSpacing: "0.04em",
+                marginBottom: "10px",
               }}
             >
-              <div style={{ fontSize: "12px", color: "#64748b", fontWeight: 700, marginBottom: "8px" }}>TOTAL ENTRY</div>
-              <div style={{ fontSize: "30px", fontWeight: 800, color: "#0f172a" }}>{outwards.length}</div>
-              <div style={{ fontSize: "12px", color: "#475569", marginTop: "8px" }}>Total outward records loaded</div>
+              OUTWARD
             </div>
-            <div
+            <h2 style={{ margin: 0, color: "#0f172a", fontSize: "28px", fontWeight: 800, lineHeight: 1.05 }}>
+              Outward Management
+            </h2>
+            <p style={{ margin: "12px 0 0", color: "#475569", fontSize: "14px", maxWidth: "620px" }}>
+              Manage outward records with quick summaries, adjustment actions, and settlement status in one clean dashboard.
+            </p>
+          </div>
+
+          <div style={{ minWidth: "220px", flex: "1 1 220px", display: "flex", alignItems: "center" }}>
+            <button
+              onClick={() => {
+                setEditData(null);
+                resetForm();
+                setShowForm(true);
+              }}
+              disabled={!canCreate}
               style={{
-                background: "#0ea5a4",
+                ...btnStyle,
+                width: "100%",
+                background: canCreate ? "#0f766e" : "#94a3b8",
+                color: "#fff",
+                padding: "14px 18px",
+                borderRadius: "14px",
+                fontSize: "14px",
+                boxShadow: canCreate ? "0 14px 26px rgba(16, 185, 129, 0.24)" : "none",
+              }}
+            >
+              Add New Outward
+            </button>
+          </div>
+        </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "12px", marginTop: "18px" }}>
+          {[
+            { title: "Total Entries", value: outwards.length, note: "Loaded outward records" },
+            { title: "All", value: outwards.length, note: "Show all entries" },
+            { title: "Pending", value: pendingCount, note: "Not adjusted" },
+            { title: "Settled", value: totalSettlementsCount, note: `${totalSettlementWeight.toFixed(2)} wt` },
+          ].map((item) => (
+            <div
+              key={item.title}
+              style={{
                 borderRadius: "18px",
-                boxShadow: "0 12px 28px rgba(14, 165, 164, 0.18)",
+                border: "1px solid rgba(15, 23, 42, 0.08)",
+                background: "#fff",
                 padding: "18px 16px",
                 display: "flex",
                 flexDirection: "column",
                 justifyContent: "space-between",
-                minHeight: "140px",
+                minHeight: "120px",
+                boxShadow: "0 10px 20px rgba(15, 23, 42, 0.04)",
               }}
             >
-              <div style={{ fontSize: "12px", color: "#d9f7f6", fontWeight: 700, marginBottom: "8px" }}>ADD ENTRY</div>
-              <div style={{ fontSize: "20px", fontWeight: 800, color: "#fff", marginBottom: "8px" }}>Create new outward</div>
-              <button
-                onClick={() => {
-                  setEditData(null);
-                  resetForm();
-                  setShowForm(true);
-                }}
-                disabled={!canCreate}
-                style={{
-                  ...btnStyle,
-                  background: canCreate ? "#fff" : "#94a3b8",
-                  color: canCreate ? "#0f172a" : "#f8fafc",
-                  fontWeight: 700,
-                  borderRadius: "14px",
-                  padding: "10px 14px",
-                  minWidth: "100%",
-                }}
-              >
-                Add Outward
-              </button>
-            </div>
-          </div>
-
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 12 }}>
-            {[
-              { key: "all", label: "All", value: outwards.length, note: "Show all entries", color: "#fff", textColor: "#0f172a" },
-              { key: "pending", label: "Pending", value: pendingCount, note: "Not adjusted", color: "#ffffff", textColor: "#0f172a" },
-              { key: "settled", label: "Settled", value: totalSettlementsCount, note: `${totalSettlementWeight.toFixed(2)} wt`, color: filterView === "settled" ? "#0ea5a4" : "#ffffff", textColor: filterView === "settled" ? "#fff" : "#0f172a" },
-            ].map((item) => (
-              <button
-                key={item.key}
-                type="button"
-                onClick={() => setFilterView(item.key)}
-                style={{
-                  borderRadius: "18px",
-                  border: filterView === item.key ? "1px solid #0ea5a4" : "1px solid #d1d5db",
-                  background: filterView === item.key ? "#0ea5a4" : item.color,
-                  color: filterView === item.key ? "#fff" : item.textColor,
-                  padding: "18px 16px",
-                  textAlign: "left",
-                  cursor: "pointer",
-                  boxShadow: filterView === item.key ? "0 16px 28px rgba(14, 165, 164, 0.16)" : "0 8px 18px rgba(15, 23, 42, 0.08)",
-                  minHeight: "140px",
-                  display: "flex",
-                  flexDirection: "column",
-                  justifyContent: "space-between",
-                }}
-              >
-                <div>
-                  <div style={{ fontSize: "12px", fontWeight: 700, marginBottom: "6px" }}>{item.label}</div>
-                  <div style={{ fontSize: "26px", fontWeight: 800, lineHeight: 1 }}>{item.value}</div>
+              <div>
+                <div style={{ fontSize: "11px", color: "#64748b", fontWeight: 700, marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.08em" }}>
+                  {item.title}
                 </div>
-                <div style={{ fontSize: "12px", color: filterView === item.key ? "rgba(255,255,255,0.8)" : "#64748b" }}>{item.note}</div>
-              </button>
-            ))}
-          </div>
+                <div style={{ fontSize: "30px", fontWeight: 800, color: "#0f172a", lineHeight: 1 }}>{item.value}</div>
+              </div>
+              <div style={{ fontSize: "12px", color: "#475569" }}>{item.note}</div>
+            </div>
+          ))}
         </div>
       </div>
 
@@ -1250,7 +1220,35 @@ Consignee: ${row.consignee_name}`;
 
       <div style={{ ...cardStyle, overflow: "hidden" }}>
         <div style={{ padding: "12px 16px", borderBottom: "1px solid #e2e8f0" }}>
-          <h3 style={{ margin: 0, color: "#0f172a", fontSize: "22px", fontWeight: 800 }}>Outward Entries</h3>
+          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "12px", justifyContent: "space-between" }}>
+            <h3 style={{ margin: 0, color: "#0f172a", fontSize: "22px", fontWeight: 800 }}>Outward Entries</h3>
+            <div style={{ color: "#64748b", fontSize: "13px" }}>Use row actions to edit, copy, adjust, or settle records quickly.</div>
+          </div>
+          <div style={{ marginTop: "12px", display: "flex", flexWrap: "wrap", gap: "10px" }}>
+            {[
+              { label: "✎ Edit", color: "#e0f2fe" },
+              { label: "⧉ Copy", color: "#eef2ff" },
+              { label: "⚙ Adjust", color: "#ffedd5" },
+              { label: "₹ Settlement", color: "#dcfce7" },
+            ].map((item) => (
+              <span
+                key={item.label}
+                style={{
+                  display: "inline-flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  padding: "8px 12px",
+                  borderRadius: "999px",
+                  background: item.color,
+                  color: "#0f172a",
+                  fontSize: "13px",
+                  fontWeight: 600,
+                }}
+              >
+                {item.label}
+              </span>
+            ))}
+          </div>
         </div>
         <div style={{ overflowX: "auto", overflowY: "auto", maxHeight: "78vh" }}>
           <table
