@@ -389,7 +389,7 @@ export default function OutwardPage() {
     setFormData({
       date: row.date ? new Date(row.date).toISOString().slice(0, 10) : "",
       employee_id: row.employee_id || "",
-      location_id: "",
+      location_id: row.location_id || "",
       warehouse_id: row.warehouse_id || "",
       product_id: row.product_id || "",
       company_id: row.company_id || "",
