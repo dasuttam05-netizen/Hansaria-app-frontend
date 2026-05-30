@@ -75,7 +75,7 @@ export default function OutwardPage() {
   const [hoveredOutwardId, setHoveredOutwardId] = useState(null);
   const [settlementRows, setSettlementRows] = useState([]);
   const [summaryLoading, setSummaryLoading] = useState(false);
-  const [filterView, setFilterView] = useState("settled"); // all | pending | adjusted | settled
+  const [filterView, setFilterView] = useState("all"); // all | pending | adjusted | settled
 
   const [formData, setFormData] = useState({
     date: "",
@@ -768,92 +768,89 @@ Consignee: ${row.consignee_name}`;
           </h2>
         </div>
 
-        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
-          <div
-            style={{
-              minWidth: "150px",
-              background: "rgba(255,255,255,0.92)",
-              borderRadius: "22px",
-              boxShadow: "0 16px 26px rgba(59, 130, 246, 0.12)",
-              display: "flex",
-              flexDirection: "column",
-              alignItems: "flex-end",
-              justifyContent: "center",
-              padding: "12px 16px",
-            }}
-          >
-            <div style={{ color: "#64748b", fontSize: "12px", fontWeight: 700, marginBottom: "6px" }}>
-              TOTAL ENTRY
-            </div>
-            <div style={{ color: "#0f172a", fontSize: "18px", fontWeight: 700, marginBottom: "10px" }}>
-              {outwards.length}
-            </div>
-            <button
-              onClick={() => {
-                setEditData(null);
-                resetForm();
-                setShowForm(true);
-              }}
-              disabled={!canCreate}
+        <div style={{ display: "grid", gridTemplateColumns: "minmax(220px, 200px) minmax(320px, 1fr)", gap: 12, alignItems: "start" }}>
+          <div style={{ display: "grid", gap: 12 }}>
+            <div
               style={{
-                ...btnStyle,
-                background: canCreate ? "#18b6d9" : "#94a3b8",
-                color: "#fff",
-                padding: "10px 18px",
-                minWidth: "110px",
-                fontWeight: 700,
-                boxShadow: "0 10px 18px rgba(24, 182, 217, 0.26)",
+                background: "#fff",
+                borderRadius: "18px",
+                border: "1px solid #e5e7f0",
+                boxShadow: "0 12px 28px rgba(15, 23, 42, 0.08)",
+                padding: "18px 16px",
               }}
             >
-              Add Outward
-            </button>
+              <div style={{ fontSize: "12px", color: "#64748b", fontWeight: 700, marginBottom: "8px" }}>TOTAL ENTRY</div>
+              <div style={{ fontSize: "30px", fontWeight: 800, color: "#0f172a" }}>{outwards.length}</div>
+              <div style={{ fontSize: "12px", color: "#475569", marginTop: "8px" }}>Total outward records loaded</div>
+            </div>
+            <div
+              style={{
+                background: "#0ea5a4",
+                borderRadius: "18px",
+                boxShadow: "0 12px 28px rgba(14, 165, 164, 0.18)",
+                padding: "18px 16px",
+                display: "flex",
+                flexDirection: "column",
+                justifyContent: "space-between",
+                minHeight: "140px",
+              }}
+            >
+              <div style={{ fontSize: "12px", color: "#d9f7f6", fontWeight: 700, marginBottom: "8px" }}>ADD ENTRY</div>
+              <div style={{ fontSize: "20px", fontWeight: 800, color: "#fff", marginBottom: "8px" }}>Create new outward</div>
+              <button
+                onClick={() => {
+                  setEditData(null);
+                  resetForm();
+                  setShowForm(true);
+                }}
+                disabled={!canCreate}
+                style={{
+                  ...btnStyle,
+                  background: canCreate ? "#fff" : "#94a3b8",
+                  color: canCreate ? "#0f172a" : "#f8fafc",
+                  fontWeight: 700,
+                  borderRadius: "14px",
+                  padding: "10px 14px",
+                  minWidth: "100%",
+                }}
+              >
+                Add Outward
+              </button>
+            </div>
           </div>
 
-          <div style={{ minWidth: 260, background: "#fff", borderRadius: 12, padding: 12, boxShadow: "0 6px 18px rgba(15, 23, 42, 0.06)", border: "1px solid #e5e7eb" }}>
-            <div style={{ marginBottom: 10 }}>
-              <div style={{ fontSize: 12, color: "#64748b", fontWeight: 700 }}>Settlement / Adjustment</div>
-              <div style={{ fontSize: 18, fontWeight: 800, color: "#0f172a", marginTop: 8 }}>
-                Tap a card to filter the entries below
-              </div>
-            </div>
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 10 }}>
-              {[
-                { key: "all", label: "All", value: outwards.length, note: "All entries" },
-                { key: "pending", label: "Pending", value: pendingCount, note: "Not adjusted" },
-                { key: "adjusted", label: "Adjusted", value: adjustedCount, note: "Needs settlement" },
-                { key: "settled", label: "Settled", value: totalSettlementsCount, note: `${totalSettlementWeight.toFixed(2)} wt` },
-              ].map((item) => (
-                <button
-                  key={item.key}
-                  type="button"
-                  onClick={() => setFilterView(item.key)}
-                  style={{
-                    borderRadius: "16px",
-                    border: filterView === item.key ? "1px solid #0ea5a4" : "1px solid #d1d5db",
-                    background: filterView === item.key ? "#0ea5a4" : "#fff",
-                    color: filterView === item.key ? "#fff" : "#0f172a",
-                    padding: "14px 16px",
-                    textAlign: "left",
-                    cursor: "pointer",
-                    minWidth: "130px",
-                    boxShadow: filterView === item.key ? "0 12px 24px rgba(14, 165, 164, 0.18)" : "0 6px 14px rgba(15, 23, 42, 0.06)",
-                    transition: "transform 0.15s ease, background 0.15s ease, color 0.15s ease",
-                  }}
-                >
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 12 }}>
+            {[
+              { key: "all", label: "All", value: outwards.length, note: "Show all entries", color: "#fff", textColor: "#0f172a" },
+              { key: "pending", label: "Pending", value: pendingCount, note: "Not adjusted", color: "#ffffff", textColor: "#0f172a" },
+              { key: "settled", label: "Settled", value: totalSettlementsCount, note: `${totalSettlementWeight.toFixed(2)} wt`, color: filterView === "settled" ? "#0ea5a4" : "#ffffff", textColor: filterView === "settled" ? "#fff" : "#0f172a" },
+            ].map((item) => (
+              <button
+                key={item.key}
+                type="button"
+                onClick={() => setFilterView(item.key)}
+                style={{
+                  borderRadius: "18px",
+                  border: filterView === item.key ? "1px solid #0ea5a4" : "1px solid #d1d5db",
+                  background: filterView === item.key ? "#0ea5a4" : item.color,
+                  color: filterView === item.key ? "#fff" : item.textColor,
+                  padding: "18px 16px",
+                  textAlign: "left",
+                  cursor: "pointer",
+                  boxShadow: filterView === item.key ? "0 16px 28px rgba(14, 165, 164, 0.16)" : "0 8px 18px rgba(15, 23, 42, 0.08)",
+                  minHeight: "140px",
+                  display: "flex",
+                  flexDirection: "column",
+                  justifyContent: "space-between",
+                }}
+              >
+                <div>
                   <div style={{ fontSize: "12px", fontWeight: 700, marginBottom: "6px" }}>{item.label}</div>
-                  <div style={{ fontSize: "20px", fontWeight: 800, lineHeight: 1 }}>{item.value}</div>
-                  <div style={{ fontSize: "12px", marginTop: "6px", color: filterView === item.key ? "rgba(255,255,255,0.85)" : "#64748b" }}>
-                    {item.note}
-                  </div>
-                </button>
-              ))}
-            </div>
-            <div style={{ marginTop: 10, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-              <button onClick={() => { fetchOutwards(); }} style={{ ...btnStyle, background: "#0ea5a4", color: "#fff", padding: "8px 14px" }}>Refresh</button>
-              <div style={{ color: "#64748b", fontSize: "12px" }}>
-                Tap a status card to view detail rows below.
-              </div>
-            </div>
+                  <div style={{ fontSize: "26px", fontWeight: 800, lineHeight: 1 }}>{item.value}</div>
+                </div>
+                <div style={{ fontSize: "12px", color: filterView === item.key ? "rgba(255,255,255,0.8)" : "#64748b" }}>{item.note}</div>
+              </button>
+            ))}
           </div>
         </div>
       </div>
