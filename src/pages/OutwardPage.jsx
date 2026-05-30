@@ -386,6 +386,54 @@ export default function OutwardPage() {
         if (cg) consignee_id = getRecordId(cg);
       }
     }
+    // Ensure dropdown lists include the referenced items from this row
+    const empId = getRecordId(row.employee_id);
+    if (empId && !employees.some((e) => sameId(getRecordId(e), empId))) {
+      setEmployees((prev) => [
+        ...(Array.isArray(prev) ? prev : []),
+        { id: empId, name: row.employee_name || `Employee ${empId}` },
+      ]);
+    }
+
+    const prodId = getRecordId(row.product_id);
+    if (prodId && !products.some((p) => sameId(getRecordId(p), prodId))) {
+      setProducts((prev) => [
+        ...(Array.isArray(prev) ? prev : []),
+        { id: prodId, name: row.product_name || `Product ${prodId}` },
+      ]);
+    }
+
+    const compId = getRecordId(row.company_id);
+    if (compId && !companies.some((c) => sameId(getRecordId(c), compId))) {
+      setCompanies((prev) => [
+        ...(Array.isArray(prev) ? prev : []),
+        { id: compId, name: row.company_name || `Company ${compId}` },
+      ]);
+    }
+
+    const accId = getRecordId(row.company_account_id);
+    if (accId && !companyAccounts.some((a) => sameId(getRecordId(a), accId))) {
+      setCompanyAccounts((prev) => [
+        ...(Array.isArray(prev) ? prev : []),
+        { id: accId, account_name: row.party_name || row.account_name || `Account ${accId}`, company_id: compId || null },
+      ]);
+    }
+
+    const bId = getRecordId(buyer_id);
+    if (bId && !buyerNames.some((b) => sameId(getRecordId(b), bId))) {
+      setBuyerNames((prev) => [
+        ...(Array.isArray(prev) ? prev : []),
+        { id: bId, name: row.buyer_name || `Buyer ${bId}` },
+      ]);
+    }
+
+    const cId = getRecordId(consignee_id);
+    if (cId && !consigneeNames.some((c) => sameId(getRecordId(c), cId))) {
+      setConsigneeNames((prev) => [
+        ...(Array.isArray(prev) ? prev : []),
+        { id: cId, name: row.consignee_name || `Consignee ${cId}`, buyer_id: bId || null },
+      ]);
+    }
     setFormData({
       date: row.date ? new Date(row.date).toISOString().slice(0, 10) : "",
       employee_id: getRecordId(row.employee_id) || "",
