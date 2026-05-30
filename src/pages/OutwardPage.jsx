@@ -73,6 +73,9 @@ export default function OutwardPage() {
   const [selectedOutward, setSelectedOutward] = useState(null);
   const [selectedSettlementOutward, setSelectedSettlementOutward] = useState(null);
   const [hoveredOutwardId, setHoveredOutwardId] = useState(null);
+  const [settlementRows, setSettlementRows] = useState([]);
+  const [summaryLoading, setSummaryLoading] = useState(false);
+  const [filterView, setFilterView] = useState("all"); // all | pending | adjusted | settled
 
   const [formData, setFormData] = useState({
     date: "",
@@ -126,6 +129,22 @@ export default function OutwardPage() {
   }, []);
 
   useEffect(() => {
+    const fetchSettlements = async () => {
+      setSummaryLoading(true);
+      try {
+        const res = await axios.get(`${API_BASE}/outward-settlement/report/list`);
+        setSettlementRows(Array.isArray(res.data) ? res.data : []);
+      } catch (err) {
+        setSettlementRows([]);
+      } finally {
+        setSummaryLoading(false);
+      }
+    };
+
+    fetchSettlements();
+  }, []);
+
+  useEffect(() => {
     if (formData.employee_id) {
       const employeeId = String(formData.employee_id);
       const emp = employees.find((e) => sameId(getRecordId(e), employeeId));
@@ -163,6 +182,30 @@ export default function OutwardPage() {
     : warehouses;
 
   const noWarehousesAvailable = formData.location_id && warehousesForLocation.length === 0;
+
+  const totalSettlementsCount = useMemo(() => settlementRows.length, [settlementRows]);
+  const totalSettlementWeight = useMemo(() => {
+    return settlementRows.reduce((sum, r) => sum + (Number(r.settlement_weight || r.unloading_qty || 0) || 0), 0);
+  }, [settlementRows]);
+
+  const adjustedCount = useMemo(() => {
+    return outwards.filter((r) => String(r.status || "").toLowerCase() === "partial").length;
+  }, [outwards]);
+
+  const pendingCount = useMemo(() => {
+    return outwards.filter((r) => !r.status || String(r.status || "").toLowerCase() === "pending").length;
+  }, [outwards]);
+
+  const filteredOutwards = useMemo(() => {
+    if (filterView === "all") return outwards;
+    if (filterView === "pending") return outwards.filter((r) => !r.status || String(r.status || "").toLowerCase() === "pending");
+    if (filterView === "adjusted") return outwards.filter((r) => String(r.status || "").toLowerCase() === "partial");
+    if (filterView === "settled") {
+      const settledIds = new Set((settlementRows || []).map((s) => String(s.outward_id)));
+      return outwards.filter((r) => settledIds.has(String(r.id)));
+    }
+    return outwards;
+  }, [outwards, filterView, settlementRows]);
 
   useEffect(() => {
     const loadWarehouseStock = async () => {
@@ -240,6 +283,13 @@ export default function OutwardPage() {
     try {
       const res = await axios.get(`${API_BASE}/outward`);
       setOutwards(Array.isArray(res.data) ? res.data : []);
+      // refresh settlement summary as well
+      try {
+        const sres = await axios.get(`${API_BASE}/outward-settlement/report/list`);
+        setSettlementRows(Array.isArray(sres.data) ? sres.data : []);
+      } catch (e) {
+        setSettlementRows([]);
+      }
     } catch (err) {
       console.error(err);
       toast.error("Error fetching outwards", { theme: "colored" });
@@ -690,44 +740,70 @@ Consignee: ${row.consignee_name}`;
           </h2>
         </div>
 
-        <div
-          style={{
-            minWidth: "150px",
-            background: "rgba(255,255,255,0.92)",
-            borderRadius: "22px",
-            boxShadow: "0 16px 26px rgba(59, 130, 246, 0.12)",
-            display: "flex",
-            flexDirection: "column",
-            alignItems: "flex-end",
-            justifyContent: "center",
-            padding: "12px 16px",
-          }}
-        >
-          <div style={{ color: "#64748b", fontSize: "12px", fontWeight: 700, marginBottom: "6px" }}>
-            TOTAL ENTRY
-          </div>
-          <div style={{ color: "#0f172a", fontSize: "18px", fontWeight: 700, marginBottom: "10px" }}>
-            {outwards.length}
-          </div>
-          <button
-            onClick={() => {
-              setEditData(null);
-              resetForm();
-              setShowForm(true);
-            }}
-            disabled={!canCreate}
+        <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+          <div
             style={{
-              ...btnStyle,
-              background: canCreate ? "#18b6d9" : "#94a3b8",
-              color: "#fff",
-              padding: "10px 18px",
-              minWidth: "110px",
-              fontWeight: 700,
-              boxShadow: "0 10px 18px rgba(24, 182, 217, 0.26)",
+              minWidth: "150px",
+              background: "rgba(255,255,255,0.92)",
+              borderRadius: "22px",
+              boxShadow: "0 16px 26px rgba(59, 130, 246, 0.12)",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "flex-end",
+              justifyContent: "center",
+              padding: "12px 16px",
             }}
           >
-            Add Outward
-          </button>
+            <div style={{ color: "#64748b", fontSize: "12px", fontWeight: 700, marginBottom: "6px" }}>
+              TOTAL ENTRY
+            </div>
+            <div style={{ color: "#0f172a", fontSize: "18px", fontWeight: 700, marginBottom: "10px" }}>
+              {outwards.length}
+            </div>
+            <button
+              onClick={() => {
+                setEditData(null);
+                resetForm();
+                setShowForm(true);
+              }}
+              disabled={!canCreate}
+              style={{
+                ...btnStyle,
+                background: canCreate ? "#18b6d9" : "#94a3b8",
+                color: "#fff",
+                padding: "10px 18px",
+                minWidth: "110px",
+                fontWeight: 700,
+                boxShadow: "0 10px 18px rgba(24, 182, 217, 0.26)",
+              }}
+            >
+              Add Outward
+            </button>
+          </div>
+
+          <div style={{ minWidth: 260, background: "#fff", borderRadius: 12, padding: 12, boxShadow: "0 6px 18px rgba(15, 23, 42, 0.06)", border: "1px solid #e5e7eb" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+              <div>
+                <div style={{ fontSize: 12, color: "#64748b", fontWeight: 700 }}>Settlement / Adjustment</div>
+                <div style={{ fontSize: 18, fontWeight: 800, color: "#0f172a" }}>{totalSettlementsCount} settled</div>
+                <div style={{ fontSize: 12, color: "#475569", marginTop: 6 }}>{totalSettlementWeight.toFixed(2)} wt</div>
+              </div>
+              <div style={{ textAlign: "right" }}>
+                <div style={{ fontSize: 12, color: "#64748b", fontWeight: 700 }}>Adjusted</div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: "#0f172a" }}>{adjustedCount}</div>
+                <div style={{ fontSize: 12, color: "#64748b", marginTop: 6 }}>Pending: {pendingCount}</div>
+              </div>
+            </div>
+            <div style={{ marginTop: 10, display: "flex", gap: 8, alignItems: "center" }}>
+              <select value={filterView} onChange={(e) => setFilterView(e.target.value)} style={{ ...inp, maxWidth: 180 }}>
+                <option value="all">Show: All</option>
+                <option value="pending">Show: Pending</option>
+                <option value="adjusted">Show: Adjusted</option>
+                <option value="settled">Show: Settled</option>
+              </select>
+              <button onClick={() => { fetchOutwards(); }} style={{ ...btnStyle, background: "#0ea5a4", color: "#fff", padding: "8px 10px" }}>Refresh</button>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -1069,8 +1145,8 @@ Consignee: ${row.consignee_name}`;
             </thead>
 
             <tbody>
-              {outwards.length > 0 ? (
-                outwards.map((row, idx) => {
+              {filteredOutwards.length > 0 ? (
+                filteredOutwards.map((row, idx) => {
                   const baseBg = idx % 2 === 0 ? "#ffffff" : "#f8fafc";
                   const rowBg = hoveredOutwardId === row.id ? rowHoverBg : baseBg;
                   const cellBase = { ...tdStyle, background: rowBg };
