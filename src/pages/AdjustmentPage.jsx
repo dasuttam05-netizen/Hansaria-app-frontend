@@ -94,13 +94,21 @@ export default function AdjustmentPage({ outward }) {
   const num = (val) => Number(val || 0).toFixed(4);
   const isPaltiSource = sourceType === "palti_lorry";
 
+  const getAdjustmentScope = () => {
+    const useLocation = !!outward?.location_id;
+    return {
+      warehouse_id: useLocation ? "" : outward?.warehouse_id || "",
+      location_id: outward?.location_id || "",
+    };
+  };
+
   const loadCompanyList = async () => {
     if (!outward?.warehouse_id && !outward?.location_id) return setCompanyList([]);
     try {
+      const scope = getAdjustmentScope();
       const res = await axios.get("/api/adjustment/parties", {
         params: {
-          warehouse_id: outward.warehouse_id || "",
-          location_id: outward.location_id || "",
+          ...scope,
           product_id: outward.product_id,
         },
       });
@@ -114,10 +122,10 @@ export default function AdjustmentPage({ outward }) {
   const loadInwardStock = async (selectedCompanyId, selectedSourceType = sourceType) => {
     if (!outward || !selectedCompanyId) return setInwardList([]);
     try {
+      const scope = getAdjustmentScope();
       const res = await axios.get("/api/adjustment/inward/report", {
         params: {
-          warehouse_id: outward.warehouse_id || "",
-          location_id: outward.location_id || "",
+          ...scope,
           company_id: selectedCompanyId,
           outward_date: outward.date,
           source_type: selectedSourceType,
@@ -331,6 +339,7 @@ export default function AdjustmentPage({ outward }) {
               <th style={thStyle}>Months</th>
               <th style={thStyle}>Lorry No</th>
               <th style={thStyle}>Company</th>
+              <th style={thStyle}>Location</th>
               <th style={thStyle}>Gross Qty</th>
               <th style={thStyle}>Shortage</th>
               <th style={thStyle}>Net Opening</th>
@@ -359,6 +368,7 @@ export default function AdjustmentPage({ outward }) {
                   <td style={tdStyle}>{row.months_diff}</td>
                   <td style={tdStyle}>{row.lorry_no}</td>
                   <td style={tdStyle}>{row.company_name}</td>
+                  <td style={tdStyle}>{row.location_name || "-"}</td>
                   <td style={tdStyle}>{num(row.gross_qty)}</td>
                   <td style={tdStyle}>{num(row.shortage_qty)}</td>
                   <td style={tdStyle}>{num(row.net_opening_qty)}</td>
@@ -368,7 +378,7 @@ export default function AdjustmentPage({ outward }) {
               ))
             ) : (
               <tr>
-                <td style={tdStyle} colSpan="12">
+                <td style={tdStyle} colSpan="13">
                   {isPaltiSource ? "No Palti Lorry found" : "No inward found"}
                 </td>
               </tr>
