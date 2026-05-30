@@ -206,9 +206,11 @@ export default function OutwardPage() {
   }, [settlementRows]);
 
   const adjustedCount = useMemo(() => {
-    return outwards.filter(
-      (r) => !settledIds.has(String(r.id)) && String(r.status || "").toLowerCase() === "partial"
-    ).length;
+    return outwards.filter((r) => {
+      if (settledIds.has(String(r.id))) return false;
+      const status = String(r.status || "").toLowerCase();
+      return status === "partial" || status === "completed";
+    }).length;
   }, [outwards, settledIds]);
 
   const pendingCount = useMemo(() => {
@@ -222,9 +224,11 @@ export default function OutwardPage() {
     if (filterView === "pending") return outwards.filter(
       (r) => !settledIds.has(String(r.id)) && (!r.status || String(r.status || "").toLowerCase() === "pending")
     );
-    if (filterView === "adjusted") return outwards.filter(
-      (r) => !settledIds.has(String(r.id)) && String(r.status || "").toLowerCase() === "partial"
-    );
+    if (filterView === "adjusted") return outwards.filter((r) => {
+      if (settledIds.has(String(r.id))) return false;
+      const status = String(r.status || "").toLowerCase();
+      return status === "partial" || status === "completed";
+    });
     if (filterView === "settled") {
       return outwards.filter((r) => settledIds.has(String(r.id)));
     }
@@ -806,34 +810,49 @@ Consignee: ${row.consignee_name}`;
           </div>
 
           <div style={{ minWidth: 260, background: "#fff", borderRadius: 12, padding: 12, boxShadow: "0 6px 18px rgba(15, 23, 42, 0.06)", border: "1px solid #e5e7eb" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
-              <div>
-                <div style={{ fontSize: 12, color: "#64748b", fontWeight: 700 }}>Settlement / Adjustment</div>
-                <button type="button" onClick={() => setFilterView("settled")} style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer" }}>
-                  <div style={{ fontSize: 18, fontWeight: 800, color: "#0f172a" }}>{totalSettlementsCount} settled</div>
-                </button>
-                <div style={{ fontSize: 12, color: "#475569", marginTop: 6 }}>{totalSettlementWeight.toFixed(2)} wt</div>
-              </div>
-              <div style={{ textAlign: "right" }}>
-                <div style={{ fontSize: 12, color: "#64748b", fontWeight: 700 }}>Adjusted</div>
-                <button type="button" onClick={() => setFilterView("adjusted")} style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer" }}>
-                  <div style={{ fontSize: 16, fontWeight: 800, color: "#0f172a" }}>{adjustedCount}</div>
-                </button>
-                <div style={{ fontSize: 12, color: "#64748b", marginTop: 6 }}>
-                  <button type="button" onClick={() => setFilterView("pending")} style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer", color: "#64748b" }}>
-                    Pending: {pendingCount}
-                  </button>
-                </div>
+            <div style={{ marginBottom: 10 }}>
+              <div style={{ fontSize: 12, color: "#64748b", fontWeight: 700 }}>Settlement / Adjustment</div>
+              <div style={{ fontSize: 18, fontWeight: 800, color: "#0f172a", marginTop: 8 }}>
+                Tap a card to filter the entries below
               </div>
             </div>
-            <div style={{ marginTop: 10, display: "flex", gap: 8, alignItems: "center" }}>
-              <select value={filterView} onChange={(e) => setFilterView(e.target.value)} style={{ ...inp, maxWidth: 180 }}>
-                <option value="all">Show: All</option>
-                <option value="pending">Show: Pending</option>
-                <option value="adjusted">Show: Adjusted</option>
-                <option value="settled">Show: Settled</option>
-              </select>
-              <button onClick={() => { fetchOutwards(); }} style={{ ...btnStyle, background: "#0ea5a4", color: "#fff", padding: "8px 10px" }}>Refresh</button>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 10 }}>
+              {[
+                { key: "all", label: "All", value: outwards.length, note: "All entries" },
+                { key: "pending", label: "Pending", value: pendingCount, note: "Not adjusted" },
+                { key: "adjusted", label: "Adjusted", value: adjustedCount, note: "Needs settlement" },
+                { key: "settled", label: "Settled", value: totalSettlementsCount, note: `${totalSettlementWeight.toFixed(2)} wt` },
+              ].map((item) => (
+                <button
+                  key={item.key}
+                  type="button"
+                  onClick={() => setFilterView(item.key)}
+                  style={{
+                    borderRadius: "16px",
+                    border: filterView === item.key ? "1px solid #0ea5a4" : "1px solid #d1d5db",
+                    background: filterView === item.key ? "#0ea5a4" : "#fff",
+                    color: filterView === item.key ? "#fff" : "#0f172a",
+                    padding: "14px 16px",
+                    textAlign: "left",
+                    cursor: "pointer",
+                    minWidth: "130px",
+                    boxShadow: filterView === item.key ? "0 12px 24px rgba(14, 165, 164, 0.18)" : "0 6px 14px rgba(15, 23, 42, 0.06)",
+                    transition: "transform 0.15s ease, background 0.15s ease, color 0.15s ease",
+                  }}
+                >
+                  <div style={{ fontSize: "12px", fontWeight: 700, marginBottom: "6px" }}>{item.label}</div>
+                  <div style={{ fontSize: "20px", fontWeight: 800, lineHeight: 1 }}>{item.value}</div>
+                  <div style={{ fontSize: "12px", marginTop: "6px", color: filterView === item.key ? "rgba(255,255,255,0.85)" : "#64748b" }}>
+                    {item.note}
+                  </div>
+                </button>
+              ))}
+            </div>
+            <div style={{ marginTop: 10, display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+              <button onClick={() => { fetchOutwards(); }} style={{ ...btnStyle, background: "#0ea5a4", color: "#fff", padding: "8px 14px" }}>Refresh</button>
+              <div style={{ color: "#64748b", fontSize: "12px" }}>
+                Tap a status card to view detail rows below.
+              </div>
             </div>
           </div>
         </div>
@@ -849,7 +868,7 @@ Consignee: ${row.consignee_name}`;
       />
 
       {/* Details panel shown when a summary card is selected (settled/adjusted/pending) */}
-      {filterView && (
+      {filterView !== "all" && (
         <div style={{ ...cardStyle, padding: 12, margin: "10px 0 16px 0", background: "#fff" }}>
           {filterView === "settled" && (
             <div>
