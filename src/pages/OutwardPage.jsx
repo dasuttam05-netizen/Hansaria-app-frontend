@@ -75,7 +75,7 @@ export default function OutwardPage() {
   const [hoveredOutwardId, setHoveredOutwardId] = useState(null);
   const [settlementRows, setSettlementRows] = useState([]);
   const [summaryLoading, setSummaryLoading] = useState(false);
-  const [filterView, setFilterView] = useState("all"); // all | pending | adjusted | settled
+  const [filterView, setFilterView] = useState("settled"); // all | pending | adjusted | settled
 
   const [formData, setFormData] = useState({
     date: "",
@@ -183,9 +183,18 @@ export default function OutwardPage() {
 
   const noWarehousesAvailable = formData.location_id && warehousesForLocation.length === 0;
 
-  const totalSettlementsCount = useMemo(() => settlementRows.length, [settlementRows]);
+  const totalSettlementsCount = useMemo(() => {
+    // count unique outward_ids in settlement rows
+    try {
+      const ids = new Set((settlementRows || []).map((s) => String(s.outward_id)));
+      return ids.size;
+    } catch (e) {
+      return (settlementRows || []).length;
+    }
+  }, [settlementRows]);
+
   const totalSettlementWeight = useMemo(() => {
-    return settlementRows.reduce((sum, r) => sum + (Number(r.settlement_weight || r.unloading_qty || 0) || 0), 0);
+    return (settlementRows || []).reduce((sum, r) => sum + (Number(r.settlement_weight || r.unloading_qty || 0) || 0), 0);
   }, [settlementRows]);
 
   const adjustedCount = useMemo(() => {
@@ -785,13 +794,21 @@ Consignee: ${row.consignee_name}`;
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
               <div>
                 <div style={{ fontSize: 12, color: "#64748b", fontWeight: 700 }}>Settlement / Adjustment</div>
-                <div style={{ fontSize: 18, fontWeight: 800, color: "#0f172a" }}>{totalSettlementsCount} settled</div>
+                <button type="button" onClick={() => setFilterView("settled")} style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer" }}>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: "#0f172a" }}>{totalSettlementsCount} settled</div>
+                </button>
                 <div style={{ fontSize: 12, color: "#475569", marginTop: 6 }}>{totalSettlementWeight.toFixed(2)} wt</div>
               </div>
               <div style={{ textAlign: "right" }}>
                 <div style={{ fontSize: 12, color: "#64748b", fontWeight: 700 }}>Adjusted</div>
-                <div style={{ fontSize: 16, fontWeight: 800, color: "#0f172a" }}>{adjustedCount}</div>
-                <div style={{ fontSize: 12, color: "#64748b", marginTop: 6 }}>Pending: {pendingCount}</div>
+                <button type="button" onClick={() => setFilterView("adjusted")} style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer" }}>
+                  <div style={{ fontSize: 16, fontWeight: 800, color: "#0f172a" }}>{adjustedCount}</div>
+                </button>
+                <div style={{ fontSize: 12, color: "#64748b", marginTop: 6 }}>
+                  <button type="button" onClick={() => setFilterView("pending")} style={{ background: "transparent", border: "none", padding: 0, cursor: "pointer", color: "#64748b" }}>
+                    Pending: {pendingCount}
+                  </button>
+                </div>
               </div>
             </div>
             <div style={{ marginTop: 10, display: "flex", gap: 8, alignItems: "center" }}>
@@ -815,6 +832,97 @@ Consignee: ${row.consignee_name}`;
         closeOnClick
         transition={Slide}
       />
+
+      {/* Details panel shown when a summary card is selected (settled/adjusted/pending) */}
+      {filterView && (
+        <div style={{ ...cardStyle, padding: 12, margin: "10px 0 16px 0", background: "#fff" }}>
+          {filterView === "settled" && (
+            <div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div style={{ fontSize: 16, fontWeight: 800 }}>{totalSettlementsCount} settled</div>
+                <div style={{ fontSize: 12, color: "#475569" }}>{totalSettlementWeight.toFixed(2)} wt</div>
+              </div>
+              <div style={{ marginTop: 10 }}>
+                {(settlementRows || []).length === 0 ? (
+                  <div style={{ color: "#64748b" }}>No settlement records found</div>
+                ) : (
+                  (settlementRows || []).map((s) => (
+                    <div key={s.id || `${s.outward_id}-${s.id}`} style={{ padding: "8px 0", borderBottom: "1px solid #eef2f6" }}>
+                      <div style={{ fontWeight: 700 }}>{s.voucher_no || `Outward ${s.outward_id}`} — {formatDate(s.date)}</div>
+                      <div style={{ fontSize: 12, color: "#475569" }}>{s.company_name || ""} • {s.warehouse_name || ""} • {s.location_name || ""}</div>
+                      <div style={{ marginTop: 6, fontSize: 13 }}>
+                        Dispatch: {s.dispatch_qty || 0} | Unloading: {s.unloading_qty || 0} | Billable: {s.billable_qty || 0}
+                      </div>
+                      {Array.isArray(s.adjustment_details) && s.adjustment_details.length > 0 && (
+                        <table style={{ width: "100%", marginTop: 8, fontSize: 12, borderCollapse: "collapse" }}>
+                          <thead>
+                            <tr>
+                              <th style={{ textAlign: "left", padding: 6, borderBottom: "1px solid #e6eef6" }}>#</th>
+                              <th style={{ textAlign: "left", padding: 6, borderBottom: "1px solid #e6eef6" }}>Source</th>
+                              <th style={{ textAlign: "right", padding: 6, borderBottom: "1px solid #e6eef6" }}>Weight</th>
+                              <th style={{ textAlign: "right", padding: 6, borderBottom: "1px solid #e6eef6" }}>Amount</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {s.adjustment_details.map((ad, i) => (
+                              <tr key={i}>
+                                <td style={{ padding: 6 }}>{i + 1}</td>
+                                <td style={{ padding: 6 }}>{ad.source_type === "inward" ? (ad.inward_voucher_no || "Inward") : (ad.lorry_no || "Palti")}</td>
+                                <td style={{ padding: 6, textAlign: "right" }}>{Number(ad.settlement_weight || 0)}</td>
+                                <td style={{ padding: 6, textAlign: "right" }}>{Number(ad.amount || 0).toFixed(2)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          )}
+
+          {filterView === "adjusted" && (
+            <div>
+              <div style={{ fontSize: 16, fontWeight: 800 }}>{adjustedCount} adjusted</div>
+              <div style={{ marginTop: 10 }}>
+                {outwards.filter((r) => String(r.status || "").toLowerCase() === "partial").map((r) => (
+                  <div key={r.id} style={{ padding: "8px 0", borderBottom: "1px solid #eef2f6", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div>
+                      <div style={{ fontWeight: 700 }}>{r.voucher_no || `Outward ${r.id}`} — {formatDate(r.date)}</div>
+                      <div style={{ fontSize: 12, color: "#475569" }}>{r.company_name || ""} • {r.warehouse_name || ""}</div>
+                    </div>
+                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                      <div style={{ fontSize: 13 }}>{formatWeight(r.weight)}</div>
+                      <button type="button" onClick={() => setSelectedOutward(r)} style={{ ...btnStyle, background: "#f59e0b", color: "#fff" }}>View Adjustment</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {filterView === "pending" && (
+            <div>
+              <div style={{ fontSize: 16, fontWeight: 800 }}>{pendingCount} pending</div>
+              <div style={{ marginTop: 10 }}>
+                {outwards.filter((r) => !r.status || String(r.status || "").toLowerCase() === "pending").map((r) => (
+                  <div key={r.id} style={{ padding: "8px 0", borderBottom: "1px solid #eef2f6", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div>
+                      <div style={{ fontWeight: 700 }}>{r.voucher_no || `Outward ${r.id}`} — {formatDate(r.date)}</div>
+                      <div style={{ fontSize: 12, color: "#475569" }}>{r.company_name || ""} • {r.warehouse_name || ""}</div>
+                    </div>
+                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                      <div style={{ fontSize: 13 }}>{formatWeight(r.weight)}</div>
+                      <button type="button" onClick={() => setSelectedOutward(r)} style={{ ...btnStyle, background: "#18b6d9", color: "#fff" }}>Adjust</button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {showForm && (
         <div
