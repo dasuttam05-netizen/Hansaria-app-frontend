@@ -197,24 +197,39 @@ export default function OutwardPage() {
     return (settlementRows || []).reduce((sum, r) => sum + (Number(r.settlement_weight || r.unloading_qty || 0) || 0), 0);
   }, [settlementRows]);
 
+  const settledIds = useMemo(() => {
+    try {
+      return new Set((settlementRows || []).map((s) => String(s.outward_id)));
+    } catch (e) {
+      return new Set();
+    }
+  }, [settlementRows]);
+
   const adjustedCount = useMemo(() => {
-    return outwards.filter((r) => String(r.status || "").toLowerCase() === "partial").length;
-  }, [outwards]);
+    return outwards.filter(
+      (r) => !settledIds.has(String(r.id)) && String(r.status || "").toLowerCase() === "partial"
+    ).length;
+  }, [outwards, settledIds]);
 
   const pendingCount = useMemo(() => {
-    return outwards.filter((r) => !r.status || String(r.status || "").toLowerCase() === "pending").length;
-  }, [outwards]);
+    return outwards.filter(
+      (r) => !settledIds.has(String(r.id)) && (!r.status || String(r.status || "").toLowerCase() === "pending")
+    ).length;
+  }, [outwards, settledIds]);
 
   const filteredOutwards = useMemo(() => {
     if (filterView === "all") return outwards;
-    if (filterView === "pending") return outwards.filter((r) => !r.status || String(r.status || "").toLowerCase() === "pending");
-    if (filterView === "adjusted") return outwards.filter((r) => String(r.status || "").toLowerCase() === "partial");
+    if (filterView === "pending") return outwards.filter(
+      (r) => !settledIds.has(String(r.id)) && (!r.status || String(r.status || "").toLowerCase() === "pending")
+    );
+    if (filterView === "adjusted") return outwards.filter(
+      (r) => !settledIds.has(String(r.id)) && String(r.status || "").toLowerCase() === "partial"
+    );
     if (filterView === "settled") {
-      const settledIds = new Set((settlementRows || []).map((s) => String(s.outward_id)));
       return outwards.filter((r) => settledIds.has(String(r.id)));
     }
     return outwards;
-  }, [outwards, filterView, settlementRows]);
+  }, [outwards, filterView, settledIds]);
 
   useEffect(() => {
     const loadWarehouseStock = async () => {
@@ -886,7 +901,7 @@ Consignee: ${row.consignee_name}`;
             <div>
               <div style={{ fontSize: 16, fontWeight: 800 }}>{adjustedCount} adjusted</div>
               <div style={{ marginTop: 10 }}>
-                {outwards.filter((r) => String(r.status || "").toLowerCase() === "partial").map((r) => (
+                {outwards.filter((r) => !settledIds.has(String(r.id)) && String(r.status || "").toLowerCase() === "partial").map((r) => (
                   <div key={r.id} style={{ padding: "8px 0", borderBottom: "1px solid #eef2f6", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <div>
                       <div style={{ fontWeight: 700 }}>{r.voucher_no || `Outward ${r.id}`} — {formatDate(r.date)}</div>
@@ -906,7 +921,7 @@ Consignee: ${row.consignee_name}`;
             <div>
               <div style={{ fontSize: 16, fontWeight: 800 }}>{pendingCount} pending</div>
               <div style={{ marginTop: 10 }}>
-                {outwards.filter((r) => !r.status || String(r.status || "").toLowerCase() === "pending").map((r) => (
+                {outwards.filter((r) => !settledIds.has(String(r.id)) && (!r.status || String(r.status || "").toLowerCase() === "pending")).map((r) => (
                   <div key={r.id} style={{ padding: "8px 0", borderBottom: "1px solid #eef2f6", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <div>
                       <div style={{ fontWeight: 700 }}>{r.voucher_no || `Outward ${r.id}`} — {formatDate(r.date)}</div>
