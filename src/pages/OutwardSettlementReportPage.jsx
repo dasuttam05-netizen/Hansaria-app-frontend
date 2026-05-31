@@ -3,6 +3,7 @@ import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import { FaFilePdf, FaWhatsapp } from "react-icons/fa";
 import OutwardSettlementPage from "./OutwardSettlementPage";
 
 export default function OutwardSettlementReportPage() {
@@ -21,6 +22,7 @@ export default function OutwardSettlementReportPage() {
     to_date: new Date().toISOString().split("T")[0],
     company_id: "",
     warehouse_id: "",
+    adjusted_company_search: "",
   });
 
   const card = {
@@ -225,6 +227,172 @@ export default function OutwardSettlementReportPage() {
     return normalized === "palti_lorry" ? "Palti Lorry" : "Warehouse Loading";
   };
 
+  const adjustedCompanySearch = String(filters.adjusted_company_search || "").trim().toLowerCase();
+
+  const filteredRecords = useMemo(() => {
+    if (!adjustedCompanySearch) return records;
+
+    return records
+      .map((row) => {
+        const adjustment_details = (row.adjustment_details || []).filter((item) =>
+          String(item.company_name || "").toLowerCase().includes(adjustedCompanySearch)
+        );
+        return adjustment_details.length > 0 ? { ...row, adjustment_details } : null;
+      })
+      .filter(Boolean);
+  }, [records, adjustedCompanySearch]);
+
+  const filteredTotals = useMemo(
+    () =>
+      filteredRecords.reduce(
+        (acc, row) => {
+          const calc = getRowCalculations(row);
+          acc.dispatch += Number(row.dispatch_qty) || 0;
+          acc.unloading += Number(row.unloading_qty) || 0;
+          acc.shortage += Number(row.shortage_qty) || 0;
+          acc.settlement += Number(row.settlement_weight) || 0;
+          acc.sale += Number(calc.saleAmount) || 0;
+          acc.gross += Number(calc.netReceivable) || 0;
+          acc.payable += Number(calc.netPayable) || 0;
+          acc.net += Number(calc.netProfitLoss) || 0;
+          return acc;
+        },
+        {
+          dispatch: 0,
+          unloading: 0,
+          shortage: 0,
+          settlement: 0,
+          sale: 0,
+          gross: 0,
+          payable: 0,
+          net: 0,
+        }
+      ),
+    [filteredRecords]
+  );
+
+  const buildAdjustedDetailRows = (row, item) => {
+    const shortQty =
+      (Number(row.dispatch_qty) || 0) > 0
+        ? ((Number(item.settlement_weight) || 0) / (Number(row.dispatch_qty) || 0)) *
+          (Number(row.shortage_qty) || 0)
+        : 0;
+    const shortAmount = shortQty * (Number(item.company_rate) || 0);
+    const netPayable =
+      (Number(item.amount) || 0) -
+      (Number(item.freight) || 0) -
+      (Number(item.labour_charges) || 0) -
+      (Number(item.other_charges) || 0) -
+      shortAmount;
+
+    return {
+      shortQty,
+      shortAmount,
+      netPayable,
+    };
+  };
+
+  const createAdjustedRowPdf = (row, item) => {
+    const { shortQty, shortAmount, netPayable } = buildAdjustedDetailRows(row, item);
+    const doc = new jsPDF("l", "mm", "a4");
+    const invNo = displayInvNo(row);
+
+    doc.setFillColor(14, 116, 144);
+    doc.rect(0, 0, 297, 18, "F");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(12);
+    doc.setTextColor(255, 255, 255);
+    doc.text("Adjusted Company Detail", 14, 12);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8);
+    doc.text(`Generated: ${new Date().toLocaleString()}`, 230, 12);
+
+    doc.setTextColor(15, 23, 42);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(14);
+    doc.text(`${item.company_name || "-"} | ${invNo}`, 14, 28);
+
+    autoTable(doc, {
+      startY: 34,
+      theme: "grid",
+      headStyles: { fillColor: [14, 116, 144], textColor: 255 },
+      styles: { fontSize: 8, textColor: 0 },
+      head: [[
+        "Outward Date",
+        "Outward Lorry",
+        "Outward Company",
+        "Warehouse",
+        "Buyer",
+        "Consignee",
+        "Product",
+        "Adjusted Date",
+        "Adjusted Company",
+        "Adjusted Lorry",
+        "Inward Voucher",
+        "Weight",
+        "Net Payable",
+      ]],
+      body: [[
+        formatDate(row.date),
+        row.lorry_no || "-",
+        row.company_name || "-",
+        row.warehouse_name || "-",
+        row.buyer_name || "-",
+        row.consignee_name || "-",
+        row.product_name || "-",
+        formatDate(item.inward_date),
+        item.company_name || "-",
+        item.lorry_no || "-",
+        item.inward_voucher_no || "-",
+        num(item.settlement_weight),
+        num(netPayable),
+      ]],
+    });
+
+    autoTable(doc, {
+      startY: doc.lastAutoTable.finalY + 8,
+      theme: "grid",
+      headStyles: { fillColor: [30, 41, 59], textColor: 255 },
+      styles: { fontSize: 8, textColor: 0, halign: "right" },
+      head: [["Short Qnt", "Company Rate", "Freight", "Labour Chgs", "Other Chgs", "Amount", "S.Amount", "Net Payable"]],
+      body: [[
+        num(shortQty),
+        num(item.company_rate),
+        num(item.freight),
+        num(item.labour_charges),
+        num(item.other_charges),
+        num(item.amount),
+        num(shortAmount),
+        num(netPayable),
+      ]],
+    });
+
+    const safeCompany = String(item.company_name || "Adjusted-Company").replace(/[/\\?%*:|"<>]/g, "-");
+    doc.save(`${safeCompany}_${invNo.replace(/[/\\?%*:|"<>]/g, "-")}.pdf`);
+  };
+
+  const openAdjustedRowWhatsApp = (row, item) => {
+    const { shortQty, shortAmount, netPayable } = buildAdjustedDetailRows(row, item);
+    const lines = [
+      "Adjusted Company Detail",
+      `Outward Date: ${formatDate(row.date)}`,
+      `Outward Lorry: ${row.lorry_no || "-"}`,
+      `Outward Voucher: ${displayInvNo(row)}`,
+      `Adjusted Date: ${formatDate(item.inward_date)}`,
+      `Adjusted Company: ${item.company_name || "-"}`,
+      `Adjusted Lorry: ${item.lorry_no || "-"}`,
+      `Inward Voucher: ${item.inward_voucher_no || "-"}`,
+      `Weight: ${num(item.settlement_weight)}`,
+      `Short Qnt: ${num(shortQty)}`,
+      `Company Rate: ${num(item.company_rate)}`,
+      `Amount: ${num(item.amount)}`,
+      `S.Amount: ${num(shortAmount)}`,
+      `Net Payable: ${num(netPayable)}`,
+    ];
+
+    window.open(`https://wa.me/?text=${encodeURIComponent(lines.join("\n"))}`, "_blank", "noopener,noreferrer");
+  };
+
   const createSinglePdf = (row) => {
     const doc = new jsPDF("l", "mm", "a4");
     const invNo = displayInvNo(row);
@@ -306,6 +474,7 @@ export default function OutwardSettlementReportPage() {
       head: [[
         "Sr",
         "Adjusted Company",
+        "Date",
         "Lorry No",
         "Inward Voucher",
         "Loading Type",
@@ -324,6 +493,7 @@ export default function OutwardSettlementReportPage() {
           ? row.adjustment_details.map((item) => [
               item.sr_no,
               item.company_name || "-",
+              formatDate(item.inward_date),
               item.lorry_no || "-",
               item.inward_voucher_no || "-",
               getLoadingTypeLabel(item.source_type),
@@ -345,7 +515,7 @@ export default function OutwardSettlementReportPage() {
                   : 0)
               ),
             ])
-          : [["", "No adjusted inward details found.", "", "", "", "", "", "", "", "", "", "", "", ""]],
+          : [["", "No adjusted inward details found.", "", "", "", "", "", "", "", "", "", "", "", "", ""]],
     });
 
     const {
@@ -569,7 +739,7 @@ export default function OutwardSettlementReportPage() {
         "Company Payable",
         "Net P/L",
       ]],
-      body: records.map((row) => [
+      body: filteredRecords.map((row) => [
         formatDate(row.date),
         row.voucher_no || `OUT-${row.outward_id}`,
         row.company_name || "-",
@@ -592,20 +762,20 @@ export default function OutwardSettlementReportPage() {
         "",
         "",
         "Totals",
-        num(totals.dispatch),
-        num(totals.unloading),
-        num(totals.shortage),
-        num(totals.settlement),
-        num(totals.sale),
-        num(totals.gross),
-        num(totals.payable),
-        num(totals.net),
+        num(filteredTotals.dispatch),
+        num(filteredTotals.unloading),
+        num(filteredTotals.shortage),
+        num(filteredTotals.settlement),
+        num(filteredTotals.sale),
+        num(filteredTotals.gross),
+        num(filteredTotals.payable),
+        num(filteredTotals.net),
       ]],
     });
 
     let startY = doc.lastAutoTable.finalY + 10;
 
-    records.forEach((row, index) => {
+    filteredRecords.forEach((row, index) => {
       if (startY > 178) {
         doc.addPage("a4", "landscape");
         startY = 14;
@@ -627,6 +797,7 @@ export default function OutwardSettlementReportPage() {
         head: [[
           "Sr",
           "Adjusted Company",
+          "Date",
           "Lorry No",
           "Inward Voucher",
           "Loading Type",
@@ -645,6 +816,7 @@ export default function OutwardSettlementReportPage() {
             ? row.adjustment_details.map((item) => [
                 item.sr_no,
                 item.company_name || "-",
+                formatDate(item.inward_date),
                 item.lorry_no || "-",
                 item.inward_voucher_no || "-",
                 getLoadingTypeLabel(item.source_type),
@@ -666,7 +838,7 @@ export default function OutwardSettlementReportPage() {
                     : 0)
                 ),
               ])
-            : [["", "No adjusted inward details found.", "", "", "", "", "", "", "", "", "", "", "", ""]],
+            : [["", "No adjusted inward details found.", "", "", "", "", "", "", "", "", "", "", "", "", ""]],
       });
 
       const {
@@ -739,7 +911,7 @@ export default function OutwardSettlementReportPage() {
       doc.setFontSize(14);
       doc.text(num(row.receivable_amount), xPl + wPl - 6, yPl + 8.6, { align: "right" });
 
-      startY = yPl + hPl + (index === records.length - 1 ? 0 : 8);
+      startY = yPl + hPl + (index === filteredRecords.length - 1 ? 0 : 8);
     });
 
     doc.save("Outward_Settlement_Report.pdf");
@@ -791,6 +963,15 @@ export default function OutwardSettlementReportPage() {
             ))}
           </select>
 
+          <input
+            type="text"
+            name="adjusted_company_search"
+            value={filters.adjusted_company_search}
+            onChange={(e) => setFilters((p) => ({ ...p, adjusted_company_search: e.target.value }))}
+            placeholder="Search adjusted company"
+            style={{ ...input, minWidth: 230 }}
+          />
+
           <button onClick={fetchReport} style={{ ...button, background: "#0f766e" }}>
             Apply
           </button>
@@ -801,17 +982,17 @@ export default function OutwardSettlementReportPage() {
       </div>
 
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 14, marginBottom: 16 }}>
-        <div style={card}><div>Total Dispatch</div><div style={statValue}>{num(totals.dispatch)}</div></div>
-        <div style={card}><div>Total Unloading</div><div style={statValue}>{num(totals.unloading)}</div></div>
-        <div style={card}><div>Total Shortage</div><div style={statValue}>{num(totals.shortage)}</div></div>
-        <div style={card}><div>Total Settlement Wt</div><div style={statValue}>{num(totals.settlement)}</div></div>
-        <div style={card}><div>Total Net Receivable</div><div style={statValue}>{num(totals.gross)}</div></div>
-        <div style={card}><div>Total Net Profit / Loss</div><div style={statValue}>{num(totals.net)}</div></div>
+        <div style={card}><div>Total Dispatch</div><div style={statValue}>{num(filteredTotals.dispatch)}</div></div>
+        <div style={card}><div>Total Unloading</div><div style={statValue}>{num(filteredTotals.unloading)}</div></div>
+        <div style={card}><div>Total Shortage</div><div style={statValue}>{num(filteredTotals.shortage)}</div></div>
+        <div style={card}><div>Total Settlement Wt</div><div style={statValue}>{num(filteredTotals.settlement)}</div></div>
+        <div style={card}><div>Total Net Receivable</div><div style={statValue}>{num(filteredTotals.gross)}</div></div>
+        <div style={card}><div>Total Net Profit / Loss</div><div style={statValue}>{num(filteredTotals.net)}</div></div>
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-        {records.length > 0 ? (
-          records.map((row) => {
+        {filteredRecords.length > 0 ? (
+          filteredRecords.map((row) => {
             const {
               dispatchQty,
               saleAmount,
@@ -880,6 +1061,7 @@ export default function OutwardSettlementReportPage() {
                     <tr>
                       <th style={{ ...hardHeaderCell, width: "40px" }}>Sr</th>
                       <th style={{ ...hardHeaderCell, width: "138px" }}>Company Name</th>
+                      <th style={{ ...hardHeaderCell, width: "104px" }}>Date</th>
                       <th style={{ ...hardHeaderCell, width: "118px" }}>Lorry No</th>
                       <th style={{ ...hardHeaderCell, width: "118px" }}>Inward Voucher</th>
                       <th style={{ ...hardHeaderCell, width: "128px" }}>Loading Type</th>
@@ -892,6 +1074,8 @@ export default function OutwardSettlementReportPage() {
                       <th style={{ ...hardHeaderCell, width: "88px" }}>Other Chgs</th>
                       <th style={{ ...hardHeaderCell, width: "96px" }}>Amount</th>
                       <th style={{ ...hardHeaderCell, width: "102px" }}>Net Payable</th>
+                      <th style={{ ...hardHeaderCell, width: "58px", textAlign: "center" }}>PDF</th>
+                      <th style={{ ...hardHeaderCell, width: "72px", textAlign: "center" }}>WhatsApp</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -900,6 +1084,7 @@ export default function OutwardSettlementReportPage() {
                         <tr key={item.id} style={{ background: index % 2 === 0 ? "#ffffff" : "#f4f7fa" }}>
                           <td style={hardBodyCell}>{item.sr_no}</td>
                           <td style={hardBodyCell}>{item.company_name || "-"}</td>
+                          <td style={hardBodyCell}>{formatDate(item.inward_date)}</td>
                           <td style={hardBodyCell}>{item.lorry_no || "-"}</td>
                           <td style={hardBodyCell}>{item.inward_voucher_no || "-"}</td>
                           <td style={hardBodyCell}>{getLoadingTypeLabel(item.source_type)}</td>
@@ -912,11 +1097,31 @@ export default function OutwardSettlementReportPage() {
                           <td style={hardBodyCell}>{num(item.other_charges)}</td>
                           <td style={hardBodyCell}>{num(item.amount)}</td>
                           <td style={hardBodyCell}>{num(item.net_payable)}</td>
+                          <td style={{ ...hardBodyCell, textAlign: "center" }}>
+                            <button
+                              type="button"
+                              title="Download this row PDF"
+                              onClick={() => createAdjustedRowPdf(row, item)}
+                              style={{ ...iconButtonStyle, background: "#dc2626" }}
+                            >
+                              <FaFilePdf />
+                            </button>
+                          </td>
+                          <td style={{ ...hardBodyCell, textAlign: "center" }}>
+                            <button
+                              type="button"
+                              title="Share this row on WhatsApp"
+                              onClick={() => openAdjustedRowWhatsApp(row, item)}
+                              style={{ ...iconButtonStyle, background: "#16a34a" }}
+                            >
+                              <FaWhatsapp />
+                            </button>
+                          </td>
                         </tr>
                       ))
                     ) : (
                       <tr>
-                        <td style={hardBodyCell} colSpan="14">No adjusted inward details found.</td>
+                        <td style={hardBodyCell} colSpan="17">No adjusted inward details found.</td>
                       </tr>
                     )}
                   </tbody>
@@ -1179,5 +1384,18 @@ const hardBodyCell = {
   lineHeight: 1.2,
   whiteSpace: "nowrap",
   background: "transparent",
+};
+
+const iconButtonStyle = {
+  width: 34,
+  height: 34,
+  border: "none",
+  borderRadius: 6,
+  color: "#ffffff",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  cursor: "pointer",
+  fontSize: 17,
 };
 
