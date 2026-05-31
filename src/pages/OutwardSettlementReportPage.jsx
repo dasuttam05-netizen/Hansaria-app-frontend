@@ -271,6 +271,13 @@ export default function OutwardSettlementReportPage() {
     [filteredRecords]
   );
 
+  const searchedAdjustmentRows = useMemo(() => {
+    if (!adjustedCompanySearch) return [];
+    return filteredRecords.flatMap((row) =>
+      (row.adjustment_details || []).map((item) => ({ row, item }))
+    );
+  }, [filteredRecords, adjustedCompanySearch]);
+
   const buildAdjustedDetailRows = (row, item) => {
     const shortQty =
       (Number(row.dispatch_qty) || 0) > 0
@@ -310,7 +317,7 @@ export default function OutwardSettlementReportPage() {
     doc.setTextColor(15, 23, 42);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(14);
-    doc.text(`${item.company_name || "-"} | ${invNo}`, 14, 28);
+    doc.text(`${item.company_name || "-"} Adjustment`, 14, 28);
 
     autoTable(doc, {
       startY: 34,
@@ -318,13 +325,6 @@ export default function OutwardSettlementReportPage() {
       headStyles: { fillColor: [14, 116, 144], textColor: 255 },
       styles: { fontSize: 8, textColor: 0 },
       head: [[
-        "Outward Date",
-        "Outward Lorry",
-        "Outward Company",
-        "Warehouse",
-        "Buyer",
-        "Consignee",
-        "Product",
         "Adjusted Date",
         "Adjusted Company",
         "Adjusted Lorry",
@@ -333,13 +333,6 @@ export default function OutwardSettlementReportPage() {
         "Net Payable",
       ]],
       body: [[
-        formatDate(row.date),
-        row.lorry_no || "-",
-        row.company_name || "-",
-        row.warehouse_name || "-",
-        row.buyer_name || "-",
-        row.consignee_name || "-",
-        row.product_name || "-",
         formatDate(item.inward_date),
         item.company_name || "-",
         item.lorry_no || "-",
@@ -375,9 +368,6 @@ export default function OutwardSettlementReportPage() {
     const { shortQty, shortAmount, netPayable } = buildAdjustedDetailRows(row, item);
     const lines = [
       "Adjusted Company Detail",
-      `Outward Date: ${formatDate(row.date)}`,
-      `Outward Lorry: ${row.lorry_no || "-"}`,
-      `Outward Voucher: ${displayInvNo(row)}`,
       `Adjusted Date: ${formatDate(item.inward_date)}`,
       `Adjusted Company: ${item.company_name || "-"}`,
       `Adjusted Lorry: ${item.lorry_no || "-"}`,
@@ -990,6 +980,82 @@ export default function OutwardSettlementReportPage() {
         <div style={card}><div>Total Net Profit / Loss</div><div style={statValue}>{num(filteredTotals.net)}</div></div>
       </div>
 
+      {adjustedCompanySearch ? (
+        <div style={{ ...card, marginBottom: 16 }}>
+          <div style={{ marginBottom: 12, color: "#0f172a", fontWeight: 800 }}>
+            Adjusted Company List
+          </div>
+          <div style={{ overflowX: "auto", border: "1px solid #d1d5db", background: "#fff" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, background: "#fff" }}>
+              <thead>
+                <tr>
+                  <th style={{ ...hardHeaderCell, width: 42 }}>Sr</th>
+                  <th style={{ ...hardHeaderCell, width: 138 }}>Company Name</th>
+                  <th style={{ ...hardHeaderCell, width: 104 }}>Date</th>
+                  <th style={{ ...hardHeaderCell, width: 118 }}>Lorry No</th>
+                  <th style={{ ...hardHeaderCell, width: 118 }}>Inward Voucher</th>
+                  <th style={{ ...hardHeaderCell, width: 126 }}>Loading Type</th>
+                  <th style={{ ...hardHeaderCell, width: 118 }}>Weight</th>
+                  <th style={{ ...hardHeaderCell, width: 96 }}>Rate</th>
+                  <th style={{ ...hardHeaderCell, width: 96 }}>Amount</th>
+                  <th style={{ ...hardHeaderCell, width: 96 }}>S.Amount</th>
+                  <th style={{ ...hardHeaderCell, width: 104 }}>Net Payable</th>
+                  <th style={{ ...hardHeaderCell, width: 58, textAlign: "center" }}>PDF</th>
+                  <th style={{ ...hardHeaderCell, width: 72, textAlign: "center" }}>WhatsApp</th>
+                </tr>
+              </thead>
+              <tbody>
+                {searchedAdjustmentRows.length > 0 ? (
+                  searchedAdjustmentRows.map(({ row, item }, index) => {
+                    const detail = buildAdjustedDetailRows(row, item);
+                    return (
+                      <tr key={`${row.id}-${item.id}`} style={{ background: index % 2 === 0 ? "#ffffff" : "#f4f7fa" }}>
+                        <td style={hardBodyCell}>{index + 1}</td>
+                        <td style={hardBodyCell}>{item.company_name || "-"}</td>
+                        <td style={hardBodyCell}>{formatDate(item.inward_date)}</td>
+                        <td style={hardBodyCell}>{item.lorry_no || "-"}</td>
+                        <td style={hardBodyCell}>{item.inward_voucher_no || "-"}</td>
+                        <td style={hardBodyCell}>{getLoadingTypeLabel(item.source_type)}</td>
+                        <td style={hardBodyCell}>{num(item.settlement_weight)}</td>
+                        <td style={hardBodyCell}>{num(item.company_rate)}</td>
+                        <td style={hardBodyCell}>{num(item.amount)}</td>
+                        <td style={hardBodyCell}>{num(detail.shortAmount)}</td>
+                        <td style={hardBodyCell}>{num(detail.netPayable)}</td>
+                        <td style={{ ...hardBodyCell, textAlign: "center" }}>
+                          <button
+                            type="button"
+                            title="Download this row PDF"
+                            onClick={() => createAdjustedRowPdf(row, item)}
+                            style={{ ...iconButtonStyle, background: "#dc2626" }}
+                          >
+                            <FaFilePdf />
+                          </button>
+                        </td>
+                        <td style={{ ...hardBodyCell, textAlign: "center" }}>
+                          <button
+                            type="button"
+                            title="Share this row on WhatsApp"
+                            onClick={() => openAdjustedRowWhatsApp(row, item)}
+                            style={{ ...iconButtonStyle, background: "#16a34a" }}
+                          >
+                            <FaWhatsapp />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })
+                ) : (
+                  <tr>
+                    <td style={hardBodyCell} colSpan="13">No adjusted company found.</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      ) : null}
+
+      {!adjustedCompanySearch ? (
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         {filteredRecords.length > 0 ? (
           filteredRecords.map((row) => {
@@ -1220,6 +1286,7 @@ export default function OutwardSettlementReportPage() {
           <div style={card}>No records found</div>
         )}
       </div>
+      ) : null}
 
       <div style={{ display: "flex", justifyContent: "center", marginTop: 20, paddingBottom: 24 }}>
         <button onClick={downloadPDF} style={{ ...button, background: "#1d4ed8", minWidth: 180 }}>
