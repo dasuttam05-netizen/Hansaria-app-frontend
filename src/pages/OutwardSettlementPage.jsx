@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { formatDisplayDate } from "../utils/date";
+import { hasPermission, loadSession } from "../utils/auth";
 
 const BASE_FONT = "'Trebuchet MS', 'Segoe UI', Tahoma, sans-serif";
 const PALETTE = {
@@ -21,10 +22,13 @@ const PALETTE = {
 
 export default function OutwardSettlementPage({ outward, onSaved }) {
   const API_BASE = "/api";
+  const { user } = loadSession();
+  const canUseManualRate = hasPermission(user, "settlement.manualRate");
 
   const [loading, setLoading] = useState(true);
   const [meta, setMeta] = useState(null);
   const [isFreightAutoLocked, setIsFreightAutoLocked] = useState(false);
+  const [adjustmentRates, setAdjustmentRates] = useState({});
   const [formData, setFormData] = useState({
     dispatch_qty: "",
     unloading_qty: "",
@@ -86,10 +90,16 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
         charge_bearer: s.charge_bearer || "self",
         narration: s.narration || "",
       });
+      setAdjustmentRates(
+        (res.data.adjustment_details || []).reduce((acc, item) => {
+          acc[item.id] = item.company_rate ?? "";
+          return acc;
+        }, {})
+      );
     } catch (err) {
       console.error(err);
       setIsFreightAutoLocked(false);
-      alert("Settlement load failed");
+      alert(err?.response?.data?.error || "Settlement load failed");
     } finally {
       setLoading(false);
     }
@@ -98,6 +108,17 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
   useEffect(() => {
     fetchSettlement();
   }, [outward?.id]);
+
+  const getItemCompanyRate = (item) => {
+    const manualRate = adjustmentRates[item.id];
+    return manualRate === "" || manualRate === null || manualRate === undefined
+      ? num(formData.company_rate)
+      : num(manualRate);
+  };
+
+  const handleAdjustmentRateChange = (id, value) => {
+    setAdjustmentRates((prev) => ({ ...prev, [id]: value }));
+  };
 
   const calculation = useMemo(() => {
   const dispatchQty = num(formData.dispatch_qty);
@@ -138,17 +159,21 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
   // ✅ Company Payable = Sum of Net Payable (Table match)
   const companyPayable = adjustmentDetails.reduce((sum, item) => {
     const weight = num(item.settlement_weight);
+    const itemCompanyRate =
+      adjustmentRates[item.id] === "" || adjustmentRates[item.id] === null || adjustmentRates[item.id] === undefined
+        ? companyRate
+        : num(adjustmentRates[item.id]);
 
     const freightPerMt = dispatchQty > 0 ? freight / dispatchQty : 0;
     const labourPerMt = dispatchQty > 0 ? labour / dispatchQty : 0;
     const otherPerMt = dispatchQty > 0 ? other / dispatchQty : 0;
 
-    const amount = weight * companyRate;
+    const amount = weight * itemCompanyRate;
 
     const shortQtyPerLine =
       dispatchQty > 0 ? (weight / dispatchQty) * shortageQty : 0;
 
-    const shortageAmount = shortQtyPerLine * companyRate;
+    const shortageAmount = shortQtyPerLine * itemCompanyRate;
 
     const netPayable =
       amount -
@@ -171,7 +196,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
     companyPayable,
     receivableAmount,
   };
-}, [formData, meta]);
+}, [formData, meta, adjustmentRates]);
 
   const handleChange = (e) => {
     setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
@@ -182,6 +207,14 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
       await axios.post(`${API_BASE}/outward-settlement/save`, {
         outward_id: outward.id,
         ...formData,
+        ...(canUseManualRate
+          ? {
+              adjustment_rates: Object.entries(adjustmentRates).map(([id, company_rate]) => ({
+                id,
+                company_rate,
+              })),
+            }
+          : {}),
       });
       alert("Settlement saved successfully");
       fetchSettlement();
@@ -346,7 +379,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
     <th style={tableHeaderStyle}>Settlement Weight</th>
     <th style={tableHeaderStyle}>Short Qnt</th>
     <th style={tableHeaderStyle}>S.Amount</th> {/* NEW */}
-    <th style={tableHeaderStyle}>Company Rate</th>
+    <th style={tableHeaderStyle}>{canUseManualRate ? "Manual Rate" : "Company Rate"}</th>
     <th style={tableHeaderStyle}>Freight</th>
     <th style={tableHeaderStyle}>Labour Chgs</th>
     <th style={tableHeaderStyle}>Other Chgs</th>
@@ -363,21 +396,22 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
       const labourPerMt = dispatchQty > 0 ? num(formData.outward_labour_charges) / dispatchQty : 0;
       const otherPerMt = dispatchQty > 0 ? num(formData.other_charges) / dispatchQty : 0;
 
-      const amount = num(item.settlement_weight) * num(formData.company_rate);
+      const itemCompanyRate = getItemCompanyRate(item);
+      const amount = num(item.settlement_weight) * itemCompanyRate;
 
       const shortQtyPerLine =
         dispatchQty > 0
           ? (num(item.settlement_weight) / dispatchQty) * calculation.shortageQty
           : 0;
 
-      const shortageAmount = shortQtyPerLine * num(formData.company_rate); // NEW
+      const shortageAmount = shortQtyPerLine * itemCompanyRate; // NEW
 
       const freightPerLine = num(item.settlement_weight) * freightPerMt;
       const labourPerLine = num(item.settlement_weight) * labourPerMt;
       const otherPerLine = num(item.settlement_weight) * otherPerMt;
 
       const netPayable =
-        amount - freightPerLine - labourPerLine - otherPerLine;
+        amount - freightPerLine - labourPerLine - otherPerLine - shortageAmount;
 
       return (
         <tr key={item.id} style={{ background: index % 2 === 0 ? "#ffffff" : PALETTE.rowAlt }}>
@@ -389,7 +423,18 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
           <td style={tableCellStyle}>{num(item.settlement_weight).toFixed(2)}</td>
           <td style={tableCellStyle}>{shortQtyPerLine.toFixed(2)}</td>
           <td style={tableCellStyle}>{shortageAmount.toFixed(2)}</td> {/* NEW */}
-          <td style={tableCellStyle}>{num(formData.company_rate).toFixed(2)}</td>
+          <td style={tableCellStyle}>
+            {canUseManualRate ? (
+              <input
+                type="number"
+                value={adjustmentRates[item.id] ?? ""}
+                onChange={(event) => handleAdjustmentRateChange(item.id, event.target.value)}
+                style={{ ...input, minWidth: 105, padding: "7px 9px" }}
+              />
+            ) : (
+              itemCompanyRate.toFixed(2)
+            )}
+          </td>
           <td style={tableCellStyle}>{freightPerLine.toFixed(2)}</td>
           <td style={tableCellStyle}>{labourPerLine.toFixed(2)}</td>
           <td style={tableCellStyle}>{otherPerLine.toFixed(2)}</td>
@@ -632,9 +677,6 @@ const statBodyStyle = {
   lineHeight: 1.2,
   background: PALETTE.tile,
 };
-
-
-
 
 
 
