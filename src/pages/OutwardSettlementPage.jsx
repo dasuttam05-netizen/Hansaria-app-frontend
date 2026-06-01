@@ -422,7 +422,19 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
           <td style={tableCellStyle}>{num(item.settlement_weight).toFixed(2)}</td>
           <td style={tableCellStyle}>{shortQtyPerLine.toFixed(2)}</td>
           <td style={tableCellStyle}>{shortageAmount.toFixed(2)}</td> {/* NEW */}
-          <td style={tableCellStyle}>{num(formData.company_rate).toFixed(2)}</td>
+          <td style={tableCellStyle}>
+            {canEditCompanyRate ? (
+              <input
+                name="company_rate"
+                type="number"
+                value={formData.company_rate}
+                onChange={handleChange}
+                style={tableRateInputStyle}
+              />
+            ) : (
+              num(formData.company_rate).toFixed(2)
+            )}
+          </td>
           <td style={tableCellStyle}>{freightPerLine.toFixed(2)}</td>
           <td style={tableCellStyle}>{labourPerLine.toFixed(2)}</td>
           <td style={tableCellStyle}>{otherPerLine.toFixed(2)}</td>
@@ -589,6 +601,18 @@ const tableCellStyle = {
   whiteSpace: "nowrap",
   fontSize: 12.5,
   lineHeight: 1.2,
+  background: "#ffffff",
+};
+
+const tableRateInputStyle = {
+  width: 92,
+  padding: "6px 8px",
+  border: `1px solid ${PALETTE.borderStrong}`,
+  borderRadius: 8,
+  color: PALETTE.ink,
+  fontSize: 12.5,
+  fontWeight: 700,
+  fontFamily: BASE_FONT,
   background: "#ffffff",
 };
 
@@ -917,5 +941,3 @@ const statBodyStyle = {
   lineHeight: 1.2,
   background: PALETTE.tile,
 };
-
-
