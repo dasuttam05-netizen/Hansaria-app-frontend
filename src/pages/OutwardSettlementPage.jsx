@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { formatDisplayDate } from "../utils/date";
+import { hasPermission, loadSession } from "../utils/auth";
 
 const BASE_FONT = "'Trebuchet MS', 'Segoe UI', Tahoma, sans-serif";
 const PALETTE = {
@@ -21,6 +22,8 @@ const PALETTE = {
 
 export default function OutwardSettlementPage({ outward, onSaved }) {
   const API_BASE = "/api";
+  const { user } = loadSession();
+  const canEditCompanyRate = hasPermission(user, "settlement.companyRate");
 
   const [loading, setLoading] = useState(true);
   const [meta, setMeta] = useState(null);
@@ -463,7 +466,24 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
 
           <div>
             <label style={label}>Company Rate</label>
-            <input name="company_rate" type="number" value={formData.company_rate} onChange={handleChange} style={input} />
+            <input
+              name="company_rate"
+              type="number"
+              value={formData.company_rate}
+              onChange={handleChange}
+              readOnly={!canEditCompanyRate}
+              style={{
+                ...input,
+                background: canEditCompanyRate ? "#fff" : "#f3f8ff",
+                cursor: canEditCompanyRate ? "text" : "not-allowed",
+                color: canEditCompanyRate ? PALETTE.ink : PALETTE.muted,
+              }}
+            />
+            {!canEditCompanyRate && (
+              <div style={{ marginTop: 6, fontSize: 12, color: PALETTE.muted, fontWeight: 600 }}>
+                Admin or Company Rate access required
+              </div>
+            )}
           </div>
 
           <div>
@@ -897,6 +917,5 @@ const statBodyStyle = {
   lineHeight: 1.2,
   background: PALETTE.tile,
 };
-
 
 
