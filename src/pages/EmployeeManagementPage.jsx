@@ -43,7 +43,7 @@ const PERMISSION_GROUPS = [
       { key: "inward_access", label: "Inward", permissions: ["inward.view", "inward.create", "inward.edit", "inward.delete"] },
       { key: "outward_access", label: "Outward", permissions: ["outward.view", "outward.create", "outward.edit", "outward.delete"] },
       { key: "adjustment_access", label: "Outward Adjustment", permissions: ["adjustment.manage"] },
-      { key: "settlement_access", label: "Settlement", permissions: ["settlement.view"] },
+      { key: "settlement_access", label: "Settlement", permissions: ["settlement.view", "settlement.companyRate"] },
       { key: "expense_access", label: "Expense Entry", permissions: ["expense.entry", "expense.create", "expense.edit", "expense.delete"] },
       { key: "expense_posted_inward_access", label: "Expense to Inward Posted", permissions: ["expense.postedInward"] },
       { key: "expense_palti_access", label: "Palti Lorry", permissions: ["expense.palti"] },
