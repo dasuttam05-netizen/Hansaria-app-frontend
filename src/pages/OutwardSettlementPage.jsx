@@ -253,83 +253,110 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
         >
           Outward Settlement
         </h2>
-        <div style={{ display: "grid", gap: 14, marginTop: 14 }}>
-          <div style={compactGridStyle}>
-            <div style={miniCardStyle("92px")}>
-              <div style={miniHeadStyle}>Voucher No</div>
-              <div style={miniBodyStyle}>{meta?.voucher_no || `OUT-${meta?.outward_id || outward?.id || "-"}`}</div>
+        <div style={settlementPreviewStyle}>
+          <div style={buyerLineStyle}>
+            <div style={roundIconStyle}>B</div>
+            <div style={buyerLabelStyle}>Buyer</div>
+            <div style={buyerValueStyle}>{meta?.buyer_name || "-"}</div>
+          </div>
+
+          <div style={sectionTitleStyle}>
+            <div style={smallSectionIconStyle}>i</div>
+            <div style={sectionLabelStyle}>Outward Details</div>
+            <div style={sectionRuleStyle} />
+          </div>
+
+          <div style={outwardDetailGridStyle}>
+            <div style={plainInfoCellStyle}>
+              <div style={plainInfoLabelStyle}>Outward Company</div>
+              <div style={plainInfoValueStyle}>{meta?.company_name || "-"}</div>
             </div>
-            <div style={miniCardStyle("84px")}>
-              <div style={miniHeadStyle}>Date</div>
-          <div style={miniBodyStyle}>{formatDisplayDate(meta?.outward_date) || "-"}</div>
+            <div style={plainInfoCellStyle}>
+              <div style={plainInfoLabelStyle}>Warehouse</div>
+              <div style={plainInfoValueStyle}>{meta?.warehouse_name || "-"}</div>
             </div>
-            <div style={miniCardStyle("132px")}>
-              <div style={miniHeadStyle}>Outward Company</div>
-              <div style={miniBodyStyle}>{meta?.company_name || "-"}</div>
+            <div style={plainInfoCellStyle}>
+              <div style={plainInfoLabelStyle}>Dispatch Date</div>
+              <div style={plainInfoValueStyle}>{formatDisplayDate(meta?.outward_date) || "-"}</div>
             </div>
-            <div style={miniCardStyle("100px")}>
-              <div style={miniHeadStyle}>Warehouse</div>
-              <div style={miniBodyStyle}>{meta?.warehouse_name || "-"}</div>
+            <div style={plainInfoCellStyle}>
+              <div style={plainInfoLabelStyle}>Location</div>
+              <div style={plainInfoValueStyle}>{meta?.location_name || outward?.location_name || "-"}</div>
             </div>
-            <div style={miniCardStyle("100px")}>
-              <div style={miniHeadStyle}>Location</div>
-              <div style={miniBodyStyle}>{meta?.location_name || outward?.location_name || "-"}</div>
+            <div style={plainInfoCellStyle}>
+              <div style={plainInfoLabelStyle}>Voucher No.</div>
+              <div style={plainInfoValueStyle}>{meta?.voucher_no || `OUT-${meta?.outward_id || outward?.id || "-"}`}</div>
             </div>
-            <div style={miniCardStyle("98px")}>
-              <div style={miniHeadStyle}>Lorry No</div>
-              <div style={miniBodyStyle}>{meta?.lorry_no || "-"}</div>
-            </div>
-            <div style={miniCardStyle("92px")}>
-              <div style={miniHeadStyle}>Buyer</div>
-              <div style={miniBodyStyle}>{meta?.buyer_name || "-"}</div>
+            <div style={{ ...plainInfoCellStyle, borderRight: "none" }}>
+              <div style={plainInfoLabelStyle}>Lorry No.</div>
+              <div style={plainInfoValueStyle}>{meta?.lorry_no || "-"}</div>
             </div>
           </div>
 
-          <div style={compactGridStyle}>
-            <div style={miniCardStyle("120px")}>
-              <div style={miniHeadStyle}>Consignee</div>
-              <div style={miniBodyStyle}>{meta?.consignee_name || "-"}</div>
-            </div>
-            <div style={miniCardStyle("80px")}>
-              <div style={miniHeadStyle}>Product</div>
-              <div style={miniBodyStyle}>{meta?.product_name || "-"}</div>
-            </div>
-            <div style={miniCardStyle("128px")}>
-              <div style={miniHeadStyle}>Dispatch Qty</div>
-              <div style={miniBodyStyle}>{num(formData.dispatch_qty).toFixed(2)}</div>
-            </div>
-            <div style={miniCardStyle("128px")}>
-              <div style={miniHeadStyle}>Unloading Qty</div>
-              <div style={miniBodyStyle}>{num(formData.unloading_qty).toFixed(2)}</div>
-            </div>
-            <div style={miniCardStyle("88px")}>
-              <div style={miniHeadStyle}>Shortage Qty</div>
-              <div style={miniBodyStyle}>{calculation.shortageQty.toFixed(2)}</div>
-            </div>
-            <div style={miniCardStyle("120px")}>
-              <div style={miniHeadStyle}>Settlement Weight</div>
-              <div style={miniBodyStyle}>{calculation.settlementWeight.toFixed(2)}</div>
-            </div>
+          <div style={sectionTitleStyle}>
+            <div style={smallSectionIconStyle}>C</div>
+            <div style={sectionLabelStyle}>Consignment Details</div>
           </div>
 
-          <div style={summaryDividerStyle} />
+          <div style={consignmentTableWrapStyle}>
+            <table style={consignmentTableStyle}>
+              <thead>
+                <tr>
+                  <th style={consignmentHeadStyle}>Consignee</th>
+                  <th style={consignmentHeadStyle}>Product</th>
+                  <th style={consignmentHeadStyle}>Dispatch Qty</th>
+                  <th style={consignmentHeadStyle}>Unloading Qty</th>
+                  <th style={consignmentHeadStyle}>Shortage Qty</th>
+                  <th style={consignmentHeadStyle}>Settlement Weight</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td style={consignmentCellStyle}>{meta?.consignee_name || "-"}</td>
+                  <td style={consignmentCellStyle}>{meta?.product_name || "-"}</td>
+                  <td style={consignmentCellStyle}>{num(formData.dispatch_qty).toFixed(2)}</td>
+                  <td style={consignmentCellStyle}>{num(formData.unloading_qty).toFixed(2)}</td>
+                  <td style={consignmentCellStyle}>{calculation.shortageQty.toFixed(2)}</td>
+                  <td style={consignmentCellStyle}>{calculation.settlementWeight.toFixed(2)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
 
-          <div style={statsGridStyle}>
-            <div style={statTileStyle("90px")}>
-              <div style={statHeadStyle}>Sale Amount</div>
-              <div style={statBodyStyle}>{calculation.saleAmount.toFixed(2)}</div>
+          <div style={sectionTitleStyle}>
+            <div style={smallSectionIconStyle}>₹</div>
+            <div style={sectionLabelStyle}>Settlement Summary</div>
+            <div style={sectionRuleStyle} />
+          </div>
+
+          <div style={settlementSummaryGridStyle}>
+            <div style={summaryMetricStyle}>
+              <div style={{ ...summaryIconStyle, background: "#dcfce7", color: "#15803d" }}>₹</div>
+              <div>
+                <div style={summaryMetricLabelStyle}>Sale Amount</div>
+                <div style={{ ...summaryMetricValueStyle, color: "#15803d" }}>₹ {calculation.saleAmount.toFixed(2)}</div>
+              </div>
             </div>
-            <div style={statTileStyle("215px")}>
-              <div style={statHeadStyle}>Net Receivable</div>
-              <div style={statBodyStyle}>{calculation.grossAmount.toFixed(2)}</div>
+            <div style={summaryMetricStyle}>
+              <div style={{ ...summaryIconStyle, background: "#dbeafe", color: "#2563eb" }}>↓</div>
+              <div>
+                <div style={summaryMetricLabelStyle}>Net Receivable</div>
+                <div style={{ ...summaryMetricValueStyle, color: "#1d4ed8" }}>₹ {calculation.grossAmount.toFixed(2)}</div>
+              </div>
             </div>
-            <div style={statTileStyle("155px")}>
-              <div style={statHeadStyle}>Company Payable</div>
-              <div style={statBodyStyle}>{calculation.companyPayable.toFixed(2)}</div>
+            <div style={summaryMetricStyle}>
+              <div style={{ ...summaryIconStyle, background: "#ffedd5", color: "#f97316" }}>₹</div>
+              <div>
+                <div style={summaryMetricLabelStyle}>Company Payable</div>
+                <div style={{ ...summaryMetricValueStyle, color: "#ea580c" }}>₹ {calculation.companyPayable.toFixed(2)}</div>
+              </div>
             </div>
-            <div style={statTileStyle("128px")}>
-              <div style={statHeadStyle}>Net Profit / Loss</div>
-              <div style={statBodyStyle}>{calculation.receivableAmount.toFixed(2)}</div>
+            <div style={{ ...summaryMetricStyle, borderRight: "none" }}>
+              <div style={{ ...summaryIconStyle, background: "#ede9fe", color: "#7c3aed" }}>P/L</div>
+              <div>
+                <div style={summaryMetricLabelStyle}>Net Profit / Loss</div>
+                <div style={{ ...summaryMetricValueStyle, color: "#6d28d9" }}>₹ {calculation.receivableAmount.toFixed(2)}</div>
+              </div>
             </div>
           </div>
         </div>
@@ -585,6 +612,185 @@ const smallNoButtonStyle = {
   cursor: "pointer",
 };
 
+const settlementPreviewStyle = {
+  display: "grid",
+  gap: 13,
+  marginTop: 12,
+  padding: "2px 14px 0",
+  background: "#ffffff",
+};
+
+const buyerLineStyle = {
+  display: "grid",
+  gridTemplateColumns: "34px 70px 1fr",
+  alignItems: "center",
+  gap: 8,
+  minHeight: 34,
+};
+
+const roundIconStyle = {
+  width: 28,
+  height: 28,
+  borderRadius: "50%",
+  background: PALETTE.header,
+  color: "#ffffff",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontWeight: 900,
+  fontSize: 13,
+};
+
+const buyerLabelStyle = {
+  color: PALETTE.ink,
+  fontSize: 13,
+  fontWeight: 800,
+};
+
+const buyerValueStyle = {
+  color: PALETTE.ink,
+  fontSize: 13,
+  fontWeight: 600,
+  borderLeft: `1px solid ${PALETTE.divider}`,
+  paddingLeft: 14,
+};
+
+const sectionTitleStyle = {
+  display: "grid",
+  gridTemplateColumns: "28px auto 1fr",
+  alignItems: "center",
+  gap: 8,
+  minHeight: 28,
+};
+
+const smallSectionIconStyle = {
+  width: 24,
+  height: 24,
+  borderRadius: "50%",
+  background: PALETTE.header,
+  color: "#ffffff",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontSize: 12,
+  fontWeight: 900,
+};
+
+const sectionLabelStyle = {
+  color: PALETTE.headerDark,
+  fontSize: 14,
+  fontWeight: 900,
+  whiteSpace: "nowrap",
+};
+
+const sectionRuleStyle = {
+  height: 1,
+  background: "#5fb7b1",
+};
+
+const outwardDetailGridStyle = {
+  display: "grid",
+  gridTemplateColumns: "repeat(6, minmax(115px, 1fr))",
+  gap: 0,
+  padding: "0 0 4px 16px",
+};
+
+const plainInfoCellStyle = {
+  padding: "0 18px 0 0",
+  marginRight: 18,
+  borderRight: `1px solid ${PALETTE.divider}`,
+  minHeight: 45,
+};
+
+const plainInfoLabelStyle = {
+  color: PALETTE.ink,
+  fontSize: 12,
+  fontWeight: 900,
+  marginBottom: 7,
+};
+
+const plainInfoValueStyle = {
+  color: PALETTE.ink,
+  fontSize: 12,
+  fontWeight: 600,
+  lineHeight: 1.25,
+};
+
+const consignmentTableWrapStyle = {
+  border: `1px solid ${PALETTE.border}`,
+  borderRadius: 6,
+  overflow: "hidden",
+  background: "#ffffff",
+};
+
+const consignmentTableStyle = {
+  width: "100%",
+  borderCollapse: "collapse",
+  fontSize: 12,
+  tableLayout: "fixed",
+};
+
+const consignmentHeadStyle = {
+  background: PALETTE.header,
+  color: "#ffffff",
+  padding: "8px 10px",
+  textAlign: "center",
+  borderRight: "1px solid rgba(255,255,255,0.22)",
+  fontWeight: 900,
+};
+
+const consignmentCellStyle = {
+  background: "#f8fafc",
+  color: PALETTE.ink,
+  padding: "10px 10px",
+  textAlign: "center",
+  borderRight: `1px solid ${PALETTE.border}`,
+  fontWeight: 700,
+  lineHeight: 1.25,
+};
+
+const settlementSummaryGridStyle = {
+  display: "grid",
+  gridTemplateColumns: "repeat(4, minmax(160px, 1fr))",
+  gap: 0,
+  alignItems: "center",
+  padding: "8px 0 2px",
+};
+
+const summaryMetricStyle = {
+  display: "grid",
+  gridTemplateColumns: "50px 1fr",
+  alignItems: "center",
+  gap: 10,
+  padding: "8px 22px",
+  borderRight: `1px solid ${PALETTE.divider}`,
+  minHeight: 62,
+};
+
+const summaryIconStyle = {
+  width: 42,
+  height: 42,
+  borderRadius: "50%",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontWeight: 900,
+  fontSize: 15,
+};
+
+const summaryMetricLabelStyle = {
+  color: PALETTE.ink,
+  fontSize: 12,
+  fontWeight: 900,
+  marginBottom: 4,
+};
+
+const summaryMetricValueStyle = {
+  fontSize: 19,
+  fontWeight: 900,
+  lineHeight: 1.15,
+};
+
 const summaryHeadStyle = {
   padding: "10px 12px",
   border: `1px solid ${PALETTE.border}`,
@@ -691,8 +897,6 @@ const statBodyStyle = {
   lineHeight: 1.2,
   background: PALETTE.tile,
 };
-
-
 
 
 
