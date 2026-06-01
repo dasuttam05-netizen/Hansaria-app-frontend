@@ -637,7 +637,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
       const otherPerLine = num(item.settlement_weight) * otherPerMt;
 
       const netPayable =
-        amount - freightPerLine - labourPerLine - otherPerLine;
+        amount - freightPerLine - labourPerLine - otherPerLine - shortageAmount;
 
       return (
         <tr key={item.id} style={{ background: index % 2 === 0 ? "#ffffff" : PALETTE.rowAlt }}>
