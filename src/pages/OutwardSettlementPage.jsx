@@ -29,6 +29,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
   const [meta, setMeta] = useState(null);
   const [isFreightAutoLocked, setIsFreightAutoLocked] = useState(false);
   const [showLabourExpenseOption, setShowLabourExpenseOption] = useState(false);
+  const [adjustmentRates, setAdjustmentRates] = useState({});
   const [formData, setFormData] = useState({
     dispatch_qty: "",
     unloading_qty: "",
@@ -91,6 +92,12 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
         charge_bearer: s.charge_bearer || "self",
         narration: s.narration || "",
       });
+      setAdjustmentRates(
+        (res.data?.adjustment_details || []).reduce((acc, item) => {
+          acc[item.id] = item.company_rate ?? s.company_rate ?? "";
+          return acc;
+        }, {})
+      );
       setShowLabourExpenseOption(approvedLabourAmount > 0 && num(s.outward_labour_charges) !== approvedLabourAmount);
     } catch (err) {
       console.error(err);
@@ -109,7 +116,6 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
   const dispatchQty = num(formData.dispatch_qty);
   const unloadingQty = num(formData.unloading_qty);
   const saleRate = num(formData.sale_rate);
-  const companyRate = num(formData.company_rate);
   const freight = num(formData.freight);
   const labour = num(formData.outward_labour_charges);
   const other = num(formData.other_charges);
@@ -144,17 +150,18 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
   // ✅ Company Payable = Sum of Net Payable (Table match)
   const companyPayable = adjustmentDetails.reduce((sum, item) => {
     const weight = num(item.settlement_weight);
+    const rowCompanyRate = num(adjustmentRates[item.id] ?? item.company_rate ?? formData.company_rate);
 
     const freightPerMt = dispatchQty > 0 ? freight / dispatchQty : 0;
     const labourPerMt = dispatchQty > 0 ? labour / dispatchQty : 0;
     const otherPerMt = dispatchQty > 0 ? other / dispatchQty : 0;
 
-    const amount = weight * companyRate;
+    const amount = weight * rowCompanyRate;
 
     const shortQtyPerLine =
       dispatchQty > 0 ? (weight / dispatchQty) * shortageQty : 0;
 
-    const shortageAmount = shortQtyPerLine * companyRate;
+    const shortageAmount = shortQtyPerLine * rowCompanyRate;
 
     const netPayable =
       amount -
@@ -177,10 +184,24 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
     companyPayable,
     receivableAmount,
   };
-}, [formData, meta]);
+}, [formData, meta, adjustmentRates]);
 
   const handleChange = (e) => {
     setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+  };
+
+  const handleAdjustmentRateChange = (adjustmentId, value) => {
+    setAdjustmentRates((prev) => ({ ...prev, [adjustmentId]: value }));
+  };
+
+  const handleCompanyRateChange = (value) => {
+    setFormData((prev) => ({ ...prev, company_rate: value }));
+    setAdjustmentRates(
+      (meta?.adjustment_details || []).reduce((acc, item) => {
+        acc[item.id] = value;
+        return acc;
+      }, {})
+    );
   };
 
   const useApprovedLabourExpense = () => {
@@ -196,6 +217,10 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
       await axios.post(`${API_BASE}/outward-settlement/save`, {
         outward_id: outward.id,
         ...formData,
+        adjustment_rates: (meta?.adjustment_details || []).map((item) => ({
+          adjustment_id: item.id,
+          company_rate: adjustmentRates[item.id] ?? item.company_rate ?? formData.company_rate,
+        })),
       });
       alert("Settlement saved successfully");
       fetchSettlement();
@@ -392,18 +417,19 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
   {(meta?.adjustment_details || []).length > 0 ? (
     meta.adjustment_details.map((item, index) => {
       const dispatchQty = num(formData.dispatch_qty);
+      const rowCompanyRate = num(adjustmentRates[item.id] ?? item.company_rate ?? formData.company_rate);
       const freightPerMt = dispatchQty > 0 ? num(formData.freight) / dispatchQty : 0;
       const labourPerMt = dispatchQty > 0 ? num(formData.outward_labour_charges) / dispatchQty : 0;
       const otherPerMt = dispatchQty > 0 ? num(formData.other_charges) / dispatchQty : 0;
 
-      const amount = num(item.settlement_weight) * num(formData.company_rate);
+      const amount = num(item.settlement_weight) * rowCompanyRate;
 
       const shortQtyPerLine =
         dispatchQty > 0
           ? (num(item.settlement_weight) / dispatchQty) * calculation.shortageQty
           : 0;
 
-      const shortageAmount = shortQtyPerLine * num(formData.company_rate); // NEW
+      const shortageAmount = shortQtyPerLine * rowCompanyRate;
 
       const freightPerLine = num(item.settlement_weight) * freightPerMt;
       const labourPerLine = num(item.settlement_weight) * labourPerMt;
@@ -427,12 +453,12 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
               <input
                 name="company_rate"
                 type="number"
-                value={formData.company_rate}
-                onChange={handleChange}
+                value={adjustmentRates[item.id] ?? item.company_rate ?? formData.company_rate}
+                onChange={(e) => handleAdjustmentRateChange(item.id, e.target.value)}
                 style={tableRateInputStyle}
               />
             ) : (
-              num(formData.company_rate).toFixed(2)
+              rowCompanyRate.toFixed(2)
             )}
           </td>
           <td style={tableCellStyle}>{freightPerLine.toFixed(2)}</td>
@@ -482,7 +508,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
               name="company_rate"
               type="number"
               value={formData.company_rate}
-              onChange={handleChange}
+              onChange={(e) => handleCompanyRateChange(e.target.value)}
               readOnly={!canEditCompanyRate}
               style={{
                 ...input,
