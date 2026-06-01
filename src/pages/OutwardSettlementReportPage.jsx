@@ -3,8 +3,8 @@ import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import { FaEdit, FaFilePdf } from "react-icons/fa";
 import OutwardSettlementPage from "./OutwardSettlementPage";
-import { buildAdjustedCompanyCopyPdf } from "../utils/adjustedCompanyPdf";
 
 export default function OutwardSettlementReportPage() {
   const navigate = useNavigate();
@@ -227,70 +227,197 @@ export default function OutwardSettlementReportPage() {
   };
 
   const createSinglePdf = (row) => {
-    const { doc, fileName } = createAdjustedCompanyCopyFromReport(row);
-    doc.save(fileName);
-  };
-
-  const shareSinglePdf = async (row) => {
-    const { doc, fileName, shareText } = createAdjustedCompanyCopyFromReport(row);
-    const blob = doc.output("blob");
-    const file = new File([blob], fileName, { type: "application/pdf" });
-
-    try {
-      if (navigator.canShare && navigator.canShare({ files: [file] }) && navigator.share) {
-        await navigator.share({
-          title: "Outward Settlement",
-          text: shareText,
-          files: [file],
-        });
-      } else {
-        doc.save(fileName);
-        window.open(`https://wa.me/?text=${encodeURIComponent(shareText)}`, "_blank", "noopener,noreferrer");
-      }
-    } catch (err) {
-      console.error(err);
-      alert("WhatsApp share failed");
-    }
-  };
-
-  const createAdjustedCompanyCopyFromReport = (row) => {
-    const calc = getRowCalculations(row);
-    const invNo = displayInvNo(row);
-    return buildAdjustedCompanyCopyPdf({
-      settlement: {
-        date: row.date,
-        voucherNo: invNo,
-        accountName: displayAccountName(row),
-        accountAddress: row.account_address || "-",
-        companyName: row.company_name || displayAccountName(row),
-        locationName: row.location_name || "-",
-        outwardLorryNo: row.lorry_no || "-",
-        consigneeName: row.consignee_name || "-",
-        productName: row.product_name || "-",
-      },
-      adjustmentItems: calc.adjustmentDetails.map((item, index) => ({
-        ...item,
-        companyName: item.company_name || `Row ${index + 1}`,
-        lorryNo: item.lorry_no,
-        inwardVoucherNo: item.inward_voucher_no,
-        sourceType: item.source_type,
-        settlementWeight: item.settlement_weight,
-        shortQty: item.shortQtyPerLine,
-        shortageAmount: item.shortAmount,
-        companyRate: item.company_rate,
-        freight: item.freight,
-        labour: item.labour_charges,
-        other: item.other_charges,
-        amount: item.amount,
-        netPayable: item.net_payable,
-      })),
-    });
+    createSettlementReportPdf(row);
   };
 
   const createSettlementReportPdf = (row) => {
     const doc = new jsPDF("l", "mm", "a4");
     const invNo = displayInvNo(row);
     const acct = displayAccountName(row);
+
+    {
+      const calc = getRowCalculations(row);
+      const generatedAt = new Date().toLocaleString();
+      const left = 8;
+      const right = 289;
+      const green = [5, 86, 68];
+      const orange = [229, 96, 12];
+
+      doc.setFillColor(248, 251, 250);
+      doc.rect(0, 0, 297, 210, "F");
+      doc.setFillColor(green[0], green[1], green[2]);
+      doc.roundedRect(6, 8, 285, 15, 2, 2, "F");
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(13);
+      doc.setTextColor(255, 255, 255);
+      doc.text("OUTWARD SETTLEMENT REPORT", left + 3, 18);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(6.5);
+      doc.text(`Generated: ${generatedAt}`, right - 5, 17, { align: "right" });
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(12.5);
+      doc.setTextColor(15, 23, 42);
+      doc.text(`${invNo} | ${acct}`, left + 3, 32);
+
+      autoTable(doc, {
+        startY: 36,
+        theme: "plain",
+        margin: { left: left + 3, right: left + 3 },
+        styles: { fontSize: 7.2, cellPadding: 1.8, textColor: [31, 41, 55] },
+        body: [[
+          `Date: ${formatDate(row.date)}`,
+          `Warehouse: ${row.warehouse_name || "-"}`,
+          `Location: ${row.location_name || "-"}`,
+          `Buyer: ${row.buyer_name || "-"}`,
+          `Consignee: ${row.consignee_name || "-"}`,
+          `Product: ${row.product_name || "-"}`,
+        ]],
+      });
+
+      autoTable(doc, {
+        startY: doc.lastAutoTable.finalY + 2,
+        theme: "grid",
+        margin: { left: left + 3, right: left + 3 },
+        headStyles: { fillColor: [238, 246, 243], textColor: green, fontStyle: "bold", halign: "center" },
+        styles: { fontSize: 7.4, cellPadding: 2, lineColor: [222, 232, 238], lineWidth: 0.2, textColor: [15, 23, 42] },
+        bodyStyles: { fontStyle: "bold", halign: "center" },
+        head: [["Outward Company", "Qty", "Rate", "Amount", "Lorry No"]],
+        body: [[
+          acct,
+          num(row.dispatch_qty),
+          num(row.sale_rate),
+          num(row.sale_amount),
+          row.lorry_no || "-",
+        ]],
+      });
+
+      const sectionY = doc.lastAutoTable.finalY + 8;
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      doc.setTextColor(green[0], green[1], green[2]);
+      doc.text("ADJUSTED COMPANY DETAILS", left + 3, sectionY);
+      doc.setDrawColor(210, 224, 230);
+      doc.line(left + 3, sectionY + 3, right - 3, sectionY + 3);
+
+      autoTable(doc, {
+        startY: sectionY + 6,
+        theme: "grid",
+        margin: { left: left + 3, right: left + 3 },
+        headStyles: { fillColor: green, textColor: 255, fontStyle: "bold", halign: "center" },
+        styles: { fontSize: 6.3, cellPadding: 1.9, lineColor: [220, 230, 236], lineWidth: 0.18, textColor: [15, 23, 42] },
+        alternateRowStyles: { fillColor: [250, 252, 252] },
+        head: [[
+          "Sr",
+          "Adjusted Company",
+          "Date",
+          "Lorry No",
+          "Inward Voucher",
+          "Loading Type",
+          "Settlement Weight",
+          "Short Qnt",
+          "Company Rate",
+          "Freight",
+          "Labour Chgs",
+          "Other Chgs",
+          "Amount",
+          "S. Amount",
+          "Net Payable",
+        ]],
+        body:
+          calc.adjustmentDetails.length > 0
+            ? calc.adjustmentDetails.map((item, index) => [
+                item.sr_no || index + 1,
+                item.company_name || "-",
+                formatDate(item.inward_date),
+                item.lorry_no || "-",
+                item.inward_voucher_no || "-",
+                getLoadingTypeLabel(item.source_type),
+                num(item.settlement_weight),
+                num(item.shortQtyPerLine),
+                num(item.company_rate),
+                num(item.freight),
+                num(item.labour_charges),
+                num(item.other_charges),
+                num(item.amount),
+                num(item.shortAmount),
+                num(item.net_payable),
+              ])
+            : [["", "No adjusted inward details found.", "", "", "", "", "", "", "", "", "", "", "", "", ""]],
+      });
+
+      const summaryY = doc.lastAutoTable.finalY + 8;
+      const cardW = 135;
+      const cardH = 48;
+      const drawSummary = (x, title, color, rows, totalLabel, totalValue) => {
+        doc.setFillColor(255, 255, 255);
+        doc.setDrawColor(220, 229, 235);
+        doc.roundedRect(x, summaryY, cardW, cardH, 3, 3, "FD");
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(9.2);
+        doc.setTextColor(color[0], color[1], color[2]);
+        doc.text(title, x + 8, summaryY + 9);
+        let y = summaryY + 16;
+        rows.forEach(([label, value]) => {
+          doc.setFont("helvetica", "normal");
+          doc.setFontSize(7.3);
+          doc.setTextColor(31, 41, 55);
+          doc.text(label, x + 8, y);
+          doc.text(value, x + cardW - 8, y, { align: "right" });
+          doc.setDrawColor(235, 240, 244);
+          doc.line(x + 8, y + 2, x + cardW - 8, y + 2);
+          y += 6.2;
+        });
+        doc.setFillColor(color[0], color[1], color[2]);
+        doc.roundedRect(x, summaryY + cardH - 11, cardW, 11, 0, 0, "F");
+        doc.setTextColor(255, 255, 255);
+        doc.setFont("helvetica", "bold");
+        doc.setFontSize(8.6);
+        doc.text(totalLabel, x + 8, summaryY + cardH - 4);
+        doc.text(totalValue, x + cardW - 8, summaryY + cardH - 4, { align: "right" });
+      };
+
+      drawSummary(
+        11,
+        "SALE SUMMARY",
+        green,
+        [
+          ["Sale Amount", num(calc.saleAmount)],
+          ["Freight", num(calc.freight)],
+          ["Other Charges", num(calc.otherCharges)],
+          ["Labour Charges", num(calc.labourCharges)],
+          ["S. Amount", num(calc.totalSAmountSale)],
+        ],
+        "Net Receivable",
+        num(calc.netReceivable)
+      );
+      drawSummary(
+        151,
+        "PURCHASE SUMMARY",
+        orange,
+        [
+          ["Purchase Amount", num(calc.purchaseAmount)],
+          ["Freight", num(calc.freight)],
+          ["Other Charges", num(calc.otherCharges)],
+          ["Labour Charges", num(calc.labourCharges)],
+          ["S. Amount", num(calc.totalSAmountPurchase)],
+        ],
+        "Net Payable",
+        num(calc.netPayable)
+      );
+
+      const footerY = 198;
+      doc.setDrawColor(190, 204, 214);
+      doc.line(85, footerY, 120, footerY);
+      doc.line(177, footerY, 212, footerY);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(7.2);
+      doc.setTextColor(green[0], green[1], green[2]);
+      doc.text("Thank you for your business!", 148.5, footerY + 1.5, { align: "center" });
+
+      doc.save(`${invNo.replace(/[/\\?%*:|"<>]/g, "-")}_Settlement_Report.pdf`);
+      return;
+    }
 
     doc.setFillColor(14, 116, 144);
     doc.rect(0, 0, 297, 18, "F");
@@ -1053,21 +1180,19 @@ export default function OutwardSettlementReportPage() {
                     <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 14 }}>
                 <button
                   onClick={() => createSinglePdf(row)}
-                  style={{ ...button, background: "#1d4ed8" }}
+                  style={{ ...iconActionButtonStyle, background: "#1d4ed8" }}
+                  title="Download PDF"
+                  aria-label="Download PDF"
                 >
-                  Adjusted PDF
-                </button>
-                <button
-                  onClick={() => shareSinglePdf(row)}
-                  style={{ ...button, background: "#16a34a" }}
-                >
-                  WhatsApp PDF
+                  <FaFilePdf />
                 </button>
                 <button
                   onClick={() => setEditingRecord(row)}
-                  style={{ ...button, background: "#0f766e" }}
+                  style={{ ...iconActionButtonStyle, background: "#0f766e" }}
+                  title="Edit Settlement"
+                  aria-label="Edit Settlement"
                 >
-                  Edit Settlement
+                  <FaEdit />
                 </button>
               </div>
 
@@ -1218,6 +1343,20 @@ const compactMetricItemStyle = {
   border: "1px solid rgba(148, 163, 184, 0.2)",
   color: "#0f172a",
   fontSize: 12,
+};
+
+const iconActionButtonStyle = {
+  width: 42,
+  height: 38,
+  border: "none",
+  borderRadius: 8,
+  color: "#ffffff",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  fontSize: 16,
+  cursor: "pointer",
+  boxShadow: "0 6px 14px rgba(15, 23, 42, 0.14)",
 };
 
 const tableCellStyle = {
