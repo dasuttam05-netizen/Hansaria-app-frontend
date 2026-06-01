@@ -1,7 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { formatDisplayDate } from "../utils/date";
-import { hasPermission, loadSession } from "../utils/auth";
 
 const BASE_FONT = "'Trebuchet MS', 'Segoe UI', Tahoma, sans-serif";
 const PALETTE = {
@@ -22,13 +21,11 @@ const PALETTE = {
 
 export default function OutwardSettlementPage({ outward, onSaved }) {
   const API_BASE = "/api";
-  const { user } = loadSession();
-  const canUseManualRate = hasPermission(user, "settlement.manualRate");
 
   const [loading, setLoading] = useState(true);
   const [meta, setMeta] = useState(null);
   const [isFreightAutoLocked, setIsFreightAutoLocked] = useState(false);
-  const [adjustmentRates, setAdjustmentRates] = useState({});
+  const [showLabourExpenseOption, setShowLabourExpenseOption] = useState(false);
   const [formData, setFormData] = useState({
     dispatch_qty: "",
     unloading_qty: "",
@@ -61,6 +58,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
       const res = await axios.get(`${API_BASE}/outward-settlement/${outward.id}`);
       setMeta(res.data);
       const s = res.data.settlement || {};
+      const approvedLabourAmount = num(res.data?.labour_expense?.amount);
       let freightValue = s.freight ?? "";
 
       try {
@@ -90,16 +88,11 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
         charge_bearer: s.charge_bearer || "self",
         narration: s.narration || "",
       });
-      setAdjustmentRates(
-        (res.data.adjustment_details || []).reduce((acc, item) => {
-          acc[item.id] = item.company_rate ?? "";
-          return acc;
-        }, {})
-      );
+      setShowLabourExpenseOption(approvedLabourAmount > 0 && num(s.outward_labour_charges) !== approvedLabourAmount);
     } catch (err) {
       console.error(err);
       setIsFreightAutoLocked(false);
-      alert(err?.response?.data?.error || "Settlement load failed");
+      alert("Settlement load failed");
     } finally {
       setLoading(false);
     }
@@ -108,17 +101,6 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
   useEffect(() => {
     fetchSettlement();
   }, [outward?.id]);
-
-  const getItemCompanyRate = (item) => {
-    const manualRate = adjustmentRates[item.id];
-    return manualRate === "" || manualRate === null || manualRate === undefined
-      ? num(formData.company_rate)
-      : num(manualRate);
-  };
-
-  const handleAdjustmentRateChange = (id, value) => {
-    setAdjustmentRates((prev) => ({ ...prev, [id]: value }));
-  };
 
   const calculation = useMemo(() => {
   const dispatchQty = num(formData.dispatch_qty);
@@ -159,21 +141,17 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
   // ✅ Company Payable = Sum of Net Payable (Table match)
   const companyPayable = adjustmentDetails.reduce((sum, item) => {
     const weight = num(item.settlement_weight);
-    const itemCompanyRate =
-      adjustmentRates[item.id] === "" || adjustmentRates[item.id] === null || adjustmentRates[item.id] === undefined
-        ? companyRate
-        : num(adjustmentRates[item.id]);
 
     const freightPerMt = dispatchQty > 0 ? freight / dispatchQty : 0;
     const labourPerMt = dispatchQty > 0 ? labour / dispatchQty : 0;
     const otherPerMt = dispatchQty > 0 ? other / dispatchQty : 0;
 
-    const amount = weight * itemCompanyRate;
+    const amount = weight * companyRate;
 
     const shortQtyPerLine =
       dispatchQty > 0 ? (weight / dispatchQty) * shortageQty : 0;
 
-    const shortageAmount = shortQtyPerLine * itemCompanyRate;
+    const shortageAmount = shortQtyPerLine * companyRate;
 
     const netPayable =
       amount -
@@ -196,10 +174,18 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
     companyPayable,
     receivableAmount,
   };
-}, [formData, meta, adjustmentRates]);
+}, [formData, meta]);
 
   const handleChange = (e) => {
     setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+  };
+
+  const useApprovedLabourExpense = () => {
+    setFormData((prev) => ({
+      ...prev,
+      outward_labour_charges: String(num(meta?.labour_expense?.amount)),
+    }));
+    setShowLabourExpenseOption(false);
   };
 
   const handleSave = async () => {
@@ -207,14 +193,6 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
       await axios.post(`${API_BASE}/outward-settlement/save`, {
         outward_id: outward.id,
         ...formData,
-        ...(canUseManualRate
-          ? {
-              adjustment_rates: Object.entries(adjustmentRates).map(([id, company_rate]) => ({
-                id,
-                company_rate,
-              })),
-            }
-          : {}),
       });
       alert("Settlement saved successfully");
       fetchSettlement();
@@ -230,9 +208,9 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
   const card = {
     background: PALETTE.panel,
     border: `1px solid ${PALETTE.border}`,
-    borderRadius: 14,
+    borderRadius: 16,
     padding: 16,
-    boxShadow: "0 10px 24px rgba(15, 23, 42, 0.06)",
+    boxShadow: "0 1px 4px rgba(15, 23, 42, 0.08)",
   };
 
   const input = {
@@ -260,15 +238,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
   }
 
   return (
-    <div
-      style={{
-        padding: 16,
-        background: "linear-gradient(180deg, #f8fbff 0%, #edf3f9 100%)",
-        borderRadius: 18,
-        border: `1px solid ${PALETTE.border}`,
-        fontFamily: BASE_FONT,
-      }}
-    >
+    <div style={settlementShellStyle}>
       <div style={{ ...card, marginBottom: 10 }}>
         <h2
           style={{
@@ -379,7 +349,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
     <th style={tableHeaderStyle}>Settlement Weight</th>
     <th style={tableHeaderStyle}>Short Qnt</th>
     <th style={tableHeaderStyle}>S.Amount</th> {/* NEW */}
-    <th style={tableHeaderStyle}>{canUseManualRate ? "Manual Rate" : "Company Rate"}</th>
+    <th style={tableHeaderStyle}>Company Rate</th>
     <th style={tableHeaderStyle}>Freight</th>
     <th style={tableHeaderStyle}>Labour Chgs</th>
     <th style={tableHeaderStyle}>Other Chgs</th>
@@ -396,22 +366,21 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
       const labourPerMt = dispatchQty > 0 ? num(formData.outward_labour_charges) / dispatchQty : 0;
       const otherPerMt = dispatchQty > 0 ? num(formData.other_charges) / dispatchQty : 0;
 
-      const itemCompanyRate = getItemCompanyRate(item);
-      const amount = num(item.settlement_weight) * itemCompanyRate;
+      const amount = num(item.settlement_weight) * num(formData.company_rate);
 
       const shortQtyPerLine =
         dispatchQty > 0
           ? (num(item.settlement_weight) / dispatchQty) * calculation.shortageQty
           : 0;
 
-      const shortageAmount = shortQtyPerLine * itemCompanyRate; // NEW
+      const shortageAmount = shortQtyPerLine * num(formData.company_rate); // NEW
 
       const freightPerLine = num(item.settlement_weight) * freightPerMt;
       const labourPerLine = num(item.settlement_weight) * labourPerMt;
       const otherPerLine = num(item.settlement_weight) * otherPerMt;
 
       const netPayable =
-        amount - freightPerLine - labourPerLine - otherPerLine - shortageAmount;
+        amount - freightPerLine - labourPerLine - otherPerLine;
 
       return (
         <tr key={item.id} style={{ background: index % 2 === 0 ? "#ffffff" : PALETTE.rowAlt }}>
@@ -423,18 +392,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
           <td style={tableCellStyle}>{num(item.settlement_weight).toFixed(2)}</td>
           <td style={tableCellStyle}>{shortQtyPerLine.toFixed(2)}</td>
           <td style={tableCellStyle}>{shortageAmount.toFixed(2)}</td> {/* NEW */}
-          <td style={tableCellStyle}>
-            {canUseManualRate ? (
-              <input
-                type="number"
-                value={adjustmentRates[item.id] ?? ""}
-                onChange={(event) => handleAdjustmentRateChange(item.id, event.target.value)}
-                style={{ ...input, minWidth: 105, padding: "7px 9px" }}
-              />
-            ) : (
-              itemCompanyRate.toFixed(2)
-            )}
-          </td>
+          <td style={tableCellStyle}>{num(formData.company_rate).toFixed(2)}</td>
           <td style={tableCellStyle}>{freightPerLine.toFixed(2)}</td>
           <td style={tableCellStyle}>{labourPerLine.toFixed(2)}</td>
           <td style={tableCellStyle}>{otherPerLine.toFixed(2)}</td>
@@ -505,6 +463,22 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
               onChange={handleChange}
               style={input}
             />
+            {showLabourExpenseOption && (
+              <div style={labourOptionStyle}>
+                <div>
+                  Approved expense found: <strong>{num(meta?.labour_expense?.amount).toFixed(2)}</strong>
+                  {meta?.labour_expense?.vouchers?.length ? ` (${meta.labour_expense.vouchers.join(", ")})` : ""}
+                </div>
+                <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                  <button type="button" onClick={useApprovedLabourExpense} style={smallYesButtonStyle}>
+                    Yes
+                  </button>
+                  <button type="button" onClick={() => setShowLabourExpenseOption(false)} style={smallNoButtonStyle}>
+                    No
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
 
           <div>
@@ -571,6 +545,46 @@ const tableCellStyle = {
   background: "#ffffff",
 };
 
+const settlementShellStyle = {
+  padding: 16,
+  background: "#f8fafc",
+  borderRadius: 18,
+  border: `1px solid ${PALETTE.border}`,
+  fontFamily: BASE_FONT,
+};
+
+const labourOptionStyle = {
+  marginTop: 8,
+  padding: "9px 10px",
+  border: "1px solid #bbf7d0",
+  borderRadius: 10,
+  background: "#f0fdf4",
+  color: "#166534",
+  fontSize: 12,
+  lineHeight: 1.35,
+  fontWeight: 600,
+};
+
+const smallYesButtonStyle = {
+  border: "none",
+  borderRadius: 8,
+  background: "#15803d",
+  color: "#ffffff",
+  padding: "6px 12px",
+  fontWeight: 800,
+  cursor: "pointer",
+};
+
+const smallNoButtonStyle = {
+  border: "1px solid #cbd5e1",
+  borderRadius: 8,
+  background: "#ffffff",
+  color: PALETTE.ink,
+  padding: "6px 12px",
+  fontWeight: 800,
+  cursor: "pointer",
+};
+
 const summaryHeadStyle = {
   padding: "10px 12px",
   border: `1px solid ${PALETTE.border}`,
@@ -597,7 +611,7 @@ const summaryBoxStyle = {
 
 const compactGridStyle = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))",
+  gridTemplateColumns: "repeat(auto-fit, minmax(155px, 1fr))",
   gap: 10,
   alignItems: "stretch",
 };
@@ -627,10 +641,10 @@ const miniHeadStyle = {
 const miniBodyStyle = {
   color: PALETTE.ink,
   fontSize: 13,
-  fontWeight: 600,
+  fontWeight: 700,
   padding: "10px 10px",
   lineHeight: 1.25,
-  minHeight: 44,
+  minHeight: 40,
   display: "flex",
   alignItems: "center",
 };
@@ -643,7 +657,7 @@ const summaryDividerStyle = {
 
 const statsGridStyle = {
   display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
+  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
   gap: 10,
   alignItems: "stretch",
 };
@@ -677,7 +691,6 @@ const statBodyStyle = {
   lineHeight: 1.2,
   background: PALETTE.tile,
 };
-
 
 
 
