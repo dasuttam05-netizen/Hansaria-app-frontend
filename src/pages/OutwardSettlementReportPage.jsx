@@ -261,6 +261,7 @@ export default function OutwardSettlementReportPage() {
         date: row.date,
         voucherNo: invNo,
         accountName: displayAccountName(row),
+        accountAddress: row.account_address || "-",
         companyName: row.company_name || displayAccountName(row),
         locationName: row.location_name || "-",
         outwardLorryNo: row.lorry_no || "-",
