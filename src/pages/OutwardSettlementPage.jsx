@@ -289,6 +289,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
         date: meta?.outward_date,
         voucherNo: meta?.voucher_no || `OUT-${meta?.outward_id || outward?.id || "-"}`,
         accountName: meta?.account_name || "-",
+        accountAddress: meta?.account_address || "-",
         companyName: meta?.company_name || meta?.account_name || "-",
         locationName: meta?.location_name || outward?.location_name || "-",
         outwardLorryNo: meta?.lorry_no || "-",
