@@ -33,6 +33,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
   const [isFreightAutoLocked, setIsFreightAutoLocked] = useState(false);
   const [showLabourExpenseOption, setShowLabourExpenseOption] = useState(false);
   const [adjustmentRates, setAdjustmentRates] = useState({});
+  const [whatsappSentAt, setWhatsappSentAt] = useState({});
   const [formData, setFormData] = useState({
     dispatch_qty: "",
     unloading_qty: "",
@@ -98,6 +99,12 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
       setAdjustmentRates(
         (res.data?.adjustment_details || []).reduce((acc, item) => {
           acc[item.id] = item.company_rate ?? s.company_rate ?? "";
+          return acc;
+        }, {})
+      );
+      setWhatsappSentAt(
+        (res.data?.adjustment_details || []).reduce((acc, item) => {
+          if (item.whatsapp_sent_at) acc[item.id] = item.whatsapp_sent_at;
           return acc;
         }, {})
       );
@@ -269,6 +276,18 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
       .replace(/[/\\?%*:|"<>]/g, "-")
       .replace(/\s+/g, "_");
 
+  const formatSentDateTime = (value) => {
+    if (!value) return "";
+    const date = new Date(value);
+    if (Number.isNaN(date.getTime())) return String(value);
+    const dd = String(date.getDate()).padStart(2, "0");
+    const mm = String(date.getMonth() + 1).padStart(2, "0");
+    const yyyy = date.getFullYear();
+    const hh = String(date.getHours()).padStart(2, "0");
+    const min = String(date.getMinutes()).padStart(2, "0");
+    return `${dd}-${mm}-${yyyy} ${hh}:${min}`;
+  };
+
   const createAdjustmentPdf = (item, index) => {
     const row = getAdjustmentRowAmounts(item);
     const voucherNo = meta?.voucher_no || `OUT-${meta?.outward_id || outward?.id || "-"}`;
@@ -298,11 +317,11 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
       styles: { fontSize: 8.5, cellPadding: 2.4, textColor: [15, 23, 42] },
       headStyles: { fillColor: [232, 246, 243], textColor: [17, 94, 89], fontStyle: "bold" },
       bodyStyles: { fillColor: [255, 255, 255] },
-      head: [["Date", "Voucher No.", "Outward Company", "Location", "Outward Lorry No."]],
+      head: [["Date", "Voucher No.", "Company Account", "Location", "Outward Lorry No."]],
       body: [[
         formatDisplayDate(meta?.outward_date) || "-",
         voucherNo,
-        meta?.company_name || "-",
+        meta?.account_name || "-",
         meta?.location_name || outward?.location_name || "-",
         meta?.lorry_no || "-",
       ]],
@@ -369,7 +388,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
       "Outward Settlement",
       `Voucher: ${voucherNo}`,
       `Date: ${formatDisplayDate(meta?.outward_date) || "-"}`,
-      `Outward Company: ${meta?.company_name || "-"}`,
+      `Company Account: ${meta?.account_name || "-"}`,
       `Location: ${meta?.location_name || outward?.location_name || "-"}`,
       `Outward Lorry No.: ${meta?.lorry_no || "-"}`,
       `Adjusted Company: ${item.company_name || "-"}`,
@@ -390,17 +409,27 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
     const blob = doc.output("blob");
     const file = new File([blob], fileName, { type: "application/pdf" });
 
-    if (navigator.canShare && navigator.canShare({ files: [file] }) && navigator.share) {
-      await navigator.share({
-        title: "Outward Settlement",
-        text: shareText,
-        files: [file],
-      });
-      return;
-    }
+    try {
+      if (navigator.canShare && navigator.canShare({ files: [file] }) && navigator.share) {
+        await navigator.share({
+          title: "Outward Settlement",
+          text: shareText,
+          files: [file],
+        });
+      } else {
+        doc.save(fileName);
+        window.open(`https://wa.me/?text=${encodeURIComponent(shareText)}`, "_blank", "noopener,noreferrer");
+      }
 
-    doc.save(fileName);
-    window.open(`https://wa.me/?text=${encodeURIComponent(shareText)}`, "_blank", "noopener,noreferrer");
+      const res = await axios.post(`${API_BASE}/outward-settlement/adjustment/${item.id}/whatsapp-sent`);
+      setWhatsappSentAt((prev) => ({
+        ...prev,
+        [item.id]: res.data?.whatsapp_sent_at || new Date().toISOString(),
+      }));
+    } catch (err) {
+      console.error(err);
+      alert("WhatsApp share failed");
+    }
   };
 
   const card = {
@@ -579,8 +608,9 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
     <th style={tableHeaderStyle}>Labour Chgs</th>
     <th style={tableHeaderStyle}>Other Chgs</th>
     <th style={tableHeaderStyle}>Amount</th>
-    <th style={tableHeaderStyle}>Action</th>
     <th style={tableHeaderStyle}>Net Payable</th>
+    <th style={tableHeaderStyle}>Action</th>
+    <th style={tableHeaderStyle}>WhatsApp Sent</th>
   </tr>
 </thead>
 
@@ -636,6 +666,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
           <td style={tableCellStyle}>{labourPerLine.toFixed(2)}</td>
           <td style={tableCellStyle}>{otherPerLine.toFixed(2)}</td>
           <td style={tableCellStyle}>{amount.toFixed(2)}</td>
+          <td style={tableCellStyle}>{netPayable.toFixed(2)}</td>
           <td style={tableCellStyle}>
             <div style={rowActionWrapStyle}>
               <button
@@ -656,13 +687,19 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
               </button>
             </div>
           </td>
-          <td style={tableCellStyle}>{netPayable.toFixed(2)}</td>
+          <td style={tableCellStyle}>
+            {whatsappSentAt[item.id] ? (
+              <span style={sentBadgeStyle}>Sent {formatSentDateTime(whatsappSentAt[item.id])}</span>
+            ) : (
+              <span style={notSentBadgeStyle}>Not sent</span>
+            )}
+          </td>
         </tr>
                 );
                 })
               ) : (
                 <tr>
-                  <td style={tableCellStyle} colSpan="15">No adjustment found for this outward.</td>
+                  <td style={tableCellStyle} colSpan="16">No adjustment found for this outward.</td>
                 </tr>
               )}
             </tbody>
@@ -852,6 +889,28 @@ const rowActionButtonStyle = {
   cursor: "pointer",
   fontSize: 15,
   boxShadow: "0 4px 10px rgba(15, 23, 42, 0.16)",
+};
+
+const sentBadgeStyle = {
+  display: "inline-block",
+  padding: "5px 8px",
+  borderRadius: 999,
+  background: "#dcfce7",
+  color: "#166534",
+  fontSize: 11.5,
+  fontWeight: 800,
+  whiteSpace: "nowrap",
+};
+
+const notSentBadgeStyle = {
+  display: "inline-block",
+  padding: "5px 8px",
+  borderRadius: 999,
+  background: "#f1f5f9",
+  color: "#64748b",
+  fontSize: 11.5,
+  fontWeight: 800,
+  whiteSpace: "nowrap",
 };
 
 const settlementShellStyle = {
