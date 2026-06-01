@@ -1,10 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
-import jsPDF from "jspdf";
-import autoTable from "jspdf-autotable";
 import { FaFilePdf, FaWhatsapp } from "react-icons/fa";
 import { formatDisplayDate } from "../utils/date";
 import { hasPermission, loadSession } from "../utils/auth";
+import { buildAdjustedCompanyCopyPdf } from "../utils/adjustedCompanyPdf";
 
 const BASE_FONT = "'Trebuchet MS', 'Segoe UI', Tahoma, sans-serif";
 const PALETTE = {
@@ -271,11 +270,6 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
     };
   };
 
-  const safeFileName = (value) =>
-    String(value || "outward-settlement")
-      .replace(/[/\\?%*:|"<>]/g, "-")
-      .replace(/\s+/g, "_");
-
   const formatSentDateTime = (value) => {
     if (!value) return "";
     const date = new Date(value);
@@ -290,113 +284,34 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
 
   const createAdjustmentPdf = (item, index) => {
     const row = getAdjustmentRowAmounts(item);
-    const voucherNo = meta?.voucher_no || `OUT-${meta?.outward_id || outward?.id || "-"}`;
-    const fileName = `${safeFileName(voucherNo)}_${safeFileName(item.company_name || `row-${index + 1}`)}.pdf`;
-    const doc = new jsPDF("p", "mm", "a4");
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const left = 14;
-
-    doc.setFillColor(15, 118, 110);
-    doc.rect(0, 0, pageWidth, 24, "F");
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(17);
-    doc.setTextColor(255, 255, 255);
-    doc.text("Outward Settlement", left, 15);
-    doc.setFontSize(9);
-    doc.setFont("helvetica", "normal");
-    doc.text("Adjusted Company Copy", pageWidth - 14, 15, { align: "right" });
-
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(11);
-    doc.setTextColor(15, 23, 42);
-    doc.text("Outward Details", left, 35);
-
-    autoTable(doc, {
-      startY: 39,
-      theme: "grid",
-      styles: { fontSize: 8.5, cellPadding: 2.4, textColor: [15, 23, 42] },
-      headStyles: { fillColor: [232, 246, 243], textColor: [17, 94, 89], fontStyle: "bold" },
-      bodyStyles: { fillColor: [255, 255, 255] },
-      head: [["Date", "Voucher No.", "Company Account", "Location", "Outward Lorry No."]],
-      body: [[
-        formatDisplayDate(meta?.outward_date) || "-",
-        voucherNo,
-        meta?.account_name || "-",
-        meta?.location_name || outward?.location_name || "-",
-        meta?.lorry_no || "-",
-      ]],
-      margin: { left, right: left },
-    });
-
-    const detailY = doc.lastAutoTable.finalY + 9;
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(11);
-    doc.setTextColor(15, 23, 42);
-    doc.text("Adjusted Company Details", left, detailY);
-
-    autoTable(doc, {
-      startY: detailY + 4,
-      theme: "grid",
-      styles: { fontSize: 8.2, cellPadding: 2.2, textColor: [15, 23, 42] },
-      headStyles: { fillColor: [15, 118, 110], textColor: 255, fontStyle: "bold" },
-      alternateRowStyles: { fillColor: [248, 251, 255] },
-      head: [["Particular", "Details"]],
-      body: [
-        ["Adjusted Company", item.company_name || "-"],
-        ["Adjusted Lorry No.", item.lorry_no || "-"],
-        ["Inward Voucher", item.inward_voucher_no || "-"],
-        ["Loading Type", getLoadingTypeLabel(item.source_type)],
-        ["Consignee", meta?.consignee_name || "-"],
-        ["Product", meta?.product_name || "-"],
-        ["Settlement Weight", row.settlementWeight.toFixed(2)],
-        ["Short Qnt", row.shortQty.toFixed(2)],
-        ["S.Amount", row.shortageAmount.toFixed(2)],
-        ["Company Rate", row.rowCompanyRate.toFixed(2)],
-        ["Freight", row.freight.toFixed(2)],
-        ["Labour Chgs", row.labour.toFixed(2)],
-        ["Other Chgs", row.other.toFixed(2)],
-        ["Amount", row.amount.toFixed(2)],
-        ["Net Payable", row.netPayable.toFixed(2)],
-      ],
-      margin: { left, right: left },
-      columnStyles: {
-        0: { cellWidth: 62, fontStyle: "bold", fillColor: [248, 250, 252] },
-        1: { cellWidth: 116 },
+    return buildAdjustedCompanyCopyPdf({
+      settlement: {
+        date: meta?.outward_date,
+        voucherNo: meta?.voucher_no || `OUT-${meta?.outward_id || outward?.id || "-"}`,
+        accountName: meta?.account_name || "-",
+        companyName: meta?.company_name || meta?.account_name || "-",
+        locationName: meta?.location_name || outward?.location_name || "-",
+        outwardLorryNo: meta?.lorry_no || "-",
+        consigneeName: meta?.consignee_name || "-",
+        productName: meta?.product_name || "-",
       },
+      adjustmentItems: [{
+        ...item,
+        companyName: item.company_name || `Row ${index + 1}`,
+        lorryNo: item.lorry_no,
+        inwardVoucherNo: item.inward_voucher_no,
+        sourceType: item.source_type,
+        settlementWeight: row.settlementWeight,
+        shortQty: row.shortQty,
+        shortageAmount: row.shortageAmount,
+        companyRate: row.rowCompanyRate,
+        freight: row.freight,
+        labour: row.labour,
+        other: row.other,
+        amount: row.amount,
+        netPayable: row.netPayable,
+      }],
     });
-
-    const y = doc.lastAutoTable.finalY + 12;
-    doc.setFillColor(248, 250, 252);
-    doc.roundedRect(left, y, pageWidth - left * 2, 20, 3, 3, "F");
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(10);
-    doc.setTextColor(71, 85, 105);
-    doc.text("Net Payable", left + 6, y + 8);
-    doc.setFontSize(15);
-    doc.setTextColor(15, 118, 110);
-    doc.text(row.netPayable.toFixed(2), pageWidth - left - 6, y + 13, { align: "right" });
-
-    const footerY = doc.internal.pageSize.getHeight() - 12;
-    doc.setDrawColor(213, 224, 234);
-    doc.line(left, footerY - 5, pageWidth - left, footerY - 5);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8);
-    doc.setTextColor(100, 116, 139);
-    doc.text("Computer generated outward settlement copy.", left, footerY);
-
-    const shareText = [
-      "Outward Settlement",
-      `Voucher: ${voucherNo}`,
-      `Date: ${formatDisplayDate(meta?.outward_date) || "-"}`,
-      `Company Account: ${meta?.account_name || "-"}`,
-      `Location: ${meta?.location_name || outward?.location_name || "-"}`,
-      `Outward Lorry No.: ${meta?.lorry_no || "-"}`,
-      `Adjusted Company: ${item.company_name || "-"}`,
-      `Adjusted Lorry No.: ${item.lorry_no || "-"}`,
-      `Net Payable: ${row.netPayable.toFixed(2)}`,
-    ].join("\n");
-
-    return { doc, fileName, shareText };
   };
 
   const downloadAdjustmentPdf = (item, index) => {
