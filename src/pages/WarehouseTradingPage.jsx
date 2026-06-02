@@ -2170,18 +2170,50 @@ export default function WarehouseTradingPage() {
                         <label style={{ ...erpLabel, width: 50, textAlign: "right" }}>Mobile</label>
                         <input value={selectedBuyer?.mobile || selectedConsignee?.mobile || ""} readOnly style={{ ...erpInput, width: 110 }} />
                       </div>
+                      {formData.sale_type === "direct" && (
+                        <>
+                          <div style={erpRow}>
+                            <label style={erpLabel}>Location</label>
+                            <select name="location_id" value={formData.location_id} onChange={handleChange} style={erpInput}>
+                              <option value="">Select Location</option>
+                              {locations.map((location) => (
+                                <option key={location.id || location._id} value={location.id || location._id}>{location.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div style={erpRow}>
+                            <label style={erpLabel}>Farmer</label>
+                            <select name="farmer_id" value={formData.farmer_id} onChange={handleChange} style={erpInput}>
+                              <option value="">Select Farmer</option>
+                              {farmers.map((farmer) => (
+                                <option key={farmer.id || farmer._id} value={farmer.id || farmer._id}>{farmer.name}</option>
+                              ))}
+                            </select>
+                          </div>
+                          <div style={erpRow}>
+                            <label style={erpLabel}>Purchase Rate</label>
+                            <input name="direct_purchase_rate" type="number" step="0.0001" value={formData.direct_purchase_rate} onChange={handleChange} style={erpInput} />
+                          </div>
+                          <div style={erpRow}>
+                            <label style={erpLabel}>Purchase Amount</label>
+                            <input value={formatMoney(saleDispatchQtyFromData(formData) * toNumber(formData.direct_purchase_rate))} readOnly style={erpInput} />
+                          </div>
+                        </>
+                      )}
                     </div>
 
                     <div style={erpPanelWide}>
-                      <div style={erpRow}>
-                        <label style={erpLabel}>Warehouse Name</label>
-                        <select name="warehouse_id" value={formData.warehouse_id} onChange={handleChange} style={erpInput}>
-                          <option value="">Select Warehouse</option>
-                          {warehouses.map((w) => (
-                            <option key={w.id || w._id} value={w.id || w._id}>{w.name}</option>
-                          ))}
-                        </select>
-                      </div>
+                      {formData.sale_type !== "direct" && (
+                        <div style={erpRow}>
+                          <label style={erpLabel}>Warehouse Name</label>
+                          <select name="warehouse_id" value={formData.warehouse_id} onChange={handleChange} style={erpInput}>
+                            <option value="">Select Warehouse</option>
+                            {warehouses.map((w) => (
+                              <option key={w.id || w._id} value={w.id || w._id}>{w.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                      )}
                       <div style={erpRow}>
                         <label style={erpLabel}>Employee Name</label>
                         <select name="employee_id" value={formData.employee_id} onChange={handleChange} style={erpInput}>
@@ -2199,12 +2231,31 @@ export default function WarehouseTradingPage() {
 
                     <div style={erpDocPanel}>
                       <div style={erpRow}>
+                        <label style={erpLabel}>Sale Type</label>
+                        <select name="sale_type" value={formData.sale_type || "direct"} onChange={handleChange} style={erpInput}>
+                          <option value="direct">Direct Farmer Loading Sale</option>
+                          <option value="warehouse">Warehouse Sale</option>
+                        </select>
+                      </div>
+                      <div style={erpRow}>
                         <label style={erpLabel}>Number</label>
                         <input name="voucher_no" value={formData.voucher_no} onChange={handleChange} placeholder="Voucher No *" style={erpInput} required />
                       </div>
                       <div style={erpRow}>
                         <label style={erpLabel}>Date</label>
                         <input name="date" type="date" value={formData.date} onChange={handleChange} style={erpInput} required />
+                      </div>
+                      <div style={erpRow}>
+                        <label style={erpLabel}>Unloading Date</label>
+                        <input name="unloading_date" type="date" value={formData.unloading_date} onChange={handleChange} style={erpInput} />
+                      </div>
+                      <div style={erpRow}>
+                        <label style={erpLabel}>P.O No</label>
+                        <input name="po_no" value={formData.po_no} onChange={handleChange} style={erpInput} />
+                      </div>
+                      <div style={erpRow}>
+                        <label style={erpLabel}>Due Date</label>
+                        <input name="due_date" type="date" value={formData.due_date} onChange={handleChange} style={erpInput} />
                       </div>
                       <div style={erpRow}>
                         <label style={erpLabel}>R. S. T No</label>
