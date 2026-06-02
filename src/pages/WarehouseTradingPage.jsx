@@ -445,6 +445,7 @@ export default function WarehouseTradingPage() {
       setReceiptAdjustments([]);
       setSelectedReceiptId(null);
       setShowReceiptAdjustPopup(false);
+      setSalePurchaseLinks([]);
       setFormData((prev) => ({ ...prev, reference_type: "", reference_id: "" }));
     }
   }, [activeTab, activeVoucherType]);
@@ -969,6 +970,7 @@ export default function WarehouseTradingPage() {
       setFormData(defaultForm());
       setPaymentAdjustments([]);
       setReceiptAdjustments([]);
+      setSalePurchaseLinks([]);
       setPartyOutstanding(null);
       setShowPaymentAdjustPopup(false);
       setShowReceiptAdjustPopup(false);
@@ -1398,11 +1400,14 @@ export default function WarehouseTradingPage() {
     sale: [
       ["date", "Date", (item) => formatLedgerDate(item.date)],
       ["voucher_no", "Voucher No", (item) => item.voucher_no || "-"],
+      ["po_no", "P.O No", (item) => item.po_no || "-"],
+      ["due_date", "Due Date", (item) => formatLedgerDate(item.due_date)],
       ["buyer", "Buyer", (item) => getBuyerName(item)],
       ["consignee", "Consignee", (item) => item.consignee_name || consignees.find((c) => String(c.id || c._id) === String(item.consignee_id))?.name || "-"],
       ["account", "Account", (item) => getAccountName(item)],
       ["warehouse", "Warehouse", (item) => getWarehouseName(item)],
       ["product", "Product", (item) => getProductName(item)],
+      ["against_purchase", "Against Purchase", (item) => item.against_purchase_enabled ? `${item.against_purchase_links?.length || 0} bill` : "-"],
       ["total_quantity", "Total Quantity", (item) => formatDecimal4(item.total_quantity || 0)],
       ["total_amount", "Total Amount", (item) => formatMoney(item.total_amount || 0)],
     ],
@@ -2423,6 +2428,81 @@ export default function WarehouseTradingPage() {
                         ))}
                       </select>
                     </Field>
+                    {activeVoucherType === "sale" && (
+                      <div style={{ gridColumn: "1 / -1", border: "1px solid #dbe3ef", borderRadius: 8, padding: 12, background: "#f8fafc" }}>
+                        <label style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 700, color: "#334155" }}>
+                          <input
+                            name="against_purchase_enabled"
+                            type="checkbox"
+                            checked={Boolean(formData.against_purchase_enabled)}
+                            onChange={handleChange}
+                          />
+                          Against Purchase Bill / Farmer Bill
+                        </label>
+                        {formData.against_purchase_enabled && (
+                          <div style={{ marginTop: 12, display: "grid", gap: 10 }}>
+                            <Field label="Farmer">
+                              <select name="against_purchase_farmer_id" value={formData.against_purchase_farmer_id} onChange={handleChange} style={inp}>
+                                <option value="">Select Farmer</option>
+                                {farmers.map((farmer) => (
+                                  <option key={farmer.id || farmer._id} value={farmer.id || farmer._id}>{farmer.name}</option>
+                                ))}
+                              </select>
+                            </Field>
+                            <div style={{ overflowX: "auto" }}>
+                              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12, background: "#fff" }}>
+                                <thead>
+                                  <tr style={reportHeaderRowStyle}>
+                                    <th style={th}>Purchase Bill</th>
+                                    <th style={th}>Date</th>
+                                    <th style={th}>Farmer</th>
+                                    <th style={th}>Qty</th>
+                                    <th style={th}>Rate</th>
+                                    <th style={th}>Against Qty</th>
+                                    <th style={th}>Amount</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {againstPurchaseRows.map((purchase) => {
+                                    const purchaseId = String(purchase.id || purchase._id || "");
+                                    const link = againstPurchaseLinkMap.get(purchaseId) || {};
+                                    const qty = toNumber(link.quantity);
+                                    return (
+                                      <tr key={purchaseId}>
+                                        <td style={td}>{purchase.voucher_no || "-"}</td>
+                                        <td style={td}>{formatLedgerDate(purchase.date)}</td>
+                                        <td style={td}>{getFarmerName(purchase)}</td>
+                                        <td style={td}>{formatDecimal4(purchase.total_qty || purchase.net_weight || purchase.quantity || 0)}</td>
+                                        <td style={td}>{formatMoney(purchase.rate || 0)}</td>
+                                        <td style={td}>
+                                          <input
+                                            type="number"
+                                            step="0.0001"
+                                            min="0"
+                                            value={qty || ""}
+                                            onChange={(event) => updateSalePurchaseLink(purchase, event.target.value)}
+                                            style={{ ...inp, minWidth: 110 }}
+                                          />
+                                        </td>
+                                        <td style={td}>{formatMoney(qty * toNumber(purchase.rate))}</td>
+                                      </tr>
+                                    );
+                                  })}
+                                  {againstPurchaseRows.length === 0 && (
+                                    <tr><td colSpan={7} style={{ ...td, textAlign: "center", padding: 14 }}>No matching purchase bill found.</td></tr>
+                                  )}
+                                </tbody>
+                              </table>
+                            </div>
+                            <div style={{ display: "flex", gap: 14, flexWrap: "wrap", fontSize: 13, color: "#334155" }}>
+                              <strong>Against Qty: {formatDecimal4(againstPurchaseTotalQty)}</strong>
+                              <strong>Purchase Amount: Rs.{formatMoney(againstPurchaseTotalAmount)}</strong>
+                              <strong>Sale Qty: {formatDecimal4(saleDispatchQtyFromData(formData))}</strong>
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
                     <Field label={activeVoucherType === "sale" ? "Loading Date" : "Date"}>
                       <input name="date" type="date" value={formData.date} onChange={handleChange} style={inp} />
                     </Field>
@@ -2430,6 +2510,16 @@ export default function WarehouseTradingPage() {
                       <Field label="Unloading Date">
                         <input name="unloading_date" type="date" value={formData.unloading_date} onChange={handleChange} style={inp} />
                       </Field>
+                    )}
+                    {activeVoucherType === "sale" && (
+                      <>
+                        <Field label="P.O No">
+                          <input name="po_no" value={formData.po_no} onChange={handleChange} style={inp} />
+                        </Field>
+                        <Field label="Due Date">
+                          <input name="due_date" type="date" value={formData.due_date} onChange={handleChange} style={inp} />
+                        </Field>
+                      </>
                     )}
                     <Field label="Quantity">
                       <input name="quantity" type="number" step="0.0001" value={formData.quantity} onChange={handleChange} style={inp} />
@@ -2548,7 +2638,7 @@ export default function WarehouseTradingPage() {
                   {loading ? "Saving..." : editId ? (activeVoucherType === "sale" ? "Save Deductions" : "Update Voucher") : "Save Voucher"}
                 </button>
                 {editId && (
-                  <button type="button" onClick={() => { setEditId(null); setFormData(defaultForm()); setPaymentAdjustments([]); setPartyOutstanding(null); }} style={{ ...btnPrimary, background: "#64748b" }}>Cancel</button>
+                  <button type="button" onClick={() => { setEditId(null); setFormData(defaultForm()); setPaymentAdjustments([]); setReceiptAdjustments([]); setSalePurchaseLinks([]); setPartyOutstanding(null); }} style={{ ...btnPrimary, background: "#64748b" }}>Cancel</button>
                 )}
               </div>
             </form>
@@ -2570,11 +2660,14 @@ export default function WarehouseTradingPage() {
                     <th style={th}>S.L No</th>
                     <th style={th}>Date</th>
                     <th style={th}>Voucher No</th>
+                    {activeVoucherType === "sale" && <th style={th}>P.O No</th>}
+                    {activeVoucherType === "sale" && <th style={th}>Due Date</th>}
                     <th style={th}>Warehouse</th>
                     <th style={th}>Account</th>
                     {(activeVoucherType === "purchase" || activeVoucherType === "payment") && <th style={th}>Farmer</th>}
                     {(activeVoucherType === "sale" || activeVoucherType === "receipt") && <th style={th}>{activeVoucherType === "sale" ? "Buyer" : "Company"}</th>}
                     {activeVoucherType === "sale" && <th style={th}>Consignee</th>}
+                    {activeVoucherType === "sale" && <th style={th}>Against Purchase</th>}
                     {(activeVoucherType === "purchase" || activeVoucherType === "sale") && <th style={th}>Product</th>}
                     {(activeVoucherType === "purchase" || activeVoucherType === "sale") && <th style={th}>{activeVoucherType === "sale" ? "Dispatch Qty" : "Qty"}</th>}
                     {activeVoucherType === "sale" && <th style={th}>Un. Date</th>}
@@ -2602,6 +2695,8 @@ export default function WarehouseTradingPage() {
                         <td style={td}>{i + 1}</td>
                         <td style={td}>{item.date}</td>
                         <td style={td}>{item.voucher_no}</td>
+                        {activeVoucherType === "sale" && <td style={td}>{item.po_no || "-"}</td>}
+                        {activeVoucherType === "sale" && <td style={td}>{formatLedgerDate(item.due_date)}</td>}
                         <td style={td}>{getWarehouseName(item)}</td>
                         <td style={td}>{getAccountName(item)}</td>
                         {(activeVoucherType === "purchase" || activeVoucherType === "payment") && (
@@ -2612,6 +2707,9 @@ export default function WarehouseTradingPage() {
                         )}
                         {activeVoucherType === "sale" && (
                           <td style={td}>{item.consignee_name || consignees.find((c) => String(c.id || c._id) === String(item.consignee_id))?.name || "-"}</td>
+                        )}
+                        {activeVoucherType === "sale" && (
+                          <td style={td}>{item.against_purchase_enabled ? `${item.against_purchase_links?.length || 0} bill` : "-"}</td>
                         )}
                         {(activeVoucherType === "purchase" || activeVoucherType === "sale") && (
                           <>
@@ -2644,7 +2742,7 @@ export default function WarehouseTradingPage() {
                     );
                   })}
                   {list.length === 0 && (
-                    <tr><td colSpan={activeVoucherType === "sale" ? 17 : 11} style={{ ...td, textAlign: "center", padding: 20 }}>No vouchers found.</td></tr>
+                    <tr><td colSpan={activeVoucherType === "sale" ? 20 : 11} style={{ ...td, textAlign: "center", padding: 20 }}>No vouchers found.</td></tr>
                   )}
                 </tbody>
               </table>
