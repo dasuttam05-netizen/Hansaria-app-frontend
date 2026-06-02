@@ -687,6 +687,9 @@ export default function WarehouseTradingPage() {
           next.company_id = String(consignee.buyer_id);
         }
       }
+      if (activeVoucherType === "sale" && name === "unloading_date") {
+        next.due_date = value;
+      }
       if (
         activeVoucherType === "sale" &&
         !editId &&
@@ -1051,7 +1054,11 @@ export default function WarehouseTradingPage() {
           loadOutstanding("company", receipt.company_id, receipt.warehouse_id, null, receipt.company_account_id);
         }
       } else {
-        setFormData({ ...defaultForm(), ...voucher });
+        setFormData({
+          ...defaultForm(),
+          ...voucher,
+          due_date: voucher.due_date || voucher.unloading_date || "",
+        });
         if (activeVoucherType === "sale") {
           const existingLinks = Array.isArray(voucher.against_purchase_links)
             ? voucher.against_purchase_links.map((item) => ({
@@ -1229,6 +1236,7 @@ export default function WarehouseTradingPage() {
       lorry_no: voucher.lorry_no || voucher.reference_id || "",
       unloading_qty: "",
       unloading_date: voucher.unloading_date || new Date().toISOString().slice(0, 10),
+      due_date: voucher.due_date || voucher.unloading_date || new Date().toISOString().slice(0, 10),
       moisture: voucher.moisture || "",
       dunki: voucher.dunki || "",
       fungus: voucher.fungus || "",
