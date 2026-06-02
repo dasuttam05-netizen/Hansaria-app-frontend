@@ -17,6 +17,10 @@ const defaultForm = () => ({
   company_account_id: "",
   consignee_id: "",
   product_id: "",
+  po_no: "",
+  due_date: "",
+  against_purchase_enabled: false,
+  against_purchase_farmer_id: "",
   reference_type: "",
   reference_id: "",
   lorry_no: "",
@@ -145,6 +149,8 @@ export default function WarehouseTradingPage() {
   const [showSaleDeductionModal, setShowSaleDeductionModal] = useState(false);
   const [saleBillSearch, setSaleBillSearch] = useState("");
   const [showSaleAdjustedModal, setShowSaleAdjustedModal] = useState(false);
+  const [salePurchaseRows, setSalePurchaseRows] = useState([]);
+  const [salePurchaseLinks, setSalePurchaseLinks] = useState([]);
   const selectedVoucher = list.find((item) => String(item.id || item._id) === String(selectedPaymentId));
   const selectedReceiptVoucher = list.find((item) => String(item.id || item._id) === String(selectedReceiptId));
   const selectedWarehouse = warehouses.find((w) => String(w.id || w._id) === String(formData.warehouse_id));
@@ -301,6 +307,19 @@ export default function WarehouseTradingPage() {
     : selectedWarehouseStockRow
       ? toNumber(selectedWarehouseStockRow.stock_qty)
       : null;
+  const againstPurchaseRows = salePurchaseRows
+    .filter((item) => {
+      if (formData.against_purchase_farmer_id && String(item.farmer_id || "") !== String(formData.against_purchase_farmer_id)) return false;
+      if (formData.company_account_id && String(item.company_account_id || "") !== String(formData.company_account_id)) return false;
+      if (formData.product_id && String(item.product_id || "") !== String(formData.product_id)) return false;
+      if (formData.warehouse_id && String(item.warehouse_id || "") !== String(formData.warehouse_id)) return false;
+      return true;
+    })
+    .slice()
+    .sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")));
+  const againstPurchaseLinkMap = new Map(salePurchaseLinks.map((item) => [String(item.purchase_id), item]));
+  const againstPurchaseTotalQty = salePurchaseLinks.reduce((sum, item) => sum + toNumber(item.quantity), 0);
+  const againstPurchaseTotalAmount = salePurchaseLinks.reduce((sum, item) => sum + toNumber(item.amount), 0);
   const saleNetReceivablePreview =
     saleGrossAmountFromData(formData) -
     toNumber(formData.claim_amount) -
@@ -309,6 +328,27 @@ export default function WarehouseTradingPage() {
     toNumber(formData.adjustment_amount) -
     (tdsEligible ? autoTdsAmount : toNumber(formData.tds_amount)) +
     toNumber(formData.round_off);
+
+  const updateSalePurchaseLink = (purchase, quantityValue) => {
+    const purchaseId = String(purchase.id || purchase._id || "");
+    const quantity = Math.max(0, toNumber(quantityValue));
+    const rate = toNumber(purchase.rate);
+    setSalePurchaseLinks((prev) => {
+      const others = prev.filter((item) => String(item.purchase_id) !== purchaseId);
+      if (!purchaseId || quantity <= 0) return others;
+      return [
+        ...others,
+        {
+          purchase_id: purchaseId,
+          voucher_no: purchase.voucher_no || "",
+          farmer_id: String(purchase.farmer_id || formData.against_purchase_farmer_id || ""),
+          quantity,
+          rate,
+          amount: Number((quantity * rate).toFixed(2)),
+        },
+      ];
+    });
+  };
   const saleVoucherPassBills = list.filter((item) => {
     const sameWarehouse = !formData.warehouse_id || String(item.warehouse_id || "") === String(formData.warehouse_id);
     const sameAccount = !formData.company_account_id || String(item.company_account_id || "") === String(formData.company_account_id);
@@ -386,6 +426,12 @@ export default function WarehouseTradingPage() {
   useEffect(() => {
     if (activeTab === "vouchers") {
       loadVouchers();
+    }
+  }, [activeTab, activeVoucherType]);
+
+  useEffect(() => {
+    if (activeTab === "vouchers" && activeVoucherType === "sale") {
+      loadSalePurchaseRows();
     }
   }, [activeTab, activeVoucherType]);
 
@@ -560,6 +606,21 @@ export default function WarehouseTradingPage() {
     }
   };
 
+  const loadSalePurchaseRows = async () => {
+    try {
+      if (!hasPermission(user, voucherPermissionMap.purchase)) {
+        setSalePurchaseRows([]);
+        return;
+      }
+      const res = await axios.get("/api/wh-vouchers/purchase");
+      const rows = Array.isArray(res.data) ? res.data : [];
+      setSalePurchaseRows(rows);
+    } catch (err) {
+      console.error(err);
+      setSalePurchaseRows([]);
+    }
+  };
+
   const loadReport = async () => {
     try {
       if (!hasPermission(user, reportPermissionMap[activeReport])) {
@@ -601,9 +662,10 @@ export default function WarehouseTradingPage() {
   };
 
   const handleChange = (e) => {
-    const { name, value } = e.target;
+    const { name, type, checked, value } = e.target;
+    const fieldValue = type === "checkbox" ? checked : value;
     setFormData((prev) => {
-      const next = { ...prev, [name]: value };
+      const next = { ...prev, [name]: fieldValue };
       if (name === "warehouse_id") {
         const warehouse = warehouses.find((w) => String(w.id || w._id) === String(value));
         next.location_id = getRecordId(warehouse?.location_id);
@@ -634,6 +696,13 @@ export default function WarehouseTradingPage() {
       }
       return next;
     });
+
+    if (
+      activeVoucherType === "sale" &&
+      ["against_purchase_enabled", "against_purchase_farmer_id", "company_account_id", "product_id", "warehouse_id"].includes(name)
+    ) {
+      setSalePurchaseLinks([]);
+    }
 
     if (activeVoucherType === "payment" && name === "company_account_id") {
       if (value) {
@@ -766,6 +835,21 @@ export default function WarehouseTradingPage() {
         alert("Please select account");
         return;
       }
+      if (formData.against_purchase_enabled) {
+        if (!formData.against_purchase_farmer_id) {
+          alert("Please select farmer for Against Purchase Bill");
+          return;
+        }
+        if (salePurchaseLinks.length === 0 || againstPurchaseTotalQty <= 0) {
+          alert("Please enter quantity against at least one farmer purchase bill");
+          return;
+        }
+        const saleQty = saleDispatchQtyFromData(formData);
+        if (againstPurchaseTotalQty > saleQty + 0.0001) {
+          alert("Against purchase quantity cannot exceed sale quantity");
+          return;
+        }
+      }
     }
     setLoading(true);
     try {
@@ -839,6 +923,9 @@ export default function WarehouseTradingPage() {
         const qtyForFifo = Number(payload.unloading_qty || payload.quantity) || 0;
         payload.fifo_rate = qtyForFifo > 0 ? grossAmount / qtyForFifo : 0;
         payload.fifo_amount = grossAmount;
+        payload.against_purchase_enabled = Boolean(formData.against_purchase_enabled && salePurchaseLinks.length);
+        payload.against_purchase_farmer_id = formData.against_purchase_farmer_id || "";
+        payload.against_purchase_links = payload.against_purchase_enabled ? salePurchaseLinks : [];
         if (editId) payload.deduction_only = true;
       }
       if (activeVoucherType === "payment") {
@@ -934,6 +1021,19 @@ export default function WarehouseTradingPage() {
         }
       } else {
         setFormData({ ...defaultForm(), ...voucher });
+        if (activeVoucherType === "sale") {
+          const existingLinks = Array.isArray(voucher.against_purchase_links)
+            ? voucher.against_purchase_links.map((item) => ({
+                purchase_id: String(item.purchase_id || item.id || ""),
+                voucher_no: item.voucher_no || item.purchase_voucher_no || "",
+                farmer_id: String(item.farmer_id || voucher.against_purchase_farmer_id || ""),
+                quantity: toNumber(item.quantity),
+                rate: toNumber(item.rate),
+                amount: toNumber(item.amount),
+              })).filter((item) => item.purchase_id && item.quantity > 0)
+            : [];
+          setSalePurchaseLinks(existingLinks);
+        }
         if (activeVoucherType === "payment") {
           const existingAdjustments = Array.isArray(voucher.adjustments)
             ? voucher.adjustments.map((item) => ({
