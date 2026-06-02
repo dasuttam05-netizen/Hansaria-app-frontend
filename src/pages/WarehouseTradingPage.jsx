@@ -10,6 +10,7 @@ const defaultForm = () => ({
   voucher_no: "",
   date: new Date().toISOString().slice(0, 10),
   unloading_date: "",
+  sale_type: "direct",
   warehouse_id: "",
   buyer_id: "",
   farmer_id: "",
@@ -19,6 +20,8 @@ const defaultForm = () => ({
   product_id: "",
   po_no: "",
   due_date: "",
+  direct_purchase_rate: "",
+  direct_purchase_amount: "",
   against_purchase_enabled: false,
   against_purchase_farmer_id: "",
   reference_type: "",
@@ -496,7 +499,7 @@ export default function WarehouseTradingPage() {
   }, [activeTab, activeVoucherType]);
 
   useEffect(() => {
-    if (activeTab !== "vouchers" || activeVoucherType !== "sale" || !formData.warehouse_id || !formData.product_id) {
+    if (activeTab !== "vouchers" || activeVoucherType !== "sale" || formData.sale_type === "direct" || !formData.warehouse_id || !formData.product_id) {
       setAvailableSaleStock(null);
       return;
     }
@@ -520,7 +523,7 @@ export default function WarehouseTradingPage() {
     return () => {
       cancelled = true;
     };
-  }, [activeTab, activeVoucherType, formData.warehouse_id, formData.product_id, editId]);
+  }, [activeTab, activeVoucherType, formData.sale_type, formData.warehouse_id, formData.product_id, editId]);
 
   const loadData = async () => {
     try {
@@ -695,12 +698,17 @@ export default function WarehouseTradingPage() {
         const gross = saleGrossAmountFromData(next);
         next.cd_amount = (gross * toNumber(value) / 100).toFixed(2);
       }
+      if (activeVoucherType === "sale" && name === "sale_type") {
+        next.against_purchase_enabled = false;
+        next.against_purchase_farmer_id = "";
+        if (value === "direct") next.warehouse_id = "";
+      }
       return next;
     });
 
     if (
       activeVoucherType === "sale" &&
-      ["against_purchase_enabled", "against_purchase_farmer_id", "company_account_id", "product_id", "warehouse_id"].includes(name)
+      ["sale_type", "against_purchase_enabled", "against_purchase_farmer_id", "company_account_id", "product_id", "warehouse_id"].includes(name)
     ) {
       setSalePurchaseLinks([]);
     }
@@ -828,15 +836,29 @@ export default function WarehouseTradingPage() {
       }
     }
     if (activeVoucherType === "sale") {
-      if (!formData.warehouse_id) {
+      if (formData.sale_type !== "direct" && !formData.warehouse_id) {
         alert("Please select warehouse");
         return;
+      }
+      if (formData.sale_type === "direct") {
+        if (!formData.location_id) {
+          alert("Please select location for direct sale");
+          return;
+        }
+        if (!formData.farmer_id) {
+          alert("Please select farmer for direct sale purchase entry");
+          return;
+        }
+        if (toNumber(formData.direct_purchase_rate) <= 0) {
+          alert("Please enter purchase rate for direct sale");
+          return;
+        }
       }
       if (!formData.company_account_id) {
         alert("Please select account");
         return;
       }
-      if (formData.against_purchase_enabled) {
+      if (formData.sale_type !== "direct" && formData.against_purchase_enabled) {
         if (!formData.against_purchase_farmer_id) {
           alert("Please select farmer for Against Purchase Bill");
           return;
@@ -866,6 +888,8 @@ export default function WarehouseTradingPage() {
         "cd_amount",
         "adjustment_amount",
         "tds_amount",
+        "direct_purchase_rate",
+        "direct_purchase_amount",
         "net_receivable_amount",
         "fifo_rate",
         "fifo_amount",
@@ -924,9 +948,14 @@ export default function WarehouseTradingPage() {
         const qtyForFifo = Number(payload.unloading_qty || payload.quantity) || 0;
         payload.fifo_rate = qtyForFifo > 0 ? grossAmount / qtyForFifo : 0;
         payload.fifo_amount = grossAmount;
-        payload.against_purchase_enabled = Boolean(formData.against_purchase_enabled && salePurchaseLinks.length);
-        payload.against_purchase_farmer_id = formData.against_purchase_farmer_id || "";
+        payload.sale_type = formData.sale_type === "direct" ? "direct" : "warehouse";
+        payload.direct_purchase_amount = payload.sale_type === "direct"
+          ? Number((payload.quantity * toNumber(formData.direct_purchase_rate)).toFixed(2))
+          : 0;
+        payload.against_purchase_enabled = payload.sale_type !== "direct" && Boolean(formData.against_purchase_enabled && salePurchaseLinks.length);
+        payload.against_purchase_farmer_id = payload.sale_type === "direct" ? formData.farmer_id : (formData.against_purchase_farmer_id || "");
         payload.against_purchase_links = payload.against_purchase_enabled ? salePurchaseLinks : [];
+        if (payload.sale_type === "direct") payload.warehouse_id = "";
         if (editId) payload.deduction_only = true;
       }
       if (activeVoucherType === "payment") {
@@ -2262,10 +2291,12 @@ export default function WarehouseTradingPage() {
                             <span>Pending Amount</span>
                             <strong>{formatMoney(selectedBuyerPendingAmount)}</strong>
                           </div>
-                          <div style={smartInfoBoxStyle}>
-                            <span>Warehouse Balance Qty</span>
-                            <strong>{selectedWarehouseBalanceQty === null ? "-" : formatDecimal4(selectedWarehouseBalanceQty)}</strong>
-                          </div>
+                          {formData.sale_type !== "direct" && (
+                            <div style={smartInfoBoxStyle}>
+                              <span>Warehouse Balance Qty</span>
+                              <strong>{selectedWarehouseBalanceQty === null ? "-" : formatDecimal4(selectedWarehouseBalanceQty)}</strong>
+                            </div>
+                          )}
                         </div>
                       )}
                     </div>
@@ -2299,14 +2330,24 @@ export default function WarehouseTradingPage() {
                 <Field label="Date">
                   <input name="date" type="date" value={formData.date} onChange={handleChange} style={inp} required />
                 </Field>
-                <Field label="Warehouse">
-                  <select name="warehouse_id" value={formData.warehouse_id} onChange={handleChange} style={inp}>
-                    <option value="">Select Warehouse</option>
-                    {warehouses.map((w) => (
-                      <option key={w.id || w._id} value={w.id || w._id}>{w.name}</option>
-                    ))}
-                  </select>
-                </Field>
+                {activeVoucherType === "sale" && (
+                  <Field label="Sale Type">
+                    <select name="sale_type" value={formData.sale_type || "direct"} onChange={handleChange} style={inp}>
+                      <option value="direct">Direct Farmer Loading Sale</option>
+                      <option value="warehouse">Warehouse Sale</option>
+                    </select>
+                  </Field>
+                )}
+                {(activeVoucherType !== "sale" || formData.sale_type !== "direct") && (
+                  <Field label="Warehouse">
+                    <select name="warehouse_id" value={formData.warehouse_id} onChange={handleChange} style={inp}>
+                      <option value="">Select Warehouse</option>
+                      {warehouses.map((w) => (
+                        <option key={w.id || w._id} value={w.id || w._id}>{w.name}</option>
+                      ))}
+                    </select>
+                  </Field>
+                )}
                 <Field label="Location">
                   <select name="location_id" value={formData.location_id} onChange={handleChange} style={inp}>
                     <option value="">Select Location</option>
@@ -2326,6 +2367,24 @@ export default function WarehouseTradingPage() {
                 <Field label="Account">
                   {renderAccountSelect(inp)}
                 </Field>
+                {activeVoucherType === "sale" && formData.sale_type === "direct" && (
+                  <>
+                    <Field label="Farmer">
+                      <select name="farmer_id" value={formData.farmer_id} onChange={handleChange} style={inp}>
+                        <option value="">Select Farmer</option>
+                        {farmers.map((farmer) => (
+                          <option key={farmer.id || farmer._id} value={farmer.id || farmer._id}>{farmer.name}</option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field label="Purchase Rate">
+                      <input name="direct_purchase_rate" type="number" step="0.0001" value={formData.direct_purchase_rate} onChange={handleChange} style={inp} />
+                    </Field>
+                    <Field label="Purchase Amount">
+                      <input value={formatMoney(saleDispatchQtyFromData(formData) * toNumber(formData.direct_purchase_rate))} readOnly style={readOnlyInp} />
+                    </Field>
+                  </>
+                )}
 
                 {(activeVoucherType === "purchase" || activeVoucherType === "payment") && (
                   <>
@@ -2428,7 +2487,7 @@ export default function WarehouseTradingPage() {
                         ))}
                       </select>
                     </Field>
-                    {activeVoucherType === "sale" && (
+                    {activeVoucherType === "sale" && formData.sale_type !== "direct" && (
                       <div style={{ gridColumn: "1 / -1", border: "1px solid #dbe3ef", borderRadius: 8, padding: 12, background: "#f8fafc" }}>
                         <label style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 700, color: "#334155" }}>
                           <input
@@ -2571,7 +2630,9 @@ export default function WarehouseTradingPage() {
                           <div style={smartInfoBoxStyle}><span>Buyer Sale Qty</span><strong>{formatDecimal4(selectedBuyerSaleQty)}</strong></div>
                           <div style={smartInfoBoxStyle}><span>Balance Amount</span><strong>{formatMoney(selectedBuyerBalanceAmount)}</strong></div>
                           <div style={smartInfoBoxStyle}><span>Pending Amount</span><strong>{formatMoney(selectedBuyerPendingAmount)}</strong></div>
-                          <div style={smartInfoBoxStyle}><span>Warehouse Balance Qty</span><strong>{selectedWarehouseBalanceQty === null ? "-" : formatDecimal4(selectedWarehouseBalanceQty)}</strong></div>
+                          {formData.sale_type !== "direct" && (
+                            <div style={smartInfoBoxStyle}><span>Warehouse Balance Qty</span><strong>{selectedWarehouseBalanceQty === null ? "-" : formatDecimal4(selectedWarehouseBalanceQty)}</strong></div>
+                          )}
                         </div>
                       </>
                     )}
