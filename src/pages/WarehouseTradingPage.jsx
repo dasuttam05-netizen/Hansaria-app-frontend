@@ -2833,6 +2833,7 @@ export default function WarehouseTradingPage() {
                             <th style={th}>Party</th>
                             <th style={th}>Sale</th>
                             <th style={th}>Receipt</th>
+                            <th style={th}>Deduction</th>
                             <th style={th}>Balance</th>
                           </tr>
                         </thead>
@@ -2854,6 +2855,7 @@ export default function WarehouseTradingPage() {
                                     {formatMoney(row.receipt_amount || 0)}
                                   </button>
                                 </td>
+                                <td style={td}>{formatMoney(row.journal_amount || 0)}</td>
                                 <td style={{ ...td, fontWeight: 700, color: toNumber(row.bill_balance) > 0 ? "#b45309" : "#15803d" }}>
                                   {formatMoney(row.bill_balance || 0)}
                                 </td>
@@ -2861,7 +2863,7 @@ export default function WarehouseTradingPage() {
                             );
                           })}
                           {saleBillRows.length === 0 && (
-                            <tr><td colSpan={5} style={{ ...td, textAlign: "center", padding: 18 }}>No sale bill found.</td></tr>
+                            <tr><td colSpan={6} style={{ ...td, textAlign: "center", padding: 18 }}>No sale bill found.</td></tr>
                           )}
                         </tbody>
                       </table>
@@ -2880,6 +2882,18 @@ export default function WarehouseTradingPage() {
                         ))
                       ) : (
                         <div style={{ color: "#64748b", fontSize: 13 }}>No receipt adjusted against this bill.</div>
+                      )}
+                      <div style={{ color: "#64748b", fontSize: 12, margin: "10px 0 8px" }}>Deduction details</div>
+                      {(selectedSaleBill?.journal_details || []).length > 0 ? (
+                        (selectedSaleBill.journal_details || []).map((detail, index) => (
+                          <div key={`${detail.voucher_no}-${index}`} style={paymentDetailRowStyle}>
+                            <span>{detail.date || "-"}</span>
+                            <span>{detail.type || "-"}</span>
+                            <strong>Rs.{formatMoney(detail.amount || 0)}</strong>
+                          </div>
+                        ))
+                      ) : (
+                        <div style={{ color: "#64748b", fontSize: 13 }}>No deduction posted against this bill.</div>
                       )}
                     </div>
                   </div>
