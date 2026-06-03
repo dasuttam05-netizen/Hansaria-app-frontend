@@ -81,6 +81,8 @@ export const ROLE_PERMISSION_PRESETS = {
     "outward.create",
     "adjustment.manage",
     "settlement.view",
+    "cash.view",
+    "warehouse.trading.view",
     "report.inward",
     "report.outwardSettlement",
   ],
