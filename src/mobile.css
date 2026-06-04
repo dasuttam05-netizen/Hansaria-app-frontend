@@ -28,6 +28,10 @@ button {
   font: inherit;
 }
 
+.ledger-mobile-view {
+  display: none;
+}
+
 @media (max-width: 768px) {
   body {
     font-size: 18px;
@@ -242,6 +246,22 @@ button {
     min-width: 720px !important;
     width: max-content !important;
     font-size: 16px !important;
+  }
+
+  .ledger-desktop-table {
+    display: none !important;
+  }
+
+  .ledger-mobile-view {
+    display: block !important;
+    width: 100% !important;
+  }
+
+  .ledger-mobile-view button {
+    min-height: 0 !important;
+    padding: 8px 12px !important;
+    font-size: 13px !important;
+    line-height: 1.2 !important;
   }
 
   th,
