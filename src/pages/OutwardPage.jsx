@@ -42,6 +42,58 @@ const getRecordId = (record) => {
 const sameId = (left, right) =>
   String(left || "") !== "" && String(left || "") === String(right || "");
 
+const mobileCard = {
+  border: "1px solid #dbe4ee",
+  borderRadius: 14,
+  background: "#ffffff",
+  padding: 14,
+  boxShadow: "0 8px 20px rgba(15, 23, 42, 0.06)",
+};
+
+const mobileCardTitle = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "flex-start",
+  gap: 12,
+  marginBottom: 10,
+};
+
+const mobileCardBadge = {
+  display: "inline-flex",
+  alignItems: "center",
+  borderRadius: 999,
+  padding: "4px 10px",
+  fontSize: 12,
+  fontWeight: 700,
+  color: "#0f766e",
+  background: "#ccfbf1",
+  whiteSpace: "nowrap",
+};
+
+const mobileRow = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: 12,
+  padding: "7px 0",
+  borderTop: "1px solid #eef2f7",
+};
+
+const mobileLabel = {
+  color: "#64748b",
+  fontSize: 13,
+  fontWeight: 700,
+  flex: "0 0 42%",
+};
+
+const mobileValue = {
+  color: "#0f172a",
+  fontSize: 14,
+  fontWeight: 600,
+  textAlign: "right",
+  wordBreak: "break-word",
+  flex: "1 1 auto",
+};
+
 const normalizeIdList = (input) => {
   if (!Array.isArray(input)) return [];
   return input.map((item) => getRecordId(item)).filter(Boolean);
@@ -1144,7 +1196,7 @@ Consignee: ${row.consignee_name}`;
             <div style={{ color: "#64748b", fontSize: "13px" }}>Use row actions to edit, copy, adjust, or settle records quickly.</div>
           </div>
         </div>
-        <div style={{ overflowX: "auto", overflowY: "auto", maxHeight: "78vh" }}>
+        <div style={{ overflowX: "auto", overflowY: "auto", maxHeight: "78vh" }} className="ledger-desktop-table">
           <table
             style={{
               width: "100%",
@@ -1293,8 +1345,99 @@ Consignee: ${row.consignee_name}`;
                   </td>
                 </tr>
               )}
-            </tbody>
-          </table>
+              </tbody>
+            </table>
+          </div>
+
+        <div className="ledger-mobile-view" style={{ marginTop: 14, display: "grid", gap: 12 }}>
+          {filteredOutwards.length > 0 ? (
+            filteredOutwards.map((row, idx) => (
+              <div key={row.id} style={mobileCard}>
+                <div style={mobileCardTitle}>
+                  <div>
+                    <div style={{ fontSize: 16, fontWeight: 800, color: "#0f172a" }}>
+                      {row.sl_no != null ? row.sl_no : row.id} · {row.inv_no || "-"}
+                    </div>
+                    <div style={{ fontSize: 13, color: "#64748b", marginTop: 2 }}>
+                      {formatDate(row.date)} · {row.self_loading || "No"}
+                    </div>
+                  </div>
+                  <span style={mobileCardBadge}>{row.lorry_no || "No Lorry"}</span>
+                </div>
+
+                {[
+                  ["Employee", row.employee_name || "-"],
+                  ["Location", row.location_name || "-"],
+                  ["Warehouse", row.warehouse_name || "-"],
+                  ["Product", row.product_name || "-"],
+                  ["Company", row.company_name || "-"],
+                  ["Account", row.party_name || "-"],
+                  ["Weight", formatWeight(row.weight)],
+                  ["Rate", formatRate(row.rate)],
+                  ["Buyer", row.buyer_name || "-"],
+                  ["Consignee", row.consignee_name || "-"],
+                ].map(([labelText, value]) => (
+                  <div key={labelText} style={mobileRow}>
+                    <span style={mobileLabel}>{labelText}</span>
+                    <span style={mobileValue}>{value}</span>
+                  </div>
+                ))}
+
+                <div style={{ ...mobileRow, alignItems: "center" }}>
+                  <span style={mobileLabel}>Actions</span>
+                  <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                    {canEdit ? (
+                      <button
+                        type="button"
+                        onClick={() => handleEdit(row)}
+                        style={{ background: "#3b82f6", color: "#fff", border: "none", padding: "8px 12px", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 700 }}
+                      >
+                        Edit
+                      </button>
+                    ) : null}
+                    {canDelete ? (
+                      <button
+                        type="button"
+                        onClick={() => handleDelete(row.id)}
+                        style={{ background: "#ef4444", color: "#fff", border: "none", padding: "8px 12px", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 700 }}
+                      >
+                        Delete
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      onClick={() => handleCopy(row)}
+                      style={{ background: "#64748b", color: "#fff", border: "none", padding: "8px 12px", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 700 }}
+                    >
+                      Copy
+                    </button>
+                    {canAdjust ? (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedOutward(row)}
+                        style={{ background: "#f59e0b", color: "#fff", border: "none", padding: "8px 12px", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 700 }}
+                      >
+                        Adjust
+                      </button>
+                    ) : null}
+                    {canEdit ? (
+                      <button
+                        type="button"
+                        onClick={() => setSelectedSettlementOutward(row)}
+                        style={{ background: "#22c55e", color: "#fff", border: "none", padding: "8px 12px", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 700 }}
+                      >
+                        Settle
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              </div>
+            ))
+          ) : (
+            <div style={mobileCard}>
+              <div style={{ color: "#64748b", textAlign: "center" }}>No outward records found</div>
+            </div>
+          )}
         </div>
       </div>
 
