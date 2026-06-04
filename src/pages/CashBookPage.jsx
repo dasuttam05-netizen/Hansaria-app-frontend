@@ -53,6 +53,58 @@ const td = {
   whiteSpace: "nowrap",
 };
 
+const mobileCard = {
+  border: "1px solid #dbe4ee",
+  borderRadius: 14,
+  background: "#ffffff",
+  padding: 14,
+  boxShadow: "0 8px 20px rgba(15, 23, 42, 0.06)",
+};
+
+const mobileCardTitle = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "flex-start",
+  gap: 12,
+  marginBottom: 10,
+};
+
+const mobileCardBadge = {
+  display: "inline-flex",
+  alignItems: "center",
+  borderRadius: 999,
+  padding: "4px 10px",
+  fontSize: 12,
+  fontWeight: 700,
+  color: "#0f766e",
+  background: "#ccfbf1",
+  whiteSpace: "nowrap",
+};
+
+const mobileRow = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: 12,
+  padding: "7px 0",
+  borderTop: "1px solid #eef2f7",
+};
+
+const mobileLabel = {
+  color: "#64748b",
+  fontSize: 13,
+  fontWeight: 700,
+  flex: "0 0 42%",
+};
+
+const mobileValue = {
+  color: "#0f172a",
+  fontSize: 14,
+  fontWeight: 600,
+  textAlign: "right",
+  wordBreak: "break-word",
+  flex: "1 1 auto",
+};
+
 const getWarehouseLabel = (w) => w?.name || w?.warehouse_name || w?.title || (w?.id ? `Warehouse ${w.id}` : "Unknown Warehouse");
 const getCompanyLabel = (c) => c?.name || c?.company_name || c?.company || (c?.id ? `Party ${c.id}` : "Unknown Party");
 const getEmployeeLabel = (e) => e?.name || e?.employee_name || e?.full_name || (e?.id ? `Employee ${e.id}` : "Unknown Employee");
@@ -734,8 +786,9 @@ const MainCashBookPage = () => {
         {loading ? (
           <p style={{ color: "#6b7280", textAlign: "center", margin: "14px 0" }}>Loading ledger...</p>
         ) : (
-          <div style={{ overflowX: "auto" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+          <>
+            <div style={{ overflowX: "auto" }} className="ledger-desktop-table">
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
                 <tr>
                   <th style={th}>Date</th>
@@ -793,9 +846,9 @@ const MainCashBookPage = () => {
                           </button>
                         </div>
                       </td>
-                    </tr>
-                  ))
-                )}
+                  </tr>
+                ))
+              )}
 
                 <tr style={{ background: "#f9fafb" }}>
                   <td style={{ ...td, fontWeight: 700 }} colSpan={9}>Current closing balance</td>
@@ -804,8 +857,95 @@ const MainCashBookPage = () => {
                   <td style={td}>-</td>
                 </tr>
               </tbody>
-            </table>
-          </div>
+              </table>
+            </div>
+
+            <div className="ledger-mobile-view" style={{ marginTop: 14 }}>
+              <div style={mobileCard}>
+                <div style={mobileCardTitle}>
+                  <div>
+                    <div style={{ fontSize: 16, fontWeight: 800, color: "#0f172a" }}>Ledger summary</div>
+                    <div style={{ fontSize: 13, color: "#64748b", marginTop: 2 }}>
+                      {ledgerTitle}
+                      {appliedFilters.start_date ? ` from ${formatDisplayDate(appliedFilters.start_date)}` : ""}
+                      {appliedFilters.end_date ? ` to ${formatDisplayDate(appliedFilters.end_date)}` : ""}
+                    </div>
+                  </div>
+                  <span style={mobileCardBadge}>Cash Book</span>
+                </div>
+                <div style={mobileRow}>
+                  <span style={mobileLabel}>Opening</span>
+                  <span style={mobileValue}>Rs. {openingBalance.toFixed(2)}</span>
+                </div>
+                <div style={mobileRow}>
+                  <span style={mobileLabel}>Dr Total</span>
+                  <span style={mobileValue}>Rs. {totals.totalDr.toFixed(2)}</span>
+                </div>
+                <div style={mobileRow}>
+                  <span style={mobileLabel}>Cr Total</span>
+                  <span style={mobileValue}>Rs. {totals.totalCr.toFixed(2)}</span>
+                </div>
+                <div style={mobileRow}>
+                  <span style={mobileLabel}>Closing</span>
+                  <span style={mobileValue}>Rs. {totals.closing.toFixed(2)}</span>
+                </div>
+              </div>
+
+              <div style={{ display: "grid", gap: 12, marginTop: 14 }}>
+                {ledgerRows.length === 0 ? (
+                  <div style={mobileCard}>
+                    <div style={{ color: "#64748b", textAlign: "center" }}>No ledger entries found.</div>
+                  </div>
+                ) : (
+                  ledgerRows.map((entry) => (
+                    <div key={entry.id} style={mobileCard}>
+                      <div style={mobileCardTitle}>
+                        <div>
+                          <div style={{ fontSize: 16, fontWeight: 800, color: "#0f172a" }}>
+                            {entry.journal_group_no || entry.voucher_no || `Entry ${entry.id}`}
+                          </div>
+                          <div style={{ fontSize: 13, color: "#64748b", marginTop: 2 }}>
+                            {formatDisplayDate(entry.entry_date)} · {entry.entry_type || "-"}
+                          </div>
+                        </div>
+                        <span style={mobileCardBadge}>{entry.payment_method || "Cash"}</span>
+                      </div>
+
+                      {[
+                        ["Name", getFundSourceLabel(entry.fund_source)],
+                        ["Employee", entry.employee_name || "-"],
+                        ["Party", entry.company_name || "-"],
+                        ["Description", entry.description || "-"],
+                        ["Ref No", entry.reference_no || "-"],
+                        ["Dr", entry.dr ? `Rs. ${Number(entry.dr).toFixed(2)}` : "-"],
+                        ["Cr", entry.cr ? `Rs. ${Number(entry.cr).toFixed(2)}` : "-"],
+                      ].map(([labelText, value]) => (
+                        <div key={labelText} style={mobileRow}>
+                          <span style={mobileLabel}>{labelText}</span>
+                          <span style={mobileValue}>{value}</span>
+                        </div>
+                      ))}
+
+                      <div style={{ ...mobileRow, alignItems: "center" }}>
+                        <span style={mobileLabel}>Actions</span>
+                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                          <button type="button" onClick={() => handleView(entry)} style={{ background: "#0ea5e9", color: "#fff", border: "none", padding: "8px 12px", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 700 }}>
+                            View
+                          </button>
+                          <button type="button" onClick={() => handleEdit(entry)} style={{ background: "#2563eb", color: "#fff", border: "none", padding: "8px 12px", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 700 }}>
+                            Edit
+                          </button>
+                          <button type="button" onClick={() => handleDelete(entry)} style={{ background: "#dc2626", color: "#fff", border: "none", padding: "8px 12px", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 700 }}>
+                            {showDeleted ? "Restore" : "Delete"}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </>
         )}
       </div>
 
