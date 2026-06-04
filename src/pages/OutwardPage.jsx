@@ -43,11 +43,11 @@ const sameId = (left, right) =>
   String(left || "") !== "" && String(left || "") === String(right || "");
 
 const mobileCard = {
-  border: "1px solid #dbe4ee",
+  border: "1px solid #bbf7d0",
   borderRadius: 14,
-  background: "#ffffff",
-  padding: 14,
-  boxShadow: "0 8px 20px rgba(15, 23, 42, 0.06)",
+  background: "#ecfdf5",
+  padding: 12,
+  boxShadow: "0 8px 18px rgba(34, 197, 94, 0.08)",
 };
 
 const mobileCardTitle = {
@@ -65,8 +65,8 @@ const mobileCardBadge = {
   padding: "4px 10px",
   fontSize: 12,
   fontWeight: 700,
-  color: "#0f766e",
-  background: "#ccfbf1",
+  color: "#1f3d05",
+  background: "#d9f99d",
   whiteSpace: "nowrap",
 };
 
@@ -74,19 +74,19 @@ const mobileRow = {
   display: "flex",
   justifyContent: "space-between",
   gap: 12,
-  padding: "7px 0",
-  borderTop: "1px solid #eef2f7",
+  padding: "6px 0",
+  borderTop: "1px solid #d9f99d",
 };
 
 const mobileLabel = {
-  color: "#64748b",
+  color: "#1f3d05",
   fontSize: 13,
-  fontWeight: 700,
+  fontWeight: 800,
   flex: "0 0 42%",
 };
 
 const mobileValue = {
-  color: "#0f172a",
+  color: "#14532d",
   fontSize: 14,
   fontWeight: 600,
   textAlign: "right",
@@ -1349,16 +1349,16 @@ Consignee: ${row.consignee_name}`;
             </table>
           </div>
 
-        <div className="ledger-mobile-view" style={{ marginTop: 14, display: "grid", gap: 12 }}>
+        <div className="ledger-mobile-view" style={{ marginTop: 12, display: "grid", gap: 12 }}>
           {filteredOutwards.length > 0 ? (
             filteredOutwards.map((row, idx) => (
               <div key={row.id} style={mobileCard}>
                 <div style={mobileCardTitle}>
                   <div>
-                    <div style={{ fontSize: 16, fontWeight: 800, color: "#0f172a" }}>
+                    <div style={{ fontSize: 16, fontWeight: 800, color: "#1f3d05" }}>
                       {row.sl_no != null ? row.sl_no : row.id} · {row.inv_no || "-"}
                     </div>
-                    <div style={{ fontSize: 13, color: "#64748b", marginTop: 2 }}>
+                    <div style={{ fontSize: 13, color: "#365314", marginTop: 2 }}>
                       {formatDate(row.date)} · {row.self_loading || "No"}
                     </div>
                   </div>
@@ -1435,7 +1435,7 @@ Consignee: ${row.consignee_name}`;
             ))
           ) : (
             <div style={mobileCard}>
-              <div style={{ color: "#64748b", textAlign: "center" }}>No outward records found</div>
+              <div style={{ color: "#365314", textAlign: "center", fontWeight: 600 }}>No outward records found</div>
             </div>
           )}
         </div>
