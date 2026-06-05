@@ -10,6 +10,7 @@ const defaultForm = () => ({
   voucher_no: "",
   date: new Date().toISOString().slice(0, 10),
   unloading_date: "",
+  due_days: "",
   sale_type: "direct",
   warehouse_id: "",
   buyer_id: "",
@@ -133,6 +134,7 @@ export default function WarehouseTradingPage() {
   const [warehouseStockReport, setWarehouseStockReport] = useState([]);
   const [availableSaleStock, setAvailableSaleStock] = useState(null);
   const [reportFilters, setReportFilters] = useState({ farmer_id: "", company_account_id: "", sale_buyer_id: "", sale_company_account_id: "" });
+  const [saleFollowupFilter, setSaleFollowupFilter] = useState("all");
   const [selectedLedgerBillId, setSelectedLedgerBillId] = useState("");
   const [partyOutstanding, setPartyOutstanding] = useState(null);
   const [showPaymentAdjustPopup, setShowPaymentAdjustPopup] = useState(false);
@@ -246,6 +248,7 @@ export default function WarehouseTradingPage() {
     purchase: "warehouse.trading.report.purchase",
     "purchase-party-ledger": "warehouse.trading.report.purchase",
     "sale-party-ledger": "warehouse.trading.report.sale",
+    "sale-followup": "warehouse.trading.report.sale",
     "warehouse-stock": "warehouse.trading.report.purchase",
     "fifo-stock": "warehouse.trading.report.purchase",
     "profit-loss": "warehouse.trading.report.profitLoss",
@@ -255,6 +258,7 @@ export default function WarehouseTradingPage() {
     purchase: "purchase-summary",
     "purchase-party-ledger": "purchase-party-ledger",
     "sale-party-ledger": "sale-party-ledger",
+    "sale-followup": "sale-followup",
     "warehouse-stock": "warehouse-stock",
     "fifo-stock": "fifo-stock",
     "profit-loss": "profit-loss",
@@ -264,6 +268,7 @@ export default function WarehouseTradingPage() {
     purchase: "Purchase Detail",
     "purchase-party-ledger": "Purchase Party Ledger",
     "sale-party-ledger": "Sale Party Ledger",
+    "sale-followup": "Sale Follow-up",
     "warehouse-stock": "Warehouse Stock",
     "fifo-stock": "FIFO Stock",
     "profit-loss": "Profit/Loss",
@@ -688,7 +693,25 @@ export default function WarehouseTradingPage() {
         }
       }
       if (activeVoucherType === "sale" && name === "unloading_date") {
-        next.due_date = value;
+        const dueDays = toNumber(prev.due_days);
+        if (value && dueDays) {
+          const parsed = new Date(`${value}T00:00:00Z`);
+          if (!Number.isNaN(parsed.getTime())) {
+            parsed.setUTCDate(parsed.getUTCDate() + dueDays);
+            next.due_date = parsed.toISOString().slice(0, 10);
+          }
+        } else {
+          next.due_date = value;
+        }
+      }
+      if (activeVoucherType === "sale" && name === "due_days") {
+        const unloadingDate = prev.unloading_date || "";
+        next.due_date = unloadingDate && value ? (() => {
+          const parsed = new Date(`${unloadingDate}T00:00:00Z`);
+          if (Number.isNaN(parsed.getTime())) return unloadingDate;
+          parsed.setUTCDate(parsed.getUTCDate() + toNumber(value));
+          return parsed.toISOString().slice(0, 10);
+        })() : next.due_date;
       }
       if (
         activeVoucherType === "sale" &&
@@ -1469,10 +1492,26 @@ export default function WarehouseTradingPage() {
       ["account", "Account", (item) => (item.row_type === "closing" ? "" : getAccountName(item))],
       ["voucher_type", "Type", (item) => (item.row_type === "closing" ? "" : (item.voucher_type || "-"))],
       ["voucher_no", "Voucher No", (item) => (item.row_type === "closing" ? "" : (item.voucher_no || "-"))],
+      ["due_date", "Due Date", (item) => (item.row_type === "closing" ? "" : formatLedgerDate(item.due_date || item.unloading_date || ""))],
+      ["due_days", "Due Days", (item) => (item.row_type === "closing" ? "" : (item.due_days !== undefined ? item.due_days : ""))],
+      ["days_overdue", "Days Overdue", (item) => (item.row_type === "closing" ? "" : (item.days_overdue || ""))],
+      ["followup_status_label", "Status", (item) => (item.row_type === "closing" ? "" : (item.followup_status_label || item.followup_status || "-"))],
       ["adjustment_details", "Adjustment Details", (item) => (item.row_type === "closing" ? "" : (item.adjustment_details || "-"))],
       ["warehouse", "Warehouse", (item) => (item.row_type === "closing" ? "" : getWarehouseName(item))],
       ["debit", "Debit", (item) => formatMoney(item.debit || 0)],
       ["credit", "Credit", (item) => formatMoney(item.credit || 0)],
+      ["balance", "Balance", (item) => formatMoney(Math.abs(item.balance || 0))],
+    ],
+    "sale-followup": [
+      ["date", "Date", (item) => formatLedgerDate(item.date)],
+      ["party", "Party", (item) => (item.party_name || item.company_name || "-")],
+      ["account", "Account", (item) => getAccountName(item)],
+      ["voucher_no", "Voucher No", (item) => (item.voucher_no || "-")],
+      ["unloading_date", "Unloading Date", (item) => formatLedgerDate(item.unloading_date || "")],
+      ["due_date", "Due Date", (item) => formatLedgerDate(item.due_date || item.unloading_date || "")],
+      ["due_days", "Due Days", (item) => (item.due_days !== undefined ? item.due_days : "")],
+      ["days_overdue", "Days Overdue", (item) => (item.days_overdue || "")],
+      ["followup_status_label", "Status", (item) => (item.followup_status_label || item.followup_status || "-")],
       ["balance", "Balance", (item) => formatMoney(Math.abs(item.balance || 0))],
     ],
     "warehouse-stock": [
@@ -1522,6 +1561,11 @@ export default function WarehouseTradingPage() {
 
   const activeReportColumns = reportColumns[activeReport] || reportColumns.sale;
   const displayReportData = useMemo(() => {
+    if (activeReport === "sale-followup") {
+      const rows = Array.isArray(reportData) ? reportData : [];
+      if (saleFollowupFilter === "all") return rows;
+      return rows.filter((row) => String(row.followup_status || "pending").toLowerCase() === saleFollowupFilter);
+    }
     if (activeReport !== "purchase-party-ledger" && activeReport !== "sale-party-ledger") return reportData;
     const entries = (Array.isArray(reportData) ? reportData : []).filter((row) => row.row_type !== "closing");
     const ledgerPartyName = (row) => activeReport === "purchase-party-ledger"
@@ -1584,7 +1628,23 @@ export default function WarehouseTradingPage() {
     });
     pushClosing();
     return grouped;
-  }, [activeReport, reportData, farmers, buyerNames, companyAccounts]);
+  }, [activeReport, reportData, farmers, buyerNames, companyAccounts, saleFollowupFilter]);
+  const saleFollowupRows = activeReport === "sale-followup" ? displayReportData : [];
+  const saleFollowupCounts = useMemo(() => {
+    const counts = { all: saleFollowupRows.length, payment_done: 0, unloading_pending: 0, pending: 0, overdue: 0 };
+    saleFollowupRows.forEach((row) => {
+      const status = String(row.followup_status || "pending").toLowerCase();
+      if (counts[status] !== undefined) counts[status] += 1;
+    });
+    return counts;
+  }, [saleFollowupRows]);
+  const saleFollowupStatusMeta = {
+    all: { label: "All Bills", bg: "#0f172a", color: "#fff" },
+    payment_done: { label: "Payment Done", bg: "#dcfce7", color: "#166534" },
+    unloading_pending: { label: "Unloading Pending", bg: "#fef3c7", color: "#92400e" },
+    pending: { label: "Payment Pending", bg: "#dbeafe", color: "#1d4ed8" },
+    overdue: { label: "Overdue", bg: "#fee2e2", color: "#b91c1c" },
+  };
   const purchaseBillRows = activeReport === "purchase-party-ledger"
     ? displayReportData.filter((row) => row.row_type === "entry" && row.voucher_type === "Purchase")
     : [];
@@ -2250,6 +2310,10 @@ export default function WarehouseTradingPage() {
                         <input name="unloading_date" type="date" value={formData.unloading_date} onChange={handleChange} style={erpInput} />
                       </div>
                       <div style={erpRow}>
+                        <label style={erpLabel}>Due Days</label>
+                        <input name="due_days" type="number" min="0" value={formData.due_days} onChange={handleChange} style={erpInput} />
+                      </div>
+                      <div style={erpRow}>
                         <label style={erpLabel}>P.O No</label>
                         <input name="po_no" value={formData.po_no} onChange={handleChange} style={erpInput} />
                       </div>
@@ -2634,6 +2698,9 @@ export default function WarehouseTradingPage() {
                         <Field label="P.O No">
                           <input name="po_no" value={formData.po_no} onChange={handleChange} style={inp} />
                         </Field>
+                        <Field label="Due Days">
+                          <input name="due_days" type="number" min="0" value={formData.due_days} onChange={handleChange} style={inp} />
+                        </Field>
                         <Field label="Due Date">
                           <input name="due_date" type="date" value={formData.due_date} onChange={handleChange} style={inp} />
                         </Field>
@@ -3014,6 +3081,66 @@ export default function WarehouseTradingPage() {
                 )}
               </div>
             )}
+            {activeReport === "sale-followup" && (
+              <>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10, marginBottom: 14 }}>
+                  {[
+                    ["all", saleFollowupCounts.all],
+                    ["payment_done", saleFollowupCounts.payment_done],
+                    ["unloading_pending", saleFollowupCounts.unloading_pending],
+                    ["pending", saleFollowupCounts.pending],
+                    ["overdue", saleFollowupCounts.overdue],
+                  ].map(([key, count]) => {
+                    const meta = saleFollowupStatusMeta[key];
+                    const active = saleFollowupFilter === key;
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => setSaleFollowupFilter(key)}
+                        style={{
+                          border: active ? `1px solid ${meta.color}` : "1px solid #e2e8f0",
+                          background: active ? meta.bg : "#fff",
+                          borderRadius: 14,
+                          padding: "14px 16px",
+                          cursor: "pointer",
+                          textAlign: "left",
+                          boxShadow: active ? "0 10px 24px rgba(15, 23, 42, 0.08)" : "none",
+                        }}
+                      >
+                        <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", marginBottom: 6 }}>{meta.label}</div>
+                        <div style={{ fontSize: 24, fontWeight: 800, color: meta.color }}>{count}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
+                  {["all", "payment_done", "unloading_pending", "pending", "overdue"].map((key) => {
+                    const meta = saleFollowupStatusMeta[key];
+                    const active = saleFollowupFilter === key;
+                    return (
+                      <button
+                        key={key}
+                        type="button"
+                        onClick={() => setSaleFollowupFilter(key)}
+                        style={{
+                          ...btnAction,
+                          background: active ? meta.color : "#e2e8f0",
+                          color: active ? "#fff" : "#0f172a",
+                        }}
+                      >
+                        {meta.label}
+                      </button>
+                    );
+                  })}
+                  {saleFollowupFilter !== "all" && (
+                    <button type="button" onClick={() => setSaleFollowupFilter("all")} style={{ ...btnAction, background: "#64748b" }}>
+                      Clear Filter
+                    </button>
+                  )}
+                </div>
+              </>
+            )}
             {activeReport === "purchase-party-ledger" ? (
               <div style={ledgerSplitStyle}>
                 <div style={tableCard}>
@@ -3111,7 +3238,7 @@ export default function WarehouseTradingPage() {
                 </div>
                 )}
               </div>
-            ) : activeReport === "sale-party-ledger" ? (
+            ) : activeReport === "sale-party-ledger" || activeReport === "sale-followup" ? (
               <div style={ledgerSplitStyle}>
                 <div style={tableCard}>
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
@@ -3123,13 +3250,20 @@ export default function WarehouseTradingPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {displayReportData.map((item, i) => (
-                        <tr key={item.id || `${item.voucher_type || item.row_type}-${item.voucher_no || i}-${i}`} style={{ background: item.row_type === "closing" ? "#eef6ff" : (i % 2 ? "#f8fafc" : "#fff"), fontWeight: item.row_type === "closing" ? 700 : 400 }}>
-                          {activeReportColumns.map(([key, _label, render]) => (
-                            <td key={key} style={td}>{render(item, i)}</td>
-                          ))}
-                        </tr>
-                      ))}
+                      {displayReportData.map((item, i) => {
+                        const statusKey = String(item.followup_status || "").toLowerCase();
+                        const followupBg =
+                          activeReport === "sale-followup"
+                            ? (statusKey === "payment_done" ? "#ecfdf5" : statusKey === "unloading_pending" ? "#fffbeb" : statusKey === "overdue" ? "#fef2f2" : "#eff6ff")
+                            : null;
+                        return (
+                          <tr key={item.id || `${item.voucher_type || item.row_type}-${item.voucher_no || i}-${i}`} style={{ background: item.row_type === "closing" ? "#eef6ff" : followupBg || (i % 2 ? "#f8fafc" : "#fff"), fontWeight: item.row_type === "closing" ? 700 : 400 }}>
+                            {activeReportColumns.map(([key, _label, render]) => (
+                              <td key={key} style={td}>{render(item, i)}</td>
+                            ))}
+                          </tr>
+                        );
+                      })}
                       {displayReportData.length === 0 && (
                         <tr><td colSpan={activeReportColumns.length} style={{ ...td, textAlign: "center", padding: 20 }}>No data available.</td></tr>
                       )}
@@ -3137,7 +3271,7 @@ export default function WarehouseTradingPage() {
                   </table>
                 </div>
 
-                {showSaleBillWise && (
+                {showSaleBillWise && activeReport === "sale-party-ledger" && (
                   <div style={billWisePanelStyle}>
                     <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center", marginBottom: 10 }}>
                       <strong>Bill Wise Report</strong>
@@ -3542,9 +3676,47 @@ export default function WarehouseTradingPage() {
                 <input 
                   type="date" 
                   value={formData.unloading_date} 
-                  onChange={(e) => setFormData(prev => ({ ...prev, unloading_date: e.target.value }))}
+                  onChange={(e) => setFormData(prev => {
+                    const unloading_date = e.target.value;
+                    const due_days = toNumber(prev.due_days);
+                    let due_date = prev.due_date;
+                    if (unloading_date && due_days) {
+                      const parsed = new Date(`${unloading_date}T00:00:00Z`);
+                      if (!Number.isNaN(parsed.getTime())) {
+                        parsed.setUTCDate(parsed.getUTCDate() + due_days);
+                        due_date = parsed.toISOString().slice(0, 10);
+                      }
+                    }
+                    return { ...prev, unloading_date, due_date };
+                  })}
                   style={inp}
                 />
+              </div>
+              <div>
+                <label style={lbl}>Due Days</label>
+                <input
+                  type="number"
+                  min="0"
+                  value={formData.due_days || ""}
+                  onChange={(e) => setFormData(prev => {
+                    const due_days = e.target.value;
+                    const unloading_date = prev.unloading_date || "";
+                    let due_date = prev.due_date;
+                    if (unloading_date && due_days) {
+                      const parsed = new Date(`${unloading_date}T00:00:00Z`);
+                      if (!Number.isNaN(parsed.getTime())) {
+                        parsed.setUTCDate(parsed.getUTCDate() + toNumber(due_days));
+                        due_date = parsed.toISOString().slice(0, 10);
+                      }
+                    }
+                    return { ...prev, due_days, due_date };
+                  })}
+                  style={inp}
+                />
+              </div>
+              <div>
+                <label style={lbl}>Due Date</label>
+                <input type="date" value={formData.due_date} readOnly style={readOnlyInp} />
               </div>
               <div>
                 <label style={lbl}>Unloading Weight (Qty)</label>
