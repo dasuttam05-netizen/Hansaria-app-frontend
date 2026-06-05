@@ -36,10 +36,20 @@ const nextExpenseItemRowKey = () => {
   return `expense-item-${expenseItemRowCounter}`;
 };
 
+const resolveExpenseParticularName = (item, fallbackName = "") => {
+  const candidates = [item?.particular_name, item?.particulars, item?.name];
+  for (const candidate of candidates) {
+    const text = String(candidate ?? "").trim();
+    if (text) return text;
+  }
+
+  return String(fallbackName ?? "").trim();
+};
+
 const createExpenseItem = (item = {}, fallbackLineNo = 1) => ({
   row_key: nextExpenseItemRowKey(),
   line_no: Number(item.line_no) || fallbackLineNo,
-  particular_name: item.particular_name ?? item.particulars ?? item.name ?? "",
+  particular_name: resolveExpenseParticularName(item, ""),
   bags: item.bags ?? "",
   rate: item.rate ?? "",
   amount:
@@ -71,15 +81,12 @@ const normalizeExpenseItemsForForm = (items, user) => {
 
     const matchedItem =
       matchIndex >= 0 ? unusedItems.splice(matchIndex, 1)[0] : null;
+    const resolvedName = resolveExpenseParticularName(matchedItem, defaultName);
 
     return createExpenseItem(
       {
         line_no: index + 1,
-        particular_name:
-          matchedItem?.particular_name ??
-          matchedItem?.particulars ??
-          matchedItem?.name ??
-          defaultName,
+        particular_name: resolvedName || defaultName,
         bags: matchedItem?.bags ?? 0,
         rate: matchedItem?.rate ?? 0,
         amount:
@@ -96,7 +103,16 @@ const normalizeExpenseItemsForForm = (items, user) => {
   });
 
   const extraRows = unusedItems.map((item, index) =>
-    createExpenseItem(item, defaultItems.length + index + 1)
+    createExpenseItem(
+      {
+        ...item,
+        particular_name: resolveExpenseParticularName(
+          item,
+          `Particular ${defaultItems.length + index + 1}`
+        ),
+      },
+      defaultItems.length + index + 1
+    )
   );
 
   return [...rows, ...extraRows];
