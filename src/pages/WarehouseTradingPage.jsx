@@ -1765,7 +1765,7 @@ export default function WarehouseTradingPage() {
   };
 
   const getLedgerPartyDetails = (row, ledgerType = activeReport) => {
-    if (row.row_type === "closing") return { name: row.party_name || row.farmer_name || "-", address: "", mobile: "" };
+    if (row.row_type === "closing") return { name: row.party_name || row.farmer_name || "-", address: "", mobile: "", email: "", gst: "", pan: "" };
     if (ledgerType === "purchase-party-ledger") {
       const farmerId = String(row.farmer_id || "");
       const farmer = farmers.find((item) => String(item.id || item._id) === farmerId) || {};
@@ -1773,6 +1773,9 @@ export default function WarehouseTradingPage() {
         name: row.farmer_name || farmer.name || getFarmerName(row) || "-",
         address: row.farmer_address || farmer.address || farmer.village || "",
         mobile: row.farmer_mobile || farmer.mobile || "",
+        email: row.farmer_email || farmer.email || "",
+        gst: row.farmer_gst || farmer.gst_no || farmer.gst || "",
+        pan: row.farmer_pan || farmer.pan_no || farmer.pan || "",
       };
     }
     const buyerId = String(row.buyer_id || row.company_id || "");
@@ -1781,6 +1784,9 @@ export default function WarehouseTradingPage() {
       name: row.party_name || row.buyer_name || row.company_name || buyer.name || "-",
       address: row.buyer_address || row.company_address || buyer.address || buyer.location || "",
       mobile: row.buyer_mobile || row.company_mobile || buyer.mobile || "",
+      email: row.buyer_email || row.company_email || buyer.email || "",
+      gst: row.buyer_gst || row.company_gst || buyer.gst_no || buyer.gst || "",
+      pan: row.buyer_pan || row.company_pan || buyer.pan_no || buyer.pan || "",
     };
   };
 
@@ -1790,11 +1796,20 @@ export default function WarehouseTradingPage() {
       name: getAccountName(row),
       address: row.company_account_address || row.account_address || account.address || "",
       mobile: row.company_account_mobile || row.account_mobile || account.mobile || "",
+      email: row.company_account_email || row.account_email || account.email || "",
+      gst: row.company_account_gst || row.account_gst || account.gst_no || account.gst || "",
+      pan: row.company_account_pan || row.account_pan || account.pan_no || account.pan || "",
     };
   };
 
-  const formatLedgerContact = ({ address, mobile }) =>
-    [address ? `Address: ${address}` : "", mobile ? `Mobile: ${mobile}` : ""].filter(Boolean).join(" | ") || "-";
+  const formatLedgerContact = ({ address, mobile, email, gst, pan }) =>
+    [
+      address ? `Address: ${address}` : "",
+      mobile ? `Phone: ${mobile}` : "",
+      email ? `Mail: ${email}` : "",
+      gst ? `GST: ${gst}` : "",
+      pan ? `PAN: ${pan}` : "",
+    ].filter(Boolean).join(" | ") || "-";
 
   const buildLedgerPdf = (ledgerType) => {
     const title = ledgerType === "sale-party-ledger" ? "Sale Party Ledger" : "Purchase Party Ledger";
@@ -1805,9 +1820,7 @@ export default function WarehouseTradingPage() {
     doc.setFontSize(9);
     doc.text(`Generated: ${formatLedgerDate(new Date().toISOString().slice(0, 10))}`, 14, 20);
     const firstEntry = (displayReportData || []).find((row) => row.row_type !== "closing") || {};
-    const reportParty = ledgerType === "sale-party-ledger"
-      ? getLedgerPartyDetails(firstEntry, ledgerType)
-      : getLedgerPartyDetails(firstEntry, ledgerType);
+    const reportParty = getLedgerPartyDetails(firstEntry, ledgerType);
     const reportAccount = getLedgerAccountDetails(firstEntry);
     doc.setFontSize(10);
     doc.text(`${reportAccount.name || "-"}`, 14, 26);
@@ -1822,17 +1835,13 @@ export default function WarehouseTradingPage() {
       styles: { fontSize: 7, cellPadding: 2, overflow: "linebreak" },
       head: [[
         "Date",
-        partyLabel,
-        "Party Details",
-        "Account",
-        "Account Details",
         "Type",
         "Voucher No",
         "Adjustment Details",
-        "Warehouse",
         "Due Date",
         "Due Days",
         "Days Overdue",
+        "Warehouse",
         "Dr",
         "Cr",
         "Balance",
@@ -1842,29 +1851,24 @@ export default function WarehouseTradingPage() {
         const account = getLedgerAccountDetails(row);
         return [
           row.row_type === "closing" ? "" : formatLedgerDate(row.date),
-          row.row_type === "closing" ? `Closing Balance (${row.closing_side})` : party.name,
-          row.row_type === "closing" ? "" : formatLedgerContact(party),
-          row.row_type === "closing" ? "" : account.name,
-          row.row_type === "closing" ? "" : formatLedgerContact(account),
           row.row_type === "closing" ? "" : (row.voucher_type || ""),
           row.row_type === "closing" ? "" : (row.voucher_no || ""),
           row.row_type === "closing" ? "" : (row.adjustment_details || row.particulars || ""),
-          row.row_type === "closing" ? "" : getWarehouseName(row),
           row.row_type === "closing" ? "" : formatLedgerDate(row.due_date || row.unloading_date || ""),
           row.row_type === "closing" ? "" : (row.due_days !== undefined ? row.due_days : ""),
           row.row_type === "closing" ? "" : (row.days_overdue !== undefined ? row.days_overdue : ""),
+          row.row_type === "closing" ? "" : getWarehouseName(row),
           formatMoney(row.debit || 0),
           formatMoney(row.credit || 0),
           formatMoney(Math.abs(row.balance || 0)),
         ];
       }),
       columnStyles: {
-        2: { cellWidth: 42 },
-        4: { cellWidth: 42 },
-        7: { cellWidth: 42 },
-        9: { cellWidth: 28 },
-        10: { cellWidth: 18 },
-        11: { cellWidth: 20 },
+        2: { cellWidth: 38 },
+        4: { cellWidth: 36 },
+        5: { cellWidth: 24 },
+        6: { cellWidth: 22 },
+        7: { cellWidth: 22 },
       },
     });
     return { doc, title };
