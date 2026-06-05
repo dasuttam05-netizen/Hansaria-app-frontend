@@ -1553,6 +1553,7 @@ export default function WarehouseTradingPage() {
         const email = String(item.contact_email || item.buyer_email || item.consignee_email || "").trim();
         const mobileRaw = String(item.contact_mobile || item.buyer_mobile || item.consignee_mobile || "").trim();
         const mobile = mobileRaw.replace(/\D/g, "");
+        const whatsappNumber = mobile.length === 10 ? `91${mobile}` : mobile;
         const dueDate = item.due_date || item.unloading_date || "";
         const body = encodeURIComponent(
           [
@@ -1569,35 +1570,51 @@ export default function WarehouseTradingPage() {
         );
         return (
           <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-            <button
-              type="button"
-              disabled={!email}
-              onClick={() => {
-                const subject = encodeURIComponent(`Outstanding follow-up for ${item.voucher_no || ""}`.trim());
-                window.location.href = `mailto:${email}?subject=${subject}&body=${body}`;
+            <a
+              href={email ? `mailto:${email}?subject=${encodeURIComponent(`Outstanding follow-up for ${item.voucher_no || ""}`.trim())}&body=${body}` : "#"}
+              onClick={(event) => {
+                if (!email) event.preventDefault();
               }}
-              style={{ ...btnAction, background: email ? "#0f766e" : "#cbd5e1", padding: "6px 10px" }}
+              style={{
+                ...btnAction,
+                background: email ? "#0f766e" : "#cbd5e1",
+                padding: "6px 10px",
+                textDecoration: "none",
+                color: "#fff",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
             >
               Mail
-            </button>
-            <button
-              type="button"
-              disabled={!mobile}
-              onClick={() => {
-                const text = encodeURIComponent(
-                  [
-                    `Dear ${item.party_name || item.buyer_name || item.company_name || "Party"},`,
-                    `Your outstanding balance is ${formatMoney(Math.abs(item.balance || 0))}.`,
-                    dueDate ? `Due Date: ${formatLedgerDate(dueDate)}` : "",
-                    `Voucher No: ${item.voucher_no || "-"}`,
-                  ].filter(Boolean).join(" ")
-                );
-                window.open(`https://wa.me/${mobile}?text=${text}`, "_blank", "noopener,noreferrer");
+            </a>
+            <a
+              href={whatsappNumber ? `https://wa.me/${whatsappNumber}?text=${encodeURIComponent([
+                `Dear ${item.party_name || item.buyer_name || item.company_name || "Party"},`,
+                `Your outstanding balance is ${formatMoney(Math.abs(item.balance || 0))}.`,
+                dueDate ? `Due Date: ${formatLedgerDate(dueDate)}` : "",
+                item.due_days !== undefined ? `Due Days: ${item.due_days}` : "",
+                item.days_overdue !== undefined ? `Days Overdue: ${item.days_overdue}` : "",
+                `Voucher No: ${item.voucher_no || "-"}`,
+              ].filter(Boolean).join(" "))}` : "#"}
+              onClick={(event) => {
+                if (!whatsappNumber) event.preventDefault();
               }}
-              style={{ ...btnAction, background: mobile ? "#15803d" : "#cbd5e1", padding: "6px 10px" }}
+              target="_blank"
+              rel="noreferrer"
+              style={{
+                ...btnAction,
+                background: whatsappNumber ? "#15803d" : "#cbd5e1",
+                padding: "6px 10px",
+                textDecoration: "none",
+                color: "#fff",
+                display: "inline-flex",
+                alignItems: "center",
+                justifyContent: "center",
+              }}
             >
               WhatsApp
-            </button>
+            </a>
           </div>
         );
       }],
@@ -1787,10 +1804,39 @@ export default function WarehouseTradingPage() {
     doc.text(title, 14, 14);
     doc.setFontSize(9);
     doc.text(`Generated: ${formatLedgerDate(new Date().toISOString().slice(0, 10))}`, 14, 20);
+    const firstEntry = (displayReportData || []).find((row) => row.row_type !== "closing") || {};
+    const reportParty = ledgerType === "sale-party-ledger"
+      ? getLedgerPartyDetails(firstEntry, ledgerType)
+      : getLedgerPartyDetails(firstEntry, ledgerType);
+    const reportAccount = getLedgerAccountDetails(firstEntry);
+    doc.setFontSize(10);
+    doc.text(`${reportAccount.name || "-"}`, 14, 26);
+    doc.setFontSize(8.5);
+    doc.text(formatLedgerContact(reportAccount), 14, 31);
+    doc.setFontSize(10);
+    doc.text(`${reportParty.name || "-"}`, 14, 37);
+    doc.setFontSize(8.5);
+    doc.text(formatLedgerContact(reportParty), 14, 42);
     autoTable(doc, {
-      startY: 25,
+      startY: 48,
       styles: { fontSize: 7, cellPadding: 2, overflow: "linebreak" },
-      head: [["Date", partyLabel, "Party Details", "Account", "Account Details", "Type", "Voucher No", "Adjustment Details", "Warehouse", "Dr", "Cr", "Balance"]],
+      head: [[
+        "Date",
+        partyLabel,
+        "Party Details",
+        "Account",
+        "Account Details",
+        "Type",
+        "Voucher No",
+        "Adjustment Details",
+        "Warehouse",
+        "Due Date",
+        "Due Days",
+        "Days Overdue",
+        "Dr",
+        "Cr",
+        "Balance",
+      ]],
       body: displayReportData.map((row) => {
         const party = getLedgerPartyDetails(row, ledgerType);
         const account = getLedgerAccountDetails(row);
@@ -1804,6 +1850,9 @@ export default function WarehouseTradingPage() {
           row.row_type === "closing" ? "" : (row.voucher_no || ""),
           row.row_type === "closing" ? "" : (row.adjustment_details || row.particulars || ""),
           row.row_type === "closing" ? "" : getWarehouseName(row),
+          row.row_type === "closing" ? "" : formatLedgerDate(row.due_date || row.unloading_date || ""),
+          row.row_type === "closing" ? "" : (row.due_days !== undefined ? row.due_days : ""),
+          row.row_type === "closing" ? "" : (row.days_overdue !== undefined ? row.days_overdue : ""),
           formatMoney(row.debit || 0),
           formatMoney(row.credit || 0),
           formatMoney(Math.abs(row.balance || 0)),
@@ -1813,6 +1862,9 @@ export default function WarehouseTradingPage() {
         2: { cellWidth: 42 },
         4: { cellWidth: 42 },
         7: { cellWidth: 42 },
+        9: { cellWidth: 28 },
+        10: { cellWidth: 18 },
+        11: { cellWidth: 20 },
       },
     });
     return { doc, title };
