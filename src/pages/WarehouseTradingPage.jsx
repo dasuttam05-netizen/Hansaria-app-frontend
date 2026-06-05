@@ -1549,6 +1549,58 @@ export default function WarehouseTradingPage() {
       ["days_overdue", "Days Overdue", (item) => (item.days_overdue !== undefined ? item.days_overdue : diffDays(item.due_date, new Date().toISOString().slice(0, 10)))],
       ["followup_status_label", "Status", (item) => (item.followup_status_label || item.followup_status || "-")],
       ["balance", "Balance", (item) => formatMoney(Math.abs(item.balance || item.bill_balance || item.outstanding || 0))],
+      ["actions", "Actions", (item) => {
+        const email = String(item.contact_email || item.buyer_email || item.consignee_email || "").trim();
+        const mobileRaw = String(item.contact_mobile || item.buyer_mobile || item.consignee_mobile || "").trim();
+        const mobile = mobileRaw.replace(/\D/g, "");
+        const dueDate = item.due_date || item.unloading_date || "";
+        const body = encodeURIComponent(
+          [
+            `Dear ${item.party_name || item.buyer_name || item.company_name || "Party"},`,
+            "",
+            `Your outstanding balance is ${formatMoney(Math.abs(item.balance || 0))}.`,
+            dueDate ? `Due Date: ${formatLedgerDate(dueDate)}` : "",
+            item.due_days !== undefined ? `Due Days: ${item.due_days}` : "",
+            item.days_overdue !== undefined ? `Days Overdue: ${item.days_overdue}` : "",
+            "",
+            "Please clear the pending amount at the earliest.",
+            `Voucher No: ${item.voucher_no || "-"}`,
+          ].filter(Boolean).join("\n")
+        );
+        return (
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+            <button
+              type="button"
+              disabled={!email}
+              onClick={() => {
+                const subject = encodeURIComponent(`Outstanding follow-up for ${item.voucher_no || ""}`.trim());
+                window.location.href = `mailto:${email}?subject=${subject}&body=${body}`;
+              }}
+              style={{ ...btnAction, background: email ? "#0f766e" : "#cbd5e1", padding: "6px 10px" }}
+            >
+              Mail
+            </button>
+            <button
+              type="button"
+              disabled={!mobile}
+              onClick={() => {
+                const text = encodeURIComponent(
+                  [
+                    `Dear ${item.party_name || item.buyer_name || item.company_name || "Party"},`,
+                    `Your outstanding balance is ${formatMoney(Math.abs(item.balance || 0))}.`,
+                    dueDate ? `Due Date: ${formatLedgerDate(dueDate)}` : "",
+                    `Voucher No: ${item.voucher_no || "-"}`,
+                  ].filter(Boolean).join(" ")
+                );
+                window.open(`https://wa.me/${mobile}?text=${text}`, "_blank", "noopener,noreferrer");
+              }}
+              style={{ ...btnAction, background: mobile ? "#15803d" : "#cbd5e1", padding: "6px 10px" }}
+            >
+              WhatsApp
+            </button>
+          </div>
+        );
+      }],
     ],
     "warehouse-stock": [
       ["warehouse", "Warehouse", (item) => getWarehouseName(item)],
