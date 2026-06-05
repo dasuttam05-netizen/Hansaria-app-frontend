@@ -1261,6 +1261,20 @@ export default function WarehouseTradingPage() {
   const selectSaleVoucherForPass = (voucherId) => {
     const voucher = list.find((item) => String(item.id || item._id) === String(voucherId));
     if (!voucher) return;
+    const existingUnloadingDate = voucher.unloading_date || "";
+    const existingDueDays = voucher.due_days !== undefined && voucher.due_days !== null && String(voucher.due_days).trim() !== ""
+      ? toNumber(voucher.due_days)
+      : "";
+    const rawDueDate = voucher.due_date || "";
+    const computedDueDate = existingUnloadingDate && existingDueDays > 0
+      ? (() => {
+          const parsed = new Date(`${existingUnloadingDate}T00:00:00Z`);
+          if (Number.isNaN(parsed.getTime())) return rawDueDate;
+          parsed.setUTCDate(parsed.getUTCDate() + existingDueDays);
+          return parsed.toISOString().slice(0, 10);
+        })()
+      : rawDueDate;
+    const derivedDueDays = existingDueDays !== "" ? existingDueDays : (computedDueDate && existingUnloadingDate ? diffDays(existingUnloadingDate, computedDueDate) : "");
     setFormData({
       ...defaultForm(),
       ...voucher,
@@ -1268,8 +1282,9 @@ export default function WarehouseTradingPage() {
       company_id: voucher.company_id || voucher.buyer_id || "",
       lorry_no: voucher.lorry_no || voucher.reference_id || "",
       unloading_qty: "",
-      unloading_date: voucher.unloading_date || new Date().toISOString().slice(0, 10),
-      due_date: voucher.due_date || voucher.unloading_date || new Date().toISOString().slice(0, 10),
+      unloading_date: existingUnloadingDate || new Date().toISOString().slice(0, 10),
+      due_days: derivedDueDays,
+      due_date: computedDueDate || "",
       moisture: voucher.moisture || "",
       dunki: voucher.dunki || "",
       fungus: voucher.fungus || "",
@@ -1300,9 +1315,20 @@ export default function WarehouseTradingPage() {
 
     const finalTdsAmount = tdsEligible ? autoTdsAmount : toNumber(formData.tds_amount);
     const finalCdAmount = Number((saleBillAmountFromData(formData) * toNumber(formData.cd_percent) / 100).toFixed(2));
+    const unloadingDate = formData.unloading_date || "";
+    const dueDays = formData.due_days !== undefined && formData.due_days !== null && String(formData.due_days).trim() !== "" ? toNumber(formData.due_days) : "";
+    const dueDate = formData.due_date || (unloadingDate && dueDays !== "" ? (() => {
+      const parsed = new Date(`${unloadingDate}T00:00:00Z`);
+      if (Number.isNaN(parsed.getTime())) return "";
+      parsed.setUTCDate(parsed.getUTCDate() + toNumber(dueDays));
+      return parsed.toISOString().slice(0, 10);
+    })() : "");
     const payload = {
       ...formData,
       deduction_only: true,
+      unloading_date: unloadingDate,
+      due_days: dueDays,
+      due_date: dueDate,
       unloading_qty: saleUnloadingQty,
       shortage_quantity: saleShortageQty,
       shortage_amount: saleShortageAmount,
