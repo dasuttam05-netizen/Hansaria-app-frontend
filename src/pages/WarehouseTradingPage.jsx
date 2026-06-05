@@ -1830,45 +1830,98 @@ export default function WarehouseTradingPage() {
     doc.text(`${reportParty.name || "-"}`, 14, 37);
     doc.setFontSize(8.5);
     doc.text(formatLedgerContact(reportParty), 14, 42);
+    const saleOnlyColumns = ledgerType === "sale-party-ledger"
+      ? [
+          "Date",
+          "Type",
+          "Voucher No",
+          "Adjustment & Details",
+          "Due Date",
+          "Due Days",
+          "Days Overdue",
+          "Dr",
+          "Cr",
+          "Balance",
+        ]
+      : [
+          "Date",
+          partyLabel,
+          "Party Details",
+          "Account",
+          "Account Details",
+          "Type",
+          "Voucher No",
+          "Adjustment Details",
+          "Warehouse",
+          "Due Date",
+          "Due Days",
+          "Days Overdue",
+          "Dr",
+          "Cr",
+          "Balance",
+        ];
     autoTable(doc, {
       startY: 48,
       styles: { fontSize: 7, cellPadding: 2, overflow: "linebreak" },
-      head: [[
-        "Date",
-        "Type",
-        "Voucher No",
-        "Adjustment Details",
-        "Due Date",
-        "Due Days",
-        "Days Overdue",
-        "Warehouse",
-        "Dr",
-        "Cr",
-        "Balance",
-      ]],
+      head: [saleOnlyColumns],
       body: displayReportData.map((row) => {
         const party = getLedgerPartyDetails(row, ledgerType);
         const account = getLedgerAccountDetails(row);
+        if (ledgerType === "sale-party-ledger") {
+          const saleDetailParts = [
+            `Qty: ${formatDecimal4(row.quantity || row.unloading_qty || 0)}`,
+            `Rate: ${formatMoney(row.rate || 0)}`,
+            `Lorry No: ${row.lorry_no || row.reference_id || "-"}`,
+            `Adjustment: ${row.adjustment_details || row.particulars || "-"}`,
+            `Due Date: ${formatLedgerDate(row.due_date || row.unloading_date || "")}`,
+            `Due Days: ${row.due_days !== undefined ? row.due_days : ""}`,
+            `Days Overdue: ${row.days_overdue !== undefined ? row.days_overdue : ""}`,
+          ];
+          return [
+            row.row_type === "closing" ? "" : formatLedgerDate(row.date),
+            row.row_type === "closing" ? "" : (row.voucher_type || ""),
+            row.row_type === "closing" ? "" : (row.voucher_no || ""),
+            row.row_type === "closing" ? "" : saleDetailParts.filter(Boolean).join("\n"),
+            row.row_type === "closing" ? "" : formatLedgerDate(row.due_date || row.unloading_date || ""),
+            row.row_type === "closing" ? "" : (row.due_days !== undefined ? row.due_days : ""),
+            row.row_type === "closing" ? "" : (row.days_overdue !== undefined ? row.days_overdue : ""),
+            formatMoney(row.debit || 0),
+            formatMoney(row.credit || 0),
+            formatMoney(Math.abs(row.balance || 0)),
+          ];
+        }
         return [
           row.row_type === "closing" ? "" : formatLedgerDate(row.date),
+          row.row_type === "closing" ? `Closing Balance (${row.closing_side})` : party.name,
+          row.row_type === "closing" ? "" : formatLedgerContact(party),
+          row.row_type === "closing" ? "" : account.name,
+          row.row_type === "closing" ? "" : formatLedgerContact(account),
           row.row_type === "closing" ? "" : (row.voucher_type || ""),
           row.row_type === "closing" ? "" : (row.voucher_no || ""),
           row.row_type === "closing" ? "" : (row.adjustment_details || row.particulars || ""),
+          row.row_type === "closing" ? "" : getWarehouseName(row),
           row.row_type === "closing" ? "" : formatLedgerDate(row.due_date || row.unloading_date || ""),
           row.row_type === "closing" ? "" : (row.due_days !== undefined ? row.due_days : ""),
           row.row_type === "closing" ? "" : (row.days_overdue !== undefined ? row.days_overdue : ""),
-          row.row_type === "closing" ? "" : getWarehouseName(row),
           formatMoney(row.debit || 0),
           formatMoney(row.credit || 0),
           formatMoney(Math.abs(row.balance || 0)),
         ];
       }),
       columnStyles: {
-        2: { cellWidth: 38 },
-        4: { cellWidth: 36 },
-        5: { cellWidth: 24 },
-        6: { cellWidth: 22 },
-        7: { cellWidth: 22 },
+        ...(ledgerType === "sale-party-ledger"
+          ? {
+              3: { cellWidth: 70 },
+              7: { cellWidth: 22 },
+              8: { cellWidth: 22 },
+            }
+          : {
+              2: { cellWidth: 38 },
+              4: { cellWidth: 36 },
+              5: { cellWidth: 24 },
+              6: { cellWidth: 22 },
+              7: { cellWidth: 22 },
+            }),
       },
     });
     return { doc, title };
