@@ -89,6 +89,16 @@ const formatLedgerDate = (value) => {
   return raw || "-";
 };
 
+const diffDays = (start, end) => {
+  const s = String(start || "").trim();
+  const e = String(end || "").trim();
+  if (!s || !e) return 0;
+  const startDate = new Date(`${(s.includes("T") ? s.split("T")[0] : s)}T00:00:00Z`);
+  const endDate = new Date(`${(e.includes("T") ? e.split("T")[0] : e)}T00:00:00Z`);
+  if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) return 0;
+  return Math.max(0, Math.floor((endDate - startDate) / (1000 * 60 * 60 * 24)));
+};
+
 const purchaseDeductionFields = [
   { key: "less_bags_weight", label: "Less Bags Weight" },
   { key: "moisture", label: "Moistur" },
@@ -694,14 +704,14 @@ export default function WarehouseTradingPage() {
       }
       if (activeVoucherType === "sale" && name === "unloading_date") {
         const dueDays = toNumber(prev.due_days);
-        if (value && dueDays) {
+        if (value && dueDays > 0) {
           const parsed = new Date(`${value}T00:00:00Z`);
           if (!Number.isNaN(parsed.getTime())) {
             parsed.setUTCDate(parsed.getUTCDate() + dueDays);
             next.due_date = parsed.toISOString().slice(0, 10);
           }
-        } else {
-          next.due_date = value;
+        } else if (!dueDays) {
+          next.due_date = "";
         }
       }
       if (activeVoucherType === "sale" && name === "due_days") {
@@ -1509,8 +1519,8 @@ export default function WarehouseTradingPage() {
       ["voucher_no", "Voucher No", (item) => (item.voucher_no || "-")],
       ["unloading_date", "Unloading Date", (item) => formatLedgerDate(item.unloading_date || "")],
       ["due_date", "Due Date", (item) => formatLedgerDate(item.due_date || item.unloading_date || "")],
-      ["due_days", "Due Days", (item) => (item.due_days !== undefined ? item.due_days : 0)],
-      ["days_overdue", "Days Overdue", (item) => (item.days_overdue !== undefined ? item.days_overdue : 0)],
+      ["due_days", "Due Days", (item) => (item.due_days !== undefined ? item.due_days : diffDays(item.unloading_date, item.due_date))],
+      ["days_overdue", "Days Overdue", (item) => (item.days_overdue !== undefined ? item.days_overdue : diffDays(item.due_date, new Date().toISOString().slice(0, 10)))],
       ["followup_status_label", "Status", (item) => (item.followup_status_label || item.followup_status || "-")],
       ["balance", "Balance", (item) => formatMoney(Math.abs(item.balance || item.bill_balance || item.outstanding || 0))],
     ],
@@ -3680,12 +3690,14 @@ export default function WarehouseTradingPage() {
                     const unloading_date = e.target.value;
                     const due_days = toNumber(prev.due_days);
                     let due_date = prev.due_date;
-                    if (unloading_date && due_days) {
+                    if (unloading_date && due_days > 0) {
                       const parsed = new Date(`${unloading_date}T00:00:00Z`);
                       if (!Number.isNaN(parsed.getTime())) {
                         parsed.setUTCDate(parsed.getUTCDate() + due_days);
                         due_date = parsed.toISOString().slice(0, 10);
                       }
+                    } else if (!due_days) {
+                      due_date = "";
                     }
                     return { ...prev, unloading_date, due_date };
                   })}
@@ -3702,12 +3714,14 @@ export default function WarehouseTradingPage() {
                     const due_days = e.target.value;
                     const unloading_date = prev.unloading_date || "";
                     let due_date = prev.due_date;
-                    if (unloading_date && due_days) {
+                    if (unloading_date && due_days > 0) {
                       const parsed = new Date(`${unloading_date}T00:00:00Z`);
                       if (!Number.isNaN(parsed.getTime())) {
                         parsed.setUTCDate(parsed.getUTCDate() + toNumber(due_days));
                         due_date = parsed.toISOString().slice(0, 10);
                       }
+                    } else if (!due_days) {
+                      due_date = "";
                     }
                     return { ...prev, due_days, due_date };
                   })}
