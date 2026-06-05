@@ -1836,14 +1836,14 @@ export default function WarehouseTradingPage() {
           "Type",
           "Voucher No",
           "Adjustment & Details",
-          "Adjustment",
-          "Due Date",
-          "Due Days",
-          "Days Overdue",
-          "Dr",
-          "Cr",
-          "Balance",
-        ]
+          "Particulars",
+        "Due Date",
+        "Due Days",
+        "Days Overdue",
+        "Dr",
+        "Cr",
+        "Balance",
+      ]
       : [
           "Date",
           partyLabel,
@@ -1874,15 +1874,19 @@ export default function WarehouseTradingPage() {
             `Rate: ${formatMoney(row.rate || 0)}`,
             `Lorry No: ${row.lorry_no || row.reference_id || "-"}`,
           ];
-          const adjustmentDetails = String(row.adjustment_details || row.particulars || "").trim();
+          const adjustmentDetails = String(row.adjustment_details || row.journal_details?.map?.((j) => `${j.voucher_no || "-"}: ${j.type || "Journal"} Rs.${formatMoney(j.amount || 0)}`)?.join("\n") || "").trim();
           const deductionDetails = String(row.deduction_details || row.description || "").trim();
           const adjustmentText = [adjustmentDetails, deductionDetails].filter(Boolean).join("\n");
+          const particularsText = [
+            row.row_type === "closing" ? "" : (row.voucher_type || ""),
+            row.row_type === "closing" ? "" : (row.particulars || row.adjustment_details || row.description || "-"),
+          ].filter(Boolean).join("\n");
           return [
             row.row_type === "closing" ? "" : formatLedgerDate(row.date),
             row.row_type === "closing" ? "" : (row.voucher_type || ""),
             row.row_type === "closing" ? "" : (row.voucher_no || ""),
             row.row_type === "closing" ? "" : saleDetailParts.filter(Boolean).join("\n"),
-            row.row_type === "closing" ? "" : adjustmentText,
+            row.row_type === "closing" ? "" : particularsText,
             row.row_type === "closing" ? "" : formatLedgerDate(row.due_date || row.unloading_date || ""),
             row.row_type === "closing" ? "" : (row.due_days !== undefined ? row.due_days : ""),
             row.row_type === "closing" ? "" : (row.days_overdue !== undefined ? row.days_overdue : ""),
@@ -1913,9 +1917,10 @@ export default function WarehouseTradingPage() {
         ...(ledgerType === "sale-party-ledger"
           ? {
               3: { cellWidth: 70 },
-              4: { cellWidth: 70 },
-              8: { cellWidth: 22 },
+              4: { cellWidth: 62 },
+              8: { cellWidth: 40 },
               9: { cellWidth: 22 },
+              10: { cellWidth: 22 },
             }
           : {
               2: { cellWidth: 38 },
