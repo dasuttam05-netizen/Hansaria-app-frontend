@@ -49,8 +49,10 @@ const emptySaleForm = () => ({
   total_deduction: 0,
   round_off: 0,
   net_amount: 0,
+  unloading_date: "",
+  due_days: "0",
+  due_date: "",
   deduction_details: {
-    unloading_date: "",
     unloading_weight: "",
     moisture: "",
     dunky: "",
@@ -316,6 +318,16 @@ export default function WarehouseManagementPage() {
     }
   };
 
+  const computeDueDate = (unloadingDate, dueDays) => {
+    if (!unloadingDate) return "";
+    const parsed = new Date(`${unloadingDate}T00:00:00Z`);
+    if (Number.isNaN(parsed.getTime())) return "";
+    const days = Number(dueDays || 0);
+    if (!Number.isFinite(days)) return unloadingDate;
+    parsed.setUTCDate(parsed.getUTCDate() + days);
+    return parsed.toISOString().slice(0, 10);
+  };
+
   const handleAddGoodsRow = () => {
     const newRow = {
       sl_no: (saleFormData.goods?.length || 0) + 1,
@@ -341,11 +353,22 @@ export default function WarehouseManagementPage() {
       return;
     }
     try {
+      const unloadingDate = saleFormData.unloading_date || saleFormData.deduction_details.unloading_date || "";
+      const dueDays = Number(saleFormData.due_days || 0) || 0;
+      const dueDate = saleFormData.due_date || computeDueDate(unloadingDate, dueDays);
       const payload = {
         ...saleFormData,
+        unloading_date: unloadingDate,
+        due_days: dueDays,
+        due_date: dueDate,
+        sale_type: "warehouse",
         net_amount_payable: saleFormData.gross_amount - saleFormData.total_deduction + saleFormData.round_off,
+        deduction_details: {
+          ...(saleFormData.deduction_details || {}),
+          unloading_date: unloadingDate,
+        },
       };
-      await axios.post("/api/warehouse-purchase-vouchers", payload);
+      await axios.post("/api/wh-vouchers/sale", payload);
       toast.success("Sale Entry saved successfully!", { theme: "colored" });
       setSaleFormData(emptySaleForm());
     } catch (err) {
@@ -749,7 +772,28 @@ function SaleEntryForm({
             <h3 style={{ fontSize: "16px", fontWeight: 600, color: "#0f172a", marginBottom: "16px" }}>Deduction Details (F2)</h3>
             <div style={{ display: "grid", gap: "12px", marginBottom: "16px" }}>
               <Field label="Unloading Date">
-                <input type="date" value={saleFormData.deduction_details.unloading_date} onChange={(e) => setSaleFormData((prev) => ({ ...prev, deduction_details: { ...prev.deduction_details, unloading_date: e.target.value } }))} style={inp} />
+                <input type="date" value={saleFormData.unloading_date || saleFormData.deduction_details.unloading_date} onChange={(e) => {
+                  const unloadingDate = e.target.value;
+                  setSaleFormData((prev) => ({
+                    ...prev,
+                    unloading_date: unloadingDate,
+                    due_date: computeDueDate(unloadingDate, prev.due_days),
+                    deduction_details: { ...prev.deduction_details, unloading_date: unloadingDate },
+                  }));
+                }} style={inp} />
+              </Field>
+              <Field label="Due Days">
+                <input type="number" min="0" value={saleFormData.due_days} onChange={(e) => {
+                  const dueDays = e.target.value;
+                  setSaleFormData((prev) => ({
+                    ...prev,
+                    due_days: dueDays,
+                    due_date: computeDueDate(prev.unloading_date || prev.deduction_details.unloading_date, dueDays),
+                  }));
+                }} placeholder="e.g. 15" style={inp} />
+              </Field>
+              <Field label="Due Date">
+                <input type="date" value={saleFormData.due_date || computeDueDate(saleFormData.unloading_date || saleFormData.deduction_details.unloading_date, saleFormData.due_days)} readOnly style={{ ...inp, background: "#f8fafc" }} />
               </Field>
               <Field label="Unloading Weight">
                 <input type="number" value={saleFormData.deduction_details.unloading_weight} onChange={(e) => setSaleFormData((prev) => ({ ...prev, deduction_details: { ...prev.deduction_details, unloading_weight: e.target.value } }))} placeholder="Weight" style={inp} />
