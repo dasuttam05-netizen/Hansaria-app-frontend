@@ -30,6 +30,11 @@ const formatItemNumber = (value) => {
   return Number.isInteger(amount) ? String(amount) : amount.toFixed(2);
 };
 
+const formatVoucherNumber = (value) => {
+  const amount = Number(value);
+  return Number.isFinite(amount) ? amount.toFixed(2) : "0.00";
+};
+
 const formatVoucherDate = (value) => {
   if (!value) return "N.A";
   const date = new Date(value);
@@ -58,6 +63,8 @@ const getVoucherFileName = (expense) => {
 };
 
 const getVoucherJpgFileName = (expense) => getVoucherFileName(expense).replace(/\.pdf$/i, ".jpg");
+
+const voucherDetailsCache = new Map();
 
 const numberToWordsUnderCrore = (value) => {
   const ones = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine", "Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"];
@@ -248,9 +255,9 @@ const createExpenseVoucherPdf = (expense) => {
     doc.setFontSize(6.2);
     doc.text(String(Number(line.line_no) || index + 1), col[0] + 6, y + 4.2, { align: "center" });
     doc.text(printableText(line.particular_name || "", ""), col[1] + 3, y + 4.2, { maxWidth: 42 });
-    doc.text(formatItemNumber(line.bags), col[3] - 3, y + 4.2, { align: "right" });
-    doc.text(formatItemNumber(line.rate), col[4] - 3, y + 4.2, { align: "right" });
-    doc.text(formatItemNumber(line.amount), col[5] - 4, y + 4.2, { align: "right" });
+    doc.text(formatVoucherNumber(line.bags), col[3] - 3, y + 4.2, { align: "right" });
+    doc.text(formatVoucherNumber(line.rate), col[4] - 3, y + 4.2, { align: "right" });
+    doc.text(formatVoucherNumber(line.amount), col[5] - 4, y + 4.2, { align: "right" });
   }
 
   rounded(margin, 197, 86, 27, [255, 255, 255]);
@@ -474,9 +481,9 @@ const createExpenseVoucherJpgFile = (expense) => {
     const line = items[index] || {};
     textLine(Number(line.line_no) || index + 1, col[0] + 22, y + 21, 12, "700", text, "center");
     textLine(printableText(line.particular_name || "", ""), col[1] + 12, y + 21, 12, "700", text);
-    textLine(formatItemNumber(line.bags), col[3] - 12, y + 21, 12, "700", text, "right");
-    textLine(formatItemNumber(line.rate), col[4] - 12, y + 21, 12, "700", text, "right");
-    textLine(formatItemNumber(line.amount), col[5] - 14, y + 21, 12, "700", text, "right");
+    textLine(formatVoucherNumber(line.bags), col[3] - 12, y + 21, 12, "700", text, "right");
+    textLine(formatVoucherNumber(line.rate), col[4] - 12, y + 21, 12, "700", text, "right");
+    textLine(formatVoucherNumber(line.amount), col[5] - 14, y + 21, 12, "700", text, "right");
   }
 
   roundRect(28, 832, 380, 96, 9);
@@ -555,6 +562,26 @@ export default function ExpenseReportPage() {
       setExpenses(Array.isArray(res.data) ? res.data : []);
     } catch (error) {
       console.error(error);
+    }
+  };
+
+  const hydrateExpenseForVoucher = async (expense) => {
+    if (!expense?.id) return expense;
+
+    const cacheKey = String(expense.id);
+    const cached = voucherDetailsCache.get(cacheKey);
+    if (cached) {
+      return { ...expense, ...cached };
+    }
+
+    try {
+      const res = await axios.get(`${API_BASE}/expenses/${expense.id}`);
+      const detailedExpense = res.data || expense;
+      voucherDetailsCache.set(cacheKey, detailedExpense);
+      return { ...expense, ...detailedExpense };
+    } catch (error) {
+      console.error("Failed to load voucher details for export", error);
+      return expense;
     }
   };
 
@@ -652,15 +679,28 @@ export default function ExpenseReportPage() {
     URL.revokeObjectURL(url);
   };
 
-  const downloadVoucherPdf = (expense) => {
+  const downloadVoucherPdf = async (expense) => {
     if (!expense) return;
-    createExpenseVoucherPdf(expense).save(getVoucherFileName(expense));
+    try {
+      const detailedExpense = await hydrateExpenseForVoucher(expense);
+      createExpenseVoucherPdf(detailedExpense).save(getVoucherFileName(detailedExpense));
+    } catch (error) {
+      console.error("Failed to export voucher PDF", error);
+      createExpenseVoucherPdf(expense).save(getVoucherFileName(expense));
+    }
   };
 
   const shareVoucherOnWhatsApp = async (expense) => {
     if (!expense) return;
-    const file = await createExpenseVoucherJpgFile(expense);
-    const message = `Expense voucher ${printableText(expense.voucher_no)} - Total amount Rs. ${formatMoney(getVoucherTotalAmount(expense))}`;
+    let detailedExpense = expense;
+    try {
+      detailedExpense = await hydrateExpenseForVoucher(expense);
+    } catch (error) {
+      console.error("Failed to load voucher details for WhatsApp share", error);
+    }
+
+    const file = await createExpenseVoucherJpgFile(detailedExpense);
+    const message = `Expense voucher ${printableText(detailedExpense.voucher_no)} - Date ${formatVoucherDate(detailedExpense.expense_date)} - Total amount Rs. ${formatMoney(getVoucherTotalAmount(detailedExpense))}`;
 
     if (navigator.canShare && navigator.canShare({ files: [file] }) && navigator.share) {
       try {
