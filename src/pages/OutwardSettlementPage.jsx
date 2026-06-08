@@ -41,6 +41,8 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
     freight: "",
     outward_labour_charges: "",
     other_charges: "",
+    claim_amount: "",
+    other_deduction: "",
     charge_bearer: "self",
     narration: "",
   });
@@ -92,6 +94,8 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
         freight: freightValue,
         outward_labour_charges: s.outward_labour_charges ?? "",
         other_charges: s.other_charges ?? "",
+        claim_amount: s.claim_amount ?? "",
+        other_deduction: s.other_deduction ?? "",
         charge_bearer: s.charge_bearer || "self",
         narration: s.narration || "",
       });
@@ -128,6 +132,8 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
   const freight = num(formData.freight);
   const labour = num(formData.outward_labour_charges);
   const other = num(formData.other_charges);
+  const claimAmount = num(formData.claim_amount);
+  const otherDeduction = num(formData.other_deduction);
 
   const adjustmentDetails = meta?.adjustment_details || [];
 
@@ -135,6 +141,15 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
     (sum, item) => sum + num(item.settlement_weight),
     0
   );
+
+  const averageRate =
+    settlementWeight > 0
+      ? adjustmentDetails.reduce(
+          (sum, item) => sum + num(item.settlement_weight) * num(adjustmentRates[item.id] ?? item.company_rate ?? formData.company_rate),
+          0
+        ) / settlementWeight
+      : num(formData.company_rate);
+  const averageAmount = settlementWeight * averageRate;
 
   const shortageQty = Math.max(dispatchQty - unloadingQty, 0);
 
@@ -183,7 +198,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
   }, 0);
 
   // ✅ Profit / Loss
-  const receivableAmount = grossAmount - companyPayable;
+  const receivableAmount = grossAmount - companyPayable - claimAmount - otherDeduction;
 
   return {
     settlementWeight,
@@ -192,6 +207,10 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
     grossAmount,
     companyPayable,
     receivableAmount,
+    averageRate,
+    averageAmount,
+    claimAmount,
+    otherDeduction,
   };
 }, [formData, meta, adjustmentRates]);
 
@@ -226,6 +245,8 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
       await axios.post(`${API_BASE}/outward-settlement/save`, {
         outward_id: outward.id,
         ...formData,
+        claim_amount: formData.claim_amount,
+        other_deduction: formData.other_deduction,
         adjustment_rates: (meta?.adjustment_details || []).map((item) => ({
           adjustment_id: item.id,
           company_rate: adjustmentRates[item.id] ?? item.company_rate ?? formData.company_rate,
@@ -474,6 +495,34 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
 
           <div style={settlementSummaryGridStyle}>
             <div style={summaryMetricStyle}>
+              <div style={{ ...summaryIconStyle, background: "#e0e7ff", color: "#4338ca" }}>A</div>
+              <div>
+                <div style={summaryMetricLabelStyle}>Average Rate</div>
+                <div style={{ ...summaryMetricValueStyle, color: "#4338ca" }}>{calculation.averageRate.toFixed(2)}</div>
+              </div>
+            </div>
+            <div style={summaryMetricStyle}>
+              <div style={{ ...summaryIconStyle, background: "#f5f3ff", color: "#6d28d9" }}>AMT</div>
+              <div>
+                <div style={summaryMetricLabelStyle}>Average Amount</div>
+                <div style={{ ...summaryMetricValueStyle, color: "#6d28d9" }}>{calculation.averageAmount.toFixed(2)}</div>
+              </div>
+            </div>
+            <div style={summaryMetricStyle}>
+              <div style={{ ...summaryIconStyle, background: "#fff7ed", color: "#c2410c" }}>CL</div>
+              <div>
+                <div style={summaryMetricLabelStyle}>Claim Amount</div>
+                <div style={{ ...summaryMetricValueStyle, color: "#c2410c" }}>{calculation.claimAmount.toFixed(2)}</div>
+              </div>
+            </div>
+            <div style={{ ...summaryMetricStyle, borderRight: "none" }}>
+              <div style={{ ...summaryIconStyle, background: "#fef2f2", color: "#be123c" }}>D</div>
+              <div>
+                <div style={summaryMetricLabelStyle}>Other Deduction</div>
+                <div style={{ ...summaryMetricValueStyle, color: "#be123c" }}>{calculation.otherDeduction.toFixed(2)}</div>
+              </div>
+            </div>
+            <div style={summaryMetricStyle}>
               <div style={{ ...summaryIconStyle, background: "#dcfce7", color: "#15803d" }}>₹</div>
               <div>
                 <div style={summaryMetricLabelStyle}>Sale Amount</div>
@@ -713,6 +762,16 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
           <div>
             <label style={label}>Other Charges</label>
             <input name="other_charges" type="number" value={formData.other_charges} onChange={handleChange} style={input} />
+          </div>
+
+          <div>
+            <label style={label}>Claim Amount</label>
+            <input name="claim_amount" type="number" value={formData.claim_amount} onChange={handleChange} style={input} />
+          </div>
+
+          <div>
+            <label style={label}>Other Deduction</label>
+            <input name="other_deduction" type="number" value={formData.other_deduction} onChange={handleChange} style={input} />
           </div>
 
           <div>
