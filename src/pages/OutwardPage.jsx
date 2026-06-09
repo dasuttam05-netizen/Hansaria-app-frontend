@@ -231,18 +231,27 @@ export default function OutwardPage() {
   useEffect(() => {
     const handleKeyDown = (event) => {
       if (event.key !== "F2") return;
-      if (!selectedOutward) return;
-
       event.preventDefault();
       event.stopPropagation();
 
-      setSelectedSettlementOutward(selectedOutward);
-      setSelectedOutward(null);
+      if (selectedOutward) {
+        setSelectedSettlementOutward(selectedOutward);
+        setSelectedOutward(null);
+        return;
+      }
+
+      const targetRow =
+        filteredOutwards.find((row) => String(row.id) === String(hoveredOutwardId)) ||
+        filteredOutwards[0];
+
+      if (targetRow) {
+        setSelectedOutward(targetRow);
+      }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selectedOutward]);
+  }, [selectedOutward, filteredOutwards, hoveredOutwardId]);
 
   // Filter warehouses by selected location
   const warehousesForLocation = formData.location_id
