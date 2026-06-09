@@ -241,30 +241,6 @@ export default function OutwardPage() {
     }
   }, [formData.employee_id, employees, warehouses, editData]);
 
-  useEffect(() => {
-    const handleKeyDown = (event) => {
-      if (event.key !== "F2") return;
-      event.preventDefault();
-      event.stopPropagation();
-
-      if (selectedOutward) {
-        openSettlementModal(selectedOutward);
-        return;
-      }
-
-      const targetRow =
-        filteredOutwards.find((row) => String(row.id) === String(hoveredOutwardId)) ||
-        filteredOutwards[0];
-
-      if (targetRow) {
-        openAdjustmentModal(targetRow);
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selectedOutward, filteredOutwards, hoveredOutwardId]);
-
   // Filter warehouses by selected location
   const warehousesForLocation = formData.location_id
     ? warehouses.filter((w) => sameId(getRecordId(w.location_id), formData.location_id))
@@ -323,6 +299,30 @@ export default function OutwardPage() {
     }
     return outwards;
   }, [outwards, filterView, settledIds]);
+
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.key !== "F2") return;
+      event.preventDefault();
+      event.stopPropagation();
+
+      if (selectedOutward) {
+        openSettlementModal(selectedOutward);
+        return;
+      }
+
+      const targetRow =
+        filteredOutwards.find((row) => String(row.id) === String(hoveredOutwardId)) ||
+        filteredOutwards[0];
+
+      if (targetRow) {
+        openAdjustmentModal(targetRow);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectedOutward, filteredOutwards, hoveredOutwardId]);
 
   useEffect(() => {
     const loadWarehouseStock = async () => {
