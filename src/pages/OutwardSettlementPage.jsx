@@ -33,6 +33,8 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
   const [showLabourExpenseOption, setShowLabourExpenseOption] = useState(false);
   const [adjustmentRates, setAdjustmentRates] = useState({});
   const [whatsappSentAt, setWhatsappSentAt] = useState({});
+  const [claimRows, setClaimRows] = useState([{ id: "claim-1", description: "", amount: "" }]);
+  const [deductionRows, setDeductionRows] = useState([{ id: "deduction-1", description: "", amount: "" }]);
   const [formData, setFormData] = useState({
     dispatch_qty: "",
     unloading_qty: "",
@@ -51,6 +53,37 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
     const n = Number(v);
     return Number.isFinite(n) ? n : 0;
   };
+
+  const createDetailRow = (prefix, index, row = {}) => ({
+    id: row.id || `${prefix}-${Date.now()}-${index}`,
+    description: String(row.description ?? row.particular ?? row.name ?? "").trim(),
+    amount: row.amount === "" || row.amount == null ? "" : String(row.amount),
+  });
+
+  const normalizeDetailRows = (value, fallbackAmount = 0, prefix = "row") => {
+    const parsed = Array.isArray(value)
+      ? value
+      : typeof value === "string" && value
+        ? (() => {
+            try {
+              const json = JSON.parse(value);
+              return Array.isArray(json) ? json : [];
+            } catch (err) {
+              return [];
+            }
+          })()
+        : [];
+
+    if (parsed.length > 0) {
+      return parsed.map((row, index) => createDetailRow(prefix, index, row));
+    }
+
+    const fallback = num(fallbackAmount);
+    return [createDetailRow(prefix, 0, { description: "", amount: fallback > 0 ? fallback : "" })];
+  };
+
+  const sumDetailRows = (rows) =>
+    (Array.isArray(rows) ? rows : []).reduce((sum, row) => sum + num(row?.amount), 0);
 
   const getLoadingTypeLabel = (sourceType) => {
     const normalized = String(sourceType || "").trim().toLowerCase();
@@ -105,6 +138,8 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
           return acc;
         }, {})
       );
+      setClaimRows(normalizeDetailRows(s.claim_details, s.claim_amount, "claim"));
+      setDeductionRows(normalizeDetailRows(s.other_deduction_details, s.other_deduction, "deduction"));
       setWhatsappSentAt(
         (res.data?.adjustment_details || []).reduce((acc, item) => {
           if (item.whatsapp_sent_at) acc[item.id] = item.whatsapp_sent_at;
@@ -132,8 +167,8 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
   const freight = num(formData.freight);
   const labour = num(formData.outward_labour_charges);
   const other = num(formData.other_charges);
-  const claimAmount = num(formData.claim_amount);
-  const otherDeduction = num(formData.other_deduction);
+  const claimAmount = sumDetailRows(claimRows);
+  const otherDeduction = sumDetailRows(deductionRows);
 
   const adjustmentDetails = meta?.adjustment_details || [];
 
@@ -212,10 +247,34 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
     claimAmount,
     otherDeduction,
   };
-}, [formData, meta, adjustmentRates]);
+}, [formData, meta, adjustmentRates, claimRows, deductionRows]);
 
   const handleChange = (e) => {
     setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+  };
+
+  const handleDetailRowChange = (type, rowId, field, value) => {
+    const setRows = type === "claim" ? setClaimRows : setDeductionRows;
+    setRows((prev) =>
+      prev.map((row) => (row.id === rowId ? { ...row, [field]: value } : row))
+    );
+  };
+
+  const addDetailRow = (type) => {
+    const setRows = type === "claim" ? setClaimRows : setDeductionRows;
+    setRows((prev) => [
+      ...prev,
+      {
+        id: `${type}-${Date.now()}-${prev.length}`,
+        description: "",
+        amount: "",
+      },
+    ]);
+  };
+
+  const removeDetailRow = (type, rowId) => {
+    const setRows = type === "claim" ? setClaimRows : setDeductionRows;
+    setRows((prev) => (prev.length > 1 ? prev.filter((row) => row.id !== rowId) : prev));
   };
 
   const handleAdjustmentRateChange = (adjustmentId, value) => {
@@ -245,8 +304,10 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
       await axios.post(`${API_BASE}/outward-settlement/save`, {
         outward_id: outward.id,
         ...formData,
-        claim_amount: formData.claim_amount,
-        other_deduction: formData.other_deduction,
+        claim_amount: calculation.claimAmount,
+        other_deduction: calculation.otherDeduction,
+        claim_details: claimRows,
+        other_deduction_details: deductionRows,
         adjustment_rates: (meta?.adjustment_details || []).map((item) => ({
           adjustment_id: item.id,
           company_rate: adjustmentRates[item.id] ?? item.company_rate ?? formData.company_rate,
@@ -403,7 +464,8 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
 
   return (
     <div style={settlementShellStyle}>
-      <div style={{ ...card, marginBottom: 10 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+      <div style={{ ...card, marginBottom: 10, order: 2 }}>
         <h2
           style={{
             margin: 0,
@@ -554,7 +616,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
         </div>
       </div>
 
-      <div style={{ ...card, marginBottom: 10 }}>
+      <div style={{ ...card, marginBottom: 10, order: 1 }}>
         <h3 style={{ marginTop: 0, marginBottom: 12, color: PALETTE.ink, fontWeight: 800 }}>Adjusted Company Details</h3>
         <div style={{ overflowX: "auto", border: `1px solid ${PALETTE.border}`, borderRadius: 10, background: "#fff" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
@@ -672,7 +734,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
         </div>
       </div>
 
-      <div style={{ ...card, marginBottom: 10 }}>
+      <div style={{ ...card, marginBottom: 10, order: 3 }}>
         <div
           style={{
             display: "grid",
@@ -766,12 +828,140 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
 
           <div>
             <label style={label}>Claim Amount</label>
-            <input name="claim_amount" type="number" value={formData.claim_amount} onChange={handleChange} style={input} />
+            <input
+              name="claim_amount"
+              type="number"
+              value={calculation.claimAmount.toFixed(2)}
+              readOnly
+              style={{ ...input, background: "#f3f8ff", cursor: "not-allowed", color: PALETTE.muted }}
+            />
           </div>
 
           <div>
             <label style={label}>Other Deduction</label>
-            <input name="other_deduction" type="number" value={formData.other_deduction} onChange={handleChange} style={input} />
+            <input
+              name="other_deduction"
+              type="number"
+              value={calculation.otherDeduction.toFixed(2)}
+              readOnly
+              style={{ ...input, background: "#f3f8ff", cursor: "not-allowed", color: PALETTE.muted }}
+            />
+          </div>
+
+          <div style={{ gridColumn: "1 / -1" }}>
+            <div style={detailSectionWrapStyle}>
+              <div style={detailSectionPanelStyle}>
+                <div style={detailSectionHeaderStyle}>
+                  <div>
+                    <div style={detailSectionTitleStyle}>Claim Details</div>
+                    <div style={detailSectionSubtitleStyle}>Add multiple claim rows. Total auto-calculates.</div>
+                  </div>
+                  <button type="button" onClick={() => addDetailRow("claim")} style={detailAddButtonStyle}>
+                    + Add Claim
+                  </button>
+                </div>
+                <div style={detailTableWrapStyle}>
+                  <table style={detailTableStyle}>
+                    <thead>
+                      <tr>
+                        <th style={detailHeadStyle}>Particular</th>
+                        <th style={detailHeadStyle}>Amount</th>
+                        <th style={detailHeadStyle}>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {claimRows.map((row, index) => (
+                        <tr key={row.id}>
+                          <td style={detailCellStyle}>
+                            <input
+                              value={row.description}
+                              onChange={(e) => handleDetailRowChange("claim", row.id, "description", e.target.value)}
+                              placeholder={`Claim ${index + 1}`}
+                              style={detailInputStyle}
+                            />
+                          </td>
+                          <td style={detailCellStyle}>
+                            <input
+                              type="number"
+                              value={row.amount}
+                              onChange={(e) => handleDetailRowChange("claim", row.id, "amount", e.target.value)}
+                              placeholder="0.00"
+                              style={detailInputStyle}
+                            />
+                          </td>
+                          <td style={detailCellStyle}>
+                            <button
+                              type="button"
+                              onClick={() => removeDetailRow("claim", row.id)}
+                              style={detailRemoveButtonStyle}
+                              disabled={claimRows.length === 1}
+                            >
+                              Remove
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              <div style={detailSectionPanelStyle}>
+                <div style={detailSectionHeaderStyle}>
+                  <div>
+                    <div style={detailSectionTitleStyle}>Other Deduction Details</div>
+                    <div style={detailSectionSubtitleStyle}>Add multiple deduction rows. Total auto-calculates.</div>
+                  </div>
+                  <button type="button" onClick={() => addDetailRow("deduction")} style={detailAddButtonStyle}>
+                    + Add Deduction
+                  </button>
+                </div>
+                <div style={detailTableWrapStyle}>
+                  <table style={detailTableStyle}>
+                    <thead>
+                      <tr>
+                        <th style={detailHeadStyle}>Particular</th>
+                        <th style={detailHeadStyle}>Amount</th>
+                        <th style={detailHeadStyle}>Action</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {deductionRows.map((row, index) => (
+                        <tr key={row.id}>
+                          <td style={detailCellStyle}>
+                            <input
+                              value={row.description}
+                              onChange={(e) => handleDetailRowChange("deduction", row.id, "description", e.target.value)}
+                              placeholder={`Deduction ${index + 1}`}
+                              style={detailInputStyle}
+                            />
+                          </td>
+                          <td style={detailCellStyle}>
+                            <input
+                              type="number"
+                              value={row.amount}
+                              onChange={(e) => handleDetailRowChange("deduction", row.id, "amount", e.target.value)}
+                              placeholder="0.00"
+                              style={detailInputStyle}
+                            />
+                          </td>
+                          <td style={detailCellStyle}>
+                            <button
+                              type="button"
+                              onClick={() => removeDetailRow("deduction", row.id)}
+                              style={detailRemoveButtonStyle}
+                              disabled={deductionRows.length === 1}
+                            >
+                              Remove
+                            </button>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+            </div>
           </div>
 
           <div>
@@ -787,6 +977,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
             <input name="narration" type="text" value={formData.narration} onChange={handleChange} style={input} />
           </div>
         </div>
+      </div>
       </div>
 
       <div style={{ display: "flex", justifyContent: "flex-end" }}>
@@ -924,6 +1115,97 @@ const smallNoButtonStyle = {
   background: "#ffffff",
   color: PALETTE.ink,
   padding: "6px 12px",
+  fontWeight: 800,
+  cursor: "pointer",
+};
+
+const detailSectionWrapStyle = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))",
+  gap: 14,
+};
+
+const detailSectionPanelStyle = {
+  border: `1px solid ${PALETTE.border}`,
+  borderRadius: 12,
+  background: "#ffffff",
+  padding: 12,
+};
+
+const detailSectionHeaderStyle = {
+  display: "flex",
+  alignItems: "flex-start",
+  justifyContent: "space-between",
+  gap: 12,
+  marginBottom: 10,
+};
+
+const detailSectionTitleStyle = {
+  color: PALETTE.ink,
+  fontSize: 14,
+  fontWeight: 800,
+};
+
+const detailSectionSubtitleStyle = {
+  color: PALETTE.muted,
+  fontSize: 12,
+  marginTop: 4,
+};
+
+const detailAddButtonStyle = {
+  border: "none",
+  borderRadius: 8,
+  background: PALETTE.header,
+  color: "#ffffff",
+  padding: "8px 12px",
+  fontWeight: 800,
+  cursor: "pointer",
+  whiteSpace: "nowrap",
+};
+
+const detailTableWrapStyle = {
+  overflowX: "auto",
+};
+
+const detailTableStyle = {
+  width: "100%",
+  borderCollapse: "collapse",
+  fontSize: 12.5,
+};
+
+const detailHeadStyle = {
+  border: `1px solid ${PALETTE.borderStrong}`,
+  background: PALETTE.headerSoft,
+  color: PALETTE.ink,
+  textAlign: "left",
+  padding: "8px 10px",
+  fontWeight: 800,
+  whiteSpace: "nowrap",
+};
+
+const detailCellStyle = {
+  border: `1px solid ${PALETTE.border}`,
+  padding: "8px 10px",
+  verticalAlign: "middle",
+};
+
+const detailInputStyle = {
+  width: "100%",
+  border: `1px solid ${PALETTE.borderStrong}`,
+  borderRadius: 8,
+  padding: "8px 10px",
+  fontFamily: BASE_FONT,
+  fontSize: 13,
+  color: PALETTE.ink,
+  background: "#ffffff",
+};
+
+const detailRemoveButtonStyle = {
+  border: "1px solid #fecaca",
+  borderRadius: 8,
+  background: "#fff1f2",
+  color: "#be123c",
+  padding: "8px 10px",
   fontWeight: 800,
   cursor: "pointer",
 };
