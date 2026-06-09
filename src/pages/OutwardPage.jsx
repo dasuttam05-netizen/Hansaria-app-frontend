@@ -4,6 +4,8 @@ import { ToastContainer, toast, Slide } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import AdjustmentPage from "./AdjustmentPage";
 import OutwardSettlementPage from "./OutwardSettlementPage";
+import BuyerAdjustmentListModal from "./BuyerAdjustmentListModal";
+import BuyerAdjustmentModal from "./BuyerAdjustmentModal";
 import { hasPermission, loadSession } from "../utils/auth";
 
 const lbl = {
@@ -128,6 +130,8 @@ export default function OutwardPage() {
   const [settlementRows, setSettlementRows] = useState([]);
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [filterView, setFilterView] = useState("all"); // all | pending | adjusted | settled
+  const [showBuyerAdjustmentList, setShowBuyerAdjustmentList] = useState(false);
+  const [selectedBuyerAdjustmentOutward, setSelectedBuyerAdjustmentOutward] = useState(null);
 
   const [formData, setFormData] = useState({
     date: "",
@@ -189,6 +193,17 @@ export default function OutwardPage() {
 
   const closeAdjustmentModal = () => setSelectedOutward(null);
   const closeSettlementModal = () => setSelectedSettlementOutward(null);
+  const openBuyerAdjustmentList = () => {
+    setShowForm(false);
+    setSelectedOutward(null);
+    setSelectedSettlementOutward(null);
+    setShowBuyerAdjustmentList(true);
+  };
+  const closeBuyerAdjustmentList = () => setShowBuyerAdjustmentList(false);
+  const closeBuyerAdjustmentModal = () => setSelectedBuyerAdjustmentOutward(null);
+  const handleSelectOutwardForBuyerAdjustment = (outward) => {
+    setSelectedBuyerAdjustmentOutward(outward);
+  };
 
   useEffect(() => {
     fetchDropdowns();
@@ -314,9 +329,9 @@ export default function OutwardPage() {
 
       if (targetRow) {
         if (event.key === "F2") {
-          closeAdjustmentModal();
           closeSettlementModal();
-          handleEdit(targetRow);
+          closeFormModal();
+          openBuyerAdjustmentList();
           return;
         }
 
@@ -1685,6 +1700,21 @@ Consignee: ${row.consignee_name}`;
           </div>
         </div>
       )}
+
+      <BuyerAdjustmentListModal
+        isOpen={showBuyerAdjustmentList}
+        onClose={closeBuyerAdjustmentList}
+        onSelectOutward={handleSelectOutwardForBuyerAdjustment}
+        buyerNames={buyerNames}
+      />
+
+      <BuyerAdjustmentModal
+        isOpen={!!selectedBuyerAdjustmentOutward}
+        outward={selectedBuyerAdjustmentOutward}
+        onClose={closeBuyerAdjustmentModal}
+        buyerNames={buyerNames}
+        onSave={fetchOutwards}
+      />
         </>
       )}
     </div>
