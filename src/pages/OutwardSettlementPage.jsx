@@ -38,6 +38,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
   const [formData, setFormData] = useState({
     dispatch_qty: "",
     unloading_qty: "",
+    unloading_date: "",
     sale_rate: "",
     company_rate: "",
     freight: "",
@@ -122,6 +123,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
       setFormData({
         dispatch_qty: s.dispatch_qty ?? "",
         unloading_qty: s.unloading_qty ?? "",
+        unloading_date: s.unloading_date ?? "",
         sale_rate: s.sale_rate ?? "",
         company_rate: s.company_rate ?? "",
         freight: freightValue,
@@ -745,6 +747,17 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
           <div>
             <label style={label}>Dispatch Qty</label>
             <input name="dispatch_qty" type="number" value={formData.dispatch_qty} onChange={handleChange} readOnly style={{ ...input, background: "#f3f8ff", cursor: "not-allowed", color: PALETTE.muted }} />
+          </div>
+
+          <div>
+            <label style={label}>Unloading Date</label>
+            <input
+              name="unloading_date"
+              type="date"
+              value={formData.unloading_date}
+              onChange={handleChange}
+              style={input}
+            />
           </div>
 
           <div>
