@@ -175,6 +175,19 @@ export default function OutwardPage() {
   const hasStockSelection = !isSelfLoading && Boolean(formData.warehouse_id && formData.product_id);
   const hasInsufficientStock = !isSelfLoading && hasStockSelection && requestedQty > 0 && requestedQty > availableStock;
 
+  const openAdjustmentModal = (row) => {
+    setSelectedSettlementOutward(null);
+    setSelectedOutward(row || null);
+  };
+
+  const openSettlementModal = (row) => {
+    setSelectedOutward(null);
+    setSelectedSettlementOutward(row || null);
+  };
+
+  const closeAdjustmentModal = () => setSelectedOutward(null);
+  const closeSettlementModal = () => setSelectedSettlementOutward(null);
+
   useEffect(() => {
     fetchDropdowns();
     fetchOutwards();
@@ -235,8 +248,7 @@ export default function OutwardPage() {
       event.stopPropagation();
 
       if (selectedOutward) {
-        setSelectedSettlementOutward(selectedOutward);
-        setSelectedOutward(null);
+        openSettlementModal(selectedOutward);
         return;
       }
 
@@ -245,7 +257,7 @@ export default function OutwardPage() {
         filteredOutwards[0];
 
       if (targetRow) {
-        setSelectedOutward(targetRow);
+        openAdjustmentModal(targetRow);
       }
     };
 
@@ -1339,7 +1351,7 @@ Consignee: ${row.consignee_name}`;
                         {canAdjust ? (
                           <button
                             type="button"
-                            onClick={() => setSelectedOutward(row)}
+                            onClick={() => openAdjustmentModal(row)}
                             title="Adjust"
                             aria-label="Adjust"
                             style={{ ...actionBtnStyle, background: "#f59e0b", color: "#fff", boxShadow: "0 10px 18px rgba(245, 158, 11, 0.28)" }}
@@ -1350,7 +1362,7 @@ Consignee: ${row.consignee_name}`;
                         {canEdit ? (
                           <button
                             type="button"
-                            onClick={() => setSelectedSettlementOutward(row)}
+                            onClick={() => openSettlementModal(row)}
                             title="Settlement"
                             aria-label="Settlement"
                             style={{ ...actionBtnStyle, background: "#22c55e", color: "#fff", boxShadow: "0 10px 18px rgba(34, 197, 94, 0.28)" }}
@@ -1439,7 +1451,7 @@ Consignee: ${row.consignee_name}`;
                     {canAdjust ? (
                       <button
                         type="button"
-                        onClick={() => setSelectedOutward(row)}
+                        onClick={() => openAdjustmentModal(row)}
                         style={{ background: "#f59e0b", color: "#fff", border: "none", padding: "8px 12px", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 700 }}
                       >
                         Adjust
@@ -1448,7 +1460,7 @@ Consignee: ${row.consignee_name}`;
                     {canEdit ? (
                       <button
                         type="button"
-                        onClick={() => setSelectedSettlementOutward(row)}
+                        onClick={() => openSettlementModal(row)}
                         style={{ background: "#22c55e", color: "#fff", border: "none", padding: "8px 12px", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 700 }}
                       >
                         Settle
@@ -1526,7 +1538,7 @@ Consignee: ${row.consignee_name}`;
                     </div>
                     <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                       <div style={{ fontSize: 13 }}>{formatWeight(r.weight)}</div>
-                      <button type="button" onClick={() => setSelectedOutward(r)} style={{ ...btnStyle, background: "#f59e0b", color: "#fff" }}>View Adjustment</button>
+                      <button type="button" onClick={() => openAdjustmentModal(r)} style={{ ...btnStyle, background: "#f59e0b", color: "#fff" }}>View Adjustment</button>
                     </div>
                   </div>
                 ))}
@@ -1546,7 +1558,7 @@ Consignee: ${row.consignee_name}`;
                     </div>
                     <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                       <div style={{ fontSize: 13 }}>{formatWeight(r.weight)}</div>
-                      <button type="button" onClick={() => setSelectedOutward(r)} style={{ ...btnStyle, background: "#18b6d9", color: "#fff" }}>Adjust</button>
+                      <button type="button" onClick={() => openAdjustmentModal(r)} style={{ ...btnStyle, background: "#18b6d9", color: "#fff" }}>Adjust</button>
                     </div>
                   </div>
                 ))}
@@ -1583,7 +1595,7 @@ Consignee: ${row.consignee_name}`;
             }}
           >
             <button
-              onClick={() => setSelectedOutward(null)}
+            onClick={closeAdjustmentModal}
               style={{
                 position: "absolute",
                 top: "12px",
@@ -1601,7 +1613,7 @@ Consignee: ${row.consignee_name}`;
               X
             </button>
 
-            <AdjustmentPage outward={selectedOutward} />
+            <AdjustmentPage key={`adjust-${selectedOutward.id || selectedOutward.voucher_no || "row"}`} outward={selectedOutward} />
           </div>
         </div>
       )}
@@ -1633,7 +1645,7 @@ Consignee: ${row.consignee_name}`;
             }}
           >
             <button
-              onClick={() => setSelectedSettlementOutward(null)}
+            onClick={closeSettlementModal}
               style={{
                 position: "absolute",
                 top: "12px",
@@ -1652,6 +1664,7 @@ Consignee: ${row.consignee_name}`;
             </button>
 
             <OutwardSettlementPage
+              key={`settle-${selectedSettlementOutward.id || selectedSettlementOutward.voucher_no || "row"}`}
               outward={selectedSettlementOutward}
               onSaved={fetchOutwards}
             />
