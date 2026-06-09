@@ -21,9 +21,25 @@ export default function BuyerAdjustmentListModal({ isOpen, onClose, onSelectOutw
       const res = await axios.get(`${API_BASE}/buyer-adjustment/without-unloading`);
       setEntries(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
-      console.error(err);
-      toast.error("Failed to fetch entries", { theme: "colored" });
-      setEntries([]);
+      console.error("Error fetching buyer adjustment entries:", err);
+      
+      // Fallback: fetch all outward entries if the endpoint doesn't exist yet
+      if (err.response?.status === 500 || err.response?.status === 404) {
+        try {
+          const fallbackRes = await axios.get(`${API_BASE}/outward`);
+          const allOutwards = Array.isArray(fallbackRes.data) ? fallbackRes.data : [];
+          // Filter for pending/partial status
+          setEntries(allOutwards.filter(o => !o.status || o.status === 'Pending' || o.status === 'Partial'));
+          toast.warning("Using all outward entries (buyer adjustment endpoint not ready)", { theme: "colored" });
+        } catch (fallbackErr) {
+          console.error("Fallback error:", fallbackErr);
+          toast.error("Failed to fetch entries", { theme: "colored" });
+          setEntries([]);
+        }
+      } else {
+        toast.error("Failed to fetch entries: " + (err.message || "Unknown error"), { theme: "colored" });
+        setEntries([]);
+      }
     } finally {
       setLoading(false);
     }
