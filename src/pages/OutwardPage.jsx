@@ -228,6 +228,22 @@ export default function OutwardPage() {
     }
   }, [formData.employee_id, employees, warehouses, editData]);
 
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.key !== "F2") return;
+      if (!selectedOutward) return;
+
+      event.preventDefault();
+      event.stopPropagation();
+
+      setSelectedSettlementOutward(selectedOutward);
+      setSelectedOutward(null);
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [selectedOutward]);
+
   // Filter warehouses by selected location
   const warehousesForLocation = formData.location_id
     ? warehouses.filter((w) => sameId(getRecordId(w.location_id), formData.location_id))
