@@ -305,8 +305,111 @@ export default function AdjustmentPage({ outward }) {
           Product: {outward?.product_name} | {outward?.warehouse_name ? `Warehouse: ${outward.warehouse_name}` : `Location: ${outward?.location_name || "-"}`}
         </p>
         <p style={{ margin: "6px 0 0", color: "#166534", fontWeight: 700 }}>
+          Buyer: {outward?.buyer_name || "-"} | Rate: {outward?.rate != null ? Number(outward.rate).toFixed(2) : "-"}
+        </p>
+        <p style={{ margin: "6px 0 0", color: "#166534", fontWeight: 700 }}>
           Outward Date: {formatDisplayDate(outward?.date)} | Outward Qty: <span style={strongText}>{num(outwardQty)}</span> | Already Adjusted: <span style={strongText}>{num(alreadyAdjusted)}</span> | Remaining: <span style={strongText}>{num(currentRemaining)}</span>
         </p>
+      </div>
+
+      <div style={cardStyle}>
+        <h3 style={sectionTitle}>Previous Adjustment Log</h3>
+        <table style={tableStyle}>
+          <thead>
+            <tr>
+              <th style={thStyle}>Voucher</th>
+              <th style={thStyle}>Lorry No</th>
+              <th style={thStyle}>Company</th>
+              <th style={thStyle}>Qty</th>
+              <th style={thStyle}>Action</th>
+            </tr>
+          </thead>
+          <tbody>
+            {adjustmentLog.length > 0 ? (
+              adjustmentLog.map((row) => (
+                <tr key={row.id}>
+                  <td style={tdStyle}>{row.inward_voucher}</td>
+                  <td style={tdStyle}>{row.lorry_no}</td>
+                  <td style={tdStyle}>{row.company_name} {row.source_type === "palti_lorry" ? "(Palti)" : ""}</td>
+                  <td style={tdStyle}>
+                    {editingLogId === row.id ? (
+                      <input
+                        type="number"
+                        value={editingQty}
+                        onChange={(e) => setEditingQty(e.target.value)}
+                        style={{ ...inputStyle, width: 100 }}
+                      />
+                    ) : (
+                      num(row.qty)
+                    )}
+                  </td>
+                  <td style={tdStyle}>
+                    {editingLogId === row.id ? (
+                      <>
+                        <button
+                          onClick={handleUpdateLog}
+                          style={{ ...buttonStyle, background: "#2563eb", marginRight: 8 }}
+                        >
+                          Update
+                        </button>
+                        <button
+                          onClick={() => {
+                            setEditingLogId(null);
+                            setEditingQty("");
+                          }}
+                          style={{ ...buttonStyle, background: "#64748b" }}
+                        >
+                          Cancel
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => handleEditLog(row)}
+                          style={{ ...buttonStyle, background: "#f59e0b", marginRight: 8 }}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleDeleteLog(row.id)}
+                          style={{ ...buttonStyle, background: "#dc2626" }}
+                        >
+                          Delete
+                        </button>
+                      </>
+                    )}
+                  </td>
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td style={tdStyle} colSpan="5">No previous adjustment</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      <div style={cardStyle}>
+        <h3 style={sectionTitle}>Settlement Summary</h3>
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+          <div style={{ flex: "1 1 220px", background: "#ecfeff", border: "1px solid #67e8f9", borderRadius: 10, padding: 12 }}>
+            <div style={{ fontWeight: 700, marginBottom: 8 }}>Settlement Items</div>
+            <div>{adjustments.length} item{adjustments.length === 1 ? "" : "s"}</div>
+          </div>
+          <div style={{ flex: "1 1 220px", background: "#f0fdf4", border: "1px solid #86efac", borderRadius: 10, padding: 12 }}>
+            <div style={{ fontWeight: 700, marginBottom: 8 }}>Total Settlement Qty</div>
+            <div>{num(totalDraftAdjusted)}</div>
+          </div>
+          <div style={{ flex: "1 1 220px", background: "#fef3c7", border: "1px solid #fde68a", borderRadius: 10, padding: 12 }}>
+            <div style={{ fontWeight: 700, marginBottom: 8 }}>Remaining To Adjust</div>
+            <div>{num(remainingQty)}</div>
+          </div>
+          <div style={{ flex: "1 1 220px", background: "#e0f2fe", border: "1px solid #7dd3fc", borderRadius: 10, padding: 12 }}>
+            <div style={{ fontWeight: 700, marginBottom: 8 }}>Outward Remaining</div>
+            <div>{num(currentRemaining)}</div>
+          </div>
+        </div>
       </div>
 
       <div style={cardStyle}>
@@ -340,28 +443,6 @@ export default function AdjustmentPage({ outward }) {
         </div>
         <div style={{ marginTop: 8, ...mutedText }}>
           Final save condition: Draft Adjustment List must be exactly <span style={strongText}>{num(adjustmentTargetQty)}</span>
-        </div>
-      </div>
-
-      <div style={cardStyle}>
-        <h3 style={sectionTitle}>Settlement Summary</h3>
-        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-          <div style={{ flex: "1 1 220px", background: "#ecfeff", border: "1px solid #67e8f9", borderRadius: 10, padding: 12 }}>
-            <div style={{ fontWeight: 700, marginBottom: 8 }}>Settlement Items</div>
-            <div>{adjustments.length} item{adjustments.length === 1 ? "" : "s"}</div>
-          </div>
-          <div style={{ flex: "1 1 220px", background: "#f0fdf4", border: "1px solid #86efac", borderRadius: 10, padding: 12 }}>
-            <div style={{ fontWeight: 700, marginBottom: 8 }}>Total Settlement Qty</div>
-            <div>{num(totalDraftAdjusted)}</div>
-          </div>
-          <div style={{ flex: "1 1 220px", background: "#fef3c7", border: "1px solid #fde68a", borderRadius: 10, padding: 12 }}>
-            <div style={{ fontWeight: 700, marginBottom: 8 }}>Remaining To Adjust</div>
-            <div>{num(remainingQty)}</div>
-          </div>
-          <div style={{ flex: "1 1 220px", background: "#e0f2fe", border: "1px solid #7dd3fc", borderRadius: 10, padding: 12 }}>
-            <div style={{ fontWeight: 700, marginBottom: 8 }}>Outward Remaining</div>
-            <div>{num(currentRemaining)}</div>
-          </div>
         </div>
       </div>
 
