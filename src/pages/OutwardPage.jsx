@@ -177,11 +177,13 @@ export default function OutwardPage() {
 
   const openAdjustmentModal = (row) => {
     setSelectedSettlementOutward(null);
+    setShowForm(false);
     setSelectedOutward(row || null);
   };
 
   const openSettlementModal = (row) => {
     setSelectedOutward(null);
+    setShowForm(false);
     setSelectedSettlementOutward(row || null);
   };
 
@@ -302,27 +304,39 @@ export default function OutwardPage() {
 
   useEffect(() => {
     const handleKeyDown = (event) => {
-      if (event.key !== "F2") return;
+      if (event.key !== "F2" && event.key !== "F5") return;
       event.preventDefault();
       event.stopPropagation();
-
-      if (selectedOutward) {
-        openSettlementModal(selectedOutward);
-        return;
-      }
 
       const targetRow =
         filteredOutwards.find((row) => String(row.id) === String(hoveredOutwardId)) ||
         filteredOutwards[0];
 
       if (targetRow) {
-        openAdjustmentModal(targetRow);
+        if (event.key === "F2") {
+          closeAdjustmentModal();
+          closeSettlementModal();
+          handleEdit(targetRow);
+          return;
+        }
+
+        if (event.key === "F5") {
+          closeAdjustmentModal();
+          closeFormModal();
+          openSettlementModal(targetRow);
+        }
+        return;
+      }
+
+      if (event.key === "F5" && showForm && editData) {
+        closeAdjustmentModal();
+        openSettlementModal(editData);
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [selectedOutward, filteredOutwards, hoveredOutwardId]);
+  }, [selectedOutward, selectedSettlementOutward, filteredOutwards, hoveredOutwardId, showForm, editData]);
 
   useEffect(() => {
     const loadWarehouseStock = async () => {
