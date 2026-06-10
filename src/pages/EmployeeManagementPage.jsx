@@ -332,6 +332,31 @@ const collectEmployeeWarehouseIds = (employee, warehouses) => {
   return Array.from(new Set([...fromEmployee, ...fromWarehouseSide]));
 };
 
+const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
+const isRetryableRequestError = (err) => {
+  const status = err?.response?.status;
+  return !status || [502, 503, 504].includes(status);
+};
+
+const requestWithRetry = async (requestFn, retries = 2, delayMs = 400) => {
+  let lastError = null;
+
+  for (let attempt = 0; attempt <= retries; attempt += 1) {
+    try {
+      return await requestFn();
+    } catch (err) {
+      lastError = err;
+      if (attempt === retries || !isRetryableRequestError(err)) {
+        throw err;
+      }
+      await wait(delayMs * (attempt + 1));
+    }
+  }
+
+  throw lastError;
+};
+
 export default function EmployeeManagementPage() {
   const { user: currentUser } = loadSession();
   const isAdminUser = hasPermission(currentUser, "all");
@@ -360,42 +385,68 @@ export default function EmployeeManagementPage() {
   const [showPassword, setShowPassword] = useState(false);
 
   const fetchEmployees = async () => {
-  const res = await axios.get("/api/employees");
+    const res = await requestWithRetry(() => axios.get("/api/employees"));
 
-  setEmployees(
-    normalizeArray(res.data || [])
-  );
-};
+    setEmployees(
+      normalizeArray(res.data || [])
+    );
+  };
 
   const fetchRoles = async () => {
-  const res = await axios.get("/api/roles");
+    const res = await requestWithRetry(() => axios.get("/api/roles"));
 
-  setRoles(
-    normalizeArray(res.data || [])
-  );
-};
+    setRoles(
+      normalizeArray(res.data || [])
+    );
+  };
 
   const fetchMeta = async () => {
-  const [locationRes, warehouseRes] =
-    await Promise.all([
-      axios.get("/api/locations"),
-      axios.get("/api/warehouses")
-    ]);
+    const [locationRes, warehouseRes] =
+      await requestWithRetry(() =>
+        Promise.all([
+          axios.get("/api/locations"),
+          axios.get("/api/warehouses")
+        ])
+      );
 
-  setLocations(
-    normalizeArray(locationRes.data || [])
-  );
+    setLocations(
+      normalizeArray(locationRes.data || [])
+    );
 
-  setWarehouses(
-    normalizeArray(warehouseRes.data || [])
-  );
-};
+    setWarehouses(
+      normalizeArray(warehouseRes.data || [])
+    );
+  };
 
   useEffect(() => {
-    Promise.all([fetchEmployees(), fetchRoles(), fetchMeta()]).catch((err) => {
-      console.error(err);
-      alert("Failed to load users and security data");
+    let cancelled = false;
+
+    const loadData = async () => {
+      const results = await Promise.allSettled([
+        fetchEmployees(),
+        fetchRoles(),
+        fetchMeta(),
+      ]);
+
+      if (cancelled) return;
+
+      const failed = results.filter((result) => result.status === "rejected");
+      if (failed.length) {
+        console.error("Employee management data load failed:", failed.map((item) => item.reason));
+        alert("Some master data could not be loaded. Please retry in a moment.");
+      }
+    };
+
+    loadData().catch((err) => {
+      if (!cancelled) {
+        console.error(err);
+        alert("Failed to load users and security data");
+      }
     });
+
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
   const warehouseOptions = useMemo(
