@@ -5,6 +5,7 @@ import { toast } from "react-toastify";
 export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [], onSave }) {
   const [unloadingDate, setUnloadingDate] = useState("");
   const [buyerAdjustments, setBuyerAdjustments] = useState([]);
+  const [removedAdjustmentIds, setRemovedAdjustmentIds] = useState([]);
   const [newAdjustment, setNewAdjustment] = useState({
     buyer_id: "",
     buyer_name: "",
@@ -25,6 +26,36 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
     if (outward?.date) {
       setUnloadingDate(new Date(outward.date).toISOString().slice(0, 10));
     }
+
+    const loadExistingAdjustments = async () => {
+      if (!outward?.id) {
+        setBuyerAdjustments([]);
+        setRemovedAdjustmentIds([]);
+        return;
+      }
+
+      try {
+        const res = await axios.get(`${API_BASE}/buyer-adjustment/${outward.id}`);
+        const items = Array.isArray(res.data) ? res.data : [];
+        setBuyerAdjustments(
+          items.map((item) => ({
+            ...item,
+            rate: item.rate || 0,
+            qty: item.qty || 0,
+            claim: item.claim || 0,
+            other_deduction: item.other_deduction || 0,
+            shortage: item.shortage || 0,
+          }))
+        );
+        setRemovedAdjustmentIds([]);
+      } catch (err) {
+        console.error("Error loading existing buyer adjustments:", err);
+        setBuyerAdjustments([]);
+        setRemovedAdjustmentIds([]);
+      }
+    };
+
+    loadExistingAdjustments();
   }, [outward]);
 
   const totalAdjustedQty = useMemo(() => {
@@ -33,6 +64,25 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
 
   const remainingQty = outwardQty - totalAdjustedQty;
   const isQtyMatched = Math.abs(totalAdjustedQty - outwardQty) < 0.0001;
+
+  const totalClaim = useMemo(
+    () => buyerAdjustments.reduce((sum, item) => sum + (Number(item.claim) || 0), 0),
+    [buyerAdjustments]
+  );
+
+  const totalOtherDeduction = useMemo(
+    () => buyerAdjustments.reduce((sum, item) => sum + (Number(item.other_deduction) || 0), 0),
+    [buyerAdjustments]
+  );
+
+  const averageRate = useMemo(() => {
+    if (totalAdjustedQty <= 0) return 0;
+    const weightedSum = buyerAdjustments.reduce(
+      (sum, item) => sum + (Number(item.rate) || 0) * (Number(item.qty) || 0),
+      0
+    );
+    return weightedSum / totalAdjustedQty;
+  }, [buyerAdjustments, totalAdjustedQty]);
 
   const handleAddAdjustment = () => {
     if (!newAdjustment.buyer_id && !newAdjustment.buyer_name) {
@@ -51,7 +101,6 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
     }
 
     if (editingId !== null) {
-      // Update existing
       setBuyerAdjustments((prev) =>
         prev.map((item) =>
           item.id === editingId
@@ -71,11 +120,10 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
       );
       setEditingId(null);
     } else {
-      // Add new
       setBuyerAdjustments((prev) => [
         ...prev,
         {
-          id: Date.now(),
+          id: `temp-${Date.now()}`,
           buyer_id: newAdjustment.buyer_id,
           buyer_name: newAdjustment.buyer_name,
           weight: newAdjustment.weight,
@@ -114,6 +162,9 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
 
   const handleDeleteAdjustment = (id) => {
     setBuyerAdjustments((prev) => prev.filter((item) => item.id !== id));
+    if (typeof id === "number") {
+      setRemovedAdjustmentIds((prev) => [...prev, id]);
+    }
     if (editingId === id) {
       resetNewAdjustment();
       setEditingId(null);
@@ -142,9 +193,14 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
 
     setLoading(true);
     try {
-      // Save all adjustments
+      // Delete removed adjustments first
+      for (const deleteId of removedAdjustmentIds) {
+        await axios.delete(`${API_BASE}/buyer-adjustment/${deleteId}`);
+      }
+
+      // Save or update current rows
       for (const adj of buyerAdjustments) {
-        await axios.post(`${API_BASE}/buyer-adjustment`, {
+        const payload = {
           outward_id: outward.id,
           buyer_id: adj.buyer_id || null,
           unloading_date: unloadingDate,
@@ -155,7 +211,13 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
           other_deduction: Number(adj.other_deduction) || 0,
           shortage: Number(adj.shortage) || 0,
           status: "Pending",
-        });
+        };
+
+        if (typeof adj.id === "number") {
+          await axios.put(`${API_BASE}/buyer-adjustment/${adj.id}`, payload);
+        } else {
+          await axios.post(`${API_BASE}/buyer-adjustment`, payload);
+        }
       }
 
       toast.success("Buyer adjustments saved successfully", { theme: "colored" });
@@ -252,6 +314,16 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
               onChange={(e) => setUnloadingDate(e.target.value)}
               style={inputStyle}
             />
+          </div>
+          <div>
+            <span style={labelStyle}>Warehouse (Unloading)</span>
+            <div style={{ fontSize: 16, fontWeight: 700, color: "#14532d" }}>{outward?.warehouse_name || outward?.warehouse || "—"}</div>
+          </div>
+          <div>
+            <span style={labelStyle}>Product / Buyer</span>
+            <div style={{ fontSize: 16, fontWeight: 700, color: "#14532d" }}>
+              {outward?.product_name || outward?.product || "—"} / {outward?.buyer_name || outward?.buyer || "—"}
+            </div>
           </div>
         </div>
       </div>
@@ -479,9 +551,9 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
                   <td style={{ ...tdStyle, fontWeight: 700, color: isQtyMatched ? "#0f766e" : "#dc2626" }}>
                     {totalAdjustedQty.toFixed(2)}
                   </td>
-                  <td style={tdStyle}></td>
-                  <td style={tdStyle}></td>
-                  <td style={tdStyle}></td>
+                  <td style={{ ...tdStyle, fontWeight: 700 }}>{averageRate.toFixed(2)}</td>
+                  <td style={{ ...tdStyle, fontWeight: 700 }}>{totalClaim.toFixed(2)}</td>
+                  <td style={{ ...tdStyle, fontWeight: 700 }}>{totalOtherDeduction.toFixed(2)}</td>
                   <td style={tdStyle}></td>
                   <td style={tdStyle}></td>
                 </tr>
