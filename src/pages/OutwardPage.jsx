@@ -5,6 +5,7 @@ import "react-toastify/dist/ReactToastify.css";
 import AdjustmentPage from "./AdjustmentPage";
 import OutwardSettlementPage from "./OutwardSettlementPage";
 import BuyerAdjustmentListModal from "./BuyerAdjustmentListModal";
+import BuyerAdjustmentSavedListModal from "./BuyerAdjustmentSavedListModal";
 import BuyerAdjustmentModal from "./BuyerAdjustmentModal";
 import { hasPermission, loadSession } from "../utils/auth";
 
@@ -131,6 +132,7 @@ export default function OutwardPage() {
   const [summaryLoading, setSummaryLoading] = useState(false);
   const [filterView, setFilterView] = useState("all"); // all | pending | adjusted | settled
   const [showBuyerAdjustmentList, setShowBuyerAdjustmentList] = useState(false);
+  const [showBuyerAdjustmentSavedList, setShowBuyerAdjustmentSavedList] = useState(false);
   const [selectedBuyerAdjustmentOutward, setSelectedBuyerAdjustmentOutward] = useState(null);
 
   const [formData, setFormData] = useState({
@@ -200,6 +202,15 @@ export default function OutwardPage() {
     setShowBuyerAdjustmentList(true);
   };
   const closeBuyerAdjustmentList = () => setShowBuyerAdjustmentList(false);
+
+  const openBuyerAdjustmentSavedList = () => {
+    setShowForm(false);
+    setSelectedOutward(null);
+    setSelectedSettlementOutward(null);
+    setShowBuyerAdjustmentSavedList(true);
+  };
+  const closeBuyerAdjustmentSavedList = () => setShowBuyerAdjustmentSavedList(false);
+
   const closeBuyerAdjustmentModal = () => setSelectedBuyerAdjustmentOutward(null);
   const handleSelectOutwardForBuyerAdjustment = (outward) => {
     setSelectedBuyerAdjustmentOutward(outward);
@@ -319,7 +330,7 @@ export default function OutwardPage() {
 
   useEffect(() => {
     const handleKeyDown = (event) => {
-      if (event.key !== "F2" && event.key !== "F5") return;
+      if (event.key !== "F2" && event.key !== "F5" && event.key !== "F6") return;
       event.preventDefault();
       event.stopPropagation();
 
@@ -327,25 +338,32 @@ export default function OutwardPage() {
         filteredOutwards.find((row) => String(row.id) === String(hoveredOutwardId)) ||
         filteredOutwards[0];
 
-      if (targetRow) {
-        if (event.key === "F2") {
-          closeSettlementModal();
-          closeFormModal();
-          openBuyerAdjustmentList();
-          return;
-        }
-
-        if (event.key === "F5") {
-          closeAdjustmentModal();
-          closeFormModal();
-          openSettlementModal(targetRow);
-        }
+      if (event.key === "F2") {
+        closeSettlementModal();
+        closeFormModal();
+        openBuyerAdjustmentList();
         return;
       }
 
-      if (event.key === "F5" && showForm && editData) {
-        closeAdjustmentModal();
-        openSettlementModal(editData);
+      if (event.key === "F6") {
+        closeSettlementModal();
+        closeFormModal();
+        openBuyerAdjustmentSavedList();
+        return;
+      }
+
+      if (event.key === "F5") {
+        if (targetRow) {
+          closeAdjustmentModal();
+          closeFormModal();
+          openSettlementModal(targetRow);
+          return;
+        }
+
+        if (showForm && editData) {
+          closeAdjustmentModal();
+          openSettlementModal(editData);
+        }
       }
     };
 
@@ -1706,6 +1724,12 @@ Consignee: ${row.consignee_name}`;
         onClose={closeBuyerAdjustmentList}
         onSelectOutward={handleSelectOutwardForBuyerAdjustment}
         buyerNames={buyerNames}
+      />
+
+      <BuyerAdjustmentSavedListModal
+        isOpen={showBuyerAdjustmentSavedList}
+        onClose={closeBuyerAdjustmentSavedList}
+        onSelectOutward={handleSelectOutwardForBuyerAdjustment}
       />
 
       <BuyerAdjustmentModal
