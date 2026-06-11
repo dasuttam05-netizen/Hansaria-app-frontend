@@ -160,10 +160,13 @@ export default function BuyerAdjustmentSavedListModal({ isOpen, onClose, onSelec
                 <th style={thStyle}>Outward ID</th>
                 <th style={thStyle}>Voucher No</th>
                 <th style={thStyle}>Date</th>
-                <th style={thStyle}>Buyer</th>
                 <th style={thStyle}>Product</th>
+                <th style={thStyle}>Buyer</th>
                 <th style={thStyle}>Qty</th>
-                <th style={thStyle}>Avg Rate</th>
+                <th style={thStyle}>Shortage</th>
+                <th style={thStyle}>Rate</th>
+                <th style={thStyle}>Claim</th>
+                <th style={thStyle}>Deduction</th>
                 <th style={thStyle}>Warehouse</th>
                 <th style={thStyle}>Action</th>
               </tr>
@@ -171,7 +174,7 @@ export default function BuyerAdjustmentSavedListModal({ isOpen, onClose, onSelec
             <tbody>
               {filteredEntries.map((entry) => (
                 <tr
-                  key={entry.outward_id}
+                  key={`${entry.outward_id}-${entry.adjustment_id}`}
                   style={rowStyle}
                   onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = "#f0f9ff")}
                   onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = "transparent")}
@@ -179,10 +182,13 @@ export default function BuyerAdjustmentSavedListModal({ isOpen, onClose, onSelec
                   <td style={tdStyle}>{entry.outward_id}</td>
                   <td style={tdStyle}>{entry.voucher_no || "—"}</td>
                   <td style={tdStyle}>{entry.date ? new Date(entry.date).toLocaleDateString() : "—"}</td>
-                  <td style={tdStyle}>{entry.buyer_name || "—"}</td>
                   <td style={tdStyle}>{entry.product_name || "—"}</td>
-                  <td style={tdStyle}>{Number(entry.total_qty || 0).toFixed(2)}</td>
-                  <td style={tdStyle}>{Number(entry.avg_rate || 0).toFixed(2)}</td>
+                  <td style={tdStyle}>{entry.buyer_name || "—"}</td>
+                  <td style={tdStyle}>{Number(entry.qty || 0).toFixed(2)}</td>
+                  <td style={tdStyle}>{Number(entry.shortage || 0).toFixed(2)}</td>
+                  <td style={tdStyle}>{Number(entry.rate || 0).toFixed(2)}</td>
+                  <td style={tdStyle}>{Number(entry.claim || 0).toFixed(2)}</td>
+                  <td style={tdStyle}>{Number(entry.other_deduction || 0).toFixed(2)}</td>
                   <td style={tdStyle}>{entry.warehouse_name || "—"}</td>
                   <td style={tdStyle}>
                     <button
