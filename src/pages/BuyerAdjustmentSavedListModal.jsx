@@ -5,6 +5,7 @@ import { toast } from "react-toastify";
 export default function BuyerAdjustmentSavedListModal({ isOpen, onClose, onSelectOutward }) {
   const [entries, setEntries] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const API_BASE = "/api";
 
@@ -16,12 +17,15 @@ export default function BuyerAdjustmentSavedListModal({ isOpen, onClose, onSelec
 
   const fetchEntriesWithAdjustments = async () => {
     setLoading(true);
+    setError("");
     try {
       const res = await axios.get(`${API_BASE}/buyer-adjustment/with-adjustments`);
       setEntries(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
       console.error("Error fetching adjusted entries:", err);
-      toast.error("Failed to load adjusted entries", { theme: "colored" });
+      const message = err?.response?.data?.error || err?.message || "Failed to load adjusted entries";
+      setError(message);
+      toast.error(message, { theme: "colored" });
       setEntries([]);
     } finally {
       setLoading(false);
@@ -148,6 +152,10 @@ export default function BuyerAdjustmentSavedListModal({ isOpen, onClose, onSelec
         {loading ? (
           <div style={{ textAlign: "center", padding: "20px", color: "#666" }}>
             Loading adjusted entries...
+          </div>
+        ) : error ? (
+          <div style={{ textAlign: "center", padding: "20px", color: "#dc2626" }}>
+            {error}
           </div>
         ) : filteredEntries.length === 0 ? (
           <div style={{ textAlign: "center", padding: "20px", color: "#666" }}>
