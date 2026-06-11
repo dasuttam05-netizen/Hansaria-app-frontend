@@ -176,6 +176,7 @@ export default function BuyerAdjustmentListModal({ isOpen, onClose, onSelectOutw
                 <th style={thStyle}>Outward ID</th>
                 <th style={thStyle}>Voucher No</th>
                 <th style={thStyle}>Date</th>
+                <th style={thStyle}>Lorry No</th>
                 <th style={thStyle}>Buyer</th>
                 <th style={thStyle}>Product</th>
                 <th style={thStyle}>Qty</th>
@@ -195,6 +196,7 @@ export default function BuyerAdjustmentListModal({ isOpen, onClose, onSelectOutw
                   <td style={tdStyle}>{entry.id}</td>
                   <td style={tdStyle}>{entry.voucher_no || "—"}</td>
                   <td style={tdStyle}>{entry.date ? new Date(entry.date).toLocaleDateString() : "—"}</td>
+                  <td style={tdStyle}>{entry.lorry_no || entry.vehicle_no || "—"}</td>
                   <td style={tdStyle}>{entry.buyer_name || "—"}</td>
                   <td style={tdStyle}>{entry.product_name || "—"}</td>
                   <td style={tdStyle}>{Number(entry.quantity || 0).toFixed(2)}</td>
