@@ -92,13 +92,19 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
   );
 
   const averageRate = useMemo(() => {
-    if (totalAdjustedQty <= 0) return 0;
-    const weightedSum = buyerAdjustments.reduce(
+    // Only include items with non-zero rate
+    const itemsWithRate = buyerAdjustments.filter((item) => Number(item.rate) > 0);
+    if (itemsWithRate.length === 0) return 0;
+    
+    const totalQtyWithRate = itemsWithRate.reduce((sum, item) => sum + (Number(item.qty) || 0), 0);
+    if (totalQtyWithRate <= 0) return 0;
+    
+    const weightedSum = itemsWithRate.reduce(
       (sum, item) => sum + (Number(item.rate) || 0) * (Number(item.qty) || 0),
       0
     );
-    return weightedSum / totalAdjustedQty;
-  }, [buyerAdjustments, totalAdjustedQty]);
+    return weightedSum / totalQtyWithRate;
+  }, [buyerAdjustments]);
 
   const handleAddAdjustment = () => {
     if (!newAdjustment.buyer_id && !newAdjustment.buyer_name) {
