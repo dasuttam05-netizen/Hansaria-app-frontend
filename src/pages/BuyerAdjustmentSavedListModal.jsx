@@ -168,6 +168,8 @@ export default function BuyerAdjustmentSavedListModal({ isOpen, onClose, onSelec
                 <th style={thStyle}>Outward ID</th>
                 <th style={thStyle}>Voucher No</th>
                 <th style={thStyle}>Date</th>
+                <th style={thStyle}>Lorry No</th>
+                <th style={thStyle}>Consignee</th>
                 <th style={thStyle}>Product</th>
                 <th style={thStyle}>Buyer</th>
                 <th style={thStyle}>Qty</th>
@@ -175,6 +177,7 @@ export default function BuyerAdjustmentSavedListModal({ isOpen, onClose, onSelec
                 <th style={thStyle}>Rate</th>
                 <th style={thStyle}>Claim</th>
                 <th style={thStyle}>Deduction</th>
+                <th style={thStyle}>Net Amount</th>
                 <th style={thStyle}>Warehouse</th>
                 <th style={thStyle}>Action</th>
               </tr>
@@ -190,6 +193,8 @@ export default function BuyerAdjustmentSavedListModal({ isOpen, onClose, onSelec
                   <td style={tdStyle}>{entry.outward_id}</td>
                   <td style={tdStyle}>{entry.voucher_no || "—"}</td>
                   <td style={tdStyle}>{entry.date ? new Date(entry.date).toLocaleDateString() : "—"}</td>
+                  <td style={tdStyle}>{entry.lorry_no || entry.vehicle_no || "—"}</td>
+                  <td style={tdStyle}>{entry.consignee_name || entry.consignee || "—"}</td>
                   <td style={tdStyle}>{entry.product_name || "—"}</td>
                   <td style={tdStyle}>{entry.buyer_name || "—"}</td>
                   <td style={tdStyle}>{Number(entry.qty || 0).toFixed(2)}</td>
@@ -197,6 +202,7 @@ export default function BuyerAdjustmentSavedListModal({ isOpen, onClose, onSelec
                   <td style={tdStyle}>{Number(entry.rate || 0).toFixed(2)}</td>
                   <td style={tdStyle}>{Number(entry.claim || 0).toFixed(2)}</td>
                   <td style={tdStyle}>{Number(entry.other_deduction || 0).toFixed(2)}</td>
+                  <td style={tdStyle}>{Number(entry.net_amount || 0).toFixed(2)}</td>
                   <td style={tdStyle}>{entry.warehouse_name || "—"}</td>
                   <td style={tdStyle}>
                     <button
