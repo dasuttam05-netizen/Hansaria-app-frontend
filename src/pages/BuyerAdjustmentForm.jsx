@@ -9,7 +9,6 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
   const [newAdjustment, setNewAdjustment] = useState({
     buyer_id: "",
     buyer_name: "",
-    weight: "",
     qty: "",
     rate: Number(outward?.rate) || 0,
     claim: "",
@@ -21,6 +20,11 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
 
   const API_BASE = "/api";
   const outwardQty = Number(outward?.quantity) || 0;
+
+  const totalShortage = useMemo(
+    () => buyerAdjustments.reduce((sum, item) => sum + (Number(item.shortage) || 0), 0),
+    [buyerAdjustments]
+  );
 
   useEffect(() => {
     if (outward?.date) {
@@ -75,6 +79,11 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
     [buyerAdjustments]
   );
 
+  const totalAmount = useMemo(
+    () => totalClaim + totalOtherDeduction + totalShortage,
+    [totalClaim, totalOtherDeduction, totalShortage]
+  );
+
   const averageRate = useMemo(() => {
     if (totalAdjustedQty <= 0) return 0;
     const weightedSum = buyerAdjustments.reduce(
@@ -108,7 +117,6 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
                 ...item,
                 buyer_id: newAdjustment.buyer_id,
                 buyer_name: newAdjustment.buyer_name,
-                weight: newAdjustment.weight,
                 qty: newAdjustment.qty,
                 rate: newAdjustment.rate,
                 claim: newAdjustment.claim,
@@ -126,15 +134,6 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
           id: `temp-${Date.now()}`,
           buyer_id: newAdjustment.buyer_id,
           buyer_name: newAdjustment.buyer_name,
-          weight: newAdjustment.weight,
-          qty: newAdjustment.qty,
-          rate: newAdjustment.rate,
-          claim: newAdjustment.claim,
-          other_deduction: newAdjustment.other_deduction,
-          shortage: newAdjustment.shortage,
-        },
-      ]);
-    }
 
     resetNewAdjustment();
   };
@@ -143,7 +142,6 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
     setNewAdjustment({
       buyer_id: "",
       buyer_name: "",
-      weight: "",
       qty: "",
       rate: Number(outward?.rate) || 0,
       claim: "",
@@ -203,6 +201,7 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
         const payload = {
           outward_id: outward.id,
           buyer_id: adj.buyer_id || null,
+          buyer_name: adj.buyer_name || null,
           unloading_date: unloadingDate,
           weight: Number(adj.weight) || 0,
           qty: Number(adj.qty) || 0,
@@ -366,22 +365,6 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
             />
           </div>
           <div>
-            <span style={labelStyle}>Weight (kg)</span>
-            <input
-              type="number"
-              value={newAdjustment.weight}
-              onChange={(e) =>
-                setNewAdjustment((prev) => ({
-                  ...prev,
-                  weight: e.target.value,
-                }))
-              }
-              placeholder="0.00"
-              step="0.01"
-              style={inputStyle}
-            />
-          </div>
-          <div>
             <span style={labelStyle}>Qty *</span>
             <input
               type="number"
@@ -398,7 +381,23 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
             />
           </div>
           <div>
-            <span style={labelStyle}>Rate</span>
+            <span style={labelStyle}>Shortage</span>
+            <input
+              type="number"
+              value={newAdjustment.shortage}
+              onChange={(e) =>
+                setNewAdjustment((prev) => ({
+                  ...prev,
+                  shortage: e.target.value,
+                }))
+              }
+              placeholder="0.00"
+              step="0.01"
+              style={inputStyle}
+            />
+          </div>
+          <div>
+            <span style={labelStyle}>Rate / Shortage Amount</span>
             <input
               type="number"
               value={newAdjustment.rate}
@@ -445,22 +444,6 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
               style={inputStyle}
             />
           </div>
-          <div>
-            <span style={labelStyle}>Shortage</span>
-            <input
-              type="number"
-              value={newAdjustment.shortage}
-              onChange={(e) =>
-                setNewAdjustment((prev) => ({
-                  ...prev,
-                  shortage: e.target.value,
-                }))
-              }
-              placeholder="0.00"
-              step="0.01"
-              style={inputStyle}
-            />
-          </div>
         </div>
 
         <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
@@ -493,12 +476,12 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
               <thead>
                 <tr>
                   <th style={thStyle}>Buyer</th>
-                  <th style={thStyle}>Weight</th>
                   <th style={thStyle}>Qty</th>
-                  <th style={thStyle}>Rate</th>
+                  <th style={thStyle}>Shortage</th>
+                  <th style={thStyle}>Rate / Shortage Amt</th>
                   <th style={thStyle}>Claim</th>
                   <th style={thStyle}>Deduction</th>
-                  <th style={thStyle}>Shortage</th>
+                  <th style={thStyle}>Total</th>
                   <th style={thStyle}>Actions</th>
                 </tr>
               </thead>
@@ -506,12 +489,12 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
                 {buyerAdjustments.map((adj) => (
                   <tr key={adj.id}>
                     <td style={tdStyle}>{adj.buyer_name || "—"}</td>
-                    <td style={tdStyle}>{Number(adj.weight || 0).toFixed(2)}</td>
                     <td style={tdStyle}>{Number(adj.qty || 0).toFixed(2)}</td>
+                    <td style={tdStyle}>{Number(adj.shortage || 0).toFixed(2)}</td>
                     <td style={tdStyle}>{Number(adj.rate || 0).toFixed(2)}</td>
                     <td style={tdStyle}>{Number(adj.claim || 0).toFixed(2)}</td>
                     <td style={tdStyle}>{Number(adj.other_deduction || 0).toFixed(2)}</td>
-                    <td style={tdStyle}>{Number(adj.shortage || 0).toFixed(2)}</td>
+                    <td style={tdStyle}>{Number((Number(adj.claim || 0) + Number(adj.other_deduction || 0) + Number(adj.shortage || 0))).toFixed(2)}</td>
                     <td style={tdStyle}>
                       <button
                         onClick={() => handleEditAdjustment(adj.id)}
@@ -547,14 +530,14 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
                 ))}
                 <tr style={{ background: "#f0fdf4" }}>
                   <td style={{ ...tdStyle, fontWeight: 700 }}>Total</td>
-                  <td style={tdStyle}></td>
                   <td style={{ ...tdStyle, fontWeight: 700, color: isQtyMatched ? "#0f766e" : "#dc2626" }}>
                     {totalAdjustedQty.toFixed(2)}
                   </td>
+                  <td style={{ ...tdStyle, fontWeight: 700 }}>{totalShortage.toFixed(2)}</td>
                   <td style={{ ...tdStyle, fontWeight: 700 }}>{averageRate.toFixed(2)}</td>
                   <td style={{ ...tdStyle, fontWeight: 700 }}>{totalClaim.toFixed(2)}</td>
                   <td style={{ ...tdStyle, fontWeight: 700 }}>{totalOtherDeduction.toFixed(2)}</td>
-                  <td style={tdStyle}></td>
+                  <td style={{ ...tdStyle, fontWeight: 700 }}>{totalAmount.toFixed(2)}</td>
                   <td style={tdStyle}></td>
                 </tr>
                 {!isQtyMatched && (
