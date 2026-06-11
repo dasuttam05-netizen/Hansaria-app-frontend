@@ -14,6 +14,7 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
     claim: "",
     other_deduction: "",
     shortage: "",
+    shortage_amount: "",
   });
   const [loading, setLoading] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -49,6 +50,7 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
             claim: item.claim || 0,
             other_deduction: item.other_deduction || 0,
             shortage: item.shortage || 0,
+            shortage_amount: item.shortage_amount || 0,
           }))
         );
         setRemovedAdjustmentIds([]);
@@ -79,9 +81,14 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
     [buyerAdjustments]
   );
 
+  const totalShortageAmount = useMemo(
+    () => buyerAdjustments.reduce((sum, item) => sum + (Number(item.shortage_amount) || 0), 0),
+    [buyerAdjustments]
+  );
+
   const totalAmount = useMemo(
-    () => totalClaim + totalOtherDeduction + totalShortage,
-    [totalClaim, totalOtherDeduction, totalShortage]
+    () => totalClaim + totalOtherDeduction + totalShortageAmount,
+    [totalClaim, totalOtherDeduction, totalShortageAmount]
   );
 
   const averageRate = useMemo(() => {
@@ -122,6 +129,7 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
                 claim: newAdjustment.claim,
                 other_deduction: newAdjustment.other_deduction,
                 shortage: newAdjustment.shortage,
+                shortage_amount: newAdjustment.shortage_amount,
               }
             : item
         )
@@ -139,6 +147,7 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
           claim: newAdjustment.claim,
           other_deduction: newAdjustment.other_deduction,
           shortage: newAdjustment.shortage,
+          shortage_amount: newAdjustment.shortage_amount,
         },
       ]);
     }
@@ -155,6 +164,7 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
       claim: "",
       other_deduction: "",
       shortage: "",
+      shortage_amount: "",
     });
   };
 
@@ -217,6 +227,7 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
           claim: Number(adj.claim) || 0,
           other_deduction: Number(adj.other_deduction) || 0,
           shortage: Number(adj.shortage) || 0,
+          shortage_amount: Number(adj.shortage_amount) || 0,
           status: "Pending",
         };
 
@@ -327,10 +338,18 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
             <div style={{ fontSize: 16, fontWeight: 700, color: "#14532d" }}>{outward?.warehouse_name || outward?.warehouse || "—"}</div>
           </div>
           <div>
-            <span style={labelStyle}>Product / Buyer</span>
+            <span style={labelStyle}>Product</span>
+            <div style={{ fontSize: 16, fontWeight: 700, color: "#14532d" }}>{outward?.product_name || outward?.product || "—"}</div>
+          </div>
+          <div>
+            <span style={labelStyle}>Buyer</span>
             <div style={{ fontSize: 16, fontWeight: 700, color: "#14532d" }}>
-              {outward?.product_name || outward?.product || "—"} / {outward?.buyer_name || outward?.buyer || "—"}
+              {newAdjustment.buyer_name || outward?.buyer_name || outward?.buyer || "—"}
             </div>
+          </div>
+          <div>
+            <span style={labelStyle}>Lorry No</span>
+            <div style={{ fontSize: 16, fontWeight: 700, color: "#14532d" }}>{outward?.lorry_no || outward?.vehicle_no || "—"}</div>
           </div>
         </div>
       </div>
@@ -405,7 +424,23 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
             />
           </div>
           <div>
-            <span style={labelStyle}>Rate / Shortage Amount</span>
+            <span style={labelStyle}>Shortage Amount</span>
+            <input
+              type="number"
+              value={newAdjustment.shortage_amount}
+              onChange={(e) =>
+                setNewAdjustment((prev) => ({
+                  ...prev,
+                  shortage_amount: e.target.value,
+                }))
+              }
+              placeholder="0.00"
+              step="0.01"
+              style={inputStyle}
+            />
+          </div>
+          <div>
+            <span style={labelStyle}>Rate</span>
             <input
               type="number"
               value={newAdjustment.rate}
@@ -483,10 +518,12 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
             <table style={tableStyle}>
               <thead>
                 <tr>
+                  <th style={thStyle}>SL</th>
                   <th style={thStyle}>Buyer</th>
                   <th style={thStyle}>Qty</th>
                   <th style={thStyle}>Shortage</th>
-                  <th style={thStyle}>Rate / Shortage Amt</th>
+                  <th style={thStyle}>Shortage Amt</th>
+                  <th style={thStyle}>Rate</th>
                   <th style={thStyle}>Claim</th>
                   <th style={thStyle}>Deduction</th>
                   <th style={thStyle}>Total</th>
@@ -494,15 +531,17 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
                 </tr>
               </thead>
               <tbody>
-                {buyerAdjustments.map((adj) => (
+                {buyerAdjustments.map((adj, index) => (
                   <tr key={adj.id}>
+                    <td style={tdStyle}>{index + 1}</td>
                     <td style={tdStyle}>{adj.buyer_name || "—"}</td>
                     <td style={tdStyle}>{Number(adj.qty || 0).toFixed(2)}</td>
                     <td style={tdStyle}>{Number(adj.shortage || 0).toFixed(2)}</td>
+                    <td style={tdStyle}>{Number(adj.shortage_amount || 0).toFixed(2)}</td>
                     <td style={tdStyle}>{Number(adj.rate || 0).toFixed(2)}</td>
                     <td style={tdStyle}>{Number(adj.claim || 0).toFixed(2)}</td>
                     <td style={tdStyle}>{Number(adj.other_deduction || 0).toFixed(2)}</td>
-                    <td style={tdStyle}>{Number((Number(adj.claim || 0) + Number(adj.other_deduction || 0) + Number(adj.shortage || 0))).toFixed(2)}</td>
+                    <td style={tdStyle}>{Number((Number(adj.claim || 0) + Number(adj.other_deduction || 0) + Number(adj.shortage_amount || 0))).toFixed(2)}</td>
                     <td style={tdStyle}>
                       <button
                         onClick={() => handleEditAdjustment(adj.id)}
@@ -542,6 +581,7 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
                     {totalAdjustedQty.toFixed(2)}
                   </td>
                   <td style={{ ...tdStyle, fontWeight: 700 }}>{totalShortage.toFixed(2)}</td>
+                  <td style={{ ...tdStyle, fontWeight: 700 }}>{totalShortageAmount.toFixed(2)}</td>
                   <td style={{ ...tdStyle, fontWeight: 700 }}>{averageRate.toFixed(2)}</td>
                   <td style={{ ...tdStyle, fontWeight: 700 }}>{totalClaim.toFixed(2)}</td>
                   <td style={{ ...tdStyle, fontWeight: 700 }}>{totalOtherDeduction.toFixed(2)}</td>
