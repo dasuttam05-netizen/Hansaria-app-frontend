@@ -583,6 +583,7 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
                 ))}
                 <tr style={{ background: "#f0fdf4" }}>
                   <td style={{ ...tdStyle, fontWeight: 700 }}>Total</td>
+                  <td style={{ ...tdStyle, fontWeight: 700 }}></td>
                   <td style={{ ...tdStyle, fontWeight: 700, color: isQtyMatched ? "#0f766e" : "#dc2626" }}>
                     {totalAdjustedQty.toFixed(2)}
                   </td>
