@@ -134,6 +134,14 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
           id: `temp-${Date.now()}`,
           buyer_id: newAdjustment.buyer_id,
           buyer_name: newAdjustment.buyer_name,
+          qty: newAdjustment.qty,
+          rate: newAdjustment.rate,
+          claim: newAdjustment.claim,
+          other_deduction: newAdjustment.other_deduction,
+          shortage: newAdjustment.shortage,
+        },
+      ]);
+    }
 
     resetNewAdjustment();
   };
