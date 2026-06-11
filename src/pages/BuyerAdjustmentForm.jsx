@@ -9,6 +9,7 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
   const [newAdjustment, setNewAdjustment] = useState({
     buyer_id: "",
     buyer_name: "",
+    consignee_name: outward?.consignee_name || outward?.consignee || "",
     qty: "",
     rate: Number(outward?.rate) || 0,
     claim: "",
@@ -20,12 +21,7 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
   const [editingId, setEditingId] = useState(null);
 
   const API_BASE = "/api";
-  const outwardQty = Number(outward?.quantity) || 0;
-
-  const totalShortage = useMemo(
-    () => buyerAdjustments.reduce((sum, item) => sum + (Number(item.shortage) || 0), 0),
-    [buyerAdjustments]
-  );
+  const outwardQty = Number(outward?.quantity || outward?.qty || 0);
 
   useEffect(() => {
     if (outward?.date) {
@@ -51,6 +47,7 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
             other_deduction: item.other_deduction || 0,
             shortage: item.shortage || 0,
             shortage_amount: item.shortage_amount || 0,
+            consignee_name: item.consignee_name || outward?.consignee_name || outward?.consignee || "",
           }))
         );
         setRemovedAdjustmentIds([]);
@@ -64,9 +61,10 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
     loadExistingAdjustments();
   }, [outward]);
 
-  const totalAdjustedQty = useMemo(() => {
-    return buyerAdjustments.reduce((sum, item) => sum + (Number(item.qty) || 0), 0);
-  }, [buyerAdjustments]);
+  const totalAdjustedQty = useMemo(
+    () => buyerAdjustments.reduce((sum, item) => sum + (Number(item.qty) || 0), 0),
+    [buyerAdjustments]
+  );
 
   const remainingQty = outwardQty - totalAdjustedQty;
   const isQtyMatched = Math.abs(totalAdjustedQty - outwardQty) < 0.0001;
@@ -92,13 +90,12 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
   );
 
   const averageRate = useMemo(() => {
-    // Only include items with non-zero rate
     const itemsWithRate = buyerAdjustments.filter((item) => Number(item.rate) > 0);
     if (itemsWithRate.length === 0) return 0;
-    
+
     const totalQtyWithRate = itemsWithRate.reduce((sum, item) => sum + (Number(item.qty) || 0), 0);
     if (totalQtyWithRate <= 0) return 0;
-    
+
     const weightedSum = itemsWithRate.reduce(
       (sum, item) => sum + (Number(item.rate) || 0) * (Number(item.qty) || 0),
       0
@@ -112,50 +109,39 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
       return;
     }
 
+    if (!newAdjustment.consignee_name || String(newAdjustment.consignee_name).trim() === "") {
+      toast.error("Please enter consignee name", { theme: "colored" });
+      return;
+    }
+
     if (!newAdjustment.qty || Number(newAdjustment.qty) <= 0) {
       toast.error("Quantity must be greater than 0", { theme: "colored" });
       return;
     }
 
-    if (Number(newAdjustment.qty) > remainingQty && editingId === null) {
+    if (editingId === null && Number(newAdjustment.qty) > remainingQty) {
       toast.error(`Quantity exceeds remaining ${remainingQty.toFixed(2)}`, { theme: "colored" });
       return;
     }
 
+    const row = {
+      id: editingId || `temp-${Date.now()}`,
+      buyer_id: newAdjustment.buyer_id,
+      buyer_name: newAdjustment.buyer_name,
+      consignee_name: newAdjustment.consignee_name,
+      qty: newAdjustment.qty,
+      rate: newAdjustment.rate,
+      claim: newAdjustment.claim,
+      other_deduction: newAdjustment.other_deduction,
+      shortage: newAdjustment.shortage,
+      shortage_amount: newAdjustment.shortage_amount,
+    };
+
     if (editingId !== null) {
-      setBuyerAdjustments((prev) =>
-        prev.map((item) =>
-          item.id === editingId
-            ? {
-                ...item,
-                buyer_id: newAdjustment.buyer_id,
-                buyer_name: newAdjustment.buyer_name,
-                qty: newAdjustment.qty,
-                rate: newAdjustment.rate,
-                claim: newAdjustment.claim,
-                other_deduction: newAdjustment.other_deduction,
-                shortage: newAdjustment.shortage,
-                shortage_amount: newAdjustment.shortage_amount,
-              }
-            : item
-        )
-      );
+      setBuyerAdjustments((prev) => prev.map((item) => (item.id === editingId ? row : item)));
       setEditingId(null);
     } else {
-      setBuyerAdjustments((prev) => [
-        ...prev,
-        {
-          id: `temp-${Date.now()}`,
-          buyer_id: newAdjustment.buyer_id,
-          buyer_name: newAdjustment.buyer_name,
-          qty: newAdjustment.qty,
-          rate: newAdjustment.rate,
-          claim: newAdjustment.claim,
-          other_deduction: newAdjustment.other_deduction,
-          shortage: newAdjustment.shortage,
-          shortage_amount: newAdjustment.shortage_amount,
-        },
-      ]);
+      setBuyerAdjustments((prev) => [...prev, row]);
     }
 
     resetNewAdjustment();
@@ -165,6 +151,7 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
     setNewAdjustment({
       buyer_id: "",
       buyer_name: "",
+      consignee_name: outward?.consignee_name || outward?.consignee || "",
       qty: "",
       rate: Number(outward?.rate) || 0,
       claim: "",
@@ -204,7 +191,9 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
 
   const handleSave = async () => {
     if (!isQtyMatched) {
-      toast.error(`Total adjusted qty (${totalAdjustedQty.toFixed(2)}) must match outward qty (${outwardQty.toFixed(2)})`, { theme: "colored" });
+      toast.error(`Total adjusted qty (${totalAdjustedQty.toFixed(2)}) must match outward qty (${outwardQty.toFixed(2)})`, {
+        theme: "colored",
+      });
       return;
     }
 
@@ -215,17 +204,16 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
 
     setLoading(true);
     try {
-      // Delete removed adjustments first
       for (const deleteId of removedAdjustmentIds) {
         await axios.delete(`${API_BASE}/buyer-adjustment/${deleteId}`);
       }
 
-      // Save or update current rows
       for (const adj of buyerAdjustments) {
         const payload = {
           outward_id: outward.id,
           buyer_id: adj.buyer_id || null,
           buyer_name: adj.buyer_name || null,
+          consignee_name: adj.consignee_name || null,
           unloading_date: unloadingDate,
           weight: Number(adj.weight) || 0,
           qty: Number(adj.qty) || 0,
@@ -256,7 +244,6 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
   };
 
   const cardStyle = {
-    background: "#fff",
     border: "1px solid #e5e7eb",
     borderRadius: 12,
     padding: 16,
@@ -272,7 +259,6 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
   };
 
   const inputStyle = {
-    width: "100%",
     padding: "10px 12px",
     border: "1px solid #cbd5e1",
     borderRadius: 8,
@@ -323,7 +309,6 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
         Buyer Adjustment: {outward?.voucher_no} ({outwardQty.toFixed(2)} qty)
       </h3>
 
-      {/* Outward Summary */}
       <div style={cardStyle}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
           <div>
@@ -332,12 +317,7 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
           </div>
           <div>
             <span style={labelStyle}>Unloading Date</span>
-            <input
-              type="date"
-              value={unloadingDate}
-              onChange={(e) => setUnloadingDate(e.target.value)}
-              style={inputStyle}
-            />
+            <input type="date" value={unloadingDate} onChange={(e) => setUnloadingDate(e.target.value)} style={inputStyle} />
           </div>
           <div>
             <span style={labelStyle}>Warehouse (Unloading)</span>
@@ -354,13 +334,18 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
             </div>
           </div>
           <div>
+            <span style={labelStyle}>Consignee</span>
+            <div style={{ fontSize: 16, fontWeight: 700, color: "#14532d" }}>
+              {outward?.consignee_name || outward?.consignee || "—"}
+            </div>
+          </div>
+          <div>
             <span style={labelStyle}>Lorry No</span>
             <div style={{ fontSize: 16, fontWeight: 700, color: "#14532d" }}>{outward?.lorry_no || outward?.vehicle_no || "—"}</div>
           </div>
         </div>
       </div>
 
-      {/* Add New Adjustment */}
       <div style={cardStyle}>
         <h4 style={{ margin: "0 0 12px", fontSize: 14, fontWeight: 700, color: "#14532d" }}>
           {editingId ? "Edit Adjustment" : "Add Buyer Adjustment"}
@@ -369,11 +354,7 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
         <div style={gridStyle}>
           <div>
             <span style={labelStyle}>Buyer</span>
-            <select
-              value={newAdjustment.buyer_id}
-              onChange={(e) => handleBuyerChange(e.target.value)}
-              style={inputStyle}
-            >
+            <select value={newAdjustment.buyer_id} onChange={(e) => handleBuyerChange(e.target.value)} style={inputStyle}>
               <option value="">Select Buyer</option>
               {buyerNames.map((b) => (
                 <option key={b.id} value={b.id}>
@@ -387,13 +368,18 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
             <input
               type="text"
               value={newAdjustment.buyer_name}
-              onChange={(e) =>
-                setNewAdjustment((prev) => ({
-                  ...prev,
-                  buyer_name: e.target.value,
-                }))
-              }
+              onChange={(e) => setNewAdjustment((prev) => ({ ...prev, buyer_name: e.target.value }))}
               placeholder="Buyer name"
+              style={inputStyle}
+            />
+          </div>
+          <div>
+            <span style={labelStyle}>Consignee *</span>
+            <input
+              type="text"
+              value={newAdjustment.consignee_name}
+              onChange={(e) => setNewAdjustment((prev) => ({ ...prev, consignee_name: e.target.value }))}
+              placeholder="Consignee name"
               style={inputStyle}
             />
           </div>
@@ -402,12 +388,7 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
             <input
               type="number"
               value={newAdjustment.qty}
-              onChange={(e) =>
-                setNewAdjustment((prev) => ({
-                  ...prev,
-                  qty: e.target.value,
-                }))
-              }
+              onChange={(e) => setNewAdjustment((prev) => ({ ...prev, qty: e.target.value }))}
               placeholder="0.00"
               step="0.01"
               style={inputStyle}
@@ -437,15 +418,10 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
             <input
               type="number"
               value={newAdjustment.shortage_amount}
-              onChange={(e) =>
-                setNewAdjustment((prev) => ({
-                  ...prev,
-                  shortage_amount: e.target.value,
-                }))
-              }
+              onChange={(e) => setNewAdjustment((prev) => ({ ...prev, shortage_amount: e.target.value }))}
               placeholder="0.00"
               step="0.01"
-              style={{...inputStyle, backgroundColor: "#f3f4f6", color: "#6b7280"}}
+              style={{ ...inputStyle, backgroundColor: "#f3f4f6", color: "#6b7280" }}
             />
           </div>
           <div>
@@ -472,12 +448,7 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
             <input
               type="number"
               value={newAdjustment.claim}
-              onChange={(e) =>
-                setNewAdjustment((prev) => ({
-                  ...prev,
-                  claim: e.target.value,
-                }))
-              }
+              onChange={(e) => setNewAdjustment((prev) => ({ ...prev, claim: e.target.value }))}
               placeholder="0.00"
               step="0.01"
               style={inputStyle}
@@ -488,12 +459,7 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
             <input
               type="number"
               value={newAdjustment.other_deduction}
-              onChange={(e) =>
-                setNewAdjustment((prev) => ({
-                  ...prev,
-                  other_deduction: e.target.value,
-                }))
-              }
+              onChange={(e) => setNewAdjustment((prev) => ({ ...prev, other_deduction: e.target.value }))}
               placeholder="0.00"
               step="0.01"
               style={inputStyle}
@@ -519,7 +485,6 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
         </div>
       </div>
 
-      {/* Adjustments List */}
       {buyerAdjustments.length > 0 && (
         <div style={cardStyle}>
           <h4 style={{ margin: "0 0 12px", fontSize: 14, fontWeight: 700, color: "#14532d" }}>
@@ -532,61 +497,66 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
                 <tr>
                   <th style={thStyle}>SL</th>
                   <th style={thStyle}>Buyer</th>
+                  <th style={thStyle}>Consignee</th>
                   <th style={thStyle}>Qty</th>
                   <th style={thStyle}>Shortage</th>
                   <th style={thStyle}>Shortage Amt</th>
                   <th style={thStyle}>Rate</th>
                   <th style={thStyle}>Claim</th>
                   <th style={thStyle}>Deduction</th>
-                  <th style={thStyle}>Total</th>
+                  <th style={thStyle}>Net Amount</th>
                   <th style={thStyle}>Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {buyerAdjustments.map((adj, index) => (
-                  <tr key={adj.id}>
-                    <td style={tdStyle}>{index + 1}</td>
-                    <td style={tdStyle}>{adj.buyer_name || "—"}</td>
-                    <td style={tdStyle}>{Number(adj.qty || 0).toFixed(2)}</td>
-                    <td style={tdStyle}>{Number(adj.shortage || 0).toFixed(2)}</td>
-                    <td style={tdStyle}>{Number(adj.shortage_amount || 0).toFixed(2)}</td>
-                    <td style={tdStyle}>{Number(adj.rate || 0).toFixed(2)}</td>
-                    <td style={tdStyle}>{Number(adj.claim || 0).toFixed(2)}</td>
-                    <td style={tdStyle}>{Number(adj.other_deduction || 0).toFixed(2)}</td>
-                    <td style={tdStyle}>{Number((Number(adj.claim || 0) + Number(adj.other_deduction || 0) + Number(adj.shortage_amount || 0))).toFixed(2)}</td>
-                    <td style={tdStyle}>
-                      <button
-                        onClick={() => handleEditAdjustment(adj.id)}
-                        style={{
-                          padding: "4px 8px",
-                          marginRight: 4,
-                          background: "#0f766e",
-                          color: "#fff",
-                          border: "none",
-                          borderRadius: 4,
-                          cursor: "pointer",
-                          fontSize: 11,
-                        }}
-                      >
-                        Edit
-                      </button>
-                      <button
-                        onClick={() => handleDeleteAdjustment(adj.id)}
-                        style={{
-                          padding: "4px 8px",
-                          background: "#dc2626",
-                          color: "#fff",
-                          border: "none",
-                          borderRadius: 4,
-                          cursor: "pointer",
-                          fontSize: 11,
-                        }}
-                      >
-                        Delete
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                {buyerAdjustments.map((adj, index) => {
+                  const netAmount = Number(adj.claim || 0) + Number(adj.other_deduction || 0) + Number(adj.shortage_amount || 0);
+                  return (
+                    <tr key={adj.id}>
+                      <td style={tdStyle}>{index + 1}</td>
+                      <td style={tdStyle}>{adj.buyer_name || "—"}</td>
+                      <td style={tdStyle}>{adj.consignee_name || "—"}</td>
+                      <td style={tdStyle}>{Number(adj.qty || 0).toFixed(2)}</td>
+                      <td style={tdStyle}>{Number(adj.shortage || 0).toFixed(2)}</td>
+                      <td style={tdStyle}>{Number(adj.shortage_amount || 0).toFixed(2)}</td>
+                      <td style={tdStyle}>{Number(adj.rate || 0).toFixed(2)}</td>
+                      <td style={tdStyle}>{Number(adj.claim || 0).toFixed(2)}</td>
+                      <td style={tdStyle}>{Number(adj.other_deduction || 0).toFixed(2)}</td>
+                      <td style={tdStyle}>{netAmount.toFixed(2)}</td>
+                      <td style={tdStyle}>
+                        <button
+                          onClick={() => handleEditAdjustment(adj.id)}
+                          style={{
+                            padding: "4px 8px",
+                            marginRight: 4,
+                            background: "#0f766e",
+                            color: "#fff",
+                            border: "none",
+                            borderRadius: 4,
+                            cursor: "pointer",
+                            fontSize: 11,
+                          }}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleDeleteAdjustment(adj.id)}
+                          style={{
+                            padding: "4px 8px",
+                            background: "#dc2626",
+                            color: "#fff",
+                            border: "none",
+                            borderRadius: 4,
+                            cursor: "pointer",
+                            fontSize: 11,
+                          }}
+                        >
+                          Delete
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
                 <tr style={{ background: "#f0fdf4" }}>
                   <td style={{ ...tdStyle, fontWeight: 700 }}>Total</td>
                   <td style={{ ...tdStyle, fontWeight: 700 }}></td>
@@ -603,7 +573,7 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
                 </tr>
                 {!isQtyMatched && (
                   <tr style={{ background: "#fef2f2" }}>
-                    <td colSpan={8} style={{ ...tdStyle, color: "#dc2626", fontWeight: 700, textAlign: "center" }}>
+                    <td colSpan={10} style={{ ...tdStyle, color: "#dc2626", fontWeight: 700, textAlign: "center" }}>
                       ⚠️ Remaining: {remainingQty.toFixed(2)} qty (must match exactly)
                     </td>
                   </tr>
@@ -614,7 +584,6 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
         </div>
       )}
 
-      {/* Action Buttons */}
       <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
         <button
           onClick={handleSave}
@@ -627,13 +596,7 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
         >
           {loading ? "Saving..." : "Save Adjustments"}
         </button>
-        <button
-          onClick={onClose}
-          style={{
-            ...buttonStyle,
-            background: "#6b7280",
-          }}
-        >
+        <button onClick={onClose} style={{ ...buttonStyle, background: "#6b7280" }}>
           Close
         </button>
       </div>
