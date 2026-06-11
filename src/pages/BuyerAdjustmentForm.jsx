@@ -412,19 +412,22 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
             <input
               type="number"
               value={newAdjustment.shortage}
-              onChange={(e) =>
+              onChange={(e) => {
+                const shortageValue = Number(e.target.value) || 0;
+                const rateValue = Number(newAdjustment.rate) || 0;
                 setNewAdjustment((prev) => ({
                   ...prev,
                   shortage: e.target.value,
-                }))
-              }
+                  shortage_amount: (shortageValue * rateValue).toFixed(2),
+                }));
+              }}
               placeholder="0.00"
               step="0.01"
               style={inputStyle}
             />
           </div>
           <div>
-            <span style={labelStyle}>Shortage Amount</span>
+            <span style={labelStyle}>Shortage Amount (Auto)</span>
             <input
               type="number"
               value={newAdjustment.shortage_amount}
@@ -436,7 +439,7 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
               }
               placeholder="0.00"
               step="0.01"
-              style={inputStyle}
+              style={{...inputStyle, backgroundColor: "#f3f4f6", color: "#6b7280"}}
             />
           </div>
           <div>
@@ -444,12 +447,15 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
             <input
               type="number"
               value={newAdjustment.rate}
-              onChange={(e) =>
+              onChange={(e) => {
+                const rateValue = Number(e.target.value) || 0;
+                const shortageValue = Number(newAdjustment.shortage) || 0;
                 setNewAdjustment((prev) => ({
                   ...prev,
                   rate: e.target.value,
-                }))
-              }
+                  shortage_amount: shortageValue > 0 ? (shortageValue * rateValue).toFixed(2) : prev.shortage_amount,
+                }));
+              }}
               placeholder="0.00"
               step="0.01"
               style={inputStyle}
