@@ -1,7 +1,7 @@
 import React from "react";
 import BuyerAdjustmentForm from "./BuyerAdjustmentForm";
 
-export default function BuyerAdjustmentModal({ isOpen, outward, onClose, buyerNames = [], onSave }) {
+export default function BuyerAdjustmentModal({ isOpen, outward, onClose, buyerNames = [], consigneeNames = [], onSave }) {
   if (!isOpen || !outward) return null;
 
   const modalStyle = {
@@ -31,7 +31,13 @@ export default function BuyerAdjustmentModal({ isOpen, outward, onClose, buyerNa
   return (
     <div style={modalStyle} onClick={onClose}>
       <div style={contentStyle} onClick={(e) => e.stopPropagation()}>
-        <BuyerAdjustmentForm outward={outward} onClose={onClose} buyerNames={buyerNames} onSave={onSave} />
+        <BuyerAdjustmentForm
+          outward={outward}
+          onClose={onClose}
+          buyerNames={buyerNames}
+          consigneeNames={consigneeNames}
+          onSave={onSave}
+        />
       </div>
     </div>
   );
