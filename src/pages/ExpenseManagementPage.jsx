@@ -358,16 +358,31 @@ export default function ExpenseManagementPage() {
 
   const loadExpensesWithApprovals = async () => {
     try {
-      let approvedIds = [];
-      if (canViewCashEntries) {
-        const cashEntriesRes = await axios.get(`${API_BASE}/cash-entries?status=pending&entry_type=expense`);
-        approvedIds = (cashEntriesRes.data || [])
-          .filter((entry) => entry.source_expense_id)
-          .map((entry) => entry.source_expense_id);
+      const [cashEntriesResult, expensesResult] = await Promise.allSettled([
+        canViewCashEntries
+          ? axios.get(`${API_BASE}/cash-entries?status=pending&entry_type=expense`)
+          : Promise.resolve({ data: [] }),
+        axios.get(`${API_BASE}/expenses?status=PENDING`),
+      ]);
+
+      const approvedIds =
+        cashEntriesResult.status === "fulfilled"
+          ? (cashEntriesResult.value.data || [])
+              .filter((entry) => entry.source_expense_id)
+              .map((entry) => entry.source_expense_id)
+          : [];
+
+      if (cashEntriesResult.status === "rejected") {
+        console.warn("Failed to load pending cash entries for expense approvals:", cashEntriesResult.reason);
       }
+
       setApprovedExpenseIds(approvedIds);
 
-      const expensesRes = await axios.get(`${API_BASE}/expenses?status=PENDING`);
+      if (expensesResult.status === "rejected") {
+        throw expensesResult.reason;
+      }
+
+      const expensesRes = expensesResult.value;
       const allExpenses = Array.isArray(expensesRes.data) ? expensesRes.data : [];
       const unapprovedExpenses = canViewCashEntries
         ? allExpenses.filter((e) => !approvedIds.includes(e.id))
@@ -380,7 +395,10 @@ export default function ExpenseManagementPage() {
       );
     } catch (error) {
       console.error("Failed to load expenses with approvals:", error);
-      toast.error("Failed to load expenses", { theme: "colored" });
+      toast.error(
+        error?.response?.data?.error || error?.message || "Failed to load expenses",
+        { theme: "colored" }
+      );
     }
   };
 
