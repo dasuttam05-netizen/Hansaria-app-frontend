@@ -362,7 +362,7 @@ export default function ExpenseManagementPage() {
         canViewCashEntries
           ? axios.get(`${API_BASE}/cash-entries?status=pending&entry_type=expense`)
           : Promise.resolve({ data: [] }),
-        axios.get(`${API_BASE}/expenses?status=PENDING`),
+        axios.get(`${API_BASE}/expenses?status=pending`),
       ]);
 
       const approvedIds =
