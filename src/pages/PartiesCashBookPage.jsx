@@ -69,7 +69,9 @@ const getSignedOpening = (row) => {
 };
 const isPartyLedgerEntry = (entry) => {
   const source = String(entry?.fund_source || "main_cash");
-  return source === "party_cash" || !!entry?.company_id;
+  // Exclude linked companion entries (they are duplicates of the main entry)
+  const isLinkedEntry = !!entry?.linked_entry_id;
+  return !isLinkedEntry && (source === "party_cash" || !!entry?.company_id);
 };
 const getDescriptionDetails = (entry) =>
   [entry.description || "-", entry.adjustment_details ? `Adjustment: ${entry.adjustment_details}` : ""]
