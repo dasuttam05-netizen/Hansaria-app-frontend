@@ -20,6 +20,7 @@ import PartyStockReportPage from "./pages/PartyStockReportPage";
 import WarehouseRentLedgerPage from "./pages/WarehouseRentLedgerPage";
 import WarehouseRentDashboard from "./pages/WarehouseRentDashboard";
 import OutwardSettlementReportPage from "./pages/OutwardSettlementReportPage";
+import OutwardEntryDetailsReportPage from "./pages/OutwardEntryDetailsReportPage";
 import TransportManagementPage from "./pages/TransportManagementPage";
 import TransportBiltiPage from "./pages/TransportBiltiPage";
 import TransportReportPage from "./pages/TransportReportPage";
@@ -223,6 +224,15 @@ function AppRoutes() {
         element={
           <ProtectedRoute permission="report.outwardSettlement">
             <OutwardSettlementReportPage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/outward-entry-details-report"
+        element={
+          <ProtectedRoute permission="report.outwardSettlement">
+            <OutwardEntryDetailsReportPage />
           </ProtectedRoute>
         }
       />
