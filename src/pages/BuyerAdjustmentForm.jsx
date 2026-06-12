@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import axios from "axios";
 import { toast } from "react-toastify";
 
-export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [], onSave }) {
+export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [], consigneeNames = [], onSave }) {
   const [unloadingDate, setUnloadingDate] = useState("");
   const [buyerAdjustments, setBuyerAdjustments] = useState([]);
   const [removedAdjustmentIds, setRemovedAdjustmentIds] = useState([]);
@@ -76,6 +76,11 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
 
   const totalOtherDeduction = useMemo(
     () => buyerAdjustments.reduce((sum, item) => sum + (Number(item.other_deduction) || 0), 0),
+    [buyerAdjustments]
+  );
+
+  const totalShortage = useMemo(
+    () => buyerAdjustments.reduce((sum, item) => sum + (Number(item.shortage) || 0), 0),
     [buyerAdjustments]
   );
 
@@ -182,10 +187,18 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
 
   const handleBuyerChange = (buyerId) => {
     const buyer = buyerNames.find((b) => String(b.id) === String(buyerId));
+    const buyerConsignees = consigneeNames.filter((item) => {
+      if (!buyerId) return true;
+      return String(item.buyer_id || "") === String(buyerId);
+    });
+    const matchingConsignee = buyerConsignees.find(
+      (item) => String(item.name || "") === String(newAdjustment.consignee_name || "")
+    );
     setNewAdjustment((prev) => ({
       ...prev,
       buyer_id: buyerId,
       buyer_name: buyer?.name || "",
+      consignee_name: matchingConsignee?.name || buyerConsignees[0]?.name || "",
     }));
   };
 
@@ -375,13 +388,23 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
           </div>
           <div>
             <span style={labelStyle}>Consignee *</span>
-            <input
-              type="text"
+            <select
               value={newAdjustment.consignee_name}
               onChange={(e) => setNewAdjustment((prev) => ({ ...prev, consignee_name: e.target.value }))}
-              placeholder="Consignee name"
               style={inputStyle}
-            />
+            >
+              <option value="">{newAdjustment.buyer_id ? "Select consignee" : "Select buyer first"}</option>
+              {(consigneeNames || [])
+                .filter((item) => {
+                  if (!newAdjustment.buyer_id) return true;
+                  return String(item.buyer_id || "") === String(newAdjustment.buyer_id);
+                })
+                .map((item) => (
+                  <option key={item.id} value={item.name}>
+                    {item.name}
+                  </option>
+                ))}
+            </select>
           </div>
           <div>
             <span style={labelStyle}>Qty *</span>
