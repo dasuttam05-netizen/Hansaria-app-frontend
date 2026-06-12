@@ -1737,6 +1737,7 @@ Consignee: ${row.consignee_name}`;
         outward={selectedBuyerAdjustmentOutward}
         onClose={closeBuyerAdjustmentModal}
         buyerNames={buyerNames}
+        consigneeNames={consigneeNames}
         onSave={fetchOutwards}
       />
         </>
