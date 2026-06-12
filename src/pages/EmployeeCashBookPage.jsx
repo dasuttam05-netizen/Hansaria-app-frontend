@@ -70,6 +70,7 @@ const getSignedOpening = (row) => {
 
 const isEmployeeLedgerEntry = (entry) => {
   const source = String(entry?.fund_source || "main_cash");
+  // Show employee cash entries (staff entries) OR employee main entries that aren't linked companions
   return source === "employee_cash" || (!!entry?.employee_id && source === "main_cash" && !entry?.linked_entry_id);
 };
 const isActiveLedgerStatus = (entry) =>
