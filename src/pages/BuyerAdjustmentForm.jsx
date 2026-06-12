@@ -2,26 +2,57 @@ import React, { useState, useEffect, useMemo } from "react";
 import axios from "axios";
 import { toast } from "react-toastify";
 
+const createEmptyAdjustment = (outward) => ({
+  buyer_id: "",
+  buyer_name: "",
+  consignee_name: outward?.consignee_name || outward?.consignee || "",
+  qty: "",
+  rate: Number(outward?.rate) || 0,
+  claim: "",
+  other_deduction: "",
+  shortage: "",
+  shortage_amount: "",
+});
+
+const normalizeAdjustmentRow = (item, outward) => ({
+  ...item,
+  buyer_name: item?.buyer_name || "",
+  consignee_name: item?.consignee_name || outward?.consignee_name || outward?.consignee || "",
+  rate: Number(item?.rate) || 0,
+  qty: Number(item?.qty) || 0,
+  claim: Number(item?.claim) || 0,
+  other_deduction: Number(item?.other_deduction) || 0,
+  shortage: Number(item?.shortage) || 0,
+  shortage_amount: Number(item?.shortage_amount) || 0,
+});
+
+const buildAdjustmentPayload = (outwardId, unloadingDate, adj) => ({
+  outward_id: outwardId,
+  buyer_id: adj.buyer_id || null,
+  buyer_name: adj.buyer_name || null,
+  consignee_name: adj.consignee_name || null,
+  unloading_date: unloadingDate,
+  weight: Number(adj.weight) || Number(adj.qty) || 0,
+  qty: Number(adj.qty) || 0,
+  rate: Number(adj.rate) || 0,
+  claim: Number(adj.claim) || 0,
+  other_deduction: Number(adj.other_deduction) || 0,
+  shortage: Number(adj.shortage) || 0,
+  shortage_amount: Number(adj.shortage_amount) || 0,
+  status: "Pending",
+});
+
 export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [], consigneeNames = [], onSave }) {
   const [unloadingDate, setUnloadingDate] = useState("");
   const [buyerAdjustments, setBuyerAdjustments] = useState([]);
   const [removedAdjustmentIds, setRemovedAdjustmentIds] = useState([]);
-  const [newAdjustment, setNewAdjustment] = useState({
-    buyer_id: "",
-    buyer_name: "",
-    consignee_name: outward?.consignee_name || outward?.consignee || "",
-    qty: "",
-    rate: Number(outward?.rate) || 0,
-    claim: "",
-    other_deduction: "",
-    shortage: "",
-    shortage_amount: "",
-  });
+  const [newAdjustment, setNewAdjustment] = useState(() => createEmptyAdjustment(outward));
   const [loading, setLoading] = useState(false);
   const [editingId, setEditingId] = useState(null);
 
   const API_BASE = "/api";
   const outwardQty = Number(outward?.quantity || outward?.qty || 0);
+  const unloadingTargetQty = Number(outward?.unloading_qty || outward?.settlement?.unloading_qty || outwardQty) || outwardQty;
 
   useEffect(() => {
     if (outward?.date) {
@@ -38,18 +69,7 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
       try {
         const res = await axios.get(`${API_BASE}/buyer-adjustment/${outward.id}`);
         const items = Array.isArray(res.data) ? res.data : [];
-        setBuyerAdjustments(
-          items.map((item) => ({
-            ...item,
-            rate: item.rate || 0,
-            qty: item.qty || 0,
-            claim: item.claim || 0,
-            other_deduction: item.other_deduction || 0,
-            shortage: item.shortage || 0,
-            shortage_amount: item.shortage_amount || 0,
-            consignee_name: item.consignee_name || outward?.consignee_name || outward?.consignee || "",
-          }))
-        );
+        setBuyerAdjustments(items.map((item) => normalizeAdjustmentRow(item, outward)));
         setRemovedAdjustmentIds([]);
       } catch (err) {
         console.error("Error loading existing buyer adjustments:", err);
@@ -65,9 +85,6 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
     () => buyerAdjustments.reduce((sum, item) => sum + (Number(item.qty) || 0), 0),
     [buyerAdjustments]
   );
-
-  const remainingQty = outwardQty - totalAdjustedQty;
-  const isQtyMatched = Math.abs(totalAdjustedQty - outwardQty) < 0.0001;
 
   const totalClaim = useMemo(
     () => buyerAdjustments.reduce((sum, item) => sum + (Number(item.claim) || 0), 0),
@@ -107,6 +124,9 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
     );
     return weightedSum / totalQtyWithRate;
   }, [buyerAdjustments]);
+
+  const isWithinTargetQty = totalAdjustedQty <= unloadingTargetQty + 0.0001;
+  const remainingQty = Math.max(unloadingTargetQty - totalAdjustedQty, 0);
 
   const handleAddAdjustment = () => {
     if (!newAdjustment.buyer_id && !newAdjustment.buyer_name) {
@@ -153,17 +173,7 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
   };
 
   const resetNewAdjustment = () => {
-    setNewAdjustment({
-      buyer_id: "",
-      buyer_name: "",
-      consignee_name: outward?.consignee_name || outward?.consignee || "",
-      qty: "",
-      rate: Number(outward?.rate) || 0,
-      claim: "",
-      other_deduction: "",
-      shortage: "",
-      shortage_amount: "",
-    });
+    setNewAdjustment(createEmptyAdjustment(outward));
   };
 
   const handleEditAdjustment = (id) => {
@@ -203,15 +213,16 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
   };
 
   const handleSave = async () => {
-    if (!isQtyMatched) {
-      toast.error(`Total adjusted qty (${totalAdjustedQty.toFixed(2)}) must match outward qty (${outwardQty.toFixed(2)})`, {
-        theme: "colored",
-      });
+    if (buyerAdjustments.length === 0) {
+      toast.error("Add at least one buyer adjustment", { theme: "colored" });
       return;
     }
 
-    if (buyerAdjustments.length === 0) {
-      toast.error("Add at least one buyer adjustment", { theme: "colored" });
+    if (!isWithinTargetQty) {
+      toast.error(
+        `Total unloading qty (${totalAdjustedQty.toFixed(2)}) cannot exceed target qty (${unloadingTargetQty.toFixed(2)})`,
+        { theme: "colored" }
+      );
       return;
     }
 
@@ -222,21 +233,7 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
       }
 
       for (const adj of buyerAdjustments) {
-        const payload = {
-          outward_id: outward.id,
-          buyer_id: adj.buyer_id || null,
-          buyer_name: adj.buyer_name || null,
-          consignee_name: adj.consignee_name || null,
-          unloading_date: unloadingDate,
-          weight: Number(adj.weight) || 0,
-          qty: Number(adj.qty) || 0,
-          rate: Number(adj.rate) || 0,
-          claim: Number(adj.claim) || 0,
-          other_deduction: Number(adj.other_deduction) || 0,
-          shortage: Number(adj.shortage) || 0,
-          shortage_amount: Number(adj.shortage_amount) || 0,
-          status: "Pending",
-        };
+        const payload = buildAdjustmentPayload(outward.id, unloadingDate, adj);
 
         if (typeof adj.id === "number") {
           await axios.put(`${API_BASE}/buyer-adjustment/${adj.id}`, payload);
@@ -321,6 +318,9 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
       <h3 style={{ margin: "0 0 16px", fontSize: 16, fontWeight: 800, color: "#14532d" }}>
         Buyer Adjustment: {outward?.voucher_no} ({outwardQty.toFixed(2)} qty)
       </h3>
+      <div style={{ marginBottom: 12, color: "#475569", fontSize: 13, fontWeight: 600 }}>
+        Unloading target: {unloadingTargetQty.toFixed(2)} qty | Balance will be shown in the outward report
+      </div>
 
       <div style={cardStyle}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
@@ -407,7 +407,7 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
             </select>
           </div>
           <div>
-            <span style={labelStyle}>Qty *</span>
+            <span style={labelStyle}>Unloading Qty *</span>
             <input
               type="number"
               value={newAdjustment.qty}
@@ -521,7 +521,7 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
                   <th style={thStyle}>SL</th>
                   <th style={thStyle}>Buyer</th>
                   <th style={thStyle}>Consignee</th>
-                  <th style={thStyle}>Qty</th>
+                  <th style={thStyle}>Unloading Qty</th>
                   <th style={thStyle}>Shortage</th>
                   <th style={thStyle}>Shortage Amt</th>
                   <th style={thStyle}>Rate</th>
@@ -580,10 +580,10 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
                     </tr>
                   );
                 })}
-                <tr style={{ background: "#f0fdf4" }}>
-                  <td style={{ ...tdStyle, fontWeight: 700 }}>Total</td>
-                  <td style={{ ...tdStyle, fontWeight: 700 }}></td>
-                  <td style={{ ...tdStyle, fontWeight: 700, color: isQtyMatched ? "#0f766e" : "#dc2626" }}>
+            <tr style={{ background: "#f0fdf4" }}>
+              <td style={{ ...tdStyle, fontWeight: 700 }}>Total</td>
+              <td style={{ ...tdStyle, fontWeight: 700 }}></td>
+              <td style={{ ...tdStyle, fontWeight: 700, color: isWithinTargetQty ? "#0f766e" : "#dc2626" }}>
                     {totalAdjustedQty.toFixed(2)}
                   </td>
                   <td style={{ ...tdStyle, fontWeight: 700 }}>{totalShortage.toFixed(2)}</td>
@@ -594,10 +594,10 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
                   <td style={{ ...tdStyle, fontWeight: 700 }}>{totalAmount.toFixed(2)}</td>
                   <td style={tdStyle}></td>
                 </tr>
-                {!isQtyMatched && (
+                {remainingQty > 0.0001 && (
                   <tr style={{ background: "#fef2f2" }}>
                     <td colSpan={10} style={{ ...tdStyle, color: "#dc2626", fontWeight: 700, textAlign: "center" }}>
-                      ⚠️ Remaining: {remainingQty.toFixed(2)} qty (must match exactly)
+                      Remaining: {remainingQty.toFixed(2)} qty
                     </td>
                   </tr>
                 )}
@@ -610,11 +610,11 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
       <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
         <button
           onClick={handleSave}
-          disabled={!isQtyMatched || buyerAdjustments.length === 0 || loading}
+          disabled={!isWithinTargetQty || buyerAdjustments.length === 0 || loading}
           style={{
             ...buttonStyle,
-            background: isQtyMatched && buyerAdjustments.length > 0 ? "#0f766e" : "#cbd5e1",
-            cursor: isQtyMatched && buyerAdjustments.length > 0 && !loading ? "pointer" : "not-allowed",
+            background: isWithinTargetQty && buyerAdjustments.length > 0 ? "#0f766e" : "#cbd5e1",
+            cursor: isWithinTargetQty && buyerAdjustments.length > 0 && !loading ? "pointer" : "not-allowed",
           }}
         >
           {loading ? "Saving..." : "Save Adjustments"}
@@ -626,3 +626,4 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
     </div>
   );
 }
+
