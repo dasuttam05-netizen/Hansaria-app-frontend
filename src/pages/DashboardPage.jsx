@@ -549,6 +549,7 @@ export default function DashboardPage() {
         { label: "Warehouse Rent Ledger", permission: "report.warehouseRentLedger", action: () => navigate("/warehouse-rent-ledger") },
         { label: "Month End Rent Report", permission: "report.warehouseRentMonthEnd", action: () => navigate("/warehouse-rent-dashboard") },
         { label: "Outward Settlement Report", permission: "report.outwardSettlement", action: () => navigate("/outward-settlement-report") },
+        { label: "Outward Entry Details", permission: "report.outwardSettlement", action: () => navigate("/outward-entry-details-report") },
         { label: "Expense Report", permission: "report.expense", action: () => navigate("/expense-report") },
         { label: "Palti Lorry Adjustment Report", permission: "report.paltiLorryAdjustment", action: () => navigate("/palti-lorry-adjustment-report") },
         {
