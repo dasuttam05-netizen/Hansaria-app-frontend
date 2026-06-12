@@ -6,7 +6,6 @@ import AdjustmentPage from "./AdjustmentPage";
 import OutwardSettlementPage from "./OutwardSettlementPage";
 import BuyerAdjustmentListModal from "./BuyerAdjustmentListModal";
 import BuyerAdjustmentSavedListModal from "./BuyerAdjustmentSavedListModal";
-import BuyerAdjustmentModal from "./BuyerAdjustmentModal";
 import { hasPermission, loadSession } from "../utils/auth";
 
 const lbl = {
@@ -133,7 +132,10 @@ export default function OutwardPage() {
   const [filterView, setFilterView] = useState("all"); // all | pending | adjusted | settled
   const [showBuyerAdjustmentList, setShowBuyerAdjustmentList] = useState(false);
   const [showBuyerAdjustmentSavedList, setShowBuyerAdjustmentSavedList] = useState(false);
-  const [selectedBuyerAdjustmentOutward, setSelectedBuyerAdjustmentOutward] = useState(null);
+  const [selectedUnloadingOutward, setSelectedUnloadingOutward] = useState(null);
+  const [selectedUnloadingDetails, setSelectedUnloadingDetails] = useState([]);
+  const [selectedUnloadingLoading, setSelectedUnloadingLoading] = useState(false);
+  const [selectedUnloadingError, setSelectedUnloadingError] = useState("");
 
   const [formData, setFormData] = useState({
     date: "",
@@ -195,6 +197,34 @@ export default function OutwardPage() {
 
   const closeAdjustmentModal = () => setSelectedOutward(null);
   const closeSettlementModal = () => setSelectedSettlementOutward(null);
+
+  const fetchUnloadingDetails = async (outward) => {
+    if (!outward || !outward.id) {
+      setSelectedUnloadingDetails([]);
+      setSelectedUnloadingError("");
+      return;
+    }
+
+    setSelectedUnloadingLoading(true);
+    setSelectedUnloadingError("");
+
+    try {
+      const res = await axios.get(`${API_BASE}/buyer-adjustment/${outward.id}`);
+      setSelectedUnloadingDetails(Array.isArray(res.data) ? res.data : []);
+    } catch (err) {
+      console.error("Error fetching unloading details:", err);
+      setSelectedUnloadingDetails([]);
+      setSelectedUnloadingError(err?.response?.data?.error || "Failed to fetch unloading details");
+    } finally {
+      setSelectedUnloadingLoading(false);
+    }
+  };
+
+  const openUnloadingDetails = (row) => {
+    setSelectedUnloadingOutward(row);
+    fetchUnloadingDetails(row);
+  };
+
   const openBuyerAdjustmentList = () => {
     setShowForm(false);
     setSelectedOutward(null);
@@ -211,9 +241,10 @@ export default function OutwardPage() {
   };
   const closeBuyerAdjustmentSavedList = () => setShowBuyerAdjustmentSavedList(false);
 
-  const closeBuyerAdjustmentModal = () => setSelectedBuyerAdjustmentOutward(null);
   const handleSelectOutwardForBuyerAdjustment = (outward) => {
-    setSelectedBuyerAdjustmentOutward(outward);
+    setShowBuyerAdjustmentList(false);
+    setShowBuyerAdjustmentSavedList(false);
+    openUnloadingDetails(outward);
   };
 
   useEffect(() => {
@@ -1333,7 +1364,8 @@ Consignee: ${row.consignee_name}`;
                     key={row.id}
                     onMouseEnter={() => setHoveredOutwardId(row.id)}
                     onMouseLeave={() => setHoveredOutwardId(null)}
-                    style={{ background: rowBg, transition: "background-color 0.15s ease" }}
+                    onClick={() => openUnloadingDetails(row)}
+                    style={{ background: rowBg, transition: "background-color 0.15s ease", cursor: "pointer" }}
                   >
                     <td style={cellBase}>{row.sl_no != null ? row.sl_no : row.id}</td>
                     <td style={cellBase}>{row.inv_no || "—"}</td>
@@ -1367,7 +1399,10 @@ Consignee: ${row.consignee_name}`;
                         {canEdit ? (
                           <button
                             type="button"
-                            onClick={() => handleEdit(row)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleEdit(row);
+                            }}
                             title="Edit"
                             aria-label="Edit"
                             style={{ ...actionBtnStyle, background: "#3b82f6", color: "#fff", boxShadow: "0 10px 18px rgba(59, 130, 246, 0.28)" }}
@@ -1378,7 +1413,10 @@ Consignee: ${row.consignee_name}`;
                         {canDelete ? (
                           <button
                             type="button"
-                            onClick={() => handleDelete(row.id)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDelete(row.id);
+                            }}
                             title="Delete"
                             aria-label="Delete"
                             style={{ ...actionBtnStyle, background: "#ef4444", color: "#fff", boxShadow: "0 10px 18px rgba(239, 68, 68, 0.26)" }}
@@ -1388,7 +1426,10 @@ Consignee: ${row.consignee_name}`;
                         ) : null}
                         <button
                           type="button"
-                          onClick={() => handleCopy(row)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleCopy(row);
+                          }}
                           title="Copy"
                           aria-label="Copy"
                           style={{ ...actionBtnStyle, background: "#64748b", color: "#fff", boxShadow: "0 10px 18px rgba(100, 116, 139, 0.24)" }}
@@ -1398,7 +1439,10 @@ Consignee: ${row.consignee_name}`;
                         {canAdjust ? (
                           <button
                             type="button"
-                            onClick={() => openAdjustmentModal(row)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openAdjustmentModal(row);
+                            }}
                             title="Adjust"
                             aria-label="Adjust"
                             style={{ ...actionBtnStyle, background: "#f59e0b", color: "#fff", boxShadow: "0 10px 18px rgba(245, 158, 11, 0.28)" }}
@@ -1409,7 +1453,10 @@ Consignee: ${row.consignee_name}`;
                         {canEdit ? (
                           <button
                             type="button"
-                            onClick={() => openSettlementModal(row)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openSettlementModal(row);
+                            }}
                             title="Settlement"
                             aria-label="Settlement"
                             style={{ ...actionBtnStyle, background: "#22c55e", color: "#fff", boxShadow: "0 10px 18px rgba(34, 197, 94, 0.28)" }}
@@ -1436,7 +1483,7 @@ Consignee: ${row.consignee_name}`;
         <div className="ledger-mobile-view" style={{ marginTop: 12, display: "grid", gap: 12 }}>
           {filteredOutwards.length > 0 ? (
             filteredOutwards.map((row, idx) => (
-              <div key={row.id} style={mobileCard}>
+              <div key={row.id} style={{ ...mobileCard, cursor: "pointer" }} onClick={() => openUnloadingDetails(row)}>
                 <div style={mobileCardTitle}>
                   <div>
                     <div style={{ fontSize: 16, fontWeight: 800, color: "#1f3d05" }}>
@@ -1490,7 +1537,10 @@ Consignee: ${row.consignee_name}`;
                     ) : null}
                     <button
                       type="button"
-                      onClick={() => handleCopy(row)}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleCopy(row);
+                      }}
                       style={{ background: "#64748b", color: "#fff", border: "none", padding: "8px 12px", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 700 }}
                     >
                       Copy
@@ -1523,7 +1573,97 @@ Consignee: ${row.consignee_name}`;
             </div>
           )}
         </div>
-      </div>
+
+        {selectedUnloadingOutward && (
+          <div style={{ ...cardStyle, margin: "16px 16px 0", padding: "16px 18px", background: "#fff" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 12, alignItems: "flex-start" }}>
+              <div>
+                <div style={{ fontSize: 16, fontWeight: 800, color: "#0f172a" }}>
+                  Selected Outward: {selectedUnloadingOutward.sl_no != null ? selectedUnloadingOutward.sl_no : selectedUnloadingOutward.id} {selectedUnloadingOutward.inv_no ? `(${selectedUnloadingOutward.inv_no})` : ""}
+                </div>
+                <div style={{ fontSize: 13, color: "#475569", marginTop: 6 }}>
+                  {formatDate(selectedUnloadingOutward.date)} • {selectedUnloadingOutward.warehouse_name || selectedUnloadingOutward.location_name || "—"}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedUnloadingOutward(null)}
+                style={{ ...btnPrimary, background: "#ef4444", minWidth: 120 }}
+              >
+                Close details
+              </button>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, marginTop: 16 }}>
+              {[
+                ["Buyer", selectedUnloadingOutward.buyer_name || "—"],
+                ["Consignee", selectedUnloadingOutward.consignee_name || "—"],
+                ["Lorry No", selectedUnloadingOutward.lorry_no || "—"],
+                ["Product", selectedUnloadingOutward.product_name || "—"],
+                ["Warehouse", selectedUnloadingOutward.warehouse_name || selectedUnloadingOutward.location_name || "—"],
+                ["Weight", formatWeight(selectedUnloadingOutward.weight)],
+                ["Rate", formatRate(selectedUnloadingOutward.rate)],
+                ["Status", selectedUnloadingOutward.status || "Pending"],
+              ].map(([label, value]) => (
+                <div key={label} style={{ background: "#f8fafc", border: "1px solid #dbeafe", borderRadius: 10, padding: 12 }}>
+                  <div style={{ fontSize: 11, color: "#475569", fontWeight: 700, marginBottom: 6 }}>{label}</div>
+                  <div style={{ fontSize: 14, color: "#0f172a", fontWeight: 700 }}>{value}</div>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ marginTop: 20 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                <div style={{ fontSize: 15, fontWeight: 800, color: "#14532d" }}>Unloading / Buyer Details</div>
+                {selectedUnloadingLoading ? (
+                  <div style={{ color: "#0ea5a4", fontWeight: 700 }}>Loading details...</div>
+                ) : null}
+              </div>
+              {selectedUnloadingError ? (
+                <div style={{ color: "#dc2626", padding: 12, background: "#fef2f2", borderRadius: 10 }}>{selectedUnloadingError}</div>
+              ) : selectedUnloadingDetails.length === 0 && !selectedUnloadingLoading ? (
+                <div style={{ color: "#475569", padding: 14, borderRadius: 10, background: "#f8fafc" }}>
+                  No unloading details found for this entry.
+                </div>
+              ) : (
+                <div style={{ overflowX: "auto" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                    <thead>
+                      <tr>
+                        <th style={{ ...thStyle, background: "#0f766e" }}>#</th>
+                        <th style={thStyle}>Buyer</th>
+                        <th style={thStyle}>Consignee</th>
+                        <th style={thStyle}>Unloading Qty</th>
+                        <th style={thStyle}>Rate</th>
+                        <th style={thStyle}>Claim</th>
+                        <th style={thStyle}>Deduction</th>
+                        <th style={thStyle}>Shortage</th>
+                        <th style={thStyle}>Shortage Amount</th>
+                        <th style={thStyle}>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {selectedUnloadingDetails.map((detail, index) => (
+                        <tr key={`${detail.id || detail.outward_id}-${index}`}> 
+                          <td style={tdStyle}>{index + 1}</td>
+                          <td style={tdStyle}>{detail.buyer_name || "—"}</td>
+                          <td style={tdStyle}>{detail.consignee_name || "—"}</td>
+                          <td style={tdStyle}>{Number(detail.qty || detail.weight || 0).toFixed(2)}</td>
+                          <td style={tdStyle}>{Number(detail.rate || 0).toFixed(2)}</td>
+                          <td style={tdStyle}>{Number(detail.claim || 0).toFixed(2)}</td>
+                          <td style={tdStyle}>{Number(detail.other_deduction || 0).toFixed(2)}</td>
+                          <td style={tdStyle}>{Number(detail.shortage || 0).toFixed(2)}</td>
+                          <td style={tdStyle}>{Number(detail.shortage_amount || 0).toFixed(2)}</td>
+                          <td style={tdStyle}>{detail.status || "Pending"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
       {filterView !== "all" && (
         <div style={{ ...cardStyle, padding: 12, margin: "10px 16px 16px 16px", background: "#fff" }}>
@@ -1730,15 +1870,6 @@ Consignee: ${row.consignee_name}`;
         isOpen={showBuyerAdjustmentSavedList}
         onClose={closeBuyerAdjustmentSavedList}
         onSelectOutward={handleSelectOutwardForBuyerAdjustment}
-      />
-
-      <BuyerAdjustmentModal
-        isOpen={!!selectedBuyerAdjustmentOutward}
-        outward={selectedBuyerAdjustmentOutward}
-        onClose={closeBuyerAdjustmentModal}
-        buyerNames={buyerNames}
-        consigneeNames={consigneeNames}
-        onSave={fetchOutwards}
       />
         </>
       )}
