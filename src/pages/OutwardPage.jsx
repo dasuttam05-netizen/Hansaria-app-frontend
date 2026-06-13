@@ -374,6 +374,8 @@ export default function OutwardPage() {
         closeFormModal();
         if (targetRow) {
           openUnloadingDetails(targetRow);
+        } else {
+          openBuyerAdjustmentList();
         }
         return;
       }
