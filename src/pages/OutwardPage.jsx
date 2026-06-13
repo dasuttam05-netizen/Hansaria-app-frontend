@@ -372,7 +372,9 @@ export default function OutwardPage() {
       if (event.key === "F2") {
         closeSettlementModal();
         closeFormModal();
-        openBuyerAdjustmentList();
+        if (targetRow) {
+          openUnloadingDetails(targetRow);
+        }
         return;
       }
 
