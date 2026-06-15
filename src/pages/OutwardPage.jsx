@@ -1496,24 +1496,6 @@ Consignee: ${row.consignee_name}`;
                   <span style={mobileCardBadge}>{row.lorry_no || "No Lorry"}</span>
                 </div>
 
-                {[
-                  ["Employee", row.employee_name || "-"],
-                  ["Location", row.location_name || "-"],
-                  ["Warehouse", row.warehouse_name || "-"],
-                  ["Product", row.product_name || "-"],
-                  ["Company", row.company_name || "-"],
-                  ["Account", row.party_name || "-"],
-                  ["Weight", formatWeight(row.weight)],
-                  ["Rate", formatRate(row.rate)],
-                  ["Buyer", row.buyer_name || "-"],
-                  ["Consignee", row.consignee_name || "-"],
-                ].map(([labelText, value]) => (
-                  <div key={labelText} style={mobileRow}>
-                    <span style={mobileLabel}>{labelText}</span>
-                    <span style={mobileValue}>{value}</span>
-                  </div>
-                ))}
-
                 <div style={{ ...mobileRow, alignItems: "center" }}>
                   <span style={mobileLabel}>Actions</span>
                   <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
@@ -1592,24 +1574,6 @@ Consignee: ${row.consignee_name}`;
               >
                 Close details
               </button>
-            </div>
-
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, marginTop: 16 }}>
-              {[
-                ["Buyer", selectedUnloadingOutward.buyer_name || "—"],
-                ["Consignee", selectedUnloadingOutward.consignee_name || "—"],
-                ["Lorry No", selectedUnloadingOutward.lorry_no || "—"],
-                ["Product", selectedUnloadingOutward.product_name || "—"],
-                ["Warehouse", selectedUnloadingOutward.warehouse_name || selectedUnloadingOutward.location_name || "—"],
-                ["Weight", formatWeight(selectedUnloadingOutward.weight)],
-                ["Rate", formatRate(selectedUnloadingOutward.rate)],
-                ["Status", selectedUnloadingOutward.status || "Pending"],
-              ].map(([label, value]) => (
-                <div key={label} style={{ background: "#f8fafc", border: "1px solid #dbeafe", borderRadius: 10, padding: 12 }}>
-                  <div style={{ fontSize: 11, color: "#475569", fontWeight: 700, marginBottom: 6 }}>{label}</div>
-                  <div style={{ fontSize: 14, color: "#0f172a", fontWeight: 700 }}>{value}</div>
-                </div>
-              ))}
             </div>
 
             <div style={{ marginTop: 20 }}>
