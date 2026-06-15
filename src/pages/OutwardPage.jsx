@@ -372,11 +372,7 @@ export default function OutwardPage() {
       if (event.key === "F2") {
         closeSettlementModal();
         closeFormModal();
-        if (targetRow) {
-          openUnloadingDetails(targetRow);
-        } else {
-          openBuyerAdjustmentList();
-        }
+        openBuyerAdjustmentList();
         return;
       }
 
@@ -402,8 +398,8 @@ export default function OutwardPage() {
       }
     };
 
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
+    window.addEventListener("keydown", handleKeyDown, true);
+    return () => window.removeEventListener("keydown", handleKeyDown, true);
   }, [selectedOutward, selectedSettlementOutward, filteredOutwards, hoveredOutwardId, showForm, editData]);
 
   useEffect(() => {
@@ -1875,9 +1871,8 @@ Consignee: ${row.consignee_name}`;
         onClose={closeBuyerAdjustmentSavedList}
         onSelectOutward={handleSelectOutwardForBuyerAdjustment}
       />
-      </div>
       </>
-    )}
+      )}
     </div>
   );
 }
