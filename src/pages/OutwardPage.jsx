@@ -405,9 +405,10 @@ export default function OutwardPage() {
         if (targetRow) {
           closeSettlementModal();
           closeFormModal();
-          openUnloadingDetails(targetRow);
+          setSelectedUnloadingOutward(targetRow);
+          setShowBuyerAdjustmentForm(true);
         } else {
-          console.warn("F2: No outward row found to open unloading details");
+          console.warn("F2: No outward row found to open buyer adjustment form");
         }
         return;
       }
