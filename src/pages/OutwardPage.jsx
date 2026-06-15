@@ -398,14 +398,16 @@ export default function OutwardPage() {
 
       const targetRow =
         selectedUnloadingOutward ||
-        filteredOutwards.find((row) => String(row.id) === String(hoveredOutwardId)) ||
-        filteredOutwards[0];
+        (hoveredOutwardId ? filteredOutwards.find((row) => String(row.id) === String(hoveredOutwardId)) : null) ||
+        (filteredOutwards && filteredOutwards.length > 0 ? filteredOutwards[0] : null);
 
       if (event.key === "F2") {
         if (targetRow) {
           closeSettlementModal();
           closeFormModal();
           openUnloadingDetails(targetRow);
+        } else {
+          console.warn("F2: No outward row found to open unloading details");
         }
         return;
       }
@@ -434,7 +436,7 @@ export default function OutwardPage() {
 
     window.addEventListener("keydown", handleKeyDown, true);
     return () => window.removeEventListener("keydown", handleKeyDown, true);
-  }, [selectedOutward, selectedSettlementOutward, filteredOutwards, hoveredOutwardId, showForm, editData]);
+  }, [selectedUnloadingOutward, selectedSettlementOutward, filteredOutwards, hoveredOutwardId, showForm, editData, selectedOutward]);
 
   useEffect(() => {
     const loadWarehouseStock = async () => {
