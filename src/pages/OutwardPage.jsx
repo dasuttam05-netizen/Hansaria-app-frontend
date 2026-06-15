@@ -6,6 +6,7 @@ import AdjustmentPage from "./AdjustmentPage";
 import OutwardSettlementPage from "./OutwardSettlementPage";
 import BuyerAdjustmentListModal from "./BuyerAdjustmentListModal";
 import BuyerAdjustmentSavedListModal from "./BuyerAdjustmentSavedListModal";
+import BuyerAdjustmentForm from "./BuyerAdjustmentForm";
 import { hasPermission, loadSession } from "../utils/auth";
 
 const lbl = {
@@ -136,6 +137,8 @@ export default function OutwardPage() {
   const [selectedUnloadingDetails, setSelectedUnloadingDetails] = useState([]);
   const [selectedUnloadingLoading, setSelectedUnloadingLoading] = useState(false);
   const [selectedUnloadingError, setSelectedUnloadingError] = useState("");
+  const [showBuyerAdjustmentForm, setShowBuyerAdjustmentForm] = useState(false);
+  const [selectedUnloadingDetail, setSelectedUnloadingDetail] = useState(null);
   const selectedRowDetailRef = useRef(null);
   const rowRefs = useRef({});
 
@@ -262,6 +265,17 @@ export default function OutwardPage() {
     setShowBuyerAdjustmentList(false);
     setShowBuyerAdjustmentSavedList(false);
     openUnloadingDetails(outward);
+  };
+
+  const handleEditUnloadingDetail = (detail) => {
+    setSelectedUnloadingDetail(detail);
+    setShowBuyerAdjustmentForm(true);
+  };
+
+  const closeBuyerAdjustmentForm = () => {
+    setShowBuyerAdjustmentForm(false);
+    setSelectedUnloadingDetail(null);
+    fetchUnloadingDetails(selectedUnloadingOutward);
   };
 
   useEffect(() => {
@@ -1544,7 +1558,11 @@ Consignee: ${row.consignee_name}`;
                                       </thead>
                                       <tbody>
                                         {selectedUnloadingDetails.map((detail, index) => (
-                                          <tr key={`${detail.id || detail.outward_id}-${index}`}>
+                                          <tr 
+                                            key={`${detail.id || detail.outward_id}-${index}`}
+                                            onClick={() => handleEditUnloadingDetail(detail)}
+                                            style={{ cursor: "pointer" }}
+                                          >
                                             <td style={tdStyle}>{index + 1}</td>
                                             <td style={tdStyle}>{detail.buyer_name || "—"}</td>
                                             <td style={tdStyle}>{detail.consignee_name || "—"}</td>
@@ -1702,7 +1720,11 @@ Consignee: ${row.consignee_name}`;
                               </thead>
                               <tbody>
                                 {selectedUnloadingDetails.map((detail, index) => (
-                                  <tr key={`${detail.id || detail.outward_id}-${index}`}>
+                                  <tr 
+                                    key={`${detail.id || detail.outward_id}-${index}`}
+                                    onClick={() => handleEditUnloadingDetail(detail)}
+                                    style={{ cursor: "pointer" }}
+                                  >
                                     <td style={tdStyle}>{index + 1}</td>
                                     <td style={tdStyle}>{detail.buyer_name || "—"}</td>
                                     <td style={tdStyle}>{detail.consignee_name || "—"}</td>
@@ -1939,6 +1961,41 @@ Consignee: ${row.consignee_name}`;
         onClose={closeBuyerAdjustmentSavedList}
         onSelectOutward={handleSelectOutwardForBuyerAdjustment}
       />
+
+      {showBuyerAdjustmentForm && selectedUnloadingOutward && (
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            background: "rgba(15, 23, 42, 0.45)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "flex-start",
+            padding: "20px 12px",
+            zIndex: 1001,
+            overflowY: "auto",
+          }}
+        >
+          <div
+            style={{
+              width: "100%",
+              maxWidth: "800px",
+              background: "#fff",
+              borderRadius: "12px",
+              padding: "20px",
+              boxShadow: "0 4px 14px rgba(15, 23, 42, 0.06)",
+            }}
+          >
+            <BuyerAdjustmentForm
+              outward={selectedUnloadingOutward}
+              onClose={closeBuyerAdjustmentForm}
+              buyerNames={buyerNames}
+              consigneeNames={consigneeNames}
+              onSave={closeBuyerAdjustmentForm}
+            />
+          </div>
+        </div>
+      )}
       </div>
       </>
     )}
