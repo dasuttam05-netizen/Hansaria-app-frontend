@@ -383,13 +383,16 @@ export default function OutwardPage() {
       event.stopPropagation();
 
       const targetRow =
+        selectedUnloadingOutward ||
         filteredOutwards.find((row) => String(row.id) === String(hoveredOutwardId)) ||
         filteredOutwards[0];
 
       if (event.key === "F2") {
-        closeSettlementModal();
-        closeFormModal();
-        openBuyerAdjustmentList();
+        if (targetRow) {
+          closeSettlementModal();
+          closeFormModal();
+          openUnloadingDetails(targetRow);
+        }
         return;
       }
 
@@ -1491,7 +1494,7 @@ Consignee: ${row.consignee_name}`;
                       {isSelected ? (
                         <tr>
                           <td colSpan="16" style={{ padding: 0, border: "none", background: "#ecfdf5" }}>
-                            <div style={{ margin: 0, padding: "18px 20px", background: "#f8fafc", borderTop: "1px solid #d1fae5", borderBottom: "1px solid #d1fae5", borderRadius: "0 0 12px 12px" }}>
+                            <div ref={selectedRowDetailRef} style={{ margin: 0, padding: "18px 20px", background: "#f8fafc", borderTop: "1px solid #d1fae5", borderBottom: "1px solid #d1fae5", borderRadius: "0 0 12px 12px" }}>
                               <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 12, alignItems: "flex-start" }}>
                                 <div>
                                   <div style={{ fontSize: 16, fontWeight: 800, color: "#0f172a" }}>
