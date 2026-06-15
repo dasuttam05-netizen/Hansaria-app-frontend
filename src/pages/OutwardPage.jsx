@@ -1871,7 +1871,10 @@ Consignee: ${row.consignee_name}`;
         onClose={closeBuyerAdjustmentSavedList}
         onSelectOutward={handleSelectOutwardForBuyerAdjustment}
       />
-    </div>
+      </div>
+      </>
+    )}
+  </div>
   );
 }
 
