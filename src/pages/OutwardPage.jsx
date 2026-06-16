@@ -1750,6 +1750,12 @@ Consignee: ${row.consignee_name}`;
                           <div style={{ fontSize: 13, color: "#475569", marginTop: 6 }}>
                             {formatDate(selectedUnloadingOutward.date)} • {selectedUnloadingOutward.warehouse_name || selectedUnloadingOutward.location_name || "—"}
                           </div>
+                          <div style={{ fontSize: 13, color: "#475569", marginTop: 4 }}>
+                            Lorry: {selectedUnloadingOutward.lorry_no || "—"}
+                          </div>
+                          <div style={{ fontSize: 13, color: "#475569", marginTop: 4 }}>
+                            Lorry: {selectedUnloadingOutward.lorry_no || "—"}
+                          </div>
                         </div>
                         <button
                           type="button"
