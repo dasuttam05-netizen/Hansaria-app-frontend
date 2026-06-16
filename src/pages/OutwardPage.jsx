@@ -1542,10 +1542,13 @@ Consignee: ${row.consignee_name}`;
                                     Selected Outward: {selectedUnloadingOutward.sl_no != null ? selectedUnloadingOutward.sl_no : selectedUnloadingOutward.id} {selectedUnloadingOutward.inv_no ? `(${selectedUnloadingOutward.inv_no})` : ""}
                                   </div>
                                   <div style={{ fontSize: 13, color: "#475569", marginTop: 6 }}>
-                                    {formatDate(selectedUnloadingOutward.date)} • {selectedUnloadingOutward.warehouse_name || selectedUnloadingOutward.location_name || "—"}
+                                    Unloading Date: {formatDate(selectedUnloadingOutward.date)}
                                   </div>
                                   <div style={{ fontSize: 13, color: "#475569", marginTop: 4 }}>
                                     Lorry No: {selectedUnloadingOutward.lorry_no || "—"}
+                                  </div>
+                                  <div style={{ fontSize: 13, color: "#475569", marginTop: 4 }}>
+                                    Warehouse/Location: {selectedUnloadingOutward.warehouse_name || selectedUnloadingOutward.location_name || "—"}
                                   </div>
                                   <div style={{ fontSize: 13, color: "#475569", marginTop: 4 }}>
                                     Unloading Weight: {formatWeight(selectedUnloadingOutward.weight || selectedUnloadingOutward.qty || selectedUnloadingOutward.unloading_qty || 0)} kg
