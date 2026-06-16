@@ -134,8 +134,6 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
       return;
     }
 
-    }
-
     if (!newAdjustment.qty || Number(newAdjustment.qty) <= 0) {
       toast.error("Quantity must be greater than 0", { theme: "colored" });
       return;
