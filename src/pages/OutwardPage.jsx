@@ -1544,6 +1544,12 @@ Consignee: ${row.consignee_name}`;
                                   <div style={{ fontSize: 13, color: "#475569", marginTop: 6 }}>
                                     {formatDate(selectedUnloadingOutward.date)} • {selectedUnloadingOutward.warehouse_name || selectedUnloadingOutward.location_name || "—"}
                                   </div>
+                                  <div style={{ fontSize: 13, color: "#475569", marginTop: 4 }}>
+                                    Lorry No: {selectedUnloadingOutward.lorry_no || "—"}
+                                  </div>
+                                  <div style={{ fontSize: 13, color: "#475569", marginTop: 4 }}>
+                                    Unloading Weight: {formatWeight(selectedUnloadingOutward.weight || selectedUnloadingOutward.qty || selectedUnloadingOutward.unloading_qty || 0)} kg
+                                  </div>
                                 </div>
                                 <button
                                   type="button"
@@ -1751,10 +1757,10 @@ Consignee: ${row.consignee_name}`;
                             {formatDate(selectedUnloadingOutward.date)} • {selectedUnloadingOutward.warehouse_name || selectedUnloadingOutward.location_name || "—"}
                           </div>
                           <div style={{ fontSize: 13, color: "#475569", marginTop: 4 }}>
-                            Lorry: {selectedUnloadingOutward.lorry_no || "—"}
+                            Lorry No: {selectedUnloadingOutward.lorry_no || "—"}
                           </div>
                           <div style={{ fontSize: 13, color: "#475569", marginTop: 4 }}>
-                            Lorry: {selectedUnloadingOutward.lorry_no || "—"}
+                            Unloading Weight: {formatWeight(selectedUnloadingOutward.weight || selectedUnloadingOutward.qty || selectedUnloadingOutward.unloading_qty || 0)} kg
                           </div>
                         </div>
                         <button
