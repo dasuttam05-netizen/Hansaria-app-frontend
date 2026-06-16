@@ -2101,11 +2101,13 @@ Consignee: ${row.consignee_name}`;
           <div
             style={{
               width: "100%",
-              maxWidth: "800px",
+              maxWidth: "1200px",
+              maxHeight: "70vh",
+              overflowY: "auto",
               background: "#fff",
               borderRadius: "12px",
-              padding: "20px",
-              boxShadow: "0 4px 14px rgba(15, 23, 42, 0.06)",
+              padding: "20px 36px",
+              boxShadow: "0 6px 24px rgba(15, 23, 42, 0.08)",
             }}
           >
             <BuyerAdjustmentForm
