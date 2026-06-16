@@ -1541,18 +1541,6 @@ Consignee: ${row.consignee_name}`;
                                   <div style={{ fontSize: 16, fontWeight: 800, color: "#0f172a" }}>
                                     Selected Outward: {selectedUnloadingOutward.sl_no != null ? selectedUnloadingOutward.sl_no : selectedUnloadingOutward.id} {selectedUnloadingOutward.inv_no ? `(${selectedUnloadingOutward.inv_no})` : ""}
                                   </div>
-                                  <div style={{ fontSize: 13, color: "#475569", marginTop: 6 }}>
-                                    Unloading Date: {formatDate(selectedUnloadingOutward.date)}
-                                  </div>
-                                  <div style={{ fontSize: 13, color: "#475569", marginTop: 4 }}>
-                                    Lorry No: {selectedUnloadingOutward.lorry_no || "—"}
-                                  </div>
-                                  <div style={{ fontSize: 13, color: "#475569", marginTop: 4 }}>
-                                    Warehouse/Location: {selectedUnloadingOutward.warehouse_name || selectedUnloadingOutward.location_name || "—"}
-                                  </div>
-                                  <div style={{ fontSize: 13, color: "#475569", marginTop: 4 }}>
-                                    Unloading Weight: {formatWeight(selectedUnloadingOutward.weight || selectedUnloadingOutward.qty || selectedUnloadingOutward.unloading_qty || 0)} kg
-                                  </div>
                                 </div>
                                 <button
                                   type="button"
@@ -1616,6 +1604,8 @@ Consignee: ${row.consignee_name}`;
                                             <th style={{ ...thStyle, background: "#0f766e" }}>#</th>
                                             <th style={thStyle}>Buyer</th>
                                             <th style={thStyle}>Consignee</th>
+                                            <th style={thStyle}>Unloading Date</th>
+                                            <th style={thStyle}>Lorry No</th>
                                             <th style={thStyle}>Unloading Qty</th>
                                             <th style={thStyle}>Rate</th>
                                             <th style={thStyle}>Claim</th>
@@ -1635,6 +1625,8 @@ Consignee: ${row.consignee_name}`;
                                               <td style={tdStyle}>{index + 1}</td>
                                               <td style={tdStyle}>{detail.buyer_name || "—"}</td>
                                               <td style={tdStyle}>{detail.consignee_name || "—"}</td>
+                                              <td style={tdStyle}>{formatDate(selectedUnloadingOutward.date)}</td>
+                                              <td style={tdStyle}>{selectedUnloadingOutward.lorry_no || "—"}</td>
                                               <td style={tdStyle}>{Number(detail.qty || detail.weight || 0).toFixed(2)}</td>
                                               <td style={tdStyle}>{Number(detail.rate || 0).toFixed(2)}</td>
                                               <td style={tdStyle}>{Number(detail.claim || 0).toFixed(2)}</td>
@@ -1645,7 +1637,7 @@ Consignee: ${row.consignee_name}`;
                                             </tr>
                                           ))}
                                           <tr style={{ background: "#f0fdf4" }}>
-                                            <td style={{ ...tdStyle, fontWeight: 700 }} colSpan={3}>Totals</td>
+                                            <td style={{ ...tdStyle, fontWeight: 700 }} colSpan={5}>Totals</td>
                                             <td style={{ ...tdStyle, fontWeight: 700 }}>{selectedUnloadingTotals.totalQty.toFixed(2)}</td>
                                             <td style={{ ...tdStyle, fontWeight: 700 }}>{selectedUnloadingTotals.avgRate.toFixed(2)}</td>
                                             <td style={{ ...tdStyle, fontWeight: 700 }}>{selectedUnloadingTotals.totalClaim.toFixed(2)}</td>
