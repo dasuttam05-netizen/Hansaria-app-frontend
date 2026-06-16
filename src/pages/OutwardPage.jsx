@@ -261,6 +261,25 @@ export default function OutwardPage() {
   };
   const closeBuyerAdjustmentSavedList = () => setShowBuyerAdjustmentSavedList(false);
 
+  const selectedUnloadingTotals = useMemo(() => {
+    const rows = Array.isArray(selectedUnloadingDetails) ? selectedUnloadingDetails : [];
+    const totalQty = rows.reduce((sum, detail) => sum + Number(detail.qty || detail.weight || 0), 0);
+    const totalClaim = rows.reduce((sum, detail) => sum + Number(detail.claim || 0), 0);
+    const totalOtherDeduction = rows.reduce((sum, detail) => sum + Number(detail.other_deduction || 0), 0);
+    const totalShortage = rows.reduce((sum, detail) => sum + Number(detail.shortage || 0), 0);
+    const totalShortageAmount = rows.reduce((sum, detail) => sum + Number(detail.shortage_amount || 0), 0);
+    const weightedRateSum = rows.reduce((sum, detail) => sum + Number(detail.rate || 0) * Number(detail.qty || detail.weight || 0), 0);
+    const avgRate = totalQty > 0 ? weightedRateSum / totalQty : 0;
+    return {
+      totalQty,
+      avgRate,
+      totalClaim,
+      totalOtherDeduction,
+      totalShortage,
+      totalShortageAmount,
+    };
+  }, [selectedUnloadingDetails]);
+
   const handleSelectOutwardForBuyerAdjustment = (outward) => {
     setShowBuyerAdjustmentList(false);
     setShowBuyerAdjustmentSavedList(false);
@@ -1543,44 +1562,86 @@ Consignee: ${row.consignee_name}`;
                                     No unloading details found for this entry.
                                   </div>
                                 ) : (
-                                  <div style={{ overflowX: "auto" }}>
-                                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                                      <thead>
-                                        <tr>
-                                          <th style={{ ...thStyle, background: "#0f766e" }}>#</th>
-                                          <th style={thStyle}>Buyer</th>
-                                          <th style={thStyle}>Consignee</th>
-                                          <th style={thStyle}>Unloading Qty</th>
-                                          <th style={thStyle}>Rate</th>
-                                          <th style={thStyle}>Claim</th>
-                                          <th style={thStyle}>Deduction</th>
-                                          <th style={thStyle}>Shortage</th>
-                                          <th style={thStyle}>Shortage Amount</th>
-                                          <th style={thStyle}>Status</th>
-                                        </tr>
-                                      </thead>
-                                      <tbody>
-                                        {selectedUnloadingDetails.map((detail, index) => (
-                                          <tr 
-                                            key={`${detail.id || detail.outward_id}-${index}`}
-                                            onClick={() => handleEditUnloadingDetail(detail)}
-                                            style={{ cursor: "pointer" }}
-                                          >
-                                            <td style={tdStyle}>{index + 1}</td>
-                                            <td style={tdStyle}>{detail.buyer_name || "—"}</td>
-                                            <td style={tdStyle}>{detail.consignee_name || "—"}</td>
-                                            <td style={tdStyle}>{Number(detail.qty || detail.weight || 0).toFixed(2)}</td>
-                                            <td style={tdStyle}>{Number(detail.rate || 0).toFixed(2)}</td>
-                                            <td style={tdStyle}>{Number(detail.claim || 0).toFixed(2)}</td>
-                                            <td style={tdStyle}>{Number(detail.other_deduction || 0).toFixed(2)}</td>
-                                            <td style={tdStyle}>{Number(detail.shortage || 0).toFixed(2)}</td>
-                                            <td style={tdStyle}>{Number(detail.shortage_amount || 0).toFixed(2)}</td>
-                                            <td style={tdStyle}>{detail.status || "Pending"}</td>
+                                  <>
+                                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12, marginBottom: 16 }}>
+                                      <div style={{ background: "#ffffff", border: "1px solid #d1fae5", borderRadius: 12, padding: 14 }}>
+                                        <div style={{ fontSize: 13, fontWeight: 700, color: "#0f766e", marginBottom: 10 }}>Consignee / Rate summary</div>
+                                        <div style={{ fontSize: 14, fontWeight: 700, color: "#14532d" }}>{selectedUnloadingTotals.totalQty.toFixed(2)} kg</div>
+                                        <div style={{ fontSize: 12, color: "#475569", marginTop: 6 }}>Total Weight from consignee/rate lines</div>
+                                        <div style={{ marginTop: 12, fontSize: 14, fontWeight: 700, color: "#14532d" }}>{selectedUnloadingTotals.avgRate.toFixed(2)}</div>
+                                        <div style={{ fontSize: 12, color: "#475569", marginTop: 6 }}>Average Rate by total weight</div>
+                                      </div>
+                                      <div style={{ background: "#ffffff", border: "1px solid #d1fae5", borderRadius: 12, padding: 14 }}>
+                                        <div style={{ fontSize: 13, fontWeight: 700, color: "#0f766e", marginBottom: 10 }}>Godowan / Palti totals</div>
+                                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                                          <div>
+                                            <div style={{ fontSize: 12, color: "#475569" }}>Claim total</div>
+                                            <div style={{ fontSize: 14, fontWeight: 700, color: "#14532d" }}>{selectedUnloadingTotals.totalClaim.toFixed(2)}</div>
+                                          </div>
+                                          <div>
+                                            <div style={{ fontSize: 12, color: "#475569" }}>Deduction total</div>
+                                            <div style={{ fontSize: 14, fontWeight: 700, color: "#14532d" }}>{selectedUnloadingTotals.totalOtherDeduction.toFixed(2)}</div>
+                                          </div>
+                                          <div>
+                                            <div style={{ fontSize: 12, color: "#475569" }}>Shortage total</div>
+                                            <div style={{ fontSize: 14, fontWeight: 700, color: "#14532d" }}>{selectedUnloadingTotals.totalShortage.toFixed(2)}</div>
+                                          </div>
+                                          <div>
+                                            <div style={{ fontSize: 12, color: "#475569" }}>Shortage amount</div>
+                                            <div style={{ fontSize: 14, fontWeight: 700, color: "#14532d" }}>{selectedUnloadingTotals.totalShortageAmount.toFixed(2)}</div>
+                                          </div>
+                                        </div>
+                                      </div>
+                                    </div>
+                                    <div style={{ overflowX: "auto" }}>
+                                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                                        <thead>
+                                          <tr>
+                                            <th style={{ ...thStyle, background: "#0f766e" }}>#</th>
+                                            <th style={thStyle}>Buyer</th>
+                                            <th style={thStyle}>Consignee</th>
+                                            <th style={thStyle}>Unloading Qty</th>
+                                            <th style={thStyle}>Rate</th>
+                                            <th style={thStyle}>Claim</th>
+                                            <th style={thStyle}>Deduction</th>
+                                            <th style={thStyle}>Shortage</th>
+                                            <th style={thStyle}>Shortage Amount</th>
+                                            <th style={thStyle}>Status</th>
                                           </tr>
-                                        ))}
-                                      </tbody>
-                                    </table>
-                                  </div>
+                                        </thead>
+                                        <tbody>
+                                          {selectedUnloadingDetails.map((detail, index) => (
+                                            <tr 
+                                              key={`${detail.id || detail.outward_id}-${index}`}
+                                              onClick={() => handleEditUnloadingDetail(detail)}
+                                              style={{ cursor: "pointer" }}
+                                            >
+                                              <td style={tdStyle}>{index + 1}</td>
+                                              <td style={tdStyle}>{detail.buyer_name || "—"}</td>
+                                              <td style={tdStyle}>{detail.consignee_name || "—"}</td>
+                                              <td style={tdStyle}>{Number(detail.qty || detail.weight || 0).toFixed(2)}</td>
+                                              <td style={tdStyle}>{Number(detail.rate || 0).toFixed(2)}</td>
+                                              <td style={tdStyle}>{Number(detail.claim || 0).toFixed(2)}</td>
+                                              <td style={tdStyle}>{Number(detail.other_deduction || 0).toFixed(2)}</td>
+                                              <td style={tdStyle}>{Number(detail.shortage || 0).toFixed(2)}</td>
+                                              <td style={tdStyle}>{Number(detail.shortage_amount || 0).toFixed(2)}</td>
+                                              <td style={tdStyle}>{detail.status || "Pending"}</td>
+                                            </tr>
+                                          ))}
+                                          <tr style={{ background: "#f0fdf4" }}>
+                                            <td style={{ ...tdStyle, fontWeight: 700 }} colSpan={3}>Totals</td>
+                                            <td style={{ ...tdStyle, fontWeight: 700 }}>{selectedUnloadingTotals.totalQty.toFixed(2)}</td>
+                                            <td style={{ ...tdStyle, fontWeight: 700 }}>{selectedUnloadingTotals.avgRate.toFixed(2)}</td>
+                                            <td style={{ ...tdStyle, fontWeight: 700 }}>{selectedUnloadingTotals.totalClaim.toFixed(2)}</td>
+                                            <td style={{ ...tdStyle, fontWeight: 700 }}>{selectedUnloadingTotals.totalOtherDeduction.toFixed(2)}</td>
+                                            <td style={{ ...tdStyle, fontWeight: 700 }}>{selectedUnloadingTotals.totalShortage.toFixed(2)}</td>
+                                            <td style={{ ...tdStyle, fontWeight: 700 }}>{selectedUnloadingTotals.totalShortageAmount.toFixed(2)}</td>
+                                            <td style={tdStyle}></td>
+                                          </tr>
+                                        </tbody>
+                                      </table>
+                                    </div>
+                                  </>
                                 )}
                               </div>
                             </div>
@@ -1705,44 +1766,86 @@ Consignee: ${row.consignee_name}`;
                             No unloading details found for this entry.
                           </div>
                         ) : (
-                          <div style={{ overflowX: "auto" }}>
-                            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                              <thead>
-                                <tr>
-                                  <th style={{ ...thStyle, background: "#0f766e" }}>#</th>
-                                  <th style={thStyle}>Buyer</th>
-                                  <th style={thStyle}>Consignee</th>
-                                  <th style={thStyle}>Unloading Qty</th>
-                                  <th style={thStyle}>Rate</th>
-                                  <th style={thStyle}>Claim</th>
-                                  <th style={thStyle}>Deduction</th>
-                                  <th style={thStyle}>Shortage</th>
-                                  <th style={thStyle}>Shortage Amount</th>
-                                  <th style={thStyle}>Status</th>
-                                </tr>
-                              </thead>
-                              <tbody>
-                                {selectedUnloadingDetails.map((detail, index) => (
-                                  <tr 
-                                    key={`${detail.id || detail.outward_id}-${index}`}
-                                    onClick={() => handleEditUnloadingDetail(detail)}
-                                    style={{ cursor: "pointer" }}
-                                  >
-                                    <td style={tdStyle}>{index + 1}</td>
-                                    <td style={tdStyle}>{detail.buyer_name || "—"}</td>
-                                    <td style={tdStyle}>{detail.consignee_name || "—"}</td>
-                                    <td style={tdStyle}>{Number(detail.qty || detail.weight || 0).toFixed(2)}</td>
-                                    <td style={tdStyle}>{Number(detail.rate || 0).toFixed(2)}</td>
-                                    <td style={tdStyle}>{Number(detail.claim || 0).toFixed(2)}</td>
-                                    <td style={tdStyle}>{Number(detail.other_deduction || 0).toFixed(2)}</td>
-                                    <td style={tdStyle}>{Number(detail.shortage || 0).toFixed(2)}</td>
-                                    <td style={tdStyle}>{Number(detail.shortage_amount || 0).toFixed(2)}</td>
-                                    <td style={tdStyle}>{detail.status || "Pending"}</td>
+                          <>
+                            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12, marginBottom: 16 }}>
+                              <div style={{ background: "#ffffff", border: "1px solid #d1fae5", borderRadius: 12, padding: 14 }}>
+                                <div style={{ fontSize: 13, fontWeight: 700, color: "#0f766e", marginBottom: 10 }}>Consignee / Rate summary</div>
+                                <div style={{ fontSize: 14, fontWeight: 700, color: "#14532d" }}>{selectedUnloadingTotals.totalQty.toFixed(2)} kg</div>
+                                <div style={{ fontSize: 12, color: "#475569", marginTop: 6 }}>Total Weight from consignee/rate lines</div>
+                                <div style={{ marginTop: 12, fontSize: 14, fontWeight: 700, color: "#14532d" }}>{selectedUnloadingTotals.avgRate.toFixed(2)}</div>
+                                <div style={{ fontSize: 12, color: "#475569", marginTop: 6 }}>Average Rate by total weight</div>
+                              </div>
+                              <div style={{ background: "#ffffff", border: "1px solid #d1fae5", borderRadius: 12, padding: 14 }}>
+                                <div style={{ fontSize: 13, fontWeight: 700, color: "#0f766e", marginBottom: 10 }}>Godowan / Palti totals</div>
+                                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                                  <div>
+                                    <div style={{ fontSize: 12, color: "#475569" }}>Claim total</div>
+                                    <div style={{ fontSize: 14, fontWeight: 700, color: "#14532d" }}>{selectedUnloadingTotals.totalClaim.toFixed(2)}</div>
+                                  </div>
+                                  <div>
+                                    <div style={{ fontSize: 12, color: "#475569" }}>Deduction total</div>
+                                    <div style={{ fontSize: 14, fontWeight: 700, color: "#14532d" }}>{selectedUnloadingTotals.totalOtherDeduction.toFixed(2)}</div>
+                                  </div>
+                                  <div>
+                                    <div style={{ fontSize: 12, color: "#475569" }}>Shortage total</div>
+                                    <div style={{ fontSize: 14, fontWeight: 700, color: "#14532d" }}>{selectedUnloadingTotals.totalShortage.toFixed(2)}</div>
+                                  </div>
+                                  <div>
+                                    <div style={{ fontSize: 12, color: "#475569" }}>Shortage amount</div>
+                                    <div style={{ fontSize: 14, fontWeight: 700, color: "#14532d" }}>{selectedUnloadingTotals.totalShortageAmount.toFixed(2)}</div>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                            <div style={{ overflowX: "auto" }}>
+                              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                                <thead>
+                                  <tr>
+                                    <th style={{ ...thStyle, background: "#0f766e" }}>#</th>
+                                    <th style={thStyle}>Buyer</th>
+                                    <th style={thStyle}>Consignee</th>
+                                    <th style={thStyle}>Unloading Qty</th>
+                                    <th style={thStyle}>Rate</th>
+                                    <th style={thStyle}>Claim</th>
+                                    <th style={thStyle}>Deduction</th>
+                                    <th style={thStyle}>Shortage</th>
+                                    <th style={thStyle}>Shortage Amount</th>
+                                    <th style={thStyle}>Status</th>
                                   </tr>
-                                ))}
-                              </tbody>
-                            </table>
-                          </div>
+                                </thead>
+                                <tbody>
+                                  {selectedUnloadingDetails.map((detail, index) => (
+                                    <tr 
+                                      key={`${detail.id || detail.outward_id}-${index}`}
+                                      onClick={() => handleEditUnloadingDetail(detail)}
+                                      style={{ cursor: "pointer" }}
+                                    >
+                                      <td style={tdStyle}>{index + 1}</td>
+                                      <td style={tdStyle}>{detail.buyer_name || "—"}</td>
+                                      <td style={tdStyle}>{detail.consignee_name || "—"}</td>
+                                      <td style={tdStyle}>{Number(detail.qty || detail.weight || 0).toFixed(2)}</td>
+                                      <td style={tdStyle}>{Number(detail.rate || 0).toFixed(2)}</td>
+                                      <td style={tdStyle}>{Number(detail.claim || 0).toFixed(2)}</td>
+                                      <td style={tdStyle}>{Number(detail.other_deduction || 0).toFixed(2)}</td>
+                                      <td style={tdStyle}>{Number(detail.shortage || 0).toFixed(2)}</td>
+                                      <td style={tdStyle}>{Number(detail.shortage_amount || 0).toFixed(2)}</td>
+                                      <td style={tdStyle}>{detail.status || "Pending"}</td>
+                                    </tr>
+                                  ))}
+                                  <tr style={{ background: "#f0fdf4" }}>
+                                    <td style={{ ...tdStyle, fontWeight: 700 }} colSpan={3}>Totals</td>
+                                    <td style={{ ...tdStyle, fontWeight: 700 }}>{selectedUnloadingTotals.totalQty.toFixed(2)}</td>
+                                    <td style={{ ...tdStyle, fontWeight: 700 }}>{selectedUnloadingTotals.avgRate.toFixed(2)}</td>
+                                    <td style={{ ...tdStyle, fontWeight: 700 }}>{selectedUnloadingTotals.totalClaim.toFixed(2)}</td>
+                                    <td style={{ ...tdStyle, fontWeight: 700 }}>{selectedUnloadingTotals.totalOtherDeduction.toFixed(2)}</td>
+                                    <td style={{ ...tdStyle, fontWeight: 700 }}>{selectedUnloadingTotals.totalShortage.toFixed(2)}</td>
+                                    <td style={{ ...tdStyle, fontWeight: 700 }}>{selectedUnloadingTotals.totalShortageAmount.toFixed(2)}</td>
+                                    <td style={tdStyle}></td>
+                                  </tr>
+                                </tbody>
+                              </table>
+                            </div>
+                          </>
                         )}
                       </div>
                     </div>
