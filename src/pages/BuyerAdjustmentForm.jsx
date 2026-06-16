@@ -2,6 +2,13 @@ import React, { useState, useEffect, useMemo } from "react";
 import axios from "axios";
 import { toast } from "react-toastify";
 
+const formatDate = (dateStr) => {
+  if (!dateStr) return "";
+  const d = new Date(dateStr);
+  if (Number.isNaN(d.getTime())) return dateStr;
+  return `${String(d.getDate()).padStart(2, "0")}-${String(d.getMonth() + 1).padStart(2, "0")}-${d.getFullYear()}`;
+};
+
 const createEmptyAdjustment = (outward) => ({
   buyer_id: "",
   buyer_name: "",
@@ -12,12 +19,14 @@ const createEmptyAdjustment = (outward) => ({
   other_deduction: "",
   shortage: "",
   shortage_amount: "",
+  unloading_date: outward?.date ? new Date(outward.date).toISOString().slice(0, 10) : "",
 });
 
 const normalizeAdjustmentRow = (item, outward) => ({
   ...item,
   buyer_name: item?.buyer_name || "",
   consignee_name: item?.consignee_name || outward?.consignee_name || outward?.consignee || "",
+  unloading_date: item?.unloading_date || outward?.date || "",
   rate: Number(item?.rate) || 0,
   qty: Number(item?.qty) || 0,
   claim: Number(item?.claim) || 0,
@@ -26,12 +35,12 @@ const normalizeAdjustmentRow = (item, outward) => ({
   shortage_amount: Number(item?.shortage_amount) || 0,
 });
 
-const buildAdjustmentPayload = (outwardId, unloadingDate, adj) => ({
+const buildAdjustmentPayload = (outwardId, adj, fallbackUnloadingDate) => ({
   outward_id: outwardId,
   buyer_id: adj.buyer_id || null,
   buyer_name: adj.buyer_name || null,
   consignee_name: adj.consignee_name || null,
-  unloading_date: unloadingDate,
+  unloading_date: adj.unloading_date || fallbackUnloadingDate || null,
   weight: Number(adj.weight) || Number(adj.qty) || 0,
   qty: Number(adj.qty) || 0,
   rate: Number(adj.rate) || 0,
@@ -149,6 +158,7 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
       buyer_id: newAdjustment.buyer_id,
       buyer_name: newAdjustment.buyer_name,
       consignee_name: newAdjustment.consignee_name,
+      unloading_date: newAdjustment.unloading_date || unloadingDate || (outward?.date ? new Date(outward.date).toISOString().slice(0,10) : ""),
       qty: newAdjustment.qty,
       rate: newAdjustment.rate,
       claim: newAdjustment.claim,
@@ -223,7 +233,7 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
       }
 
       for (const adj of buyerAdjustments) {
-        const payload = buildAdjustmentPayload(outward.id, unloadingDate, adj);
+        const payload = buildAdjustmentPayload(outward.id, adj, unloadingDate || (outward?.date ? new Date(outward.date).toISOString().slice(0,10) : ""));
 
         if (typeof adj.id === "number") {
           await axios.put(`${API_BASE}/buyer-adjustment/${adj.id}`, payload);
@@ -406,6 +416,15 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
             </select>
           </div>
           <div>
+            <span style={labelStyle}>Unloading Date</span>
+            <input
+              type="date"
+              value={newAdjustment.unloading_date}
+              onChange={(e) => setNewAdjustment((prev) => ({ ...prev, unloading_date: e.target.value }))}
+              style={inputStyle}
+            />
+          </div>
+          <div>
             <span style={labelStyle}>Unloading Qty *</span>
             <input
               type="number"
@@ -520,6 +539,7 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
                   <th style={thStyle}>SL</th>
                   <th style={thStyle}>Buyer</th>
                   <th style={thStyle}>Consignee</th>
+                  <th style={thStyle}>Unloading Date</th>
                   <th style={thStyle}>Unloading Qty</th>
                   <th style={thStyle}>Shortage</th>
                   <th style={thStyle}>Shortage Amt</th>
@@ -538,6 +558,7 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
                       <td style={tdStyle}>{index + 1}</td>
                       <td style={tdStyle}>{adj.buyer_name || "—"}</td>
                       <td style={tdStyle}>{adj.consignee_name || "—"}</td>
+                      <td style={tdStyle}>{formatDate(adj.unloading_date)}</td>
                       <td style={tdStyle}>{Number(adj.qty || 0).toFixed(2)}</td>
                       <td style={tdStyle}>{Number(adj.shortage || 0).toFixed(2)}</td>
                       <td style={tdStyle}>{Number(adj.shortage_amount || 0).toFixed(2)}</td>
