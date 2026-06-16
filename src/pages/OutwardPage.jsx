@@ -268,17 +268,22 @@ export default function OutwardPage() {
     const totalOtherDeduction = rows.reduce((sum, detail) => sum + Number(detail.other_deduction || 0), 0);
     const totalShortage = rows.reduce((sum, detail) => sum + Number(detail.shortage || 0), 0);
     const totalShortageAmount = rows.reduce((sum, detail) => sum + Number(detail.shortage_amount || 0), 0);
-    const weightedRateSum = rows.reduce((sum, detail) => sum + Number(detail.rate || 0) * Number(detail.qty || detail.weight || 0), 0);
-    const avgRate = totalQty > 0 ? weightedRateSum / totalQty : 0;
+    const consigneeRateRows = rows.filter((detail) => Number(detail.rate || 0) > 0);
+    const consigneeWeight = consigneeRateRows.reduce((sum, detail) => sum + Number(detail.qty || detail.weight || 0), 0);
+    const weightedRateSum = consigneeRateRows.reduce((sum, detail) => sum + Number(detail.rate || 0) * Number(detail.qty || detail.weight || 0), 0);
+    const avgRate = consigneeWeight > 0 ? weightedRateSum / consigneeWeight : 0;
+    const totalGodawanPaltiWeight = Number(selectedUnloadingOutward?.weight || selectedUnloadingOutward?.qty || selectedUnloadingOutward?.unloading_qty || 0);
     return {
       totalQty,
+      consigneeWeight,
       avgRate,
       totalClaim,
       totalOtherDeduction,
       totalShortage,
       totalShortageAmount,
+      totalGodawanPaltiWeight,
     };
-  }, [selectedUnloadingDetails]);
+  }, [selectedUnloadingDetails, selectedUnloadingOutward]);
 
   const handleSelectOutwardForBuyerAdjustment = (outward) => {
     setShowBuyerAdjustmentList(false);
@@ -1565,15 +1570,17 @@ Consignee: ${row.consignee_name}`;
                                   <>
                                     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12, marginBottom: 16 }}>
                                       <div style={{ background: "#ffffff", border: "1px solid #d1fae5", borderRadius: 12, padding: 14 }}>
-                                        <div style={{ fontSize: 13, fontWeight: 700, color: "#0f766e", marginBottom: 10 }}>Consignee / Rate summary</div>
-                                        <div style={{ fontSize: 14, fontWeight: 700, color: "#14532d" }}>{selectedUnloadingTotals.totalQty.toFixed(2)} kg</div>
-                                        <div style={{ fontSize: 12, color: "#475569", marginTop: 6 }}>Total Weight from consignee/rate lines</div>
-                                        <div style={{ marginTop: 12, fontSize: 14, fontWeight: 700, color: "#14532d" }}>{selectedUnloadingTotals.avgRate.toFixed(2)}</div>
-                                        <div style={{ fontSize: 12, color: "#475569", marginTop: 6 }}>Average Rate by total weight</div>
+                                        <div style={{ fontSize: 13, fontWeight: 700, color: "#0f766e", marginBottom: 10 }}>Godowan / Palti weight</div>
+                                        <div style={{ fontSize: 14, fontWeight: 700, color: "#14532d" }}>{selectedUnloadingTotals.totalGodawanPaltiWeight.toFixed(2)} kg</div>
+                                        <div style={{ fontSize: 12, color: "#475569", marginTop: 6 }}>Total Godowan and Palti unloading weight</div>
                                       </div>
                                       <div style={{ background: "#ffffff", border: "1px solid #d1fae5", borderRadius: 12, padding: 14 }}>
-                                        <div style={{ fontSize: 13, fontWeight: 700, color: "#0f766e", marginBottom: 10 }}>Godowan / Palti totals</div>
-                                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                                        <div style={{ fontSize: 13, fontWeight: 700, color: "#0f766e", marginBottom: 10 }}>Consignee / Rate summary</div>
+                                        <div style={{ fontSize: 14, fontWeight: 700, color: "#14532d" }}>{selectedUnloadingTotals.consigneeWeight.toFixed(2)} kg</div>
+                                        <div style={{ fontSize: 12, color: "#475569", marginTop: 6 }}>Total weight from consignee/rate lines</div>
+                                        <div style={{ marginTop: 12, fontSize: 14, fontWeight: 700, color: "#14532d" }}>{selectedUnloadingTotals.avgRate.toFixed(2)}</div>
+                                        <div style={{ fontSize: 12, color: "#475569", marginTop: 6 }}>Average rate by consignee rate line weight</div>
+                                        <div style={{ marginTop: 14, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                                           <div>
                                             <div style={{ fontSize: 12, color: "#475569" }}>Claim total</div>
                                             <div style={{ fontSize: 14, fontWeight: 700, color: "#14532d" }}>{selectedUnloadingTotals.totalClaim.toFixed(2)}</div>
@@ -1769,15 +1776,17 @@ Consignee: ${row.consignee_name}`;
                           <>
                             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12, marginBottom: 16 }}>
                               <div style={{ background: "#ffffff", border: "1px solid #d1fae5", borderRadius: 12, padding: 14 }}>
-                                <div style={{ fontSize: 13, fontWeight: 700, color: "#0f766e", marginBottom: 10 }}>Consignee / Rate summary</div>
-                                <div style={{ fontSize: 14, fontWeight: 700, color: "#14532d" }}>{selectedUnloadingTotals.totalQty.toFixed(2)} kg</div>
-                                <div style={{ fontSize: 12, color: "#475569", marginTop: 6 }}>Total Weight from consignee/rate lines</div>
-                                <div style={{ marginTop: 12, fontSize: 14, fontWeight: 700, color: "#14532d" }}>{selectedUnloadingTotals.avgRate.toFixed(2)}</div>
-                                <div style={{ fontSize: 12, color: "#475569", marginTop: 6 }}>Average Rate by total weight</div>
+                                <div style={{ fontSize: 13, fontWeight: 700, color: "#0f766e", marginBottom: 10 }}>Godowan / Palti weight</div>
+                                <div style={{ fontSize: 14, fontWeight: 700, color: "#14532d" }}>{selectedUnloadingTotals.totalGodawanPaltiWeight.toFixed(2)} kg</div>
+                                <div style={{ fontSize: 12, color: "#475569", marginTop: 6 }}>Total Godowan and Palti unloading weight</div>
                               </div>
                               <div style={{ background: "#ffffff", border: "1px solid #d1fae5", borderRadius: 12, padding: 14 }}>
-                                <div style={{ fontSize: 13, fontWeight: 700, color: "#0f766e", marginBottom: 10 }}>Godowan / Palti totals</div>
-                                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+                                <div style={{ fontSize: 13, fontWeight: 700, color: "#0f766e", marginBottom: 10 }}>Consignee / Rate summary</div>
+                                <div style={{ fontSize: 14, fontWeight: 700, color: "#14532d" }}>{selectedUnloadingTotals.consigneeWeight.toFixed(2)} kg</div>
+                                <div style={{ fontSize: 12, color: "#475569", marginTop: 6 }}>Total weight from consignee/rate lines</div>
+                                <div style={{ marginTop: 12, fontSize: 14, fontWeight: 700, color: "#14532d" }}>{selectedUnloadingTotals.avgRate.toFixed(2)}</div>
+                                <div style={{ fontSize: 12, color: "#475569", marginTop: 6 }}>Average rate by consignee rate line weight</div>
+                                <div style={{ marginTop: 14, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
                                   <div>
                                     <div style={{ fontSize: 12, color: "#475569" }}>Claim total</div>
                                     <div style={{ fontSize: 14, fontWeight: 700, color: "#14532d" }}>{selectedUnloadingTotals.totalClaim.toFixed(2)}</div>
