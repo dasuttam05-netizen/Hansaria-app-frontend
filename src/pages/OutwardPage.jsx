@@ -1625,7 +1625,7 @@ Consignee: ${row.consignee_name}`;
                                               <td style={tdStyle}>{index + 1}</td>
                                               <td style={tdStyle}>{detail.buyer_name || "—"}</td>
                                               <td style={tdStyle}>{detail.consignee_name || "—"}</td>
-                                              <td style={tdStyle}>{formatDate(selectedUnloadingOutward.date)}</td>
+                                              <td style={tdStyle}>{formatDate(detail.unloading_date || selectedUnloadingOutward.unloading_date || selectedUnloadingOutward.date)}</td>
                                               <td style={tdStyle}>{selectedUnloadingOutward.lorry_no || "—"}</td>
                                               <td style={tdStyle}>{Number(detail.qty || detail.weight || 0).toFixed(2)}</td>
                                               <td style={tdStyle}>{Number(detail.rate || 0).toFixed(2)}</td>
