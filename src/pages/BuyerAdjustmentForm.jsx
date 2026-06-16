@@ -5,9 +5,9 @@ import { toast } from "react-toastify";
 const createEmptyAdjustment = (outward) => ({
   buyer_id: "",
   buyer_name: "",
-  consignee_name: outward?.consignee_name || outward?.consignee || "",
+  consignee_name: "",
   qty: "",
-  rate: Number(outward?.rate) || 0,
+  rate: "",
   claim: "",
   other_deduction: "",
   shortage: "",
@@ -134,9 +134,6 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
       return;
     }
 
-    if (!newAdjustment.consignee_name || String(newAdjustment.consignee_name).trim() === "") {
-      toast.error("Please enter consignee name", { theme: "colored" });
-      return;
     }
 
     if (!newAdjustment.qty || Number(newAdjustment.qty) <= 0) {
@@ -197,18 +194,13 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
 
   const handleBuyerChange = (buyerId) => {
     const buyer = buyerNames.find((b) => String(b.id) === String(buyerId));
-    const buyerConsignees = consigneeNames.filter((item) => {
-      if (!buyerId) return true;
-      return String(item.buyer_id || "") === String(buyerId);
-    });
-    const matchingConsignee = buyerConsignees.find(
-      (item) => String(item.name || "") === String(newAdjustment.consignee_name || "")
-    );
     setNewAdjustment((prev) => ({
       ...prev,
       buyer_id: buyerId,
       buyer_name: buyer?.name || "",
-      consignee_name: matchingConsignee?.name || buyerConsignees[0]?.name || "",
+      consignee_name: "",
+      rate: "",
+      shortage_amount: "",
     }));
   };
 
@@ -381,7 +373,16 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
             <input
               type="text"
               value={newAdjustment.buyer_name}
-              onChange={(e) => setNewAdjustment((prev) => ({ ...prev, buyer_name: e.target.value }))}
+              onChange={(e) =>
+                setNewAdjustment((prev) => ({
+                  ...prev,
+                  buyer_name: e.target.value,
+                  buyer_id: "",
+                  consignee_name: "",
+                  rate: "",
+                  shortage_amount: "",
+                }))
+              }
               placeholder="Buyer name"
               style={inputStyle}
             />
