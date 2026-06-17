@@ -26,6 +26,8 @@ export default function AdjustmentPage({ outward }) {
   };
 
   const num = (val) => Number(val || 0).toFixed(4);
+  // Small tolerance to account for floating point rounding in comparisons
+  const EPS = 0.01;
 
   const totalDraftAdjusted = useMemo(
     () => adjustments.reduce((sum, item) => sum + Number(item.qty || 0), 0),
@@ -285,7 +287,7 @@ export default function AdjustmentPage({ outward }) {
     if (qty > Number(selectedInward.available_qty)) {
       return alert("Adjusted qty cannot be greater than the available qty");
     }
-    if (qty > remainingQty) return alert(`Only ${remainingQty} qty remaining to adjust`);
+    if (qty > remainingQty + EPS) return alert(`Only ${num(remainingQty)} qty remaining to adjust`);
 
     const existingIndex = adjustments.findIndex(
       (item) => item.inward_id === selectedInward.id
@@ -325,8 +327,8 @@ export default function AdjustmentPage({ outward }) {
 
   const handleSave = async () => {
     if (totalDraftAdjusted <= 0) return alert("Please add adjustment first");
-    if (totalDraftAdjusted > currentRemaining) {
-      return alert(`Adjustment cannot exceed remaining ${currentRemaining}`);
+    if (totalDraftAdjusted > currentRemaining + EPS) {
+      return alert(`Adjustment cannot exceed remaining ${num(currentRemaining)}`);
     }
     if (!isDraftExactMatch) {
       return alert(
