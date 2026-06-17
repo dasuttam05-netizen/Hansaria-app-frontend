@@ -92,9 +92,20 @@ export default function AdjustmentPage({ outward }) {
     fontWeight: 700,
   };
 
+  const parseNumber = (val) => {
+    const raw = val == null ? "" : String(val).trim();
+    const cleaned = raw.replace(/,/g, "").replace(/[^0-9.-]+/g, "");
+    const parsed = Number(cleaned);
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+
   const num = (val) => Number(val || 0).toFixed(4);
   const totalConsigneeQty = useMemo(
-    () => buyerAdjustmentDetails.reduce((sum, item) => sum + Number(item.qty || item.weight || 0), 0),
+    () =>
+      buyerAdjustmentDetails.reduce(
+        (sum, item) => sum + parseNumber(item.qty || item.weight || 0),
+        0
+      ),
     [buyerAdjustmentDetails]
   );
 
@@ -682,14 +693,3 @@ export default function AdjustmentPage({ outward }) {
             background: isDraftExactMatch ? "#16a34a" : "#94a3b8",
             marginTop: 14,
           }}
-        >
-          Save Settlement
-        </button>
-      </div>
-    </div>
-  );
-}
-
-
-
-
