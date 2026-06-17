@@ -693,3 +693,14 @@ export default function AdjustmentPage({ outward }) {
             background: isDraftExactMatch ? "#16a34a" : "#94a3b8",
             marginTop: 14,
           }}
+        >
+          Save Settlement
+        </button>
+      </div>
+    </div>
+  );
+}
+
+
+
+
