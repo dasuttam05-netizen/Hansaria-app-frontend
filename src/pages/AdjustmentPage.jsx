@@ -23,7 +23,7 @@ export default function AdjustmentPage({ outward }) {
     [adjustments]
   );
 
-  const currentRemaining = outwardQty - alreadyAdjusted;
+  const currentRemaining = effectiveOutwardQty - alreadyAdjusted;
   const remainingQty = currentRemaining - totalDraftAdjusted;
   const adjustmentTargetQty = currentRemaining;
   const isDraftExactMatch =
@@ -103,12 +103,14 @@ export default function AdjustmentPage({ outward }) {
   const totalConsigneeQty = useMemo(
     () =>
       buyerAdjustmentDetails.reduce((sum, item) => {
-        const hasRate = item.rate != null && item.rate !== "";
+        const hasRate = Number(item.rate) > 0;
         if (!hasRate) return sum;
         return sum + parseNumber(item.weight ?? item.qty ?? 0);
       }, 0),
     [buyerAdjustmentDetails]
   );
+
+  const effectiveOutwardQty = totalConsigneeQty > 0 ? totalConsigneeQty : outwardQty;
 
   const buyerDisplay = useMemo(() => {
     const names = Array.from(
@@ -162,7 +164,7 @@ export default function AdjustmentPage({ outward }) {
     return [];
   }, [buyerAdjustmentDetails, outward, outwardQty]);
 
-  const outwardQtyDisplay = totalConsigneeQty || outwardQty;
+  const outwardQtyDisplay = effectiveOutwardQty;
 
   const isPaltiSource = sourceType === "palti_lorry";
 
