@@ -11,6 +11,7 @@ export default function AdjustmentPage({ outward }) {
   const [adjustQty, setAdjustQty] = useState("");
   const [adjustments, setAdjustments] = useState([]);
   const [adjustmentLog, setAdjustmentLog] = useState([]);
+  const [buyerAdjustmentDetails, setBuyerAdjustmentDetails] = useState([]);
   const [alreadyAdjusted, setAlreadyAdjusted] = useState(0);
   const [editingLogId, setEditingLogId] = useState(null);
   const [editingQty, setEditingQty] = useState("");
@@ -92,6 +93,35 @@ export default function AdjustmentPage({ outward }) {
   };
 
   const num = (val) => Number(val || 0).toFixed(4);
+  const totalConsigneeQty = useMemo(
+    () => buyerAdjustmentDetails.reduce((sum, item) => sum + Number(item.qty || item.weight || 0), 0),
+    [buyerAdjustmentDetails]
+  );
+
+  const buyerDisplay = useMemo(() => {
+    const names = Array.from(
+      new Set(
+        buyerAdjustmentDetails
+          .map((item) => String(item.buyer_name || "").trim())
+          .filter(Boolean)
+      )
+    );
+    if (names.length === 0) return outward?.buyer_name || "-";
+    return names.length === 1 ? names[0] : "Multiple";
+  }, [buyerAdjustmentDetails, outward?.buyer_name]);
+
+  const rateDisplay = useMemo(() => {
+    const rates = Array.from(
+      new Set(
+        buyerAdjustmentDetails
+          .map((item) => (item.rate != null ? Number(item.rate).toFixed(2) : ""))
+          .filter(Boolean)
+      )
+    );
+    if (rates.length === 0) return outward?.rate != null ? Number(outward.rate).toFixed(2) : "-";
+    return rates.length === 1 ? rates[0] : "Multiple";
+  }, [buyerAdjustmentDetails, outward?.rate]);
+
   const isPaltiSource = sourceType === "palti_lorry";
 
   const getAdjustmentScope = () => {
@@ -169,6 +199,16 @@ export default function AdjustmentPage({ outward }) {
     }
   };
 
+  const loadBuyerAdjustmentDetails = async () => {
+    if (!outward?.id) return;
+    try {
+      const res = await axios.get(`/api/buyer-adjustment/${outward.id}`);
+      setBuyerAdjustmentDetails(Array.isArray(res.data) ? res.data : []);
+    } catch {
+      setBuyerAdjustmentDetails([]);
+    }
+  };
+
   useEffect(() => {
     setCompanyId("");
     setSourceType("inward");
@@ -177,6 +217,7 @@ export default function AdjustmentPage({ outward }) {
     setAdjustQty("");
     setAdjustments([]);
     setAdjustmentLog([]);
+    setBuyerAdjustmentDetails([]);
     setAlreadyAdjusted(0);
     setEditingLogId(null);
     setEditingQty("");
@@ -184,6 +225,7 @@ export default function AdjustmentPage({ outward }) {
     if (outward) {
       loadCompanyList();
       loadAdjustmentLog();
+      loadBuyerAdjustmentDetails();
     }
   }, [outward]);
 
@@ -305,11 +347,28 @@ export default function AdjustmentPage({ outward }) {
           Product: {outward?.product_name} | {outward?.warehouse_name ? `Warehouse: ${outward.warehouse_name}` : `Location: ${outward?.location_name || "-"}`}
         </p>
         <p style={{ margin: "6px 0 0", color: "#166534", fontWeight: 700 }}>
-          Buyer: {outward?.buyer_name || "-"} | Rate: {outward?.rate != null ? Number(outward.rate).toFixed(2) : "-"}
+          Buyer: {buyerDisplay} | Rate: {rateDisplay}
         </p>
         <p style={{ margin: "6px 0 0", color: "#166534", fontWeight: 700 }}>
           Outward Date: {formatDisplayDate(outward?.date)} | Outward Qty: <span style={strongText}>{num(outwardQty)}</span> | Already Adjusted: <span style={strongText}>{num(alreadyAdjusted)}</span> | Remaining: <span style={strongText}>{num(currentRemaining)}</span>
         </p>
+      </div>
+      <div style={cardStyle}>
+        <div style={{ fontSize: 13, fontWeight: 700, color: "#0f766e", marginBottom: 10 }}>Consignee / Rate summary</div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
+          <div style={{ padding: 12, background: "#ffffff", border: "1px solid #d1d5db", borderRadius: 12 }}>
+            <div style={{ fontSize: 12, color: "#475569" }}>Qnt</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: "#14532d" }}>{num(totalConsigneeQty)}</div>
+          </div>
+          <div style={{ padding: 12, background: "#ffffff", border: "1px solid #d1d5db", borderRadius: 12 }}>
+            <div style={{ fontSize: 12, color: "#475569" }}>Already Adjusted</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: "#14532d" }}>{num(alreadyAdjusted)}</div>
+          </div>
+          <div style={{ padding: 12, background: "#ffffff", border: "1px solid #d1d5db", borderRadius: 12 }}>
+            <div style={{ fontSize: 12, color: "#475569" }}>Remaining</div>
+            <div style={{ fontSize: 16, fontWeight: 700, color: "#14532d" }}>{num(currentRemaining)}</div>
+          </div>
+        </div>
       </div>
 
       <div style={cardStyle}>
@@ -611,62 +670,3 @@ export default function AdjustmentPage({ outward }) {
                         type="number"
                         value={editingQty}
                         onChange={(e) => setEditingQty(e.target.value)}
-                        style={{ ...inputStyle, width: 100 }}
-                      />
-                    ) : (
-                      num(row.qty)
-                    )}
-                  </td>
-                  <td style={tdStyle}>
-                    {editingLogId === row.id ? (
-                      <>
-                        <button
-                          onClick={handleUpdateLog}
-                          style={{ ...buttonStyle, background: "#2563eb", marginRight: 8 }}
-                        >
-                          Update
-                        </button>
-                        <button
-                          onClick={() => {
-                            setEditingLogId(null);
-                            setEditingQty("");
-                          }}
-                          style={{ ...buttonStyle, background: "#64748b" }}
-                        >
-                          Cancel
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <button
-                          onClick={() => handleEditLog(row)}
-                          style={{ ...buttonStyle, background: "#f59e0b", marginRight: 8 }}
-                        >
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => handleDeleteLog(row.id)}
-                          style={{ ...buttonStyle, background: "#dc2626" }}
-                        >
-                          Delete
-                        </button>
-                      </>
-                    )}
-                  </td>
-                </tr>
-              ))
-            ) : (
-              <tr>
-                <td style={tdStyle} colSpan="5">No previous adjustment</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
-
-
-
