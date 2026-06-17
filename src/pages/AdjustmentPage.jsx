@@ -47,8 +47,10 @@ export default function AdjustmentPage({ outward }) {
   const currentRemaining = effectiveOutwardQty - alreadyAdjusted;
   const remainingQty = currentRemaining - totalDraftAdjusted;
   const adjustmentTargetQty = currentRemaining;
+  // Allow a small tolerance when comparing floats so tiny rounding
+  // differences don't prevent final save from being enabled.
   const isDraftExactMatch =
-    totalDraftAdjusted > 0 && Math.abs(totalDraftAdjusted - adjustmentTargetQty) < 0.0001;
+    totalDraftAdjusted > 0 && Math.abs(totalDraftAdjusted - adjustmentTargetQty) < 0.01;
 
   const cardStyle = {
     background: "#fff",
