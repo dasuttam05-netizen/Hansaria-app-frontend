@@ -27,28 +27,34 @@ export default function AdjustmentPage({ outward }) {
   };
 
   const num = (val) => Number(val || 0).toFixed(4);
+  
+  // Helper to round to 4 decimals to avoid floating point errors
+  const roundTo4 = (val) => Math.round((val || 0) * 10000) / 10000;
+  
   // Small tolerance to account for floating point rounding in comparisons
   const EPS = 0.01;
 
   const totalDraftAdjusted = useMemo(
-    () => adjustments.reduce((sum, item) => sum + Number(item.qty || 0), 0),
+    () => roundTo4(adjustments.reduce((sum, item) => sum + Number(item.qty || 0), 0)),
     [adjustments]
   );
 
   const totalConsigneeQty = useMemo(
     () =>
-      buyerAdjustmentDetails.reduce((sum, item) => {
-        const hasRate = Number(item.rate) > 0;
-        if (!hasRate) return sum;
-        return sum + parseNumber(item.weight ?? item.qty ?? 0);
-      }, 0),
+      roundTo4(
+        buyerAdjustmentDetails.reduce((sum, item) => {
+          const hasRate = Number(item.rate) > 0;
+          if (!hasRate) return sum;
+          return sum + parseNumber(item.weight ?? item.qty ?? 0);
+        }, 0)
+      ),
     [buyerAdjustmentDetails]
   );
 
   const effectiveOutwardQty = totalConsigneeQty > 0 ? totalConsigneeQty : outwardQty;
 
-  const currentRemaining = effectiveOutwardQty - alreadyAdjusted;
-  const remainingQty = currentRemaining - totalDraftAdjusted;
+  const currentRemaining = roundTo4(effectiveOutwardQty - alreadyAdjusted);
+  const remainingQty = roundTo4(currentRemaining - totalDraftAdjusted);
   const adjustmentTargetQty = currentRemaining;
   // Allow a small tolerance when comparing floats so tiny rounding
   // differences don't prevent final save from being enabled.
@@ -211,9 +217,9 @@ export default function AdjustmentPage({ outward }) {
         },
       });
       setCompanyList(Array.isArray(res.data) ? res.data : []);
-    } catch {
+    } catch (err) {
       setCompanyList([]);
-      alert("Company load failed");
+      toast.error("Company load failed", { theme: "colored", autoClose: 2000 });
     }
   };
 
@@ -230,9 +236,9 @@ export default function AdjustmentPage({ outward }) {
         },
       });
       setInwardList(Array.isArray(res.data) ? res.data : []);
-    } catch {
+    } catch (err) {
       setInwardList([]);
-      alert("Inward load failed");
+      toast.error("Inward load failed", { theme: "colored", autoClose: 2000 });
     }
   };
 
@@ -280,15 +286,28 @@ export default function AdjustmentPage({ outward }) {
   }, [outward]);
 
   const handleAddAdjustment = () => {
-    if (!companyId) return alert("Please select company first");
-    if (!selectedInward) return alert("Please select inward / lorry first");
+    if (!companyId) {
+      toast.warning("Please select company first", { theme: "colored", autoClose: 2000 });
+      return;
+    }
+    if (!selectedInward) {
+      toast.warning("Please select inward / lorry first", { theme: "colored", autoClose: 2000 });
+      return;
+    }
 
     const qty = Number(adjustQty);
-    if (!qty || qty <= 0) return alert("Enter valid qty");
-    if (qty > Number(selectedInward.available_qty)) {
-      return alert("Adjusted qty cannot be greater than the available qty");
+    if (!qty || qty <= 0) {
+      toast.warning("Enter valid qty", { theme: "colored", autoClose: 2000 });
+      return;
     }
-    if (qty > remainingQty + EPS) return alert(`Only ${num(remainingQty)} qty remaining to adjust`);
+    if (qty > Number(selectedInward.available_qty)) {
+      toast.warning("Adjusted qty cannot be greater than the available qty", { theme: "colored", autoClose: 2000 });
+      return;
+    }
+    if (qty > remainingQty + EPS) {
+      toast.warning(`Only ${num(remainingQty)} qty remaining to adjust`, { theme: "colored", autoClose: 2000 });
+      return;
+    }
 
     const existingIndex = adjustments.findIndex(
       (item) => item.inward_id === selectedInward.id
@@ -299,7 +318,8 @@ export default function AdjustmentPage({ outward }) {
       const nextQty = Number(updated[existingIndex].qty) + qty;
 
       if (nextQty > Number(selectedInward.available_qty)) {
-        return alert("Total qty cannot be greater than the available qty");
+        toast.warning("Total qty cannot be greater than the available qty", { theme: "colored", autoClose: 2000 });
+        return;
       }
 
       updated[existingIndex].qty = nextQty;
@@ -322,19 +342,26 @@ export default function AdjustmentPage({ outward }) {
       ]);
     }
 
+    toast.success("✓ Adjustment added to draft list", { theme: "colored", autoClose: 2000 });
     setAdjustQty("");
     setSelectedInward(null);
   };
 
   const handleSave = async () => {
-    if (totalDraftAdjusted <= 0) return alert("Please add adjustment first");
+    if (totalDraftAdjusted <= 0) {
+      toast.warning("Please add adjustment first", { theme: "colored", autoClose: 3000 });
+      return;
+    }
     if (totalDraftAdjusted > currentRemaining + EPS) {
-      return alert(`Adjustment cannot exceed remaining ${num(currentRemaining)}`);
+      toast.warning(`Adjustment cannot exceed remaining ${num(currentRemaining)}`, { theme: "colored", autoClose: 3000 });
+      return;
     }
     if (!isDraftExactMatch) {
-      return alert(
-        `Draft Adjustment List total must be exactly ${num(adjustmentTargetQty)} before final save`
+      toast.warning(
+        `Draft Adjustment List total must be exactly ${num(adjustmentTargetQty)} before final save`,
+        { theme: "colored", autoClose: 3000 }
       );
+      return;
     }
 
     try {
@@ -343,7 +370,7 @@ export default function AdjustmentPage({ outward }) {
         adjustments,
       });
 
-      toast.success("Adjustment saved successfully!", { theme: "colored", autoClose: 3000 });
+      toast.success("✓ Adjustment saved successfully!", { theme: "colored", autoClose: 3000 });
       setAdjustments([]);
       setCompanyId("");
       setSourceType("inward");
@@ -354,7 +381,7 @@ export default function AdjustmentPage({ outward }) {
       await loadAdjustmentLog();
       await loadBuyerAdjustmentDetails();
     } catch (err) {
-      alert(err?.response?.data?.error || "Save failed");
+      toast.error(err?.response?.data?.error || "Save failed", { theme: "colored", autoClose: 3000 });
     }
   };
 
@@ -362,7 +389,7 @@ export default function AdjustmentPage({ outward }) {
     if (!window.confirm("Delete this adjustment log?")) return;
     try {
       await axios.delete(`/api/adjustment/log/${id}`);
-      alert("Deleted successfully");
+      toast.success("✓ Deleted successfully", { theme: "colored", autoClose: 3000 });
       setCompanyId("");
       setSourceType("inward");
       setInwardList([]);
@@ -373,7 +400,7 @@ export default function AdjustmentPage({ outward }) {
       await loadBuyerAdjustmentDetails();
       await loadCompanyList();
     } catch (err) {
-      alert(err?.response?.data?.error || "Delete failed");
+      toast.error(err?.response?.data?.error || "Delete failed", { theme: "colored", autoClose: 3000 });
     }
   };
 
@@ -388,7 +415,7 @@ export default function AdjustmentPage({ outward }) {
       await axios.put(`/api/adjustment/log/${editingLogId}`, {
         qty: Number(editingQty),
       });
-      alert("Updated successfully");
+      toast.success("✓ Updated successfully", { theme: "colored", autoClose: 3000 });
       setEditingLogId(null);
       setEditingQty("");
       setCompanyId("");
@@ -401,7 +428,7 @@ export default function AdjustmentPage({ outward }) {
       await loadBuyerAdjustmentDetails();
       await loadCompanyList();
     } catch (err) {
-      alert(err?.response?.data?.error || "Update failed");
+      toast.error(err?.response?.data?.error || "Update failed", { theme: "colored", autoClose: 3000 });
     }
   };
 
