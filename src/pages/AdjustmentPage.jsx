@@ -343,12 +343,16 @@ export default function AdjustmentPage({ outward }) {
         adjustments,
       });
 
-      toast.success("Adjustment saved", { theme: "colored" });
+      toast.success("Adjustment saved successfully!", { theme: "colored", autoClose: 3000 });
       setAdjustments([]);
       setCompanyId("");
+      setSourceType("inward");
       setInwardList([]);
-      loadCompanyList();
-      loadAdjustmentLog();
+      setSelectedInward(null);
+      setAdjustQty("");
+      await loadCompanyList();
+      await loadAdjustmentLog();
+      await loadBuyerAdjustmentDetails();
     } catch (err) {
       alert(err?.response?.data?.error || "Save failed");
     }
@@ -712,7 +716,3 @@ export default function AdjustmentPage({ outward }) {
     </div>
   );
 }
-
-
-
-
