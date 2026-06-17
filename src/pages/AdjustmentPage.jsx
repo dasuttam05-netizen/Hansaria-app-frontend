@@ -392,14 +392,14 @@ export default function AdjustmentPage({ outward }) {
           <div style={{ margin: "4px 0 0 10px", color: "#166534", fontWeight: 700 }}>-</div>
         )}
         <p style={{ margin: "10px 0 0", color: "#166534", fontWeight: 700 }}>
-          Outward Date: {formatDisplayDate(outward?.date)} | Outward Qty: <span style={strongText}>{num(outwardQtyDisplay)}</span> | Already Adjusted: <span style={strongText}>{num(alreadyAdjusted)}</span> | Remaining: <span style={strongText}>{num(currentRemaining)}</span>
+          Outward Date: {formatDisplayDate(outward?.date)} | Outward Qty{buyerLines.length > 0 ? " (Consignee)" : ""}: <span style={strongText}>{num(outwardQtyDisplay)}</span> | Already Adjusted: <span style={strongText}>{num(alreadyAdjusted)}</span> | Remaining: <span style={strongText}>{num(currentRemaining)}</span>
         </p>
       </div>
       <div style={cardStyle}>
         <div style={{ fontSize: 13, fontWeight: 700, color: "#0f766e", marginBottom: 10 }}>Consignee / Rate summary</div>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12 }}>
           <div style={{ padding: 12, background: "#ffffff", border: "1px solid #d1d5db", borderRadius: 12 }}>
-            <div style={{ fontSize: 12, color: "#475569" }}>Qnt</div>
+            <div style={{ fontSize: 12, color: "#475569" }}>Total Weight</div>
             <div style={{ fontSize: 16, fontWeight: 700, color: "#14532d" }}>{num(totalConsigneeQty)}</div>
           </div>
           <div style={{ padding: 12, background: "#ffffff", border: "1px solid #d1d5db", borderRadius: 12 }}>
