@@ -670,3 +670,62 @@ export default function AdjustmentPage({ outward }) {
                         type="number"
                         value={editingQty}
                         onChange={(e) => setEditingQty(e.target.value)}
+                        style={{ ...inputStyle, width: 100 }}
+                      />
+                    ) : (
+                      num(row.qty)
+                    )}
+                  </td>
+                  <td style={tdStyle}>
+                    {editingLogId === row.id ? (
+                      <>
+                        <button
+                          onClick={handleUpdateLog}
+                          style={{ ...buttonStyle, background: "#2563eb", marginRight: 8 }}
+                        >
+                          Update
+                        </button>
+                        <button
+                          onClick={() => {
+                            setEditingLogId(null);
+                            setEditingQty("");
+                          }}
+                          style={{ ...buttonStyle, background: "#64748b" }}
+                        >
+                          Cancel
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <button
+                          onClick={() => handleEditLog(row)}
+                          style={{ ...buttonStyle, background: "#f59e0b", marginRight: 8 }}
+                        >
+                          Edit
+                        </button>
+                        <button
+                          onClick={() => handleDeleteLog(row.id)}
+                          style={{ ...buttonStyle, background: "#dc2626" }}
+                        >
+                          Delete
+                        </button>
+                      </>
+                    )}
+                  </td>
+                </tr>
+              ))
+            ) : (
+              <tr>
+                <td style={tdStyle} colSpan="5">No previous adjustment</td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
+
+
+
+
