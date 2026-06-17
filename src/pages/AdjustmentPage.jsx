@@ -16,6 +16,10 @@ export default function AdjustmentPage({ outward }) {
   const [alreadyAdjusted, setAlreadyAdjusted] = useState(0);
   const [editingLogId, setEditingLogId] = useState(null);
   const [editingQty, setEditingQty] = useState("");
+  
+  // For cleanup on unmount
+  const isMountedRef = React.useRef(true);
+  const abortControllerRef = React.useRef(new AbortController());
 
   const outwardQty = Number(outward?.quantity) || 0;
 
@@ -215,11 +219,16 @@ export default function AdjustmentPage({ outward }) {
           ...scope,
           product_id: outward.product_id,
         },
+        signal: abortControllerRef.current.signal,
       });
-      setCompanyList(Array.isArray(res.data) ? res.data : []);
+      if (isMountedRef.current) {
+        setCompanyList(Array.isArray(res.data) ? res.data : []);
+      }
     } catch (err) {
-      setCompanyList([]);
-      toast.error("Company load failed", { theme: "colored", autoClose: 2000 });
+      if (isMountedRef.current && err.name !== "CanceledError") {
+        setCompanyList([]);
+        toast.error("Company load failed", { theme: "colored", autoClose: 2000 });
+      }
     }
   };
 
@@ -234,34 +243,51 @@ export default function AdjustmentPage({ outward }) {
           outward_date: outward.date,
           source_type: selectedSourceType,
         },
+        signal: abortControllerRef.current.signal,
       });
-      setInwardList(Array.isArray(res.data) ? res.data : []);
+      if (isMountedRef.current) {
+        setInwardList(Array.isArray(res.data) ? res.data : []);
+      }
     } catch (err) {
-      setInwardList([]);
-      toast.error("Inward load failed", { theme: "colored", autoClose: 2000 });
+      if (isMountedRef.current && err.name !== "CanceledError") {
+        setInwardList([]);
+        toast.error("Inward load failed", { theme: "colored", autoClose: 2000 });
+      }
     }
   };
 
   const loadAdjustmentLog = async () => {
     if (!outward?.id) return;
     try {
-      const res = await axios.get(`/api/adjustment/${outward.id}`);
-      const rows = Array.isArray(res.data) ? res.data : [];
-      setAdjustmentLog(rows);
-      setAlreadyAdjusted(rows.reduce((sum, item) => sum + Number(item.qty || 0), 0));
-    } catch {
-      setAdjustmentLog([]);
-      setAlreadyAdjusted(0);
+      const res = await axios.get(`/api/adjustment/${outward.id}`, {
+        signal: abortControllerRef.current.signal,
+      });
+      if (isMountedRef.current) {
+        const rows = Array.isArray(res.data) ? res.data : [];
+        setAdjustmentLog(rows);
+        setAlreadyAdjusted(rows.reduce((sum, item) => sum + Number(item.qty || 0), 0));
+      }
+    } catch (err) {
+      if (isMountedRef.current && err.name !== "CanceledError") {
+        setAdjustmentLog([]);
+        setAlreadyAdjusted(0);
+      }
     }
   };
 
   const loadBuyerAdjustmentDetails = async () => {
     if (!outward?.id) return;
     try {
-      const res = await axios.get(`/api/buyer-adjustment/${outward.id}`);
-      setBuyerAdjustmentDetails(Array.isArray(res.data) ? res.data : []);
-    } catch {
-      setBuyerAdjustmentDetails([]);
+      const res = await axios.get(`/api/buyer-adjustment/${outward.id}`, {
+        signal: abortControllerRef.current.signal,
+      });
+      if (isMountedRef.current) {
+        setBuyerAdjustmentDetails(Array.isArray(res.data) ? res.data : []);
+      }
+    } catch (err) {
+      if (isMountedRef.current && err.name !== "CanceledError") {
+        setBuyerAdjustmentDetails([]);
+      }
     }
   };
 
@@ -284,6 +310,16 @@ export default function AdjustmentPage({ outward }) {
       loadBuyerAdjustmentDetails();
     }
   }, [outward]);
+
+  // Cleanup on component unmount
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      // Cancel all pending requests
+      abortControllerRef.current.abort();
+    };
+  }, []);
 
   const handleAddAdjustment = () => {
     if (!companyId) {
@@ -368,39 +404,52 @@ export default function AdjustmentPage({ outward }) {
       await axios.post("/api/adjustment/final-save", {
         outward_id: outward.id,
         adjustments,
+      }, {
+        signal: abortControllerRef.current.signal,
       });
 
-      toast.success("✓ Adjustment saved successfully!", { theme: "colored", autoClose: 3000 });
-      setAdjustments([]);
-      setCompanyId("");
-      setSourceType("inward");
-      setInwardList([]);
-      setSelectedInward(null);
-      setAdjustQty("");
-      await loadCompanyList();
-      await loadAdjustmentLog();
-      await loadBuyerAdjustmentDetails();
+      if (isMountedRef.current) {
+        toast.success("✓ Adjustment saved successfully!", { theme: "colored", autoClose: 3000 });
+        setAdjustments([]);
+        setCompanyId("");
+        setSourceType("inward");
+        setInwardList([]);
+        setSelectedInward(null);
+        setAdjustQty("");
+        await loadCompanyList();
+        await loadAdjustmentLog();
+        await loadBuyerAdjustmentDetails();
+      }
     } catch (err) {
-      toast.error(err?.response?.data?.error || "Save failed", { theme: "colored", autoClose: 3000 });
+      if (isMountedRef.current && err.name !== "CanceledError") {
+        toast.error(err?.response?.data?.error || "Save failed", { theme: "colored", autoClose: 3000 });
+      }
     }
   };
 
   const handleDeleteLog = async (id) => {
     if (!window.confirm("Delete this adjustment log?")) return;
     try {
-      await axios.delete(`/api/adjustment/log/${id}`);
-      toast.success("✓ Deleted successfully", { theme: "colored", autoClose: 3000 });
-      setCompanyId("");
-      setSourceType("inward");
-      setInwardList([]);
-      setSelectedInward(null);
-      setAdjustments([]);
-      setAdjustQty("");
-      await loadAdjustmentLog();
-      await loadBuyerAdjustmentDetails();
-      await loadCompanyList();
+      await axios.delete(`/api/adjustment/log/${id}`, {
+        signal: abortControllerRef.current.signal,
+      });
+      
+      if (isMountedRef.current) {
+        toast.success("✓ Deleted successfully", { theme: "colored", autoClose: 3000 });
+        setCompanyId("");
+        setSourceType("inward");
+        setInwardList([]);
+        setSelectedInward(null);
+        setAdjustments([]);
+        setAdjustQty("");
+        await loadAdjustmentLog();
+        await loadBuyerAdjustmentDetails();
+        await loadCompanyList();
+      }
     } catch (err) {
-      toast.error(err?.response?.data?.error || "Delete failed", { theme: "colored", autoClose: 3000 });
+      if (isMountedRef.current && err.name !== "CanceledError") {
+        toast.error(err?.response?.data?.error || "Delete failed", { theme: "colored", autoClose: 3000 });
+      }
     }
   };
 
@@ -414,21 +463,28 @@ export default function AdjustmentPage({ outward }) {
     try {
       await axios.put(`/api/adjustment/log/${editingLogId}`, {
         qty: Number(editingQty),
+      }, {
+        signal: abortControllerRef.current.signal,
       });
-      toast.success("✓ Updated successfully", { theme: "colored", autoClose: 3000 });
-      setEditingLogId(null);
-      setEditingQty("");
-      setCompanyId("");
-      setSourceType("inward");
-      setInwardList([]);
-      setSelectedInward(null);
-      setAdjustments([]);
-      setAdjustQty("");
-      await loadAdjustmentLog();
-      await loadBuyerAdjustmentDetails();
-      await loadCompanyList();
+      
+      if (isMountedRef.current) {
+        toast.success("✓ Updated successfully", { theme: "colored", autoClose: 3000 });
+        setEditingLogId(null);
+        setEditingQty("");
+        setCompanyId("");
+        setSourceType("inward");
+        setInwardList([]);
+        setSelectedInward(null);
+        setAdjustments([]);
+        setAdjustQty("");
+        await loadAdjustmentLog();
+        await loadBuyerAdjustmentDetails();
+        await loadCompanyList();
+      }
     } catch (err) {
-      toast.error(err?.response?.data?.error || "Update failed", { theme: "colored", autoClose: 3000 });
+      if (isMountedRef.current && err.name !== "CanceledError") {
+        toast.error(err?.response?.data?.error || "Update failed", { theme: "colored", autoClose: 3000 });
+      }
     }
   };
 
