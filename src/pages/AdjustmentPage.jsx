@@ -103,7 +103,7 @@ export default function AdjustmentPage({ outward }) {
   const totalConsigneeQty = useMemo(
     () =>
       buyerAdjustmentDetails.reduce(
-        (sum, item) => sum + parseNumber(item.qty || item.weight || 0),
+        (sum, item) => sum + parseNumber(item.weight ?? item.qty ?? 0),
         0
       ),
     [buyerAdjustmentDetails]
@@ -142,7 +142,7 @@ export default function AdjustmentPage({ outward }) {
         if (!acc[key]) {
           acc[key] = { buyer_name: buyerName, rate, qty: 0 };
         }
-        acc[key].qty += Number(item.qty || item.weight || 0);
+        acc[key].qty += parseNumber(item.weight ?? item.qty ?? 0);
         return acc;
       }, {});
       return Object.values(grouped);
