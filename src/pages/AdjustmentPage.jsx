@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
+import { toast } from "react-toastify";
 import { formatDisplayDate } from "../utils/date";
 
 export default function AdjustmentPage({ outward }) {
@@ -342,7 +343,7 @@ export default function AdjustmentPage({ outward }) {
         adjustments,
       });
 
-      alert("Adjustment saved");
+      toast.success("Adjustment saved", { theme: "colored" });
       setAdjustments([]);
       setCompanyId("");
       setInwardList([]);
