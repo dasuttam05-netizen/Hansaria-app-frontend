@@ -122,6 +122,36 @@ export default function AdjustmentPage({ outward }) {
     return rates.length === 1 ? rates[0] : "Multiple";
   }, [buyerAdjustmentDetails, outward?.rate]);
 
+  const buyerLines = useMemo(() => {
+    if (buyerAdjustmentDetails.length > 0) {
+      const grouped = buyerAdjustmentDetails.reduce((acc, item) => {
+        const buyerName = String(item.buyer_name || "").trim() || "-";
+        const rate = item.rate != null ? Number(item.rate).toFixed(2) : "-";
+        const key = `${buyerName}|${rate}`;
+        if (!acc[key]) {
+          acc[key] = { buyer_name: buyerName, rate, qty: 0 };
+        }
+        acc[key].qty += Number(item.qty || item.weight || 0);
+        return acc;
+      }, {});
+      return Object.values(grouped);
+    }
+
+    if (outward?.buyer_name) {
+      return [
+        {
+          buyer_name: outward.buyer_name,
+          rate: outward?.rate != null ? Number(outward.rate).toFixed(2) : "-",
+          qty: outwardQty,
+        },
+      ];
+    }
+
+    return [];
+  }, [buyerAdjustmentDetails, outward, outwardQty]);
+
+  const outwardQtyDisplay = totalConsigneeQty || outwardQty;
+
   const isPaltiSource = sourceType === "palti_lorry";
 
   const getAdjustmentScope = () => {
@@ -346,11 +376,23 @@ export default function AdjustmentPage({ outward }) {
         <p style={{ margin: "10px 0 0", color: "#166534", fontWeight: 700 }}>
           Product: {outward?.product_name} | {outward?.warehouse_name ? `Warehouse: ${outward.warehouse_name}` : `Location: ${outward?.location_name || "-"}`}
         </p>
-        <p style={{ margin: "6px 0 0", color: "#166534", fontWeight: 700 }}>
-          Buyer: {buyerDisplay} | Rate: {rateDisplay}
-        </p>
-        <p style={{ margin: "6px 0 0", color: "#166534", fontWeight: 700 }}>
-          Outward Date: {formatDisplayDate(outward?.date)} | Outward Qty: <span style={strongText}>{num(outwardQty)}</span> | Already Adjusted: <span style={strongText}>{num(alreadyAdjusted)}</span> | Remaining: <span style={strongText}>{num(currentRemaining)}</span>
+        <div style={{ margin: "6px 0 0", color: "#166534", fontWeight: 700 }}>
+          Buyer:
+        </div>
+        {buyerLines.length > 0 ? (
+          buyerLines.map((line, index) => (
+            <div
+              key={`${line.buyer_name}-${line.rate}-${index}`}
+              style={{ margin: "4px 0 0 10px", color: "#166534", fontWeight: 700 }}
+            >
+              {line.buyer_name} | {num(line.qty)} | Rate: {line.rate}
+            </div>
+          ))
+        ) : (
+          <div style={{ margin: "4px 0 0 10px", color: "#166534", fontWeight: 700 }}>-</div>
+        )}
+        <p style={{ margin: "10px 0 0", color: "#166534", fontWeight: 700 }}>
+          Outward Date: {formatDisplayDate(outward?.date)} | Outward Qty: <span style={strongText}>{num(outwardQtyDisplay)}</span> | Already Adjusted: <span style={strongText}>{num(alreadyAdjusted)}</span> | Remaining: <span style={strongText}>{num(currentRemaining)}</span>
         </p>
       </div>
       <div style={cardStyle}>
@@ -643,84 +685,6 @@ export default function AdjustmentPage({ outward }) {
         >
           Save Settlement
         </button>
-      </div>
-
-      <div style={cardStyle}>
-        <h3 style={sectionTitle}>Previous Adjustment Log</h3>
-        <table style={tableStyle}>
-          <thead>
-            <tr>
-              <th style={thStyle}>Voucher</th>
-              <th style={thStyle}>Lorry No</th>
-              <th style={thStyle}>Company</th>
-              <th style={thStyle}>Qty</th>
-              <th style={thStyle}>Action</th>
-            </tr>
-          </thead>
-          <tbody>
-            {adjustmentLog.length > 0 ? (
-              adjustmentLog.map((row) => (
-                <tr key={row.id}>
-                  <td style={tdStyle}>{row.inward_voucher}</td>
-                  <td style={tdStyle}>{row.lorry_no}</td>
-                  <td style={tdStyle}>{row.company_name} {row.source_type === "palti_lorry" ? "(Palti)" : ""}</td>
-                  <td style={tdStyle}>
-                    {editingLogId === row.id ? (
-                      <input
-                        type="number"
-                        value={editingQty}
-                        onChange={(e) => setEditingQty(e.target.value)}
-                        style={{ ...inputStyle, width: 100 }}
-                      />
-                    ) : (
-                      num(row.qty)
-                    )}
-                  </td>
-                  <td style={tdStyle}>
-                    {editingLogId === row.id ? (
-                      <>
-                        <button
-                          onClick={handleUpdateLog}
-                          style={{ ...buttonStyle, background: "#2563eb", marginRight: 8 }}
-                        >
-                          Update
-                        </button>
-                        <button
-                          onClick={() => {
-                            setEditingLogId(null);
-                            setEditingQty("");
-                          }}
-                          style={{ ...buttonStyle, background: "#64748b" }}
-                        >
-                          Cancel
-                        </button>
-                      </>
-                    ) : (
-                      <>
-                        <button
-                          onClick={() => handleEditLog(row)}
-                          style={{ ...buttonStyle, background: "#f59e0b", marginRight: 8 }}
-                        >
-                          Edit
-                        </button>
-                        <button
-                          onClick={() => handleDeleteLog(row.id)}
-                          style={{ ...buttonStyle, background: "#dc2626" }}
-                        >
-                          Delete
-                        </button>
-                      </>
-                    )}
-                  </td>
-                </tr>
-              ))
-            ) : (
-              <tr>
-                <td style={tdStyle} colSpan="5">No previous adjustment</td>
-              </tr>
-            )}
-          </tbody>
-        </table>
       </div>
     </div>
   );
