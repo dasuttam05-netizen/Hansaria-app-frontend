@@ -460,9 +460,15 @@ export default function AdjustmentPage({ outward }) {
 
   const handleUpdateLog = async () => {
     if (!editingLogId) return;
+    const qtyValue = Number(editingQty);
+    if (!qtyValue || qtyValue <= 0) {
+      toast.warning("Enter a valid qty to update", { theme: "colored", autoClose: 3000 });
+      return;
+    }
+
     try {
       await axios.put(`/api/adjustment/log/${editingLogId}`, {
-        qty: Number(editingQty),
+        qty: qtyValue,
       }, {
         signal: abortControllerRef.current.signal,
       });
@@ -483,7 +489,8 @@ export default function AdjustmentPage({ outward }) {
       }
     } catch (err) {
       if (isMountedRef.current && err.name !== "CanceledError") {
-        toast.error(err?.response?.data?.error || "Update failed", { theme: "colored", autoClose: 3000 });
+        const errorMessage = err?.response?.data?.error || err?.message || "Update failed";
+        toast.error(errorMessage, { theme: "colored", autoClose: 3000 });
       }
     }
   };
