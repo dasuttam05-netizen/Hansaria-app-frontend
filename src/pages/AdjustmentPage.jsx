@@ -18,10 +18,31 @@ export default function AdjustmentPage({ outward }) {
 
   const outwardQty = Number(outward?.quantity) || 0;
 
+  const parseNumber = (val) => {
+    const raw = val == null ? "" : String(val).trim();
+    const cleaned = raw.replace(/,/g, "").replace(/[^0-9.-]+/g, "");
+    const parsed = Number(cleaned);
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+
+  const num = (val) => Number(val || 0).toFixed(4);
+
   const totalDraftAdjusted = useMemo(
     () => adjustments.reduce((sum, item) => sum + Number(item.qty || 0), 0),
     [adjustments]
   );
+
+  const totalConsigneeQty = useMemo(
+    () =>
+      buyerAdjustmentDetails.reduce((sum, item) => {
+        const hasRate = Number(item.rate) > 0;
+        if (!hasRate) return sum;
+        return sum + parseNumber(item.weight ?? item.qty ?? 0);
+      }, 0),
+    [buyerAdjustmentDetails]
+  );
+
+  const effectiveOutwardQty = totalConsigneeQty > 0 ? totalConsigneeQty : outwardQty;
 
   const currentRemaining = effectiveOutwardQty - alreadyAdjusted;
   const remainingQty = currentRemaining - totalDraftAdjusted;
@@ -91,26 +112,6 @@ export default function AdjustmentPage({ outward }) {
     color: "#166534",
     fontWeight: 700,
   };
-
-  const parseNumber = (val) => {
-    const raw = val == null ? "" : String(val).trim();
-    const cleaned = raw.replace(/,/g, "").replace(/[^0-9.-]+/g, "");
-    const parsed = Number(cleaned);
-    return Number.isFinite(parsed) ? parsed : 0;
-  };
-
-  const num = (val) => Number(val || 0).toFixed(4);
-  const totalConsigneeQty = useMemo(
-    () =>
-      buyerAdjustmentDetails.reduce((sum, item) => {
-        const hasRate = Number(item.rate) > 0;
-        if (!hasRate) return sum;
-        return sum + parseNumber(item.weight ?? item.qty ?? 0);
-      }, 0),
-    [buyerAdjustmentDetails]
-  );
-
-  const effectiveOutwardQty = totalConsigneeQty > 0 ? totalConsigneeQty : outwardQty;
 
   const buyerDisplay = useMemo(() => {
     const names = Array.from(
