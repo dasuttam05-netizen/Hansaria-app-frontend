@@ -102,10 +102,11 @@ export default function AdjustmentPage({ outward }) {
   const num = (val) => Number(val || 0).toFixed(4);
   const totalConsigneeQty = useMemo(
     () =>
-      buyerAdjustmentDetails.reduce(
-        (sum, item) => sum + parseNumber(item.weight ?? item.qty ?? 0),
-        0
-      ),
+      buyerAdjustmentDetails.reduce((sum, item) => {
+        const hasRate = item.rate != null && item.rate !== "";
+        if (!hasRate) return sum;
+        return sum + parseNumber(item.weight ?? item.qty ?? 0);
+      }, 0),
     [buyerAdjustmentDetails]
   );
 
@@ -402,7 +403,10 @@ export default function AdjustmentPage({ outward }) {
         ) : (
           <div style={{ margin: "4px 0 0 10px", color: "#166534", fontWeight: 700 }}>-</div>
         )}
-        <p style={{ margin: "10px 0 0", color: "#166534", fontWeight: 700 }}>
+        <div style={{ margin: "10px 0 0", color: "#166534", fontWeight: 700 }}>
+          Consignee/Rate Weight: <span style={strongText}>{num(totalConsigneeQty)}</span>
+        </div>
+        <p style={{ margin: "8px 0 0", color: "#166534", fontWeight: 700 }}>
           Outward Date: {formatDisplayDate(outward?.date)} | Outward Qty{buyerLines.length > 0 ? " (Consignee)" : ""}: <span style={strongText}>{num(outwardQtyDisplay)}</span> | Already Adjusted: <span style={strongText}>{num(alreadyAdjusted)}</span> | Remaining: <span style={strongText}>{num(currentRemaining)}</span>
         </p>
       </div>
