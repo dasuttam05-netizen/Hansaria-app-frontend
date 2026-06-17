@@ -140,8 +140,8 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
           return acc;
         }, {})
       );
-      setClaimRows(normalizeDetailRows(s.claim_details, s.claim_amount, "claim"));
-      setDeductionRows(normalizeDetailRows(s.other_deduction_details, s.other_deduction, "deduction"));
+      setClaimRows(normalizeDetailRows(s.claim_details, s.claim_amount, "Claim"));
+      setDeductionRows(normalizeDetailRows(s.other_deduction_details, s.other_deduction, "Deduction"));
       setWhatsappSentAt(
         (res.data?.adjustment_details || []).reduce((acc, item) => {
           if (item.whatsapp_sent_at) acc[item.id] = item.whatsapp_sent_at;
@@ -728,7 +728,12 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
                 })
               ) : (
                 <tr>
-                  <td style={tableCellStyle} colSpan="16">No adjustment found for this outward.</td>
+                  <td style={tableCellStyle} colSpan="16">
+                    <div style={{ padding: "16px", textAlign: "center", color: PALETTE.muted, fontSize: 13, background: "#f9fafb", borderRadius: 8 }}>
+                      <div style={{ fontWeight: 600, marginBottom: 4 }}>No adjustments linked to this outward</div>
+                      <div style={{ fontSize: 12, marginTop: 6 }}>Create adjustments by mapping inward or palti lorry entries to this outward dispatch.</div>
+                    </div>
+                  </td>
                 </tr>
               )}
             </tbody>
@@ -889,7 +894,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
                             <input
                               value={row.description}
                               onChange={(e) => handleDetailRowChange("claim", row.id, "description", e.target.value)}
-                              placeholder={`Claim ${index + 1}`}
+                              placeholder="Enter claim description"
                               style={detailInputStyle}
                             />
                           </td>
@@ -899,6 +904,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
                               value={row.amount}
                               onChange={(e) => handleDetailRowChange("claim", row.id, "amount", e.target.value)}
                               placeholder="0.00"
+                              step="0.01"
                               style={detailInputStyle}
                             />
                           </td>
@@ -945,7 +951,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
                             <input
                               value={row.description}
                               onChange={(e) => handleDetailRowChange("deduction", row.id, "description", e.target.value)}
-                              placeholder={`Deduction ${index + 1}`}
+                              placeholder="Enter deduction description"
                               style={detailInputStyle}
                             />
                           </td>
@@ -955,6 +961,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
                               value={row.amount}
                               onChange={(e) => handleDetailRowChange("deduction", row.id, "amount", e.target.value)}
                               placeholder="0.00"
+                              step="0.01"
                               style={detailInputStyle}
                             />
                           </td>
