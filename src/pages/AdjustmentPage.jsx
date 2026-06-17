@@ -367,7 +367,10 @@ export default function AdjustmentPage({ outward }) {
       setSourceType("inward");
       setInwardList([]);
       setSelectedInward(null);
+      setAdjustments([]);
+      setAdjustQty("");
       await loadAdjustmentLog();
+      await loadBuyerAdjustmentDetails();
       await loadCompanyList();
     } catch (err) {
       alert(err?.response?.data?.error || "Delete failed");
@@ -392,7 +395,10 @@ export default function AdjustmentPage({ outward }) {
       setSourceType("inward");
       setInwardList([]);
       setSelectedInward(null);
+      setAdjustments([]);
+      setAdjustQty("");
       await loadAdjustmentLog();
+      await loadBuyerAdjustmentDetails();
       await loadCompanyList();
     } catch (err) {
       alert(err?.response?.data?.error || "Update failed");
