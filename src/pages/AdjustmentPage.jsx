@@ -363,9 +363,12 @@ export default function AdjustmentPage({ outward }) {
     try {
       await axios.delete(`/api/adjustment/log/${id}`);
       alert("Deleted successfully");
-      await loadCompanyList();
+      setCompanyId("");
+      setSourceType("inward");
+      setInwardList([]);
+      setSelectedInward(null);
       await loadAdjustmentLog();
-      if (companyId) await loadInwardStock(companyId);
+      await loadCompanyList();
     } catch (err) {
       alert(err?.response?.data?.error || "Delete failed");
     }
@@ -385,9 +388,12 @@ export default function AdjustmentPage({ outward }) {
       alert("Updated successfully");
       setEditingLogId(null);
       setEditingQty("");
-      await loadCompanyList();
+      setCompanyId("");
+      setSourceType("inward");
+      setInwardList([]);
+      setSelectedInward(null);
       await loadAdjustmentLog();
-      if (companyId) await loadInwardStock(companyId);
+      await loadCompanyList();
     } catch (err) {
       alert(err?.response?.data?.error || "Update failed");
     }
