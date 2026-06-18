@@ -279,7 +279,7 @@ export default function AdjustmentPage({ outward }) {
   const loadBuyerAdjustmentDetails = async () => {
     if (!outward?.id) return;
     try {
-      const res = await axios.get(`/api/buyer-adjustment/${outward.id}`, {
+      const res = await API.get(`/api/buyer-adjustment/${outward.id}`, {
         signal: abortControllerRef.current.signal,
       });
       if (isMountedRef.current) {
