@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
+import API from "./axiosInstance";
 import { toast } from "react-toastify";
 import { formatDisplayDate } from "../utils/date";
 
@@ -214,7 +215,7 @@ export default function AdjustmentPage({ outward }) {
     if (!outward?.warehouse_id && !outward?.location_id) return setCompanyList([]);
     try {
       const scope = getAdjustmentScope();
-      const res = await axios.get("/api/adjustment/parties", {
+      const res = await API.get("/api/adjustment/parties", {
         params: {
           ...scope,
           product_id: outward.product_id,
@@ -236,7 +237,7 @@ export default function AdjustmentPage({ outward }) {
     if (!outward || !selectedCompanyId) return setInwardList([]);
     try {
       const scope = getAdjustmentScope();
-      const res = await axios.get("/api/adjustment/inward/report", {
+      const res = await API.get("/api/adjustment/inward/report", {
         params: {
           ...scope,
           company_id: selectedCompanyId,
@@ -259,7 +260,7 @@ export default function AdjustmentPage({ outward }) {
   const loadAdjustmentLog = async () => {
     if (!outward?.id) return;
     try {
-      const res = await axios.get(`/api/adjustment/${outward.id}`, {
+      const res = await API.get(`/api/adjustment/${outward.id}`, {
         signal: abortControllerRef.current.signal,
       });
       if (isMountedRef.current) {
@@ -401,7 +402,7 @@ export default function AdjustmentPage({ outward }) {
     }
 
     try {
-      await axios.post("/api/adjustment/final-save", {
+      await API.post("/api/adjustment/final-save", {
         outward_id: outward.id,
         adjustments,
       }, {
@@ -430,7 +431,7 @@ export default function AdjustmentPage({ outward }) {
   const handleDeleteLog = async (id) => {
     if (!window.confirm("Delete this adjustment log?")) return;
     try {
-      await axios.post(`/api/adjustment/log/${id}/delete`, null, {
+      await API.post(`/api/adjustment/log/${id}/delete`, null, {
         signal: abortControllerRef.current.signal,
       });
       
@@ -467,7 +468,7 @@ export default function AdjustmentPage({ outward }) {
     }
 
     try {
-      await axios.post(`/api/adjustment/log/${editingLogId}/update`, {
+      await API.post(`/api/adjustment/log/${editingLogId}/update`, {
         qty: qtyValue,
       }, {
         signal: abortControllerRef.current.signal,
