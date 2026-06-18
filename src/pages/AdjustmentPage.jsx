@@ -431,7 +431,7 @@ export default function AdjustmentPage({ outward }) {
   const handleDeleteLog = async (id) => {
     if (!window.confirm("Delete this adjustment log?")) return;
     try {
-      await API.post(`/api/adjustment/log/${id}/delete`, null, {
+      await API.delete(`/api/adjustment/log/${id}`, {
         signal: abortControllerRef.current.signal,
       });
       
@@ -468,7 +468,7 @@ export default function AdjustmentPage({ outward }) {
     }
 
     try {
-      await API.post(`/api/adjustment/log/${editingLogId}/update`, {
+      await API.put(`/api/adjustment/log/${editingLogId}`, {
         qty: qtyValue,
       }, {
         signal: abortControllerRef.current.signal,
