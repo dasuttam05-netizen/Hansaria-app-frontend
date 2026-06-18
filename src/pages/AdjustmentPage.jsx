@@ -431,9 +431,23 @@ export default function AdjustmentPage({ outward }) {
   const handleDeleteLog = async (id) => {
     if (!window.confirm("Delete this adjustment log?")) return;
     try {
-      await API.delete(`/api/adjustment/log/${id}`, {
-        signal: abortControllerRef.current.signal,
-      });
+      try {
+        await API.delete(`/api/adjustment/log/${id}`, {
+          signal: abortControllerRef.current.signal,
+        });
+      } catch (deleteErr) {
+        if (deleteErr.name === "CanceledError") {
+          throw deleteErr;
+        }
+
+        if (deleteErr.response && deleteErr.response.status < 500) {
+          throw deleteErr;
+        }
+
+        await API.post(`/api/adjustment/log/${id}/delete`, null, {
+          signal: abortControllerRef.current.signal,
+        });
+      }
       
       if (isMountedRef.current) {
         toast.success("✓ Deleted successfully", { theme: "colored", autoClose: 3000 });
