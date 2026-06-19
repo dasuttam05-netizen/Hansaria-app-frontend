@@ -439,7 +439,7 @@ export default function AdjustmentPage({ outward }) {
   const handleDeleteLog = async (id) => {
     if (!window.confirm("Delete this adjustment log?")) return;
     try {
-      await API.post(`/api/adjustment/log/${id}/delete`, null, {
+      await API.delete(`/api/adjustment/log/${id}`, {
         signal: abortControllerRef.current.signal,
       });
       
