@@ -5,7 +5,7 @@ import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { formatDisplayDate } from "../utils/date";
 
-export default function AdjustmentPage({ outward, onSaved, onDeleted }) {
+export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose }) {
   const [companyList, setCompanyList] = useState([]);
   const [companyId, setCompanyId] = useState("");
   const [sourceType, setSourceType] = useState("inward");
@@ -414,12 +414,7 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted }) {
       });
 
       if (isMountedRef.current) {
-        setAdjustments([]);
-        setCompanyId("");
-        setSourceType("inward");
-        setInwardList([]);
-        setSelectedInward(null);
-        setAdjustQty("");
+        resetDraftState();
         await loadCompanyList();
         await loadAdjustmentLog();
         await loadBuyerAdjustmentDetails();
@@ -444,12 +439,7 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted }) {
       });
 
       if (isMountedRef.current) {
-        setCompanyId("");
-        setSourceType("inward");
-        setInwardList([]);
-        setSelectedInward(null);
-        setAdjustments([]);
-        setAdjustQty("");
+        resetDraftState();
         await loadAdjustmentLog();
         await loadBuyerAdjustmentDetails();
         await loadCompanyList();
@@ -485,12 +475,7 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted }) {
       if (isMountedRef.current) {
         setEditingLogId(null);
         setEditingQty("");
-        setCompanyId("");
-        setSourceType("inward");
-        setInwardList([]);
-        setSelectedInward(null);
-        setAdjustments([]);
-        setAdjustQty("");
+        resetDraftState();
         await loadAdjustmentLog();
         await loadBuyerAdjustmentDetails();
         await loadCompanyList();
@@ -504,18 +489,16 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted }) {
     }
   };
 
-  useEffect(() => {
-    return () => {
-      setAdjustments([]);
-      setCompanyId("");
-      setSourceType("inward");
-      setInwardList([]);
-      setSelectedInward(null);
-      setAdjustQty("");
-      setEditingLogId(null);
-      setEditingQty("");
-    };
-  }, []);
+  const resetDraftState = () => {
+    setAdjustments([]);
+    setCompanyId("");
+    setSourceType("inward");
+    setInwardList([]);
+    setSelectedInward(null);
+    setAdjustQty("");
+    setEditingLogId(null);
+    setEditingQty("");
+  };
 
   return (
     <div style={{ padding: 20, background: "#f8fafc", borderRadius: 16 }}>
