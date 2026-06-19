@@ -406,10 +406,14 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
 
     try {
       setIsSaving(true);
-      await API.post("/api/adjustment/final-save", {
-        outward_id: outward.id,
-        adjustments,
-      });
+      await API.post(
+        "/api/adjustment/final-save",
+        {
+          outward_id: outward.id,
+          adjustments,
+        },
+        { timeout: 30000 }
+      );
 
       if (!isMountedRef.current) return;
       resetDraftState();
@@ -424,7 +428,8 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
       void loadBuyerAdjustmentDetails();
     } catch (err) {
       if (isMountedRef.current && err.name !== "CanceledError") {
-        toast.error(err?.response?.data?.error || "Save failed", { theme: "colored", autoClose: 3000 });
+        const message = err?.response?.data?.error || err?.message || "Save failed";
+        toast.error(message, { theme: "colored", autoClose: 3000 });
       }
     } finally {
       if (isMountedRef.current) {
