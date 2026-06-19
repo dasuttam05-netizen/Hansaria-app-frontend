@@ -449,7 +449,7 @@ export default function AdjustmentPage({ outward }) {
       }
     } catch (err) {
       if (isMountedRef.current && err.name !== "CanceledError") {
-        toast.error(err?.response?.data?.error || err?.message || "Delete failed", { theme: "colored", autoClose: 3000 });
+        toast.error(err?.response?.data?.error || "Delete failed", { theme: "colored", autoClose: 3000 });
       }
     }
   };
