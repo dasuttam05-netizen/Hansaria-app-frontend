@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import API from "./axiosInstance";
-import { toast } from "react-toastify";
+import { ToastContainer, toast, Slide } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 import { formatDisplayDate } from "../utils/date";
 
 export default function AdjustmentPage({ outward }) {
@@ -17,6 +18,7 @@ export default function AdjustmentPage({ outward }) {
   const [alreadyAdjusted, setAlreadyAdjusted] = useState(0);
   const [editingLogId, setEditingLogId] = useState(null);
   const [editingQty, setEditingQty] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
   
   // For cleanup on unmount
   const isMountedRef = React.useRef(true);
@@ -385,6 +387,7 @@ export default function AdjustmentPage({ outward }) {
   };
 
   const handleSave = async () => {
+    if (isSaving) return;
     if (totalDraftAdjusted <= 0) {
       toast.warning("Please add adjustment first", { theme: "colored", autoClose: 3000 });
       return;
@@ -402,6 +405,7 @@ export default function AdjustmentPage({ outward }) {
     }
 
     try {
+      setIsSaving(true);
       await API.post("/api/adjustment/final-save", {
         outward_id: outward.id,
         adjustments,
@@ -424,6 +428,10 @@ export default function AdjustmentPage({ outward }) {
     } catch (err) {
       if (isMountedRef.current && err.name !== "CanceledError") {
         toast.error(err?.response?.data?.error || "Save failed", { theme: "colored", autoClose: 3000 });
+      }
+    } finally {
+      if (isMountedRef.current) {
+        setIsSaving(false);
       }
     }
   };
@@ -498,6 +506,7 @@ export default function AdjustmentPage({ outward }) {
 
   return (
     <div style={{ padding: 20, background: "#f8fafc", borderRadius: 16 }}>
+      <ToastContainer position="top-right" autoClose={2500} hideProgressBar transition={Slide} />
       <div style={cardStyle}>
         <h2 style={{ margin: 0, color: "#14532d", fontWeight: 800 }}>Adjustment Entry</h2>
         <p style={{ margin: "10px 0 0", color: "#166534", fontWeight: 700 }}>
@@ -806,14 +815,16 @@ export default function AdjustmentPage({ outward }) {
 
         <button
           onClick={handleSave}
-          disabled={!isDraftExactMatch}
+          disabled={!isDraftExactMatch || isSaving}
           style={{
             ...buttonStyle,
-            background: isDraftExactMatch ? "#16a34a" : "#94a3b8",
+            background: isDraftExactMatch && !isSaving ? "#16a34a" : "#94a3b8",
             marginTop: 14,
+            cursor: isDraftExactMatch && !isSaving ? "pointer" : "not-allowed",
+            opacity: isSaving ? 0.85 : 1,
           }}
         >
-          Save Settlement
+          {isSaving ? "Saving..." : "Save Settlement"}
         </button>
       </div>
     </div>
