@@ -5,7 +5,7 @@ import { ToastContainer, toast, Slide } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { formatDisplayDate } from "../utils/date";
 
-export default function AdjustmentPage({ outward }) {
+export default function AdjustmentPage({ outward, onSaved, onDeleted }) {
   const [companyList, setCompanyList] = useState([]);
   const [companyId, setCompanyId] = useState("");
   const [sourceType, setSourceType] = useState("inward");
@@ -414,7 +414,6 @@ export default function AdjustmentPage({ outward }) {
       });
 
       if (isMountedRef.current) {
-        toast.success("✓ Adjustment saved successfully!", { theme: "colored", autoClose: 3000 });
         setAdjustments([]);
         setCompanyId("");
         setSourceType("inward");
@@ -424,6 +423,7 @@ export default function AdjustmentPage({ outward }) {
         await loadCompanyList();
         await loadAdjustmentLog();
         await loadBuyerAdjustmentDetails();
+        if (typeof onSaved === "function") onSaved();
       }
     } catch (err) {
       if (isMountedRef.current && err.name !== "CanceledError") {
@@ -453,8 +453,6 @@ export default function AdjustmentPage({ outward }) {
         });
       }
 
-      toast.success("Deleted successfully", { theme: "colored", autoClose: 3000 });
-
       if (isMountedRef.current) {
         setCompanyId("");
         setSourceType("inward");
@@ -465,6 +463,7 @@ export default function AdjustmentPage({ outward }) {
         await loadAdjustmentLog();
         await loadBuyerAdjustmentDetails();
         await loadCompanyList();
+        if (typeof onDeleted === "function") onDeleted();
       }
     } catch (err) {
       if (isMountedRef.current && err.name !== "CanceledError") {
@@ -506,6 +505,7 @@ export default function AdjustmentPage({ outward }) {
         await loadAdjustmentLog();
         await loadBuyerAdjustmentDetails();
         await loadCompanyList();
+        if (typeof onSaved === "function") onSaved();
       }
     } catch (err) {
       if (isMountedRef.current && err.name !== "CanceledError") {
@@ -840,6 +840,9 @@ export default function AdjustmentPage({ outward }) {
     </div>
   );
 }
+
+
+
 
 
 
