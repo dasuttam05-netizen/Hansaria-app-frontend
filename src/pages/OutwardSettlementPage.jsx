@@ -551,7 +551,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
               </div>
               <div style={{ ...plainInfoCellStyle, borderRight: "none" }}>
                 <div style={plainInfoLabelStyle}>Rate</div>
-                <div style={plainInfoValueStyle}>{calculation.averageRate.toFixed(2)}</div>
+                <div style={plainInfoValueStyle}>{unloadingTotals.avgRate.toFixed(2)}</div>
               </div>
             </div>
 
@@ -567,6 +567,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
                     <th style={consignmentHeadStyle}>Buyer</th>
                     <th style={consignmentHeadStyle}>Consignee</th>
                     <th style={consignmentHeadStyle}>Product</th>
+                    <th style={consignmentHeadStyle}>Unloading Date</th>
                     <th style={consignmentHeadStyle}>Unloading Qty</th>
                     <th style={consignmentHeadStyle}>Rate</th>
                     <th style={consignmentHeadStyle}>Claim</th>
@@ -583,6 +584,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
                           <td style={consignmentCellStyle}>{detail.buyer_name || meta?.buyer_name || "-"}</td>
                           <td style={consignmentCellStyle}>{detail.consignee_name || "-"}</td>
                           <td style={consignmentCellStyle}>{detail.product_name || meta?.product_name || "-"}</td>
+                          <td style={consignmentCellStyle}>{formatDisplayDate(detail.unloading_date || formData.unloading_date || meta?.outward_date) || "-"}</td>
                           <td style={consignmentCellStyle}>{num(detail.qty || detail.weight || 0).toFixed(2)}</td>
                           <td style={consignmentCellStyle}>{num(detail.rate).toFixed(2)}</td>
                           <td style={consignmentCellStyle}>{num(detail.claim).toFixed(2)}</td>
@@ -591,27 +593,27 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
                           <td style={consignmentCellStyle}>{num(detail.shortage_amount).toFixed(2)}</td>
                         </tr>
                       ))}
-                      <tr style={{ background: PALETTE.headerSoft }}>
-                        <td style={consignmentCellStyle} colSpan={3}>Totals</td>
-                        <td style={consignmentCellStyle}>{unloadingTotals.totalQty.toFixed(2)}</td>
-                        <td style={consignmentCellStyle}>{unloadingTotals.avgRate.toFixed(2)}</td>
-                        <td style={consignmentCellStyle}>
+                      <tr style={consignmentTotalRowStyle}>
+                        <td style={consignmentTotalCellStyle} colSpan={4}>Totals</td>
+                        <td style={consignmentTotalCellStyle}>{unloadingTotals.totalQty.toFixed(2)}</td>
+                        <td style={consignmentTotalCellStyle}>{unloadingTotals.avgRate.toFixed(2)}</td>
+                        <td style={consignmentTotalCellStyle}>
                           {unloadingDetails.reduce((sum, detail) => sum + num(detail.claim), 0).toFixed(2)}
                         </td>
-                        <td style={consignmentCellStyle}>
+                        <td style={consignmentTotalCellStyle}>
                           {unloadingDetails.reduce((sum, detail) => sum + num(detail.other_deduction), 0).toFixed(2)}
                         </td>
-                        <td style={consignmentCellStyle}>
+                        <td style={consignmentTotalCellStyle}>
                           {unloadingDetails.reduce((sum, detail) => sum + num(detail.shortage), 0).toFixed(2)}
                         </td>
-                        <td style={consignmentCellStyle}>
+                        <td style={consignmentTotalCellStyle}>
                           {unloadingDetails.reduce((sum, detail) => sum + num(detail.shortage_amount), 0).toFixed(2)}
                         </td>
                       </tr>
                     </>
                   ) : (
                     <tr>
-                      <td style={consignmentCellStyle} colSpan={9}>No unloading details found</td>
+                      <td style={consignmentCellStyle} colSpan={10}>No unloading details found</td>
                     </tr>
                   )}
                 </tbody>
@@ -1231,6 +1233,21 @@ const consignmentCellStyle = {
   borderRight: `1px solid ${PALETTE.border}`,
   fontWeight: 700,
   lineHeight: 1.25,
+};
+
+const consignmentTotalRowStyle = {
+  background: "linear-gradient(90deg, #dcfce7 0%, #f0fdf4 100%)",
+  borderTop: "2px solid #16a34a",
+  boxShadow: "inset 0 1px 0 rgba(22, 163, 74, 0.18)",
+};
+
+const consignmentTotalCellStyle = {
+  ...consignmentCellStyle,
+  background: "#dcfce7",
+  color: "#064e3b",
+  fontWeight: 900,
+  fontSize: 13,
+  letterSpacing: "0.01em",
 };
 
 const settlementSummaryGridStyle = {
