@@ -413,13 +413,12 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
         signal: abortControllerRef.current.signal,
       });
 
-      if (isMountedRef.current) {
-        resetDraftState();
-        await loadCompanyList();
-        await loadAdjustmentLog();
-        await loadBuyerAdjustmentDetails();
-        if (typeof onSaved === "function") onSaved();
-      }
+      if (!isMountedRef.current) return;
+      resetDraftState();
+      if (typeof onSaved === "function") onSaved();
+      void loadCompanyList();
+      void loadAdjustmentLog();
+      void loadBuyerAdjustmentDetails();
     } catch (err) {
       if (isMountedRef.current && err.name !== "CanceledError") {
         toast.error(err?.response?.data?.error || "Save failed", { theme: "colored", autoClose: 3000 });
@@ -444,14 +443,12 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
         }
       }
 
-      if (isMountedRef.current) {
-        resetDraftState();
-        await loadAdjustmentLog();
-        await loadBuyerAdjustmentDetails();
-        await loadCompanyList();
-        if (typeof onDeleted === "function") onDeleted();
-        toast.success("Adjustment deleted successfully", { theme: "colored", autoClose: 3000 });
-      }
+      if (!isMountedRef.current) return;
+      resetDraftState();
+      if (typeof onDeleted === "function") onDeleted();
+      void loadAdjustmentLog();
+      void loadBuyerAdjustmentDetails();
+      void loadCompanyList();
     } catch (err) {
       if (isMountedRef.current && err.name !== "CanceledError") {
         toast.error(err?.response?.data?.error || "Delete failed", { theme: "colored", autoClose: 3000 });
@@ -479,15 +476,14 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
         signal: abortControllerRef.current.signal,
       });
       
-      if (isMountedRef.current) {
-        setEditingLogId(null);
-        setEditingQty("");
-        resetDraftState();
-        await loadAdjustmentLog();
-        await loadBuyerAdjustmentDetails();
-        await loadCompanyList();
-        if (typeof onSaved === "function") onSaved();
-      }
+      if (!isMountedRef.current) return;
+      setEditingLogId(null);
+      setEditingQty("");
+      resetDraftState();
+      if (typeof onSaved === "function") onSaved();
+      void loadAdjustmentLog();
+      void loadBuyerAdjustmentDetails();
+      void loadCompanyList();
     } catch (err) {
       if (isMountedRef.current && err.name !== "CanceledError") {
         const errorMessage = err?.response?.data?.error || err?.message || "Update failed";
