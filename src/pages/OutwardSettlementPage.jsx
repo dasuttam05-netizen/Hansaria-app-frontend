@@ -112,7 +112,17 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
       const embeddedDetails = Array.isArray(res.data?.unloading_details) ? res.data.unloading_details : [];
       const fallbackDetails = Array.isArray(unloadingRes.data) ? unloadingRes.data : [];
       const sourceDetails = embeddedDetails.length > 0 ? embeddedDetails : fallbackDetails;
-      setUnloadingDetails(sourceDetails.filter(isRealUnloadingDetail));
+      const realUnloadingDetails = sourceDetails.filter(isRealUnloadingDetail);
+      const totalUnloadingQty = realUnloadingDetails.reduce(
+        (sum, detail) => sum + num(detail.qty || detail.weight || 0),
+        0
+      );
+      const weightedSaleRate = realUnloadingDetails.reduce(
+        (sum, detail) => sum + num(detail.rate) * num(detail.qty || detail.weight || 0),
+        0
+      );
+      const autoSaleRate = totalUnloadingQty > 0 ? weightedSaleRate / totalUnloadingQty : 0;
+      setUnloadingDetails(realUnloadingDetails);
       const s = res.data.settlement || {};
       const approvedLabourAmount = num(res.data?.labour_expense?.amount);
       let freightValue = s.freight ?? "";
@@ -135,12 +145,12 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
 
       setFormData({
         dispatch_qty: s.dispatch_qty ?? "",
-        unloading_qty: s.unloading_qty ?? "",
+        unloading_qty: totalUnloadingQty > 0 ? totalUnloadingQty.toFixed(2) : (s.unloading_qty ?? ""),
         unloading_date: s.unloading_date ?? "",
-        sale_rate: s.sale_rate ?? "",
+        sale_rate: autoSaleRate > 0 ? autoSaleRate.toFixed(2) : (s.sale_rate ?? ""),
         company_rate: s.company_rate ?? "",
         freight: freightValue,
-        outward_labour_charges: s.outward_labour_charges ?? "",
+        outward_labour_charges: approvedLabourAmount > 0 ? approvedLabourAmount : (s.outward_labour_charges ?? ""),
         other_charges: s.other_charges ?? "",
         charge_bearer: s.charge_bearer || "self",
         narration: s.narration || "",
@@ -159,7 +169,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
           return acc;
         }, {})
       );
-      setShowLabourExpenseOption(approvedLabourAmount > 0 && num(s.outward_labour_charges) !== approvedLabourAmount);
+      setShowLabourExpenseOption(false);
     } catch (err) {
       console.error(err);
       setIsFreightAutoLocked(false);
@@ -763,24 +773,19 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
           </div>
 
           <div>
-            <label style={label}>Unloading Date</label>
+            <label style={label}>Unloading Qty</label>
             <input
-              name="unloading_date"
-              type="date"
-              value={formData.unloading_date}
-              onChange={handleChange}
-              style={input}
+              name="unloading_qty"
+              type="number"
+              value={formData.unloading_qty}
+              readOnly
+              style={{ ...input, background: "#f3f8ff", cursor: "not-allowed", color: PALETTE.muted }}
             />
           </div>
 
           <div>
-            <label style={label}>Unloading Qty</label>
-            <input name="unloading_qty" type="number" value={formData.unloading_qty} onChange={handleChange} style={input} />
-          </div>
-
-          <div>
             <label style={label}>Sale Rate</label>
-            <input name="sale_rate" type="number" value={formData.sale_rate} onChange={handleChange} readOnly style={{ ...input, background: "#f3f8ff", cursor: "not-allowed", color: PALETTE.muted }} />
+            <input name="sale_rate" type="number" value={formData.sale_rate} readOnly style={{ ...input, background: "#f3f8ff", cursor: "not-allowed", color: PALETTE.muted }} />
           </div>
 
           <div>
@@ -790,19 +795,13 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
               type="number"
               value={formData.company_rate}
               onChange={(e) => handleCompanyRateChange(e.target.value)}
-              readOnly={!canEditCompanyRate}
               style={{
                 ...input,
-                background: canEditCompanyRate ? "#fff" : "#f3f8ff",
-                cursor: canEditCompanyRate ? "text" : "not-allowed",
-                color: canEditCompanyRate ? PALETTE.ink : PALETTE.muted,
+                background: "#fff",
+                cursor: "text",
+                color: PALETTE.ink,
               }}
             />
-            {!canEditCompanyRate && (
-              <div style={{ marginTop: 6, fontSize: 12, color: PALETTE.muted, fontWeight: 600 }}>
-                Admin or Company Rate access required
-              </div>
-            )}
           </div>
 
           <div>
@@ -811,12 +810,11 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
               name="freight"
               type="number"
               value={formData.freight}
-              onChange={handleChange}
-              readOnly={isFreightAutoLocked}
-              style={{ ...input, background: isFreightAutoLocked ? "#f3f8ff" : "#fff", color: isFreightAutoLocked ? PALETTE.muted : PALETTE.ink }}
+              readOnly
+              style={{ ...input, background: "#f3f8ff", cursor: "not-allowed", color: PALETTE.muted }}
             />
             <div style={{ marginTop: 6, fontSize: 12, color: isFreightAutoLocked ? PALETTE.headerDark : PALETTE.muted, fontWeight: 600 }}>
-              {isFreightAutoLocked ? "Auto from transport payment (locked)" : "Manual entry"}
+              {isFreightAutoLocked ? "Auto from transport payment (locked)" : "Auto field"}
             </div>
           </div>
 
@@ -826,8 +824,8 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
               name="outward_labour_charges"
               type="number"
               value={formData.outward_labour_charges}
-              onChange={handleChange}
-              style={input}
+              readOnly
+              style={{ ...input, background: "#f3f8ff", cursor: "not-allowed", color: PALETTE.muted }}
             />
             {showLabourExpenseOption && (
               <div style={labourOptionStyle}>
@@ -849,12 +847,12 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
 
           <div>
             <label style={label}>Other Charges</label>
-            <input name="other_charges" type="number" value={formData.other_charges} onChange={handleChange} style={input} />
+            <input name="other_charges" type="number" value={formData.other_charges} readOnly style={{ ...input, background: "#f3f8ff", cursor: "not-allowed", color: PALETTE.muted }} />
           </div>
 
           <div>
             <label style={label}>Charge Bearer</label>
-            <select name="charge_bearer" value={formData.charge_bearer} onChange={handleChange} style={input}>
+            <select name="charge_bearer" value={formData.charge_bearer} disabled style={{ ...input, background: "#f3f8ff", cursor: "not-allowed", color: PALETTE.muted }}>
               <option value="self">Self</option>
               <option value="company">Company</option>
             </select>
