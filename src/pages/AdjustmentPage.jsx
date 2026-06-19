@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import API from "./axiosInstance";
-import { ToastContainer, toast, Slide } from "react-toastify";
+import { toast } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import { formatDisplayDate } from "../utils/date";
 
@@ -414,7 +414,6 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted }) {
       });
 
       if (isMountedRef.current) {
-        toast.success("Adjustment saved successfully", { theme: "colored", autoClose: 3000 });
         setAdjustments([]);
         setCompanyId("");
         setSourceType("inward");
@@ -484,7 +483,6 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted }) {
       });
       
       if (isMountedRef.current) {
-        toast.success("✓ Updated successfully", { theme: "colored", autoClose: 3000 });
         setEditingLogId(null);
         setEditingQty("");
         setCompanyId("");
@@ -831,6 +829,7 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted }) {
     </div>
   );
 }
+
 
 
 
