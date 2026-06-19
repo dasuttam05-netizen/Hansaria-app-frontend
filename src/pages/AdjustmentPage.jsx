@@ -409,8 +409,6 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
       await API.post("/api/adjustment/final-save", {
         outward_id: outward.id,
         adjustments,
-      }, {
-        signal: abortControllerRef.current.signal,
       });
 
       if (!isMountedRef.current) return;
@@ -434,9 +432,7 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
     if (!window.confirm("Delete this adjustment log?")) return;
     try {
       try {
-        await API.post(`/api/adjustment/log/${id}/delete`, null, {
-          signal: abortControllerRef.current.signal,
-        });
+        await API.post(`/api/adjustment/log/${id}/delete`, null);
       } catch (deleteErr) {
         if (deleteErr?.response?.status !== 404) {
           throw deleteErr;
@@ -472,8 +468,6 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
     try {
       await API.put(`/api/adjustment/log/${editingLogId}`, {
         qty: qtyValue,
-      }, {
-        signal: abortControllerRef.current.signal,
       });
       
       if (!isMountedRef.current) return;
