@@ -2012,7 +2012,18 @@ Consignee: ${row.consignee_name}`;
               X
             </button>
 
-            <AdjustmentPage key={`adjust-${selectedOutward.id || selectedOutward.voucher_no || "row"}`} outward={selectedOutward} />
+            <AdjustmentPage
+              key={`adjust-${selectedOutward.id || selectedOutward.voucher_no || "row"}`}
+              outward={selectedOutward}
+              onSaved={() => {
+                toast.success("Adjustment saved successfully", { theme: "colored" });
+                fetchOutwards();
+              }}
+              onDeleted={() => {
+                toast.success("Adjustment deleted successfully", { theme: "colored" });
+                fetchOutwards();
+              }}
+            />
           </div>
         </div>
       )}
