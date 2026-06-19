@@ -1072,6 +1072,7 @@ Consignee: ${row.consignee_name}`;
         newestOnTop
         closeOnClick
         transition={Slide}
+        style={{ zIndex: 99999 }}
       />
 
       {showForm && (
