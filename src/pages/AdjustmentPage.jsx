@@ -413,7 +413,12 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
 
       if (!isMountedRef.current) return;
       resetDraftState();
-      if (typeof onSaved === "function") onSaved();
+      if (typeof onSaved === "function") {
+        onSaved();
+      } else {
+        toast.success("Adjustment saved successfully", { theme: "colored", autoClose: 3000 });
+      }
+      if (typeof onClose === "function") onClose();
       void loadCompanyList();
       void loadAdjustmentLog();
       void loadBuyerAdjustmentDetails();
