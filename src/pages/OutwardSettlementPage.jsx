@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
+import { ToastContainer, toast, Slide } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 import { FaFilePdf, FaWhatsapp } from "react-icons/fa";
 import { formatDisplayDate } from "../utils/date";
 import { hasPermission, loadSession } from "../utils/auth";
@@ -31,6 +33,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
   const [meta, setMeta] = useState(null);
   const [isFreightAutoLocked, setIsFreightAutoLocked] = useState(false);
   const [showLabourExpenseOption, setShowLabourExpenseOption] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
   const [adjustmentRates, setAdjustmentRates] = useState({});
   const [whatsappSentAt, setWhatsappSentAt] = useState({});
   const [claimRows, setClaimRows] = useState([{ id: "claim-1", description: "", amount: "" }]);
@@ -44,11 +47,10 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
     freight: "",
     outward_labour_charges: "",
     other_charges: "",
-    claim_amount: "",
-    other_deduction: "",
     charge_bearer: "self",
     narration: "",
   });
+  const hasSavedSettlement = Boolean(meta?.settlement?.id);
 
   const num = (v) => {
     const n = Number(v);
@@ -129,8 +131,6 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
         freight: freightValue,
         outward_labour_charges: s.outward_labour_charges ?? "",
         other_charges: s.other_charges ?? "",
-        claim_amount: s.claim_amount ?? "",
-        other_deduction: s.other_deduction ?? "",
         charge_bearer: s.charge_bearer || "self",
         narration: s.narration || "",
       });
@@ -302,7 +302,9 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
   };
 
   const handleSave = async () => {
+    if (isSaving) return;
     try {
+      setIsSaving(true);
       await axios.post(`${API_BASE}/outward-settlement/save`, {
         outward_id: outward.id,
         ...formData,
@@ -315,14 +317,22 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
           company_rate: adjustmentRates[item.id] ?? item.company_rate ?? formData.company_rate,
         })),
       });
-      alert("Settlement saved successfully");
-      fetchSettlement();
+      toast.success(hasSavedSettlement ? "Settlement updated successfully" : "Settlement saved successfully", {
+        theme: "colored",
+        autoClose: 2500,
+      });
+      await fetchSettlement();
       if (onSaved) {
         onSaved();
       }
     } catch (err) {
       console.error(err);
-      alert(err?.response?.data?.error || "Settlement save failed");
+      toast.error(err?.response?.data?.error || "Settlement save failed", {
+        theme: "colored",
+        autoClose: 3000,
+      });
+    } finally {
+      setIsSaving(false);
     }
   };
 
@@ -466,6 +476,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
 
   return (
     <div style={settlementShellStyle}>
+      <ToastContainer position="top-right" autoClose={2500} hideProgressBar transition={Slide} />
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
       <div style={{ ...card, marginBottom: 10, order: 2 }}>
         <h2
@@ -844,28 +855,6 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
             <input name="other_charges" type="number" value={formData.other_charges} onChange={handleChange} style={input} />
           </div>
 
-          <div>
-            <label style={label}>Claim Amount</label>
-            <input
-              name="claim_amount"
-              type="number"
-              value={calculation.claimAmount.toFixed(2)}
-              readOnly
-              style={{ ...input, background: "#f3f8ff", cursor: "not-allowed", color: PALETTE.muted }}
-            />
-          </div>
-
-          <div>
-            <label style={label}>Other Deduction</label>
-            <input
-              name="other_deduction"
-              type="number"
-              value={calculation.otherDeduction.toFixed(2)}
-              readOnly
-              style={{ ...input, background: "#f3f8ff", cursor: "not-allowed", color: PALETTE.muted }}
-            />
-          </div>
-
           <div style={{ gridColumn: "1 / -1" }}>
             <div style={detailSectionWrapStyle}>
               <div style={detailSectionPanelStyle}>
@@ -1003,19 +992,23 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
       <div style={{ display: "flex", justifyContent: "flex-end" }}>
         <button
           onClick={handleSave}
+          disabled={isSaving}
           style={{
             padding: "11px 20px",
             border: "none",
             borderRadius: 10,
-            background: "linear-gradient(135deg, #15803d 0%, #22c55e 100%)",
+            background: isSaving
+              ? "linear-gradient(135deg, #64748b 0%, #94a3b8 100%)"
+              : "linear-gradient(135deg, #15803d 0%, #22c55e 100%)",
             color: "#ffffff",
             fontWeight: 800,
             letterSpacing: "0.2px",
-            cursor: "pointer",
+            cursor: isSaving ? "not-allowed" : "pointer",
             boxShadow: "0 10px 20px rgba(21, 128, 61, 0.28)",
+            opacity: isSaving ? 0.85 : 1,
           }}
         >
-          Save Settlement
+          {isSaving ? "Saving..." : hasSavedSettlement ? "Update Settlement" : "Save Settlement"}
         </button>
       </div>
     </div>
