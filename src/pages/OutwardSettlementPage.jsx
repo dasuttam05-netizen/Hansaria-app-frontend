@@ -192,7 +192,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
 
   const saleAmount = dispatchQty * saleRate;
 
-  // ✅ Total Shortage Amount (Sale Rate)
+  // âœ… Total Shortage Amount (Sale Rate)
   const totalShortageAmountSale = adjustmentDetails.reduce((sum, item) => {
     const shortQtyPerLine =
       dispatchQty > 0
@@ -202,13 +202,13 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
     return sum + shortQtyPerLine * saleRate;
   }, 0);
 
-  // ✅ Net Receivable (ALL LESS)
+  // âœ… Net Receivable (ALL LESS)
   const grossAmount = Math.max(
     saleAmount - freight - labour - other - totalShortageAmountSale,
     0
   );
 
-  // ✅ Company Payable = Sum of Net Payable (Table match)
+  // âœ… Company Payable = Sum of Net Payable (Table match)
   const companyPayable = adjustmentDetails.reduce((sum, item) => {
     const weight = num(item.settlement_weight);
     const rowCompanyRate = num(adjustmentRates[item.id] ?? item.company_rate ?? formData.company_rate);
@@ -234,7 +234,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
     return sum + netPayable;
   }, 0);
 
-  // ✅ Profit / Loss
+  // âœ… Profit / Loss
   const receivableAmount = grossAmount - companyPayable - claimAmount - otherDeduction;
 
   return {
@@ -498,18 +498,6 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
             <div style={buyerLabelStyle}>Buyer</div>
             <div style={buyerValueStyle}>{meta?.buyer_name || "-"}</div>
           </div>
-
-          <div style={sectionTitleStyle}>
-            <div style={smallSectionIconStyle}>i</div>
-            <div style={sectionLabelStyle}>Outward Details</div>
-            <div style={sectionRuleStyle} />
-          </div>
-
-          <div style={outwardDetailGridStyle}>
-            <div style={plainInfoCellStyle}>
-              <div style={plainInfoLabelStyle}>Outward Company</div>
-              <div style={plainInfoValueStyle}>{meta?.company_name || "-"}</div>
-            </div>
             <div style={plainInfoCellStyle}>
               <div style={plainInfoLabelStyle}>Warehouse</div>
               <div style={plainInfoValueStyle}>{meta?.warehouse_name || "-"}</div>
@@ -531,102 +519,6 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
               <div style={plainInfoValueStyle}>{meta?.lorry_no || "-"}</div>
             </div>
           </div>
-
-          <div style={sectionTitleStyle}>
-            <div style={smallSectionIconStyle}>C</div>
-            <div style={sectionLabelStyle}>Consignment Details</div>
-          </div>
-
-          <div style={consignmentTableWrapStyle}>
-            <table style={consignmentTableStyle}>
-              <thead>
-                <tr>
-                  <th style={consignmentHeadStyle}>Consignee</th>
-                  <th style={consignmentHeadStyle}>Product</th>
-                  <th style={consignmentHeadStyle}>Dispatch Qty</th>
-                  <th style={consignmentHeadStyle}>Unloading Qty</th>
-                  <th style={consignmentHeadStyle}>Shortage Qty</th>
-                  <th style={consignmentHeadStyle}>Settlement Weight</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr>
-                  <td style={consignmentCellStyle}>{meta?.consignee_name || "-"}</td>
-                  <td style={consignmentCellStyle}>{meta?.product_name || "-"}</td>
-                  <td style={consignmentCellStyle}>{num(formData.dispatch_qty).toFixed(2)}</td>
-                  <td style={consignmentCellStyle}>{num(formData.unloading_qty).toFixed(2)}</td>
-                  <td style={consignmentCellStyle}>{calculation.shortageQty.toFixed(2)}</td>
-                  <td style={consignmentCellStyle}>{calculation.settlementWeight.toFixed(2)}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          <div style={sectionTitleStyle}>
-            <div style={smallSectionIconStyle}>₹</div>
-            <div style={sectionLabelStyle}>Settlement Summary</div>
-            <div style={sectionRuleStyle} />
-          </div>
-
-          <div style={settlementSummaryGridStyle}>
-            <div style={summaryMetricStyle}>
-              <div style={{ ...summaryIconStyle, background: "#e0e7ff", color: "#4338ca" }}>A</div>
-              <div>
-                <div style={summaryMetricLabelStyle}>Average Rate</div>
-                <div style={{ ...summaryMetricValueStyle, color: "#4338ca" }}>{calculation.averageRate.toFixed(2)}</div>
-              </div>
-            </div>
-            <div style={summaryMetricStyle}>
-              <div style={{ ...summaryIconStyle, background: "#f5f3ff", color: "#6d28d9" }}>AMT</div>
-              <div>
-                <div style={summaryMetricLabelStyle}>Average Amount</div>
-                <div style={{ ...summaryMetricValueStyle, color: "#6d28d9" }}>{calculation.averageAmount.toFixed(2)}</div>
-              </div>
-            </div>
-            <div style={summaryMetricStyle}>
-              <div style={{ ...summaryIconStyle, background: "#fff7ed", color: "#c2410c" }}>CL</div>
-              <div>
-                <div style={summaryMetricLabelStyle}>Claim Amount</div>
-                <div style={{ ...summaryMetricValueStyle, color: "#c2410c" }}>{calculation.claimAmount.toFixed(2)}</div>
-              </div>
-            </div>
-            <div style={{ ...summaryMetricStyle, borderRight: "none" }}>
-              <div style={{ ...summaryIconStyle, background: "#fef2f2", color: "#be123c" }}>D</div>
-              <div>
-                <div style={summaryMetricLabelStyle}>Other Deduction</div>
-                <div style={{ ...summaryMetricValueStyle, color: "#be123c" }}>{calculation.otherDeduction.toFixed(2)}</div>
-              </div>
-            </div>
-            <div style={summaryMetricStyle}>
-              <div style={{ ...summaryIconStyle, background: "#dcfce7", color: "#15803d" }}>₹</div>
-              <div>
-                <div style={summaryMetricLabelStyle}>Sale Amount</div>
-                <div style={{ ...summaryMetricValueStyle, color: "#15803d" }}>₹ {calculation.saleAmount.toFixed(2)}</div>
-              </div>
-            </div>
-            <div style={summaryMetricStyle}>
-              <div style={{ ...summaryIconStyle, background: "#dbeafe", color: "#2563eb" }}>↓</div>
-              <div>
-                <div style={summaryMetricLabelStyle}>Net Receivable</div>
-                <div style={{ ...summaryMetricValueStyle, color: "#1d4ed8" }}>₹ {calculation.grossAmount.toFixed(2)}</div>
-              </div>
-            </div>
-            <div style={summaryMetricStyle}>
-              <div style={{ ...summaryIconStyle, background: "#ffedd5", color: "#f97316" }}>₹</div>
-              <div>
-                <div style={summaryMetricLabelStyle}>Company Payable</div>
-                <div style={{ ...summaryMetricValueStyle, color: "#ea580c" }}>₹ {calculation.companyPayable.toFixed(2)}</div>
-              </div>
-            </div>
-            <div style={{ ...summaryMetricStyle, borderRight: "none" }}>
-              <div style={{ ...summaryIconStyle, background: "#ede9fe", color: "#7c3aed" }}>P/L</div>
-              <div>
-                <div style={summaryMetricLabelStyle}>Net Profit / Loss</div>
-                <div style={{ ...summaryMetricValueStyle, color: "#6d28d9" }}>₹ {calculation.receivableAmount.toFixed(2)}</div>
-              </div>
-            </div>
-          </div>
-        </div>
       </div>
 
       <div style={{ ...card, marginBottom: 10, order: 1 }}>
@@ -1390,3 +1282,4 @@ const statBodyStyle = {
   lineHeight: 1.2,
   background: PALETTE.tile,
 };
+
