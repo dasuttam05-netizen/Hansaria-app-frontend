@@ -58,6 +58,9 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
     return Number.isFinite(n) ? n : 0;
   };
 
+  const isRealUnloadingDetail = (detail = {}) =>
+    String(detail.consignee_name || "").trim() && num(detail.rate) > 0;
+
   const createDetailRow = (prefix, index, row = {}) => ({
     id: row.id || `${prefix}-${Date.now()}-${index}`,
     description: String(row.description ?? row.particular ?? row.name ?? "").trim(),
@@ -108,7 +111,8 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
       setMeta(res.data);
       const embeddedDetails = Array.isArray(res.data?.unloading_details) ? res.data.unloading_details : [];
       const fallbackDetails = Array.isArray(unloadingRes.data) ? unloadingRes.data : [];
-      setUnloadingDetails(embeddedDetails.length > 0 ? embeddedDetails : fallbackDetails);
+      const sourceDetails = embeddedDetails.length > 0 ? embeddedDetails : fallbackDetails;
+      setUnloadingDetails(sourceDetails.filter(isRealUnloadingDetail));
       const s = res.data.settlement || {};
       const approvedLabourAmount = num(res.data?.labour_expense?.amount);
       let freightValue = s.freight ?? "";
