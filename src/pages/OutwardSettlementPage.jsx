@@ -36,6 +36,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
   const [isSaving, setIsSaving] = useState(false);
   const [adjustmentRates, setAdjustmentRates] = useState({});
   const [whatsappSentAt, setWhatsappSentAt] = useState({});
+  const [unloadingDetails, setUnloadingDetails] = useState([]);
   const [claimRows, setClaimRows] = useState([{ id: "claim-1", description: "", amount: "" }]);
   const [deductionRows, setDeductionRows] = useState([{ id: "deduction-1", description: "", amount: "" }]);
   const [formData, setFormData] = useState({
@@ -100,8 +101,14 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
 
     setLoading(true);
     try {
-      const res = await axios.get(`${API_BASE}/outward-settlement/${outward.id}`);
+      const [res, unloadingRes] = await Promise.all([
+        axios.get(`${API_BASE}/outward-settlement/${outward.id}`),
+        axios.get(`${API_BASE}/buyer-adjustment/${outward.id}`).catch(() => ({ data: [] })),
+      ]);
       setMeta(res.data);
+      const embeddedDetails = Array.isArray(res.data?.unloading_details) ? res.data.unloading_details : [];
+      const fallbackDetails = Array.isArray(unloadingRes.data) ? unloadingRes.data : [];
+      setUnloadingDetails(embeddedDetails.length > 0 ? embeddedDetails : fallbackDetails);
       const s = res.data.settlement || {};
       const approvedLabourAmount = num(res.data?.labour_expense?.amount);
       let freightValue = s.freight ?? "";
@@ -152,6 +159,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
     } catch (err) {
       console.error(err);
       setIsFreightAutoLocked(false);
+      setUnloadingDetails([]);
       alert("Settlement load failed");
     } finally {
       setLoading(false);
@@ -250,6 +258,21 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
     otherDeduction,
   };
 }, [formData, meta, adjustmentRates, claimRows, deductionRows]);
+
+  const unloadingTotals = useMemo(() => {
+    const rows = Array.isArray(unloadingDetails) ? unloadingDetails : [];
+    const totalQty = rows.reduce((sum, detail) => sum + num(detail.qty || detail.weight || 0), 0);
+    const rateRows = rows.filter((detail) => num(detail.rate) > 0);
+    const rateQty = rateRows.reduce((sum, detail) => sum + num(detail.qty || detail.weight || 0), 0);
+    const weightedRate = rateRows.reduce(
+      (sum, detail) => sum + num(detail.rate) * num(detail.qty || detail.weight || 0),
+      0
+    );
+    return {
+      totalQty,
+      avgRate: rateQty > 0 ? weightedRate / rateQty : calculation.averageRate,
+    };
+  }, [unloadingDetails, calculation.averageRate]);
 
   const handleChange = (e) => {
     setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
@@ -478,48 +501,124 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
     <div style={settlementShellStyle}>
       <ToastContainer position="top-right" autoClose={2500} hideProgressBar transition={Slide} />
       <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
-      <div style={{ ...card, marginBottom: 10, order: 2 }}>
-        <h2
-          style={{
-            margin: 0,
-            color: PALETTE.ink,
-            fontWeight: 800,
-            fontSize: 24,
-            letterSpacing: "0.3px",
-            borderBottom: `1px solid ${PALETTE.border}`,
-            paddingBottom: 10,
-          }}
-        >
-          Outward Settlement
-        </h2>
-        <div style={settlementPreviewStyle}>
-          <div style={buyerLineStyle}>
-            <div style={roundIconStyle}>B</div>
-            <div style={buyerLabelStyle}>Buyer</div>
-            <div style={buyerValueStyle}>{meta?.buyer_name || "-"}</div>
+        <div style={{ ...card, marginBottom: 10, order: 2 }}>
+          <h2
+            style={{
+              margin: 0,
+              color: PALETTE.ink,
+              fontWeight: 800,
+              fontSize: 24,
+              letterSpacing: "0.3px",
+              borderBottom: `1px solid ${PALETTE.border}`,
+              paddingBottom: 10,
+            }}
+          >
+            Outward Settlement
+          </h2>
+          <div style={settlementPreviewStyle}>
+            <div style={buyerLineStyle}>
+              <div style={roundIconStyle}>B</div>
+              <div style={buyerLabelStyle}>Buyer</div>
+              <div style={buyerValueStyle}>{meta?.buyer_name || "-"}</div>
+            </div>
+
+            <div style={sectionTitleStyle}>
+              <div style={smallSectionIconStyle}>i</div>
+              <div style={sectionLabelStyle}>Outward Details</div>
+              <div style={sectionRuleStyle} />
+            </div>
+
+            <div style={outwardDetailGridStyle}>
+              <div style={plainInfoCellStyle}>
+                <div style={plainInfoLabelStyle}>Warehouse</div>
+                <div style={plainInfoValueStyle}>{meta?.warehouse_name || "-"}</div>
+              </div>
+              <div style={plainInfoCellStyle}>
+                <div style={plainInfoLabelStyle}>Dispatch Date</div>
+                <div style={plainInfoValueStyle}>{formatDisplayDate(meta?.outward_date) || "-"}</div>
+              </div>
+              <div style={plainInfoCellStyle}>
+                <div style={plainInfoLabelStyle}>Location</div>
+                <div style={plainInfoValueStyle}>{meta?.location_name || outward?.location_name || "-"}</div>
+              </div>
+              <div style={plainInfoCellStyle}>
+                <div style={plainInfoLabelStyle}>Voucher No.</div>
+                <div style={plainInfoValueStyle}>{meta?.voucher_no || `OUT-${meta?.outward_id || outward?.id || "-"}`}</div>
+              </div>
+              <div style={plainInfoCellStyle}>
+                <div style={plainInfoLabelStyle}>Lorry No.</div>
+                <div style={plainInfoValueStyle}>{meta?.lorry_no || "-"}</div>
+              </div>
+              <div style={{ ...plainInfoCellStyle, borderRight: "none" }}>
+                <div style={plainInfoLabelStyle}>Rate</div>
+                <div style={plainInfoValueStyle}>{calculation.averageRate.toFixed(2)}</div>
+              </div>
+            </div>
+
+            <div style={sectionTitleStyle}>
+              <div style={smallSectionIconStyle}>C</div>
+              <div style={sectionLabelStyle}>Consignment Details</div>
+            </div>
+
+            <div style={consignmentTableWrapStyle}>
+              <table style={consignmentTableStyle}>
+                <thead>
+                  <tr>
+                    <th style={consignmentHeadStyle}>Buyer</th>
+                    <th style={consignmentHeadStyle}>Consignee</th>
+                    <th style={consignmentHeadStyle}>Product</th>
+                    <th style={consignmentHeadStyle}>Unloading Qty</th>
+                    <th style={consignmentHeadStyle}>Rate</th>
+                    <th style={consignmentHeadStyle}>Claim</th>
+                    <th style={consignmentHeadStyle}>Deduction</th>
+                    <th style={consignmentHeadStyle}>Shortage</th>
+                    <th style={consignmentHeadStyle}>Shortage Amount</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {unloadingDetails.length > 0 ? (
+                    <>
+                      {unloadingDetails.map((detail, index) => (
+                        <tr key={`${detail.id || detail.outward_id || "detail"}-${index}`}>
+                          <td style={consignmentCellStyle}>{detail.buyer_name || meta?.buyer_name || "-"}</td>
+                          <td style={consignmentCellStyle}>{detail.consignee_name || "-"}</td>
+                          <td style={consignmentCellStyle}>{detail.product_name || meta?.product_name || "-"}</td>
+                          <td style={consignmentCellStyle}>{num(detail.qty || detail.weight || 0).toFixed(2)}</td>
+                          <td style={consignmentCellStyle}>{num(detail.rate).toFixed(2)}</td>
+                          <td style={consignmentCellStyle}>{num(detail.claim).toFixed(2)}</td>
+                          <td style={consignmentCellStyle}>{num(detail.other_deduction).toFixed(2)}</td>
+                          <td style={consignmentCellStyle}>{num(detail.shortage).toFixed(2)}</td>
+                          <td style={consignmentCellStyle}>{num(detail.shortage_amount).toFixed(2)}</td>
+                        </tr>
+                      ))}
+                      <tr style={{ background: PALETTE.headerSoft }}>
+                        <td style={consignmentCellStyle} colSpan={3}>Totals</td>
+                        <td style={consignmentCellStyle}>{unloadingTotals.totalQty.toFixed(2)}</td>
+                        <td style={consignmentCellStyle}>{unloadingTotals.avgRate.toFixed(2)}</td>
+                        <td style={consignmentCellStyle}>
+                          {unloadingDetails.reduce((sum, detail) => sum + num(detail.claim), 0).toFixed(2)}
+                        </td>
+                        <td style={consignmentCellStyle}>
+                          {unloadingDetails.reduce((sum, detail) => sum + num(detail.other_deduction), 0).toFixed(2)}
+                        </td>
+                        <td style={consignmentCellStyle}>
+                          {unloadingDetails.reduce((sum, detail) => sum + num(detail.shortage), 0).toFixed(2)}
+                        </td>
+                        <td style={consignmentCellStyle}>
+                          {unloadingDetails.reduce((sum, detail) => sum + num(detail.shortage_amount), 0).toFixed(2)}
+                        </td>
+                      </tr>
+                    </>
+                  ) : (
+                    <tr>
+                      <td style={consignmentCellStyle} colSpan={9}>No unloading details found</td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
-            <div style={plainInfoCellStyle}>
-              <div style={plainInfoLabelStyle}>Warehouse</div>
-              <div style={plainInfoValueStyle}>{meta?.warehouse_name || "-"}</div>
-            </div>
-            <div style={plainInfoCellStyle}>
-              <div style={plainInfoLabelStyle}>Dispatch Date</div>
-              <div style={plainInfoValueStyle}>{formatDisplayDate(meta?.outward_date) || "-"}</div>
-            </div>
-            <div style={plainInfoCellStyle}>
-              <div style={plainInfoLabelStyle}>Location</div>
-              <div style={plainInfoValueStyle}>{meta?.location_name || outward?.location_name || "-"}</div>
-            </div>
-            <div style={plainInfoCellStyle}>
-              <div style={plainInfoLabelStyle}>Voucher No.</div>
-              <div style={plainInfoValueStyle}>{meta?.voucher_no || `OUT-${meta?.outward_id || outward?.id || "-"}`}</div>
-            </div>
-            <div style={{ ...plainInfoCellStyle, borderRight: "none" }}>
-              <div style={plainInfoLabelStyle}>Lorry No.</div>
-              <div style={plainInfoValueStyle}>{meta?.lorry_no || "-"}</div>
-            </div>
-          </div>
-      </div>
+        </div>
 
       <div style={{ ...card, marginBottom: 10, order: 1 }}>
         <h3 style={{ marginTop: 0, marginBottom: 12, color: PALETTE.ink, fontWeight: 800 }}>Adjusted Company Details</h3>
