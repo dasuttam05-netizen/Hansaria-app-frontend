@@ -439,12 +439,22 @@ export default function AdjustmentPage({ outward }) {
   const handleDeleteLog = async (id) => {
     if (!window.confirm("Delete this adjustment log?")) return;
     try {
-      await API.delete(`/api/adjustment/log/${id}`, {
-        signal: abortControllerRef.current.signal,
-      });
-      
+      try {
+        await API.delete(`/api/adjustment/log/${id}`, {
+          signal: abortControllerRef.current.signal,
+        });
+      } catch (deleteErr) {
+        if (deleteErr?.response?.status !== 404) {
+          throw deleteErr;
+        }
+
+        await API.post(`/api/adjustment/log/${id}/delete`, null, {
+          signal: abortControllerRef.current.signal,
+        });
+      }
+
       if (isMountedRef.current) {
-        toast.success("✓ Deleted successfully", { theme: "colored", autoClose: 3000 });
+        toast.success("? Deleted successfully", { theme: "colored", autoClose: 3000 });
         setCompanyId("");
         setSourceType("inward");
         setInwardList([]);
@@ -830,6 +840,7 @@ export default function AdjustmentPage({ outward }) {
     </div>
   );
 }
+
 
 
 
