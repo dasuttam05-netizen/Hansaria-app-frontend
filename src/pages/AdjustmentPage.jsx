@@ -444,6 +444,7 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
         await loadBuyerAdjustmentDetails();
         await loadCompanyList();
         if (typeof onDeleted === "function") onDeleted();
+        toast.success("Adjustment deleted successfully", { theme: "colored", autoClose: 3000 });
       }
     } catch (err) {
       if (isMountedRef.current && err.name !== "CanceledError") {
