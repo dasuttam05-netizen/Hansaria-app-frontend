@@ -21,6 +21,7 @@ export default function AdjustmentPage({ outward }) {
   // For cleanup on unmount
   const isMountedRef = React.useRef(true);
   const abortControllerRef = React.useRef(new AbortController());
+  const saveControllerRef = React.useRef(null);
 
   const outwardQty = Number(outward?.quantity) || 0;
 
@@ -213,85 +214,84 @@ export default function AdjustmentPage({ outward }) {
 
   const loadCompanyList = async () => {
     if (!outward?.warehouse_id && !outward?.location_id) return setCompanyList([]);
+
     try {
       const scope = getAdjustmentScope();
-      const res = await API.get("/api/adjustment/parties", {
+      const { data } = await API.get('/api/adjustment/parties', {
         params: {
           ...scope,
-          product_id: outward.product_id,
+          product_id: outward?.product_id || '',
         },
         signal: abortControllerRef.current.signal,
       });
-      if (isMountedRef.current) {
-        setCompanyList(Array.isArray(res.data) ? res.data : []);
-      }
+
+      if (!isMountedRef.current) return;
+      setCompanyList(Array.isArray(data) ? data : []);
     } catch (err) {
-      if (isMountedRef.current && err.name !== "CanceledError") {
-        setCompanyList([]);
-        toast.error("Company load failed", { theme: "colored", autoClose: 2000 });
+      if (err.name !== 'CanceledError') {
+        toast.error(err?.response?.data?.error || 'Failed to load company list', { theme: 'colored', autoClose: 3000 });
       }
     }
   };
-
   const loadInwardStock = async (selectedCompanyId, selectedSourceType = sourceType) => {
     if (!outward || !selectedCompanyId) return setInwardList([]);
+
     try {
       const scope = getAdjustmentScope();
-      const res = await API.get("/api/adjustment/inward/report", {
+      const { data } = await API.get('/api/adjustment/inward/report', {
         params: {
           ...scope,
           company_id: selectedCompanyId,
-          outward_date: outward.date,
+          outward_date: outward?.date || '',
           source_type: selectedSourceType,
         },
         signal: abortControllerRef.current.signal,
       });
-      if (isMountedRef.current) {
-        setInwardList(Array.isArray(res.data) ? res.data : []);
-      }
+
+      if (!isMountedRef.current) return;
+      setInwardList(Array.isArray(data) ? data : []);
     } catch (err) {
-      if (isMountedRef.current && err.name !== "CanceledError") {
-        setInwardList([]);
-        toast.error("Inward load failed", { theme: "colored", autoClose: 2000 });
+      if (err.name !== 'CanceledError') {
+        toast.error(err?.response?.data?.error || 'Failed to load inward stock', { theme: 'colored', autoClose: 3000 });
       }
     }
   };
-
   const loadAdjustmentLog = async () => {
     if (!outward?.id) return;
+
     try {
-      const res = await API.get(`/api/adjustment/${outward.id}`, {
+      const { data } = await API.get(`/api/adjustment/${outward.id}`, {
         signal: abortControllerRef.current.signal,
       });
-      if (isMountedRef.current) {
-        const rows = Array.isArray(res.data) ? res.data : [];
-        setAdjustmentLog(rows);
-        setAlreadyAdjusted(rows.reduce((sum, item) => sum + Number(item.qty || 0), 0));
-      }
+
+      if (!isMountedRef.current) return;
+      setAdjustmentLog(Array.isArray(data) ? data : []);
     } catch (err) {
-      if (isMountedRef.current && err.name !== "CanceledError") {
-        setAdjustmentLog([]);
-        setAlreadyAdjusted(0);
+      if (err.name !== 'CanceledError') {
+        toast.error(err?.response?.data?.error || 'Failed to load adjustment log', { theme: 'colored', autoClose: 3000 });
       }
     }
   };
-
   const loadBuyerAdjustmentDetails = async () => {
     if (!outward?.id) return;
+
     try {
-      const res = await API.get(`/api/buyer-adjustment/${outward.id}`, {
+      const { data } = await API.get(`/api/buyer-adjustment/${outward.id}`, {
         signal: abortControllerRef.current.signal,
       });
-      if (isMountedRef.current) {
-        setBuyerAdjustmentDetails(Array.isArray(res.data) ? res.data : []);
-      }
+
+      if (!isMountedRef.current) return;
+      const rows = Array.isArray(data) ? data : [];
+      setBuyerAdjustmentDetails(rows);
+      setAlreadyAdjusted(
+        rows.reduce((sum, item) => sum + Number(item.qty || 0), 0)
+      );
     } catch (err) {
-      if (isMountedRef.current && err.name !== "CanceledError") {
-        setBuyerAdjustmentDetails([]);
+      if (err.name !== 'CanceledError') {
+        toast.error(err?.response?.data?.error || 'Failed to load buyer adjustments', { theme: 'colored', autoClose: 3000 });
       }
     }
   };
-
   useEffect(() => {
     setCompanyId("");
     setSourceType("inward");
@@ -319,6 +319,7 @@ export default function AdjustmentPage({ outward }) {
       isMountedRef.current = false;
       // Cancel all pending requests
       abortControllerRef.current.abort();
+      saveControllerRef.current?.abort();
     };
   }, []);
 
@@ -402,27 +403,31 @@ export default function AdjustmentPage({ outward }) {
     }
 
     try {
+      saveControllerRef.current?.abort();
+      saveControllerRef.current = new AbortController();
+
       await API.post("/api/adjustment/final-save", {
         outward_id: outward.id,
         adjustments,
       }, {
-        signal: abortControllerRef.current.signal,
+        signal: saveControllerRef.current.signal,
       });
 
-      if (isMountedRef.current) {
-        toast.success("✓ Adjustment saved successfully!", { theme: "colored", autoClose: 3000 });
-        setAdjustments([]);
-        setCompanyId("");
-        setSourceType("inward");
-        setInwardList([]);
-        setSelectedInward(null);
-        setAdjustQty("");
-        await loadCompanyList();
-        await loadAdjustmentLog();
-        await loadBuyerAdjustmentDetails();
-      }
+      toast.success("✓ Adjustment saved successfully!", { theme: "colored", autoClose: 3000 });
+
+      if (!isMountedRef.current) return;
+
+      setAdjustments([]);
+      setCompanyId("");
+      setSourceType("inward");
+      setInwardList([]);
+      setSelectedInward(null);
+      setAdjustQty("");
+      await loadCompanyList();
+      await loadAdjustmentLog();
+      await loadBuyerAdjustmentDetails();
     } catch (err) {
-      if (isMountedRef.current && err.name !== "CanceledError") {
+      if (err.name !== "CanceledError") {
         toast.error(err?.response?.data?.error || "Save failed", { theme: "colored", autoClose: 3000 });
       }
     }
@@ -431,25 +436,32 @@ export default function AdjustmentPage({ outward }) {
   const handleDeleteLog = async (id) => {
     if (!window.confirm("Delete this adjustment log?")) return;
     try {
-      await API.post(`/api/adjustment/log/${id}/delete`, null, {
-        signal: abortControllerRef.current.signal,
+      saveControllerRef.current?.abort();
+      saveControllerRef.current = new AbortController();
+
+      await API.post("/api/adjustment/final-save", {
+        outward_id: outward.id,
+        adjustments,
+      }, {
+        signal: saveControllerRef.current.signal,
       });
-      
-      if (isMountedRef.current) {
-        toast.success("✓ Deleted successfully", { theme: "colored", autoClose: 3000 });
-        setCompanyId("");
-        setSourceType("inward");
-        setInwardList([]);
-        setSelectedInward(null);
-        setAdjustments([]);
-        setAdjustQty("");
-        await loadAdjustmentLog();
-        await loadBuyerAdjustmentDetails();
-        await loadCompanyList();
-      }
+
+      toast.success("✓ Adjustment saved successfully!", { theme: "colored", autoClose: 3000 });
+
+      if (!isMountedRef.current) return;
+
+      setAdjustments([]);
+      setCompanyId("");
+      setSourceType("inward");
+      setInwardList([]);
+      setSelectedInward(null);
+      setAdjustQty("");
+      await loadCompanyList();
+      await loadAdjustmentLog();
+      await loadBuyerAdjustmentDetails();
     } catch (err) {
-      if (isMountedRef.current && err.name !== "CanceledError") {
-        toast.error(err?.response?.data?.error || err?.message || "Delete failed", { theme: "colored", autoClose: 3000 });
+      if (err.name !== "CanceledError") {
+        toast.error(err?.response?.data?.error || "Save failed", { theme: "colored", autoClose: 3000 });
       }
     }
   };
@@ -473,20 +485,13 @@ export default function AdjustmentPage({ outward }) {
       }, {
         signal: abortControllerRef.current.signal,
       });
-      
+
       if (isMountedRef.current) {
         toast.success("✓ Updated successfully", { theme: "colored", autoClose: 3000 });
         setEditingLogId(null);
         setEditingQty("");
-        setCompanyId("");
-        setSourceType("inward");
-        setInwardList([]);
-        setSelectedInward(null);
-        setAdjustments([]);
-        setAdjustQty("");
         await loadAdjustmentLog();
         await loadBuyerAdjustmentDetails();
-        await loadCompanyList();
       }
     } catch (err) {
       if (isMountedRef.current && err.name !== "CanceledError") {
@@ -495,7 +500,6 @@ export default function AdjustmentPage({ outward }) {
       }
     }
   };
-
   return (
     <div style={{ padding: 20, background: "#f8fafc", borderRadius: 16 }}>
       <div style={cardStyle}>
@@ -819,6 +823,9 @@ export default function AdjustmentPage({ outward }) {
     </div>
   );
 }
+
+
+
 
 
 
