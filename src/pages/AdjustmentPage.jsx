@@ -453,8 +453,9 @@ export default function AdjustmentPage({ outward }) {
         });
       }
 
+      toast.success("Deleted successfully", { theme: "colored", autoClose: 3000 });
+
       if (isMountedRef.current) {
-        toast.success("? Deleted successfully", { theme: "colored", autoClose: 3000 });
         setCompanyId("");
         setSourceType("inward");
         setInwardList([]);
@@ -516,7 +517,6 @@ export default function AdjustmentPage({ outward }) {
 
   return (
     <div style={{ padding: 20, background: "#f8fafc", borderRadius: 16 }}>
-      <ToastContainer position="top-right" autoClose={2500} hideProgressBar transition={Slide} />
       <div style={cardStyle}>
         <h2 style={{ margin: 0, color: "#14532d", fontWeight: 800 }}>Adjustment Entry</h2>
         <p style={{ margin: "10px 0 0", color: "#166534", fontWeight: 700 }}>
@@ -840,6 +840,7 @@ export default function AdjustmentPage({ outward }) {
     </div>
   );
 }
+
 
 
 
