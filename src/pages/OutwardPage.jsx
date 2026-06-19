@@ -200,7 +200,9 @@ export default function OutwardPage() {
     setSelectedSettlementOutward(row || null);
   };
 
-  const closeAdjustmentModal = () => setSelectedOutward(null);
+  const closeAdjustmentModal = () => {
+    setSelectedOutward(null);
+  };
   const closeSettlementModal = () => setSelectedSettlementOutward(null);
 
   const fetchUnloadingDetails = async (outward) => {
@@ -2015,6 +2017,7 @@ Consignee: ${row.consignee_name}`;
             <AdjustmentPage
               key={`adjust-${selectedOutward.id || selectedOutward.voucher_no || "row"}`}
               outward={selectedOutward}
+              onClose={closeAdjustmentModal}
               onSaved={() => {
                 toast.success("Adjustment saved successfully", { theme: "colored" });
                 fetchOutwards();
