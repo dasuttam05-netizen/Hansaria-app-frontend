@@ -414,6 +414,7 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted }) {
       });
 
       if (isMountedRef.current) {
+        toast.success("Adjustment saved successfully", { theme: "colored", autoClose: 3000 });
         setAdjustments([]);
         setCompanyId("");
         setSourceType("inward");
@@ -439,19 +440,9 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted }) {
   const handleDeleteLog = async (id) => {
     if (!window.confirm("Delete this adjustment log?")) return;
     try {
-      try {
-        await API.delete(`/api/adjustment/log/${id}`, {
-          signal: abortControllerRef.current.signal,
-        });
-      } catch (deleteErr) {
-        if (deleteErr?.response?.status !== 404) {
-          throw deleteErr;
-        }
-
-        await API.post(`/api/adjustment/log/${id}/delete`, null, {
-          signal: abortControllerRef.current.signal,
-        });
-      }
+      await API.post(`/api/adjustment/log/${id}/delete`, null, {
+        signal: abortControllerRef.current.signal,
+      });
 
       if (isMountedRef.current) {
         setCompanyId("");
