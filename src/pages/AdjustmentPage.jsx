@@ -504,6 +504,19 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted }) {
     }
   };
 
+  useEffect(() => {
+    return () => {
+      setAdjustments([]);
+      setCompanyId("");
+      setSourceType("inward");
+      setInwardList([]);
+      setSelectedInward(null);
+      setAdjustQty("");
+      setEditingLogId(null);
+      setEditingQty("");
+    };
+  }, []);
+
   return (
     <div style={{ padding: 20, background: "#f8fafc", borderRadius: 16 }}>
       <div style={cardStyle}>
