@@ -434,9 +434,15 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
   const handleDeleteLog = async (id) => {
     if (!window.confirm("Delete this adjustment log?")) return;
     try {
-      await API.post(`/api/adjustment/log/${id}/delete`, null, {
-        signal: abortControllerRef.current.signal,
-      });
+      try {
+        await API.post(`/api/adjustment/log/${id}/delete`, null, {
+          signal: abortControllerRef.current.signal,
+        });
+      } catch (deleteErr) {
+        if (deleteErr?.response?.status !== 404) {
+          throw deleteErr;
+        }
+      }
 
       if (isMountedRef.current) {
         resetDraftState();
