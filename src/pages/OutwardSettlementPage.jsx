@@ -434,7 +434,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
         inwardVoucherNo: item.inward_voucher_no,
         sourceType: item.source_type,
         settlementWeight: row.settlementWeight,
-        shortQty: row.shortQty,
+        shortQty: calculation.shortageQty,
         shortageAmount: row.shortageAmount,
         companyRate: row.rowCompanyRate,
         freight: row.freight,
@@ -694,7 +694,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
           <td style={tableCellStyle}>{item.inward_voucher_no || "-"}</td>
           <td style={tableCellStyle}>{getLoadingTypeLabel(item.source_type)}</td>
           <td style={tableCellStyle}>{num(item.settlement_weight).toFixed(2)}</td>
-          <td style={tableCellStyle}>{shortQtyPerLine.toFixed(2)}</td>
+          <td style={tableCellStyle}>{calculation.shortageQty.toFixed(2)}</td>
           <td style={tableCellStyle}>{shortageAmount.toFixed(2)}</td> {/* NEW */}
           <td style={tableCellStyle}>
             {canEditCompanyRate ? (
