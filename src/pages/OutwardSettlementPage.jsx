@@ -210,7 +210,11 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
       : num(formData.company_rate);
   const averageAmount = settlementWeight * averageRate;
 
-  const shortageQty = Math.max(dispatchQty - unloadingQty, 0);
+  const unloadingShortageTotal = (Array.isArray(unloadingDetails) ? unloadingDetails : []).reduce(
+    (sum, d) => sum + num(d.shortage),
+    0
+  );
+  const shortageQty = unloadingShortageTotal > 0 ? unloadingShortageTotal : Math.max(dispatchQty - unloadingQty, 0);
 
   const saleAmount = dispatchQty * saleRate;
 
@@ -271,7 +275,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
     claimAmount,
     otherDeduction,
   };
-}, [formData, meta, adjustmentRates, claimRows, deductionRows]);
+}, [formData, meta, adjustmentRates, claimRows, deductionRows, unloadingDetails]);
 
   const unloadingTotals = useMemo(() => {
     const rows = Array.isArray(unloadingDetails) ? unloadingDetails : [];
