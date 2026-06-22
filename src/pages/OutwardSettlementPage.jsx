@@ -34,6 +34,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
   const [isFreightAutoLocked, setIsFreightAutoLocked] = useState(false);
   const [showLabourExpenseOption, setShowLabourExpenseOption] = useState(false);
   const [labourAutoEnabled, setLabourAutoEnabled] = useState(false);
+  const [labourVoucherNos, setLabourVoucherNos] = useState([]);
   const [isSaving, setIsSaving] = useState(false);
   const [adjustmentRates, setAdjustmentRates] = useState({});
   const [whatsappSentAt, setWhatsappSentAt] = useState({});
@@ -126,6 +127,9 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
       setUnloadingDetails(realUnloadingDetails);
       const s = res.data.settlement || {};
       const approvedLabourAmount = num(res.data?.labour_expense?.amount);
+      const approvedLabourVouchers = Array.isArray(res.data?.labour_expense?.vouchers)
+        ? res.data.labour_expense.vouchers.filter(Boolean)
+        : [];
       let freightValue = s.freight ?? "";
 
       try {
@@ -185,10 +189,12 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
       // Show option to auto-fill labour only if an approved labour expense exists
       setShowLabourExpenseOption(approvedLabourAmount > 0);
       setLabourAutoEnabled(autoLabourEnabled);
+      setLabourVoucherNos(approvedLabourVouchers);
     } catch (err) {
       console.error(err);
       setIsFreightAutoLocked(false);
       setUnloadingDetails([]);
+      setLabourVoucherNos([]);
       alert("Settlement load failed");
     } finally {
       setLoading(false);
@@ -381,6 +387,9 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
     }));
     setLabourAutoEnabled(true);
     setShowLabourExpenseOption(true);
+    setLabourVoucherNos(
+      Array.isArray(meta?.labour_expense?.vouchers) ? meta.labour_expense.vouchers.filter(Boolean) : []
+    );
   };
 
   const handleSave = async () => {
@@ -946,7 +955,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
                 </div>
                 <div style={{ marginTop: 8, fontSize: 12, color: PALETTE.muted }}>
                   Auto amount: <strong>{num(meta?.labour_expense?.amount).toFixed(2)}</strong>
-                  {meta?.labour_expense?.vouchers?.length ? ` (voucher: ${meta.labour_expense.vouchers.join(", ")})` : ""}
+                  {labourVoucherNos.length ? ` (voucher: ${labourVoucherNos.join(", ")})` : ""}
                 </div>
               </div>
             )}
@@ -1507,4 +1516,3 @@ const statBodyStyle = {
   lineHeight: 1.2,
   background: PALETTE.tile,
 };
-
