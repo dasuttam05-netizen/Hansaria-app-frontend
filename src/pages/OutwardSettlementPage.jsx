@@ -300,8 +300,6 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
     totalUnloadingClaimAmount,
     totalUnloadingDeductionAmount,
     totalSettlementShortageAmount,
-    totalClaimDeductionShortage,
-    summaryNetPayment,
     summaryNetPayment,
   };
 }, [formData, meta, adjustmentRates, claimRows, deductionRows, unloadingDetails]);
