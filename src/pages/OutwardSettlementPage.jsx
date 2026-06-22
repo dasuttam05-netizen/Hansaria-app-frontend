@@ -35,6 +35,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
   const [showLabourExpenseOption, setShowLabourExpenseOption] = useState(false);
   const [labourAutoEnabled, setLabourAutoEnabled] = useState(false);
   const [labourVoucherNos, setLabourVoucherNos] = useState([]);
+  const [labourExpenseEntries, setLabourExpenseEntries] = useState([]);
   const [isSaving, setIsSaving] = useState(false);
   const [adjustmentRates, setAdjustmentRates] = useState({});
   const [whatsappSentAt, setWhatsappSentAt] = useState({});
@@ -130,6 +131,9 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
       const approvedLabourVouchers = Array.isArray(res.data?.labour_expense?.vouchers)
         ? res.data.labour_expense.vouchers.filter(Boolean)
         : [];
+      const approvedLabourEntries = Array.isArray(res.data?.labour_expense?.entries)
+        ? res.data.labour_expense.entries.filter((item) => num(item?.amount) > 0)
+        : [];
       let freightValue = s.freight ?? "";
 
       try {
@@ -190,11 +194,13 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
       setShowLabourExpenseOption(approvedLabourAmount > 0);
       setLabourAutoEnabled(autoLabourEnabled);
       setLabourVoucherNos(approvedLabourVouchers);
+      setLabourExpenseEntries(approvedLabourEntries);
     } catch (err) {
       console.error(err);
       setIsFreightAutoLocked(false);
       setUnloadingDetails([]);
       setLabourVoucherNos([]);
+      setLabourExpenseEntries([]);
       alert("Settlement load failed");
     } finally {
       setLoading(false);
@@ -389,6 +395,11 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
     setShowLabourExpenseOption(true);
     setLabourVoucherNos(
       Array.isArray(meta?.labour_expense?.vouchers) ? meta.labour_expense.vouchers.filter(Boolean) : []
+    );
+    setLabourExpenseEntries(
+      Array.isArray(meta?.labour_expense?.entries)
+        ? meta.labour_expense.entries.filter((item) => num(item?.amount) > 0)
+        : []
     );
   };
 
@@ -957,6 +968,19 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
                   Auto amount: <strong>{num(meta?.labour_expense?.amount).toFixed(2)}</strong>
                   {labourVoucherNos.length ? ` (voucher: ${labourVoucherNos.join(", ")})` : ""}
                 </div>
+                {labourExpenseEntries.length > 0 && (
+                  <div style={{ marginTop: 8, fontSize: 12, color: PALETTE.ink }}>
+                    Linked expense rows:
+                    <div style={{ marginTop: 4, display: "grid", gap: 4 }}>
+                      {labourExpenseEntries.map((entry) => (
+                        <div key={entry.id || entry.voucher_no} style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+                          <span>{entry.voucher_no || `EXP-${entry.id}`}</span>
+                          <strong>{num(entry.amount).toFixed(2)}</strong>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
           </div>
