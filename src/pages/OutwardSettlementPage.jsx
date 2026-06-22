@@ -226,6 +226,12 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
     0
   );
 
+  const totalSettlementShortageAmount = adjustmentDetails.reduce((sum, item) => {
+    const rowCompanyRate = num(adjustmentRates[item.id] ?? item.company_rate ?? formData.company_rate);
+    const shortQtyPerLine = dispatchQty > 0 ? (num(item.settlement_weight) / dispatchQty) * shortageQty : 0;
+    return sum + shortQtyPerLine * rowCompanyRate;
+  }, 0);
+
   const saleAmount = dispatchQty * saleRate;
 
   // âœ… Total Shortage Amount (Sale Rate)
@@ -292,6 +298,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
     otherDeduction,
     totalUnloadingClaimAmount,
     totalUnloadingDeductionAmount,
+    totalSettlementShortageAmount,
   };
 }, [formData, meta, adjustmentRates, claimRows, deductionRows, unloadingDetails]);
 
@@ -677,6 +684,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
     <th style={tableHeaderStyle}>Loading Type</th>
     <th style={tableHeaderStyle}>Settlement Weight</th>
     <th style={tableHeaderStyle}>Short Qnt</th>
+    <th style={tableHeaderStyle}>Short Amt</th>
     <th style={tableHeaderStyle}>S.Amount</th> {/* NEW */}
     <th style={tableHeaderStyle}>C.Deduction</th>
     <th style={tableHeaderStyle}>Company Rate</th>
@@ -728,6 +736,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
             <td style={tableCellStyle}>{getLoadingTypeLabel(item.source_type)}</td>
             <td style={tableCellStyle}>{num(item.settlement_weight).toFixed(2)}</td>
             <td style={tableCellStyle}>{shortQtyPerLine.toFixed(2)}</td>
+            <td style={tableCellStyle}>{shortageAmount.toFixed(2)}</td>
             <td style={tableCellStyle}>{claimPerLine.toFixed(2)}</td> {/* Claim amount allocated */}
             <td style={tableCellStyle}>{deductionPerLine.toFixed(2)}</td>
             <td style={tableCellStyle}>
@@ -783,6 +792,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
         <td style={consignmentTotalCellStyle} colSpan={5}>Totals</td>
         <td style={consignmentTotalCellStyle}>{calculation.settlementWeight.toFixed(2)}</td>
         <td style={consignmentTotalCellStyle}>{calculation.shortageQty.toFixed(2)}</td>
+        <td style={consignmentTotalCellStyle}>{calculation.totalSettlementShortageAmount.toFixed(2)}</td>
         <td style={consignmentTotalCellStyle}>{calculation.totalUnloadingClaimAmount.toFixed(2)}</td>
         <td style={consignmentTotalCellStyle}>{calculation.totalUnloadingDeductionAmount.toFixed(2)}</td>
         <td style={consignmentTotalCellStyle}></td>
@@ -797,7 +807,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
     </>
   ) : (
                 <tr>
-                  <td style={tableCellStyle} colSpan="16">
+                  <td style={tableCellStyle} colSpan="18">
                     <div style={{ padding: "16px", textAlign: "center", color: PALETTE.muted, fontSize: 13, background: "#f9fafb", borderRadius: 8 }}>
                       <div style={{ fontWeight: 600, marginBottom: 4 }}>No adjustments linked to this outward</div>
                       <div style={{ fontSize: 12, marginTop: 6 }}>Create adjustments by mapping inward or palti lorry entries to this outward dispatch.</div>
