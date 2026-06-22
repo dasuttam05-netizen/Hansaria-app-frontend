@@ -144,6 +144,18 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
         setIsFreightAutoLocked(false);
       }
 
+      const labourHasValue =
+        s.outward_labour_charges !== null &&
+        s.outward_labour_charges !== undefined &&
+        s.outward_labour_charges !== "" &&
+        Number(s.outward_labour_charges) !== 0;
+      const labourValue = labourHasValue
+        ? s.outward_labour_charges
+        : approvedLabourAmount > 0
+        ? approvedLabourAmount
+        : "";
+      const autoLabourEnabled = approvedLabourAmount > 0 && !labourHasValue;
+
       setFormData({
         dispatch_qty: s.dispatch_qty ?? "",
         unloading_qty: totalUnloadingQty > 0 ? totalUnloadingQty.toFixed(2) : (s.unloading_qty ?? ""),
@@ -151,7 +163,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
         sale_rate: autoSaleRate > 0 ? autoSaleRate.toFixed(2) : (s.sale_rate ?? ""),
         company_rate: s.company_rate ?? "",
         freight: freightValue,
-        outward_labour_charges: s.outward_labour_charges ?? "",
+        outward_labour_charges: labourValue,
         other_charges: s.other_charges ?? "",
         charge_bearer: s.charge_bearer || "self",
         narration: s.narration || "",
@@ -172,7 +184,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
       );
       // Show option to auto-fill labour only if an approved labour expense exists
       setShowLabourExpenseOption(approvedLabourAmount > 0);
-      setLabourAutoEnabled(false);
+      setLabourAutoEnabled(autoLabourEnabled);
     } catch (err) {
       console.error(err);
       setIsFreightAutoLocked(false);
