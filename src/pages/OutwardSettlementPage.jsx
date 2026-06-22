@@ -890,27 +890,52 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
               type="number"
               value={formData.outward_labour_charges}
               onChange={handleChange}
-              style={{ ...input, background: "#fff", cursor: "text", color: PALETTE.ink }}
+              readOnly={labourAutoEnabled}
+              style={{
+                ...input,
+                background: labourAutoEnabled ? "#f3f8ff" : "#fff",
+                cursor: labourAutoEnabled ? "not-allowed" : "text",
+                color: PALETTE.ink,
+              }}
             />
             {showLabourExpenseOption && (
-              <div style={{ marginTop: 8 }}>
-                <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
-                  <input
-                    type="checkbox"
-                    checked={labourAutoEnabled}
-                    onChange={(e) => {
-                      const checked = e.target.checked;
-                      setLabourAutoEnabled(checked);
-                      if (checked) {
-                        setFormData((prev) => ({ ...prev, outward_labour_charges: String(num(meta?.labour_expense?.amount)) }));
-                      }
+              <div style={labourOptionStyle}>
+                <div style={{ marginBottom: 8, fontSize: 12, color: PALETTE.ink, fontWeight: 700 }}>
+                  Map labour charges from approved expense voucher?
+                </div>
+                <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setLabourAutoEnabled(true);
+                      setFormData((prev) => ({
+                        ...prev,
+                        outward_labour_charges: String(num(meta?.labour_expense?.amount)),
+                      }));
                     }}
-                  />
-                  <span style={{ color: PALETTE.muted }}>
-                    Auto from approved expense: <strong style={{ color: PALETTE.ink }}>{num(meta?.labour_expense?.amount).toFixed(2)}</strong>
-                    {meta?.labour_expense?.vouchers?.length ? ` (${meta.labour_expense.vouchers.join(", ")})` : ""}
-                  </span>
-                </label>
+                    style={{
+                      ...smallYesButtonStyle,
+                      background: labourAutoEnabled ? "#15803d" : "#10b981",
+                    }}
+                  >
+                    Yes
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setLabourAutoEnabled(false)}
+                    style={{
+                      ...smallNoButtonStyle,
+                      borderColor: labourAutoEnabled ? PALETTE.border : "#94a3b8",
+                      background: labourAutoEnabled ? "#ffffff" : "#f8fafc",
+                    }}
+                  >
+                    No
+                  </button>
+                </div>
+                <div style={{ marginTop: 8, fontSize: 12, color: PALETTE.muted }}>
+                  Auto amount: <strong>{num(meta?.labour_expense?.amount).toFixed(2)}</strong>
+                  {meta?.labour_expense?.vouchers?.length ? ` (voucher: ${meta.labour_expense.vouchers.join(", ")})` : ""}
+                </div>
               </div>
             )}
           </div>
