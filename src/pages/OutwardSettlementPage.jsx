@@ -654,6 +654,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
     <th style={tableHeaderStyle}>Settlement Weight</th>
     <th style={tableHeaderStyle}>Short Qnt</th>
     <th style={tableHeaderStyle}>S.Amount</th> {/* NEW */}
+    <th style={tableHeaderStyle}>C.Deduction</th>
     <th style={tableHeaderStyle}>Company Rate</th>
     <th style={tableHeaderStyle}>Freight</th>
     <th style={tableHeaderStyle}>Labour Chgs</th>
@@ -682,6 +683,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
           : 0;
 
       const shortageAmount = shortQtyPerLine * rowCompanyRate;
+      const claimDeductionAmount = shortQtyPerLine * rowCompanyRate;
 
       const freightPerLine = num(item.settlement_weight) * freightPerMt;
       const labourPerLine = num(item.settlement_weight) * labourPerMt;
@@ -700,6 +702,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
           <td style={tableCellStyle}>{num(item.settlement_weight).toFixed(2)}</td>
           <td style={tableCellStyle}>{shortQtyPerLine.toFixed(2)}</td>
           <td style={tableCellStyle}>{shortageAmount.toFixed(2)}</td> {/* NEW */}
+          <td style={tableCellStyle}>{claimDeductionAmount.toFixed(2)}</td>
           <td style={tableCellStyle}>
             {canEditCompanyRate ? (
               <input
