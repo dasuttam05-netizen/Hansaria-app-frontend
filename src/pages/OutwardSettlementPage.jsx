@@ -33,6 +33,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
   const [meta, setMeta] = useState(null);
   const [isFreightAutoLocked, setIsFreightAutoLocked] = useState(false);
   const [showLabourExpenseOption, setShowLabourExpenseOption] = useState(false);
+  const [labourAutoEnabled, setLabourAutoEnabled] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [adjustmentRates, setAdjustmentRates] = useState({});
   const [whatsappSentAt, setWhatsappSentAt] = useState({});
@@ -150,7 +151,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
         sale_rate: autoSaleRate > 0 ? autoSaleRate.toFixed(2) : (s.sale_rate ?? ""),
         company_rate: s.company_rate ?? "",
         freight: freightValue,
-        outward_labour_charges: approvedLabourAmount > 0 ? approvedLabourAmount : (s.outward_labour_charges ?? ""),
+        outward_labour_charges: s.outward_labour_charges ?? "",
         other_charges: s.other_charges ?? "",
         charge_bearer: s.charge_bearer || "self",
         narration: s.narration || "",
@@ -169,7 +170,9 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
           return acc;
         }, {})
       );
-      setShowLabourExpenseOption(false);
+      // Show option to auto-fill labour only if an approved labour expense exists
+      setShowLabourExpenseOption(approvedLabourAmount > 0);
+      setLabourAutoEnabled(false);
     } catch (err) {
       console.error(err);
       setIsFreightAutoLocked(false);
@@ -364,7 +367,8 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
       ...prev,
       outward_labour_charges: String(num(meta?.labour_expense?.amount)),
     }));
-    setShowLabourExpenseOption(false);
+    setLabourAutoEnabled(true);
+    setShowLabourExpenseOption(true);
   };
 
   const handleSave = async () => {
@@ -885,35 +889,40 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
               name="outward_labour_charges"
               type="number"
               value={formData.outward_labour_charges}
-              readOnly
-              style={{ ...input, background: "#f3f8ff", cursor: "not-allowed", color: PALETTE.muted }}
+              onChange={handleChange}
+              style={{ ...input, background: "#fff", cursor: "text", color: PALETTE.ink }}
             />
             {showLabourExpenseOption && (
-              <div style={labourOptionStyle}>
-                <div>
-                  Approved expense found: <strong>{num(meta?.labour_expense?.amount).toFixed(2)}</strong>
-                  {meta?.labour_expense?.vouchers?.length ? ` (${meta.labour_expense.vouchers.join(", ")})` : ""}
-                </div>
-                <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
-                  <button type="button" onClick={useApprovedLabourExpense} style={smallYesButtonStyle}>
-                    Yes
-                  </button>
-                  <button type="button" onClick={() => setShowLabourExpenseOption(false)} style={smallNoButtonStyle}>
-                    No
-                  </button>
-                </div>
+              <div style={{ marginTop: 8 }}>
+                <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12 }}>
+                  <input
+                    type="checkbox"
+                    checked={labourAutoEnabled}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      setLabourAutoEnabled(checked);
+                      if (checked) {
+                        setFormData((prev) => ({ ...prev, outward_labour_charges: String(num(meta?.labour_expense?.amount)) }));
+                      }
+                    }}
+                  />
+                  <span style={{ color: PALETTE.muted }}>
+                    Auto from approved expense: <strong style={{ color: PALETTE.ink }}>{num(meta?.labour_expense?.amount).toFixed(2)}</strong>
+                    {meta?.labour_expense?.vouchers?.length ? ` (${meta.labour_expense.vouchers.join(", ")})` : ""}
+                  </span>
+                </label>
               </div>
             )}
           </div>
 
           <div>
             <label style={label}>Other Charges</label>
-            <input name="other_charges" type="number" value={formData.other_charges} readOnly style={{ ...input, background: "#f3f8ff", cursor: "not-allowed", color: PALETTE.muted }} />
+            <input name="other_charges" type="number" value={formData.other_charges} onChange={handleChange} style={{ ...input, background: "#fff", cursor: "text", color: PALETTE.ink }} />
           </div>
 
           <div>
             <label style={label}>Charge Bearer</label>
-            <select name="charge_bearer" value={formData.charge_bearer} disabled style={{ ...input, background: "#f3f8ff", cursor: "not-allowed", color: PALETTE.muted }}>
+            <select name="charge_bearer" value={formData.charge_bearer} onChange={handleChange} style={{ ...input, background: "#fff", cursor: "text", color: PALETTE.ink }}>
               <option value="self">Self</option>
               <option value="company">Company</option>
             </select>
