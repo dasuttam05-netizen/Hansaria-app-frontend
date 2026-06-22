@@ -284,6 +284,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
 
   // âœ… Profit / Loss
   const receivableAmount = grossAmount - companyPayable - claimAmount - otherDeduction;
+  const summaryNetPayment = averageAmount - (totalUnloadingClaimAmount + totalUnloadingDeductionAmount + totalSettlementShortageAmount);
 
   return {
     settlementWeight,
@@ -299,6 +300,9 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
     totalUnloadingClaimAmount,
     totalUnloadingDeductionAmount,
     totalSettlementShortageAmount,
+    totalClaimDeductionShortage,
+    summaryNetPayment,
+    summaryNetPayment,
   };
 }, [formData, meta, adjustmentRates, claimRows, deductionRows, unloadingDetails]);
 
@@ -815,6 +819,34 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
                   </td>
                 </tr>
               )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div style={{ ...card, marginBottom: 10 }}>
+        <h4 style={{ margin: "0 0 10px", color: PALETTE.headerDark, fontWeight: 800, fontSize: 16 }}>Adjusted Company Summary</h4>
+        <div style={{ overflowX: "auto", border: `1px solid ${PALETTE.border}`, borderRadius: 10, background: "#fff" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+            <thead>
+              <tr>
+                <th style={tableHeaderStyle}>Amount</th>
+                <th style={tableHeaderStyle}>Qnt × Rate</th>
+                <th style={tableHeaderStyle}>Claim</th>
+                <th style={tableHeaderStyle}>Deduction</th>
+                <th style={tableHeaderStyle}>Shortage Amount</th>
+                <th style={tableHeaderStyle}>Net Payment</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr style={{ background: "#ffffff" }}>
+                <td style={tableCellStyle}>{calculation.averageAmount.toFixed(2)}</td>
+                <td style={tableCellStyle}>{calculation.averageAmount.toFixed(2)}</td>
+                <td style={tableCellStyle}>{calculation.totalUnloadingClaimAmount.toFixed(2)}</td>
+                <td style={tableCellStyle}>{calculation.totalUnloadingDeductionAmount.toFixed(2)}</td>
+                <td style={tableCellStyle}>{calculation.totalSettlementShortageAmount.toFixed(2)}</td>
+                <td style={tableCellStyle}>{calculation.summaryNetPayment.toFixed(2)}</td>
+              </tr>
             </tbody>
           </table>
         </div>
