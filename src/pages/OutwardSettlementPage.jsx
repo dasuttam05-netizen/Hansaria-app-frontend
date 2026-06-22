@@ -134,6 +134,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
       const approvedLabourEntries = Array.isArray(res.data?.labour_expense?.entries)
         ? res.data.labour_expense.entries.filter((item) => num(item?.amount) > 0)
         : [];
+      const labourExpenseTotal = approvedLabourEntries.reduce((sum, item) => sum + num(item.amount), 0);
       let freightValue = s.freight ?? "";
 
       try {
@@ -159,10 +160,10 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
         Number(s.outward_labour_charges) !== 0;
       const labourValue = labourHasValue
         ? s.outward_labour_charges
-        : approvedLabourAmount > 0
-        ? approvedLabourAmount
+        : labourExpenseTotal > 0
+        ? labourExpenseTotal
         : "";
-      const autoLabourEnabled = approvedLabourAmount > 0 && !labourHasValue;
+      const autoLabourEnabled = labourExpenseTotal > 0 && !labourHasValue;
 
       setFormData({
         dispatch_qty: s.dispatch_qty ?? "",
@@ -191,7 +192,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
         }, {})
       );
       // Show option to auto-fill labour only if an approved labour expense exists
-      setShowLabourExpenseOption(approvedLabourAmount > 0);
+      setShowLabourExpenseOption(labourExpenseTotal > 0);
       setLabourAutoEnabled(autoLabourEnabled);
       setLabourVoucherNos(approvedLabourVouchers);
       setLabourExpenseEntries(approvedLabourEntries);
@@ -387,20 +388,20 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
   };
 
   const useApprovedLabourExpense = () => {
+    const entries = Array.isArray(meta?.labour_expense?.entries)
+      ? meta.labour_expense.entries.filter((item) => num(item?.amount) > 0)
+      : [];
+    const total = entries.reduce((sum, item) => sum + num(item.amount), 0);
     setFormData((prev) => ({
       ...prev,
-      outward_labour_charges: String(num(meta?.labour_expense?.amount)),
+      outward_labour_charges: String(total || num(meta?.labour_expense?.amount)),
     }));
     setLabourAutoEnabled(true);
     setShowLabourExpenseOption(true);
     setLabourVoucherNos(
       Array.isArray(meta?.labour_expense?.vouchers) ? meta.labour_expense.vouchers.filter(Boolean) : []
     );
-    setLabourExpenseEntries(
-      Array.isArray(meta?.labour_expense?.entries)
-        ? meta.labour_expense.entries.filter((item) => num(item?.amount) > 0)
-        : []
-    );
+    setLabourExpenseEntries(entries);
   };
 
   const handleSave = async () => {
