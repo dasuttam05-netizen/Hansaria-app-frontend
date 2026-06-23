@@ -126,60 +126,50 @@ export default function OutwardSettlementReportPage() {
     const freight = normalized.freight;
     const otherCharges = normalized.other_charges;
     const labourCharges = normalized.outward_labour_charges;
+    const totalUnloadingClaimAmount = toNumber(normalized.claim_amount);
+    const totalUnloadingDeductionAmount = toNumber(normalized.other_deduction);
 
     const adjustmentDetails = (normalized.adjustment_details || []).map((item) => {
       const itemSettlementWeight = Number(item.settlement_weight) || 0;
       const companyRate = Number(item.company_rate ?? normalized.company_rate) || 0;
       const shortQtyPerLine =
         dispatchQty > 0 ? (itemSettlementWeight / dispatchQty) * shortageQty : 0;
-      const shortAmount =
-        item.short_amount != null
-          ? Number(item.short_amount) || 0
-          : shortQtyPerLine * companyRate;
+      const shortAmount = shortQtyPerLine * companyRate;
+      const saleShortAmount = shortQtyPerLine * saleRate;
+      const claimPerLine = dispatchQty > 0 ? itemSettlementWeight * (totalUnloadingClaimAmount / dispatchQty) : 0;
+      const deductionPerLine = dispatchQty > 0 ? itemSettlementWeight * (totalUnloadingDeductionAmount / dispatchQty) : 0;
+      const freightPerLine = dispatchQty > 0 ? itemSettlementWeight * (freight / dispatchQty) : 0;
+      const labourPerLine = dispatchQty > 0 ? itemSettlementWeight * (labourCharges / dispatchQty) : 0;
+      const otherPerLine = dispatchQty > 0 ? itemSettlementWeight * (otherCharges / dispatchQty) : 0;
       const amount =
         item.amount != null
           ? Number(item.amount) || 0
           : itemSettlementWeight * companyRate;
-      const freightValue =
-        item.freight != null
-          ? Number(item.freight) || 0
-          : dispatchQty > 0
-            ? itemSettlementWeight * (freight / dispatchQty)
-            : 0;
-      const labourValue =
-        item.labour_charges != null
-          ? Number(item.labour_charges) || 0
-          : dispatchQty > 0
-            ? itemSettlementWeight * (labourCharges / dispatchQty)
-            : 0;
-      const otherValue =
-        item.other_charges != null
-          ? Number(item.other_charges) || 0
-          : dispatchQty > 0
-            ? itemSettlementWeight * (otherCharges / dispatchQty)
-            : 0;
       const netPayableValue =
-        amount - freightValue - labourValue - otherValue - shortAmount;
+        amount - freightPerLine - labourPerLine - otherPerLine - shortAmount - claimPerLine - deductionPerLine;
 
       return {
         ...item,
         shortQtyPerLine,
         shortAmount,
+        sale_short_amount: saleShortAmount,
+        claim_per_line: claimPerLine,
+        deduction_per_line: deductionPerLine,
         amount,
-        freight: freightValue,
-        labour_charges: labourValue,
-        other_charges: otherValue,
+        freight: freightPerLine,
+        labour_charges: labourPerLine,
+        other_charges: otherPerLine,
         company_rate: companyRate,
         net_payable: netPayableValue,
       };
     });
 
     const totalSAmountPurchase = adjustmentDetails.reduce(
-      (sum, item) => sum + item.shortAmount,
+      (sum, item) => sum + item.shortAmount + item.claim_per_line + item.deduction_per_line,
       0
     );
     const totalSAmountSale = adjustmentDetails.reduce(
-      (sum, item) => sum + item.shortQtyPerLine * saleRate,
+      (sum, item) => sum + item.sale_short_amount,
       0
     );
     const netReceivable =
@@ -198,6 +188,8 @@ export default function OutwardSettlementReportPage() {
       freight,
       otherCharges,
       labourCharges,
+      totalUnloadingClaimAmount,
+      totalUnloadingDeductionAmount,
       adjustmentDetails,
       totalSAmountPurchase,
       totalSAmountSale,
@@ -539,6 +531,9 @@ export default function OutwardSettlementReportPage() {
         "Loading Type",
         "Settlement Weight",
         "Short Qnt",
+        "Short Amt",
+        "S.Amount",
+        "C.Deduction",
         "Company Rate",
         "Freight",
         "Labour Chgs",
@@ -557,6 +552,9 @@ export default function OutwardSettlementReportPage() {
               getLoadingTypeLabel(item.source_type),
               num(item.settlement_weight),
               num((Number(record.dispatch_qty) || 0) > 0 ? ((Number(item.settlement_weight) || 0) / (Number(record.dispatch_qty) || 0)) * (Number(record.shortage_qty) || 0) : 0),
+              num(item.shortAmount),
+              num(item.sale_short_amount),
+              num(item.claim_per_line + item.deduction_per_line),
               num(item.company_rate),
               num(item.freight),
               num(item.labour_charges),
@@ -573,7 +571,7 @@ export default function OutwardSettlementReportPage() {
                   : 0)
               ),
             ])
-          : [["", "No adjusted inward details found.", "", "", "", "", "", "", "", "", "", "", "", ""]],
+            : [["", "No adjusted inward details found.", "", "", "", "", "", "", "", "", "", "", "", "", "", ""]],
     });
 
     const {
@@ -1115,7 +1113,9 @@ export default function OutwardSettlementReportPage() {
                       <th style={{ ...hardHeaderCell, width: "128px" }}>Loading Type</th>
                       <th style={{ ...hardHeaderCell, width: "118px" }}>Settlement Weight</th>
                       <th style={{ ...hardHeaderCell, width: "92px" }}>Short Qnt</th>
+                      <th style={{ ...hardHeaderCell, width: "96px" }}>Short Amt</th>
                       <th style={{ ...hardHeaderCell, width: "96px" }}>S.Amount</th>
+                      <th style={{ ...hardHeaderCell, width: "96px" }}>C.Deduction</th>
                       <th style={{ ...hardHeaderCell, width: "110px" }}>Company Rate</th>
                       <th style={{ ...hardHeaderCell, width: "84px" }}>Freight</th>
                       <th style={{ ...hardHeaderCell, width: "92px" }}>Labour Chgs</th>
@@ -1136,6 +1136,8 @@ export default function OutwardSettlementReportPage() {
                           <td style={hardBodyCell}>{num(item.settlement_weight)}</td>
                           <td style={hardBodyCell}>{num(item.shortQtyPerLine)}</td>
                           <td style={hardBodyCell}>{num(item.shortAmount)}</td>
+                          <td style={hardBodyCell}>{num(item.sale_short_amount)}</td>
+                          <td style={hardBodyCell}>{num(item.claim_per_line + item.deduction_per_line)}</td>
                           <td style={hardBodyCell}>{num(item.company_rate)}</td>
                           <td style={hardBodyCell}>{num(item.freight)}</td>
                           <td style={hardBodyCell}>{num(item.labour_charges)}</td>
@@ -1146,7 +1148,7 @@ export default function OutwardSettlementReportPage() {
                       ))
                     ) : (
                       <tr>
-                        <td style={hardBodyCell} colSpan="14">No adjusted inward details found.</td>
+                        <td style={hardBodyCell} colSpan="16">No adjusted inward details found.</td>
                       </tr>
                     )}
                   </tbody>
