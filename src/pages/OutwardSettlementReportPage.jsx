@@ -1223,7 +1223,7 @@ export default function OutwardSettlementReportPage() {
 
                     <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 14 }}>
                 <button
-                  onClick={() => createSinglePdf(row)}
+                  onClick={() => createSinglePdf(record)}
                   style={{ ...iconActionButtonStyle, background: "#1d4ed8" }}
                   title="Download PDF"
                   aria-label="Download PDF"
@@ -1231,7 +1231,7 @@ export default function OutwardSettlementReportPage() {
                   <FaFilePdf />
                 </button>
                 <button
-                  onClick={() => setEditingRecord(row)}
+                  onClick={() => setEditingRecord(record)}
                   style={{ ...iconActionButtonStyle, background: "#0f766e" }}
                   title="Edit Settlement"
                   aria-label="Edit Settlement"
@@ -1240,9 +1240,9 @@ export default function OutwardSettlementReportPage() {
                 </button>
               </div>
 
-              {row.narration ? (
+              {record.narration ? (
                 <div style={{ marginTop: 12, color: "#475569" }}>
-                  Narration: {row.narration}
+                  Narration: {record.narration}
                 </div>
               ) : null}
             </div>
