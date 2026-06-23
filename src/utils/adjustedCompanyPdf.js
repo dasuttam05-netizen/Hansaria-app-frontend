@@ -107,6 +107,8 @@ export function buildAdjustedCompanyCopyPdf({ settlement, adjustmentItems }) {
       settlementWeight: toNumber(item.settlementWeight ?? item.settlement_weight),
       shortQty: toNumber(item.shortQty ?? item.shortQtyPerLine),
       shortageAmount: toNumber(item.shortageAmount ?? item.shortAmount),
+      claim: toNumber(item.claim),
+      deduction: toNumber(item.deduction),
       companyRate: toNumber(item.companyRate ?? item.company_rate),
       freight: toNumber(item.freight),
       labour: toNumber(item.labour ?? item.labour_charges),
@@ -160,8 +162,8 @@ export function buildAdjustedCompanyCopyPdf({ settlement, adjustmentItems }) {
       ],
       [
         ["Product", settlement.productName || "-"],
+        ["Name", item.companyName || item.company_name || settlement.accountName || "-"],
         ["Settlement Weight", row.settlementWeight.toFixed(2)],
-        ["Short Qnt", row.shortQty.toFixed(2)],
       ],
       88
     );
@@ -181,9 +183,11 @@ export function buildAdjustedCompanyCopyPdf({ settlement, adjustmentItems }) {
         ["2", "Company Rate", "Rate applied on settlement", money(row.companyRate)],
         [{ content: "Amount", colSpan: 2, styles: { fontStyle: "bold", fillColor: GREEN_SOFT } }, "Weight x company rate", money(row.amount)],
         ["3", "S. Amount", "Shortage deduction", money(row.shortageAmount)],
-        ["4", "Freight", "Transportation charges", money(row.freight)],
-        ["5", "Labour Chgs", "Labour charges", money(row.labour)],
-        ["6", "Other Chgs", "Other miscellaneous charges", money(row.other)],
+        ["4", "Claim", "Claim amount", money(row.claim)],
+        ["5", "C.Deduction", "Claim + deduction", money(row.claim + row.deduction)],
+        ["6", "Freight", "Transportation charges", money(row.freight)],
+        ["7", "Labour Chgs", "Labour charges", money(row.labour)],
+        ["8", "Other Chgs", "Other miscellaneous charges", money(row.other)],
         [{ content: "Net Payable", colSpan: 2, styles: { fontStyle: "bold", fillColor: GREEN_SOFT } }, "Total payable after all adjustments", money(row.netPayable)],
       ],
       columnStyles: {
