@@ -67,11 +67,17 @@ const getSignedOpening = (row) => {
   const type = String(row?.opening_balance_type || "dr").toLowerCase();
   return type === "cr" ? -Math.abs(amount) : Math.abs(amount);
 };
+const getVoucherBaseKey = (entry) => {
+  const voucher = String(entry?.voucher_no || "").trim();
+  if (voucher) return voucher.replace(/-(PARTY|EMP)$/i, "");
+  return String(entry?.journal_group_no || entry?.linked_entry_id || entry?.id || "");
+};
+const isEmployeeCompanionEntry = (entry) => String(entry?.fund_source || "").toLowerCase() === "employee_cash";
 const isPartyLedgerEntry = (entry) => {
   const source = String(entry?.fund_source || "main_cash");
   // Exclude linked companion entries (they are duplicates of the main entry)
   const isLinkedEntry = !!entry?.linked_entry_id;
-  return !isLinkedEntry && (source === "party_cash" || !!entry?.company_id);
+  return !isLinkedEntry && !isEmployeeCompanionEntry(entry) && (source === "party_cash" || !!entry?.company_id);
 };
 const getDescriptionDetails = (entry) =>
   [entry.description || "-", entry.adjustment_details ? `Adjustment: ${entry.adjustment_details}` : ""]
@@ -159,7 +165,7 @@ const PartiesCashBookPage = () => {
   }, [fetchData]);
 
   const filteredRows = useMemo(() => {
-    return entries
+    const rows = entries
       .filter((e) => e.company_id)
       .filter(isPartyLedgerEntry)
       .filter((e) => (showDeleted ? String(e.status || "").toLowerCase() === "cancelled" : isActiveLedgerStatus(e)))
@@ -172,6 +178,30 @@ const PartiesCashBookPage = () => {
         return true;
       })
       .sort((a, b) => new Date(a.entry_date) - new Date(b.entry_date));
+
+    const deduped = [];
+    const indexByKey = new Map();
+    rows.forEach((row) => {
+      const key = `${getVoucherBaseKey(row)}::${String(row.company_id || "")}`;
+      if (!key || key === "::") {
+        deduped.push(row);
+        return;
+      }
+      if (!indexByKey.has(key)) {
+        indexByKey.set(key, deduped.length);
+        deduped.push(row);
+        return;
+      }
+      const idx = indexByKey.get(key);
+      const existing = deduped[idx];
+      const existingSource = String(existing?.fund_source || "").toLowerCase();
+      const incomingSource = String(row?.fund_source || "").toLowerCase();
+      if (existingSource !== "main_cash" && incomingSource === "main_cash") {
+        deduped[idx] = row;
+      }
+    });
+
+    return deduped;
   }, [entries, appliedFilters, showDeleted, companies]);
 
   const openingBalance = useMemo(() => {
