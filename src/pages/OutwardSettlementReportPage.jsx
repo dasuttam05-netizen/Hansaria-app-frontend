@@ -164,6 +164,10 @@ export default function OutwardSettlementReportPage() {
       };
     });
 
+    const totalSettlementShortageAmount = adjustmentDetails.reduce((sum, item) => {
+      return sum + item.shortAmount;
+    }, 0);
+
     const totalSAmountPurchase = adjustmentDetails.reduce(
       (sum, item) => sum + item.shortAmount + item.claim_per_line + item.deduction_per_line,
       0
