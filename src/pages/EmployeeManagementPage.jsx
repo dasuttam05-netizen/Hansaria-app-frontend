@@ -291,6 +291,9 @@ const normalizeData = (data) => {
 const employeeRecordId = (employee) =>
   employee?.id ?? employee?._id ?? "";
 
+const employeeMobileValue = (employee) =>
+  String(employee?.mobile ?? employee?.mobile_no ?? employee?.phone ?? "").trim();
+
 const normalizeId = (value) => {
   if (!value) return "";
   if (typeof value === "string") return value;
@@ -745,7 +748,7 @@ export default function EmployeeManagementPage() {
 
     setFormData({
       name: detail.name || "",
-      mobile: detail.mobile || "",
+      mobile: employeeMobileValue(detail),
       address: detail.address || "",
       username: detail.username || "",
       password: "",
@@ -800,7 +803,7 @@ export default function EmployeeManagementPage() {
     alert(
       [
         `Name: ${employee.name || "-"}`,
-        `Mobile: ${employee.mobile || "-"}`,
+        `Mobile: ${employeeMobileValue(employee) || "-"}`,
         `Username: ${employee.username || "-"}`,
         `Role: ${employee.role || "Custom Role"}`,
         `Location: ${employee.all_location_access ? "All Locations" : locationNames || "-"}`,
@@ -921,7 +924,7 @@ export default function EmployeeManagementPage() {
                     </div>
                   </td>
                   <td style={tdStyle}>{employee.name}</td>
-                  <td style={tdStyle}>{employee.mobile || "-"}</td>
+                  <td style={tdStyle}>{employeeMobileValue(employee) || "-"}</td>
                   <td style={tdStyle}>{employee.username}</td>
                   <td style={tdStyle}><span style={roleBadge(employeeIsAdmin)}>{employee.role || "Custom Role"}</span></td>
                   <td style={tdStyle}>
