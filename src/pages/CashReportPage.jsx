@@ -54,6 +54,14 @@ function toSignedEntry(entry) {
   return String(entry.entry_type || "").toLowerCase() === "income" ? amount : -amount;
 }
 
+function isEmployeeCompanionEntry(entry) {
+  return String(entry.fund_source || "").toLowerCase() === "employee_cash";
+}
+
+function isPartyLedgerEntry(entry) {
+  return String(entry.company_id || "").trim() !== "" && !isEmployeeCompanionEntry(entry);
+}
+
 const getRecordId = (record) => {
   if (!record) return "";
   if (typeof record === "string" || typeof record === "number") return String(record);
@@ -99,10 +107,10 @@ export default function CashReportPage() {
   const matchesLedger = (entry, accountValue) => {
     if (accountValue === "all") return true;
     if (accountValue.startsWith("company:")) {
-      return String(entry.company_id || "") === accountValue.split(":")[1];
+      return isPartyLedgerEntry(entry) && String(entry.company_id || "") === accountValue.split(":")[1];
     }
     if (accountValue.startsWith("employee:")) {
-      return String(entry.employee_id || "") === accountValue.split(":")[1];
+      return isEmployeeCompanionEntry(entry) && String(entry.employee_id || "") === accountValue.split(":")[1];
     }
     return true;
   };
@@ -121,10 +129,10 @@ export default function CashReportPage() {
       if (id) employeeMap.set(id, e.name || "Unknown");
     });
     cashEntries.forEach((entry) => {
-      if (entry.company_id && !companyMap.has(String(entry.company_id))) {
+      if (entry.company_id && isPartyLedgerEntry(entry) && !companyMap.has(String(entry.company_id))) {
         companyMap.set(String(entry.company_id), entry.company_name || `Party ${entry.company_id}`);
       }
-      if (entry.employee_id && !employeeMap.has(String(entry.employee_id))) {
+      if (entry.employee_id && isEmployeeCompanionEntry(entry) && !employeeMap.has(String(entry.employee_id))) {
         employeeMap.set(String(entry.employee_id), entry.employee_name || `Employee ${entry.employee_id}`);
       }
     });
