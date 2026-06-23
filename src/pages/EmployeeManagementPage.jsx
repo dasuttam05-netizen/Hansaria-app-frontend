@@ -621,6 +621,8 @@ export default function EmployeeManagementPage() {
       normalizeIdArray(formData.assigned_warehouse_ids),
   };
 
+  console.log("[employee.submit] payload:", payload);
+
   // Required field validation
   if (
     !payload.name ||
