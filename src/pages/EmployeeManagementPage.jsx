@@ -607,6 +607,8 @@ export default function EmployeeManagementPage() {
   const payload = {
     ...formData,
 
+    mobile: String(formData.mobile ?? "").trim(),
+
     location_id: safeLocationIds[0] || "",
     location_ids: safeLocationIds,
 
