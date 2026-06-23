@@ -650,18 +650,12 @@ export default function EmployeeManagementPage() {
 
   setIsSubmittingEmployee(true);
 
-  try {
-    if (editId) {
-      await axios.put(
-        `/api/employees/${editId}`,
-        payload
-      );
-    } else {
-      await axios.post(
-        "/api/employees",
-        payload
-      );
-    }
+    try {
+    const response = editId
+      ? await axios.put(`/api/employees/${editId}`, payload)
+      : await axios.post("/api/employees", payload);
+
+    console.log("[employee.submit] response:", response?.data);
 
     await Promise.all([
       fetchEmployees(),
