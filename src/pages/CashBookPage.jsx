@@ -114,6 +114,19 @@ const getFundSourceLabel = (source) => {
   if (key === "party_cash") return "Party Cash";
   return "Main Cash";
 };
+const getVoucherBaseKey = (entry) => {
+  const voucher = String(entry?.voucher_no || "").trim();
+  if (voucher) return voucher.replace(/-(PARTY|EMP)$/i, "");
+  return String(entry?.journal_group_no || entry?.linked_entry_id || entry?.id || "");
+};
+const preferEntry = (existing, incoming) => {
+  const existingSource = String(existing?.fund_source || "").toLowerCase();
+  const incomingSource = String(incoming?.fund_source || "").toLowerCase();
+  if (existingSource === incomingSource) return existing;
+  if (incomingSource === "main_cash") return incoming;
+  if (existingSource === "main_cash") return existing;
+  return incoming;
+};
 const getEntryAmounts = (entry) => {
   const amount = Number(entry?.amount || 0);
   const isIncome = String(entry?.entry_type || "").toLowerCase() === "income";
@@ -230,11 +243,30 @@ const MainCashBookPage = () => {
   );
 
   const filteredRows = useMemo(() => {
-    return entries
+    const rows = entries
       .filter((e) => e.status === (showDeleted ? "cancelled" : "posted"))
       .filter((e) => String(e.fund_source || "main_cash") === "main_cash")
       .filter(matchesAppliedFilters)
       .sort((a, b) => new Date(a.entry_date) - new Date(b.entry_date));
+
+    const deduped = [];
+    const indexByKey = new Map();
+    rows.forEach((row) => {
+      const key = getVoucherBaseKey(row);
+      if (!key) {
+        deduped.push(row);
+        return;
+      }
+      if (!indexByKey.has(key)) {
+        indexByKey.set(key, deduped.length);
+        deduped.push(row);
+        return;
+      }
+      const idx = indexByKey.get(key);
+      deduped[idx] = preferEntry(deduped[idx], row);
+    });
+
+    return deduped;
   }, [entries, matchesAppliedFilters, showDeleted]);
 
   const openingBalance = useMemo(() => {
