@@ -62,6 +62,23 @@ function isPartyLedgerEntry(entry) {
   return String(entry.company_id || "").trim() !== "" && !isEmployeeCompanionEntry(entry);
 }
 
+function getVoucherPairKey(entry) {
+  const voucher = String(entry?.voucher_no || "").trim();
+  if (voucher) {
+    return voucher.replace(/-(PARTY|EMP)$/i, "");
+  }
+  return String(entry?.journal_group_no || entry?.linked_entry_id || entry?.id || "");
+}
+
+function keepPreferredLedgerRow(existing, incoming) {
+  const existingSource = String(existing?.fund_source || "").toLowerCase();
+  const incomingSource = String(incoming?.fund_source || "").toLowerCase();
+  if (existingSource === incomingSource) return existing;
+  if (incomingSource === "main_cash") return incoming;
+  if (existingSource === "main_cash") return existing;
+  return incoming;
+}
+
 const getRecordId = (record) => {
   if (!record) return "";
   if (typeof record === "string" || typeof record === "number") return String(record);
@@ -156,7 +173,25 @@ export default function CashReportPage() {
       })
       .sort((a, b) => new Date(a.entry_date) - new Date(b.entry_date));
 
-    return rows;
+    const deduped = [];
+    const indexByKey = new Map();
+
+    rows.forEach((row) => {
+      const key = getVoucherPairKey(row);
+      if (!key) {
+        deduped.push(row);
+        return;
+      }
+      if (!indexByKey.has(key)) {
+        indexByKey.set(key, deduped.length);
+        deduped.push(row);
+        return;
+      }
+      const idx = indexByKey.get(key);
+      deduped[idx] = keepPreferredLedgerRow(deduped[idx], row);
+    });
+
+    return deduped;
   }, [cashEntries, appliedFilters]);
 
   const openingBalance = useMemo(() => {
