@@ -67,6 +67,10 @@ export default function OutwardSettlementReportPage() {
   };
 
   const num = (v) => Number(v || 0).toFixed(2);
+  const toNumber = (v) => {
+    const n = Number(v);
+    return Number.isFinite(n) ? n : 0;
+  };
   const formatDate = (value) => {
     if (!value) return "-";
     const date = new Date(value);
@@ -76,22 +80,56 @@ export default function OutwardSettlementReportPage() {
     return `${dd}-${mm}-${date.getFullYear()}`;
   };
 
-  const getRowCalculations = (row) => {
-    const dispatchQty = Number(row.dispatch_qty) || 0;
-    const shortageQty = Number(row.shortage_qty) || 0;
-    const saleAmount = Number(row.sale_amount) || 0;
-    const settlementWeight = Number(row.settlement_weight) || 0;
-    const saleRate = settlementWeight > 0 ? saleAmount / settlementWeight : 0;
-    const purchaseAmount =
-      Number(row.company_amount) ||
-      settlementWeight * (Number(row.company_rate) || 0);
-    const freight = Number(row.freight) || 0;
-    const otherCharges = Number(row.other_charges) || 0;
-    const labourCharges = Number(row.outward_labour_charges) || 0;
+  const normalizeRow = (row) => {
+    const dispatchQty = toNumber(row.dispatch_qty);
+    const unloadingQty = toNumber(row.unloading_qty);
+    const settlementWeight = toNumber(row.settlement_weight ?? row.billable_qty ?? Math.max(dispatchQty - unloadingQty, 0));
+    const shortageQty = toNumber(row.shortage_qty ?? row.billable_qty ?? Math.max(dispatchQty - unloadingQty, 0));
+    const saleRate = toNumber(row.sale_rate);
+    const saleAmount = toNumber(row.sale_amount ?? dispatchQty * saleRate);
+    const companyRate = toNumber(row.company_rate);
+    const companyAmount = toNumber(row.company_amount ?? settlementWeight * companyRate);
+    const freight = toNumber(row.freight);
+    const otherCharges = toNumber(row.other_charges);
+    const labourCharges = toNumber(row.outward_labour_charges);
+    const grossAmount = toNumber(row.gross_amount ?? row.gross_profit ?? saleAmount - freight - otherCharges - labourCharges);
+    const receivableAmount = toNumber(row.receivable_amount ?? row.net_profit);
+    const companyPayable = toNumber(row.company_payable);
 
-    const adjustmentDetails = (row.adjustment_details || []).map((item) => {
+    return {
+      ...row,
+      dispatch_qty: dispatchQty,
+      unloading_qty: unloadingQty,
+      shortage_qty: shortageQty,
+      settlement_weight: settlementWeight,
+      sale_rate: saleRate,
+      sale_amount: saleAmount,
+      company_rate: companyRate,
+      company_amount: companyAmount,
+      freight,
+      other_charges: otherCharges,
+      outward_labour_charges: labourCharges,
+      gross_amount: grossAmount,
+      receivable_amount: receivableAmount,
+      company_payable: companyPayable,
+    };
+  };
+
+  const getRowCalculations = (row) => {
+    const normalized = normalizeRow(row);
+    const dispatchQty = normalized.dispatch_qty;
+    const shortageQty = normalized.shortage_qty;
+    const saleAmount = normalized.sale_amount;
+    const settlementWeight = normalized.settlement_weight;
+    const saleRate = normalized.sale_rate;
+    const purchaseAmount = normalized.company_amount;
+    const freight = normalized.freight;
+    const otherCharges = normalized.other_charges;
+    const labourCharges = normalized.outward_labour_charges;
+
+    const adjustmentDetails = (normalized.adjustment_details || []).map((item) => {
       const itemSettlementWeight = Number(item.settlement_weight) || 0;
-      const companyRate = Number(item.company_rate ?? row.company_rate) || 0;
+      const companyRate = Number(item.company_rate ?? normalized.company_rate) || 0;
       const shortQtyPerLine =
         dispatchQty > 0 ? (itemSettlementWeight / dispatchQty) * shortageQty : 0;
       const shortAmount =
@@ -180,7 +218,7 @@ export default function OutwardSettlementReportPage() {
       const res = await axios.get(`${API_BASE}/outward-settlement/report/list`, {
         params: filters,
       });
-      setRecords(res.data || []);
+      setRecords((Array.isArray(res.data) ? res.data : []).map(normalizeRow));
     } catch (err) {
       console.error(err);
       setRecords([]);
@@ -191,14 +229,14 @@ export default function OutwardSettlementReportPage() {
     () =>
       records.reduce(
         (acc, row) => {
-          acc.dispatch += Number(row.dispatch_qty) || 0;
-          acc.unloading += Number(row.unloading_qty) || 0;
-          acc.shortage += Number(row.shortage_qty) || 0;
-          acc.settlement += Number(row.settlement_weight) || 0;
-          acc.sale += Number(row.sale_amount) || 0;
-          acc.gross += Number(row.gross_amount) || 0;
-          acc.payable += Number(row.company_payable) || 0;
-          acc.net += Number(row.receivable_amount) || 0;
+          acc.dispatch += toNumber(row.dispatch_qty);
+          acc.unloading += toNumber(row.unloading_qty);
+          acc.shortage += toNumber(row.shortage_qty);
+          acc.settlement += toNumber(row.settlement_weight);
+          acc.sale += toNumber(row.sale_amount);
+          acc.gross += toNumber(row.gross_amount);
+          acc.payable += toNumber(row.company_payable);
+          acc.net += toNumber(row.receivable_amount);
           return acc;
         },
         {
@@ -231,12 +269,13 @@ export default function OutwardSettlementReportPage() {
   };
 
   const createSettlementReportPdf = (row) => {
+    const record = normalizeRow(row);
     const doc = new jsPDF("l", "mm", "a4");
-    const invNo = displayInvNo(row);
-    const acct = displayAccountName(row);
+    const invNo = displayInvNo(record);
+    const acct = displayAccountName(record);
 
     {
-      const calc = getRowCalculations(row);
+      const calc = getRowCalculations(record);
       const generatedAt = new Date().toLocaleString();
       const left = 8;
       const right = 289;
@@ -266,12 +305,12 @@ export default function OutwardSettlementReportPage() {
         margin: { left: left + 3, right: left + 3 },
         styles: { fontSize: 7.2, cellPadding: 1.8, textColor: [31, 41, 55] },
         body: [[
-          `Date: ${formatDate(row.date)}`,
-          `Warehouse: ${row.warehouse_name || "-"}`,
-          `Location: ${row.location_name || "-"}`,
-          `Buyer: ${row.buyer_name || "-"}`,
-          `Consignee: ${row.consignee_name || "-"}`,
-          `Product: ${row.product_name || "-"}`,
+          `Date: ${formatDate(record.date)}`,
+          `Warehouse: ${record.warehouse_name || "-"}`,
+          `Location: ${record.location_name || "-"}`,
+          `Buyer: ${record.buyer_name || "-"}`,
+          `Consignee: ${record.consignee_name || "-"}`,
+          `Product: ${record.product_name || "-"}`,
         ]],
       });
 
@@ -285,10 +324,10 @@ export default function OutwardSettlementReportPage() {
         head: [["Outward Company", "Qty", "Rate", "Amount", "Lorry No"]],
         body: [[
           acct,
-          num(row.dispatch_qty),
-          num(row.sale_rate),
-          num(row.sale_amount),
-          row.lorry_no || "-",
+          num(record.dispatch_qty),
+          num(record.sale_rate),
+          num(record.sale_amount),
+          record.lorry_no || "-",
         ]],
       });
 
@@ -437,12 +476,12 @@ export default function OutwardSettlementReportPage() {
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
     doc.text(
-      `Date: ${formatDate(row.date)} | Warehouse: ${row.warehouse_name || "-"} | Location: ${row.location_name || "-"} | Lorry: ${row.lorry_no || "-"}`,
+      `Date: ${formatDate(record.date)} | Warehouse: ${record.warehouse_name || "-"} | Location: ${record.location_name || "-"} | Lorry: ${record.lorry_no || "-"}`,
       14,
       34
     );
     doc.text(
-      `Buyer: ${row.buyer_name || "-"} | Consignee: ${row.consignee_name || "-"} | Product: ${row.product_name || "-"}`,
+      `Buyer: ${record.buyer_name || "-"} | Consignee: ${record.consignee_name || "-"} | Product: ${record.product_name || "-"}`,
       14,
       39
     );
@@ -466,17 +505,17 @@ export default function OutwardSettlementReportPage() {
         "Settlement Wt",
       ]],
       body: [[
-        formatDate(row.date),
-        row.warehouse_name || "-",
-        row.location_name || "-",
-        row.lorry_no || "-",
-        row.buyer_name || "-",
-        row.consignee_name || "-",
-        row.product_name || "-",
-        num(row.dispatch_qty),
-        num(row.unloading_qty),
-        num(row.shortage_qty),
-        num(row.settlement_weight),
+        formatDate(record.date),
+        record.warehouse_name || "-",
+        record.location_name || "-",
+        record.lorry_no || "-",
+        record.buyer_name || "-",
+        record.consignee_name || "-",
+        record.product_name || "-",
+        num(record.dispatch_qty),
+        num(record.unloading_qty),
+        num(record.shortage_qty),
+        num(record.settlement_weight),
       ]],
     });
 
@@ -509,28 +548,28 @@ export default function OutwardSettlementReportPage() {
         "Net Payable",
       ]],
       body:
-        (row.adjustment_details || []).length > 0
-          ? row.adjustment_details.map((item) => [
+        (record.adjustment_details || []).length > 0
+          ? record.adjustment_details.map((item) => [
               item.sr_no,
               item.company_name || "-",
               item.lorry_no || "-",
               item.inward_voucher_no || "-",
               getLoadingTypeLabel(item.source_type),
               num(item.settlement_weight),
-              num((Number(row.dispatch_qty) || 0) > 0 ? ((Number(item.settlement_weight) || 0) / (Number(row.dispatch_qty) || 0)) * (Number(row.shortage_qty) || 0) : 0),
+              num((Number(record.dispatch_qty) || 0) > 0 ? ((Number(item.settlement_weight) || 0) / (Number(record.dispatch_qty) || 0)) * (Number(record.shortage_qty) || 0) : 0),
               num(item.company_rate),
               num(item.freight),
               num(item.labour_charges),
               num(item.other_charges),
               num(item.amount),
-              num((Number(row.dispatch_qty) || 0) > 0 ? ((Number(item.settlement_weight) || 0) / (Number(row.dispatch_qty) || 0)) * (Number(row.shortage_qty) || 0) * (Number(item.company_rate) || 0) : 0),
+              num((Number(record.dispatch_qty) || 0) > 0 ? ((Number(item.settlement_weight) || 0) / (Number(record.dispatch_qty) || 0)) * (Number(record.shortage_qty) || 0) * (Number(item.company_rate) || 0) : 0),
               num(
                 (Number(item.amount) || 0) -
                 (Number(item.freight) || 0) -
                 (Number(item.labour_charges) || 0) -
                 (Number(item.other_charges) || 0) -
-                ((Number(row.dispatch_qty) || 0) > 0
-                  ? ((Number(item.settlement_weight) || 0) / (Number(row.dispatch_qty) || 0)) * (Number(row.shortage_qty) || 0) * (Number(item.company_rate) || 0)
+                ((Number(record.dispatch_qty) || 0) > 0
+                  ? ((Number(item.settlement_weight) || 0) / (Number(record.dispatch_qty) || 0)) * (Number(record.shortage_qty) || 0) * (Number(item.company_rate) || 0)
                   : 0)
               ),
             ])
@@ -548,7 +587,7 @@ export default function OutwardSettlementReportPage() {
       netReceivable,
       netPayable,
       netProfitLoss,
-    } = getRowCalculations(row);
+    } = getRowCalculations(record);
 
     const summaryStartY = doc.lastAutoTable.finalY + 8;
     const summarySectionHeight = 62;
@@ -795,6 +834,7 @@ export default function OutwardSettlementReportPage() {
     let startY = doc.lastAutoTable.finalY + 10;
 
     records.forEach((row, index) => {
+      const record = normalizeRow(row);
       if (startY > 178) {
         doc.addPage("a4", "landscape");
         startY = 14;
@@ -802,7 +842,7 @@ export default function OutwardSettlementReportPage() {
 
       doc.setFontSize(11);
       doc.text(
-        `${row.voucher_no || `OUT-${row.outward_id}`} | ${row.company_name || "-"} | ${row.location_name || "-"} | ${row.lorry_no || "-"}`,
+        `${record.voucher_no || `OUT-${record.outward_id}`} | ${record.company_name || "-"} | ${record.location_name || "-"} | ${record.lorry_no || "-"}`,
         14,
         startY
       );
@@ -830,28 +870,28 @@ export default function OutwardSettlementReportPage() {
           "Net Payable",
         ]],
         body:
-          (row.adjustment_details || []).length > 0
-            ? row.adjustment_details.map((item) => [
+          (record.adjustment_details || []).length > 0
+            ? record.adjustment_details.map((item) => [
                 item.sr_no,
                 item.company_name || "-",
                 item.lorry_no || "-",
                 item.inward_voucher_no || "-",
                 getLoadingTypeLabel(item.source_type),
                 num(item.settlement_weight),
-              num((Number(row.dispatch_qty) || 0) > 0 ? ((Number(item.settlement_weight) || 0) / (Number(row.dispatch_qty) || 0)) * (Number(row.shortage_qty) || 0) : 0),
-              num(item.company_rate),
+                num((Number(record.dispatch_qty) || 0) > 0 ? ((Number(item.settlement_weight) || 0) / (Number(record.dispatch_qty) || 0)) * (Number(record.shortage_qty) || 0) : 0),
+                num(item.company_rate),
                 num(item.freight),
                 num(item.labour_charges),
                 num(item.other_charges),
                 num(item.amount),
-                num((Number(row.dispatch_qty) || 0) > 0 ? ((Number(item.settlement_weight) || 0) / (Number(row.dispatch_qty) || 0)) * (Number(row.shortage_qty) || 0) * (Number(item.company_rate) || 0) : 0),
+                num((Number(record.dispatch_qty) || 0) > 0 ? ((Number(item.settlement_weight) || 0) / (Number(record.dispatch_qty) || 0)) * (Number(record.shortage_qty) || 0) * (Number(item.company_rate) || 0) : 0),
                 num(
                   (Number(item.amount) || 0) -
                   (Number(item.freight) || 0) -
                   (Number(item.labour_charges) || 0) -
                   (Number(item.other_charges) || 0) -
-                  ((Number(row.dispatch_qty) || 0) > 0
-                    ? ((Number(item.settlement_weight) || 0) / (Number(row.dispatch_qty) || 0)) * (Number(row.shortage_qty) || 0) * (Number(item.company_rate) || 0)
+                  ((Number(record.dispatch_qty) || 0) > 0
+                    ? ((Number(item.settlement_weight) || 0) / (Number(record.dispatch_qty) || 0)) * (Number(record.shortage_qty) || 0) * (Number(item.company_rate) || 0)
                     : 0)
                 ),
               ])
@@ -865,7 +905,7 @@ export default function OutwardSettlementReportPage() {
         totalSAmountSale,
         netReceivable,
         netPayable,
-      } = getRowCalculations(row);
+      } = getRowCalculations(record);
 
       autoTable(doc, {
         startY: doc.lastAutoTable.finalY + 4,
@@ -874,11 +914,11 @@ export default function OutwardSettlementReportPage() {
         styles: { fontSize: 8, halign: "right" },
         margin: { left: 14, right: 14 },
         head: [["Sale Amount", "Freight", "Other Chgs", "Labour Chgs", "S.Amount", "Net Receivable"]],
-        body: [[
+      body: [[
           num(saleAmount),
-          num(row.freight),
-          num(row.other_charges),
-          num(row.outward_labour_charges),
+          num(record.freight),
+          num(record.other_charges),
+          num(record.outward_labour_charges),
           num(totalSAmountSale),
           num(netReceivable),
         ]],
@@ -891,17 +931,17 @@ export default function OutwardSettlementReportPage() {
         styles: { fontSize: 8, halign: "right" },
         margin: { left: 14, right: 14 },
         head: [["Purchase Amount (Sett.Wt×Co.Rate)", "Freight", "Other Chgs", "Labour Chgs", "S.Amount", "Net Payable"]],
-        body: [[
+      body: [[
           num(purchaseAmount),
-          num(row.freight),
-          num(row.other_charges),
-          num(row.outward_labour_charges),
+          num(record.freight),
+          num(record.other_charges),
+          num(record.outward_labour_charges),
           num(totalSAmountPurchase),
           num(netPayable),
         ]],
       });
 
-      const plVal = Number(row.receivable_amount);
+      const plVal = Number(record.receivable_amount);
       const plColor = plVal < 0 ? [220, 38, 38] : plVal > 0 ? [21, 128, 61] : [30, 41, 59];
       const skyFill = [224, 242, 254];
 
@@ -926,7 +966,7 @@ export default function OutwardSettlementReportPage() {
 
       doc.setTextColor(plColor[0], plColor[1], plColor[2]);
       doc.setFontSize(14);
-      doc.text(num(row.receivable_amount), xPl + wPl - 6, yPl + 8.6, { align: "right" });
+      doc.text(num(record.receivable_amount), xPl + wPl - 6, yPl + 8.6, { align: "right" });
 
       startY = yPl + hPl + (index === records.length - 1 ? 0 : 8);
     });
@@ -1001,6 +1041,7 @@ export default function OutwardSettlementReportPage() {
       <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
         {records.length > 0 ? (
           records.map((row) => {
+            const record = normalizeRow(row);
             const {
               dispatchQty,
               saleAmount,
@@ -1014,26 +1055,26 @@ export default function OutwardSettlementReportPage() {
               netReceivable,
               netPayable,
               netProfitLoss,
-            } = getRowCalculations(row);
+            } = getRowCalculations(record);
             return (
-              <div key={row.id} style={card}>
+              <div key={record.id} style={card}>
               <div style={{ display: "flex", justifyContent: "space-between", gap: 16, flexWrap: "wrap", marginBottom: 14 }}>
                 <div>
                   <h3 style={{ margin: 0, color: "#0f172a" }}>
-                    {displayInvNo(row)} | {displayAccountName(row)}
+                    {displayInvNo(record)} | {displayAccountName(record)}
                   </h3>
                   <div style={{ color: "#0f172a", marginTop: 6 }}>
-                    Date: {formatDate(row.date)} | Warehouse: {row.warehouse_name || "-"} | Location: {row.location_name || "-"} | Lorry: {row.lorry_no || "-"}
+                    Date: {formatDate(record.date)} | Warehouse: {record.warehouse_name || "-"} | Location: {record.location_name || "-"} | Lorry: {record.lorry_no || "-"}
                   </div>
                   <div style={{ color: "#0f172a", marginTop: 4 }}>
-                    Buyer: {row.buyer_name || "-"} | Consignee: {row.consignee_name || "-"} | Product: {row.product_name || "-"}
+                    Buyer: {record.buyer_name || "-"} | Consignee: {record.consignee_name || "-"} | Product: {record.product_name || "-"}
                   </div>
                 </div>
                 <div style={{ minWidth: 280, color: "#0f172a", fontSize: 14 }}>
-                  <div>Dispatch Qty: {num(row.dispatch_qty)}</div>
-                  <div>Unloading Qty: {num(row.unloading_qty)}</div>
-                  <div>Shortage Qty: {num(row.shortage_qty)}</div>
-                  <div>Settlement Weight: {num(row.settlement_weight)}</div>
+                  <div>Dispatch Qty: {num(record.dispatch_qty)}</div>
+                  <div>Unloading Qty: {num(record.unloading_qty)}</div>
+                  <div>Shortage Qty: {num(record.shortage_qty)}</div>
+                  <div>Settlement Weight: {num(record.settlement_weight)}</div>
                 </div>
               </div>
 
