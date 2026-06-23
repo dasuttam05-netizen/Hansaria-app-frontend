@@ -70,8 +70,9 @@ const getSignedOpening = (row) => {
 
 const isEmployeeLedgerEntry = (entry) => {
   const source = String(entry?.fund_source || "main_cash");
-  // Show employee cash entries (staff entries) OR employee main entries that aren't linked companions
-  return source === "employee_cash" || (!!entry?.employee_id && source === "main_cash" && !entry?.linked_entry_id);
+  // Keep only the dedicated employee cash companion rows here to avoid
+  // showing the same voucher again in the party/main cash views.
+  return source === "employee_cash";
 };
 const isActiveLedgerStatus = (entry) =>
   String(entry?.status || "posted").toLowerCase() !== "cancelled" &&
