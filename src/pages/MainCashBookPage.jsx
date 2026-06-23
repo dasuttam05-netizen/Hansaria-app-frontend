@@ -79,9 +79,7 @@ const isMainCashLedgerEntry = (entry) => {
   const isExpenseFromExpenseModule =
     Number(entry?.source_expense_id || 0) > 0 &&
     String(entry?.entry_type || "").toLowerCase() === "expense";
-  // Exclude linked companion entries (they are duplicates of the main entry)
-  const isLinkedEntry = !!entry?.linked_entry_id;
-  return !isLinkedEntry && String(entry?.fund_source || "main_cash") === "main_cash" && !isExpenseFromExpenseModule;
+  return String(entry?.fund_source || "main_cash") === "main_cash" && !isExpenseFromExpenseModule;
 };
 const isActiveLedgerStatus = (entry) =>
   String(entry?.status || "posted").toLowerCase() !== "cancelled";
