@@ -75,9 +75,7 @@ const getVoucherBaseKey = (entry) => {
 const isEmployeeCompanionEntry = (entry) => String(entry?.fund_source || "").toLowerCase() === "employee_cash";
 const isPartyLedgerEntry = (entry) => {
   const source = String(entry?.fund_source || "main_cash");
-  // Exclude linked companion entries (they are duplicates of the main entry)
-  const isLinkedEntry = !!entry?.linked_entry_id;
-  return !isLinkedEntry && !isEmployeeCompanionEntry(entry) && (source === "party_cash" || !!entry?.company_id);
+  return !isEmployeeCompanionEntry(entry) && (source === "party_cash" || !!entry?.company_id);
 };
 const getDescriptionDetails = (entry) =>
   [entry.description || "-", entry.adjustment_details ? `Adjustment: ${entry.adjustment_details}` : ""]
