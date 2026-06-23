@@ -79,6 +79,12 @@ function keepPreferredLedgerRow(existing, incoming) {
   return incoming;
 }
 
+function getPartyLedgerKey(entry) {
+  const voucherKey = getVoucherPairKey(entry);
+  const companyId = String(entry?.company_id || "").trim();
+  return `${voucherKey}::${companyId}`;
+}
+
 const getRecordId = (record) => {
   if (!record) return "";
   if (typeof record === "string" || typeof record === "number") return String(record);
@@ -177,7 +183,7 @@ export default function CashReportPage() {
     const indexByKey = new Map();
 
     rows.forEach((row) => {
-      const key = getVoucherPairKey(row);
+      const key = getPartyLedgerKey(row);
       if (!key) {
         deduped.push(row);
         return;
