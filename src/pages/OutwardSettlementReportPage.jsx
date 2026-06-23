@@ -191,6 +191,7 @@ export default function OutwardSettlementReportPage() {
       totalUnloadingClaimAmount,
       totalUnloadingDeductionAmount,
       adjustmentDetails,
+      totalSettlementShortageAmount,
       totalSAmountPurchase,
       totalSAmountSale,
       netReceivable,
@@ -551,7 +552,7 @@ export default function OutwardSettlementReportPage() {
               item.inward_voucher_no || "-",
               getLoadingTypeLabel(item.source_type),
               num(item.settlement_weight),
-              num((Number(record.dispatch_qty) || 0) > 0 ? ((Number(item.settlement_weight) || 0) / (Number(record.dispatch_qty) || 0)) * (Number(record.shortage_qty) || 0) : 0),
+              num(item.shortQtyPerLine),
               num(item.shortAmount),
               num(item.sale_short_amount),
               num(item.claim_per_line + item.deduction_per_line),
@@ -913,14 +914,14 @@ export default function OutwardSettlementReportPage() {
         margin: { left: 14, right: 14 },
         head: [["Sale Amount", "Freight", "Other Chgs", "Labour Chgs", "S.Amount", "Net Receivable"]],
       body: [[
-          num(saleAmount),
-          num(record.freight),
-          num(record.other_charges),
-          num(record.outward_labour_charges),
-          num(totalSAmountSale),
-          num(netReceivable),
-        ]],
-      });
+        num(saleAmount),
+        num(record.freight),
+        num(record.other_charges),
+        num(record.outward_labour_charges),
+        num(totalSAmountSale),
+        num(netReceivable),
+      ]],
+    });
 
       autoTable(doc, {
         startY: doc.lastAutoTable.finalY + 4,
@@ -930,13 +931,13 @@ export default function OutwardSettlementReportPage() {
         margin: { left: 14, right: 14 },
         head: [["Purchase Amount (Sett.Wt×Co.Rate)", "Freight", "Other Chgs", "Labour Chgs", "S.Amount", "Net Payable"]],
       body: [[
-          num(purchaseAmount),
-          num(record.freight),
-          num(record.other_charges),
-          num(record.outward_labour_charges),
-          num(totalSAmountPurchase),
-          num(netPayable),
-        ]],
+        num(purchaseAmount),
+        num(record.freight),
+        num(record.other_charges),
+        num(record.outward_labour_charges),
+        num(totalSAmountPurchase),
+        num(netPayable),
+      ]],
       });
 
       const plVal = Number(record.receivable_amount);
