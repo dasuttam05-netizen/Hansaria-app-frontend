@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import ModalWrapper from "./ModalWrapper";
+import { getApiOrigin } from "../utils/api";
 
-const API_BASE = "/api";
+const API_BASE = getApiOrigin();
 
 const ENTRY_MODES = [
   { key: "journal", label: "Journal" },
