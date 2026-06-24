@@ -6,8 +6,9 @@ import CashEntryForm from "../components/CashEntryForm";
 import { hasPermission, loadSession } from "../utils/auth";
 import PageBackCloseActions from "../components/PageBackCloseActions";
 import { exportLedgerExcel, exportLedgerPDF } from "../utils/ledgerExport";
+import { getApiOrigin } from "../utils/api";
 
-const API_BASE = "/api";
+const API_BASE = getApiOrigin();
 
 const panel = {
   background: "#fff",
