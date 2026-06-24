@@ -3,8 +3,9 @@ import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import CashEntryForm from "../components/CashEntryForm";
 import PageBackCloseActions from "../components/PageBackCloseActions";
+import { getApiOrigin } from "../utils/api";
 
-const API_BASE = "/api";
+const API_BASE = getApiOrigin();
 
 const emptyForm = () => ({
   voucher_no: "",
