@@ -3805,7 +3805,15 @@ export default function WarehouseTradingPage() {
               </button>
             </div>
 
+            <div style={{ marginTop: 14, padding: "10px 12px", border: "1px solid #d7dce4", borderRadius: 8, background: "#f8fafc" }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#0f766e", marginBottom: 4 }}>F2 Journey Setup</div>
+              <div style={{ fontSize: 12, color: "#475569", lineHeight: 1.5 }}>
+                First leg can stay auto. Later consignee legs can be entered manually using the same journey link.
+              </div>
+            </div>
+
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, marginTop: 14 }}>
+              <div style={{ gridColumn: "1 / -1", fontSize: 12, fontWeight: 700, color: "#334155" }}>Bill Details</div>
               <div>
                 <label style={lbl}>Warehouse</label>
                 <select name="warehouse_id" value={formData.warehouse_id} onChange={handleChange} style={inp}>
@@ -3929,6 +3937,7 @@ export default function WarehouseTradingPage() {
                   placeholder="Loading / reject / palti / godown note"
                 />
               </div>
+              <div style={{ gridColumn: "1 / -1", fontSize: 12, fontWeight: 700, color: "#334155" }}>Unloading / Leg Details</div>
               <div>
                 <label style={lbl}>Dispatch Weight</label>
                 <input type="text" value={formatDecimal4(saleDispatchQty)} readOnly style={readOnlyInp} />
@@ -4091,6 +4100,14 @@ export default function WarehouseTradingPage() {
                   readOnly={tdsEligible}
                   style={tdsEligible ? readOnlyInp : inp}
                 />
+              </div>
+              <div style={{ gridColumn: "1 / -1", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                <div style={{ fontSize: 12, color: "#475569" }}>
+                  Same lorry can carry multiple bills. Keep each leg as a separate bill entry if needed.
+                </div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: "#0f766e" }}>
+                  Remaining after this leg: {formatDecimal4(Math.max(saleDispatchQty - saleUnloadingQty, 0))}
+                </div>
               </div>
             </div>
 
