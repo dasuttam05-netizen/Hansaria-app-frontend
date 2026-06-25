@@ -702,8 +702,7 @@ export default function WarehouseTradingPage() {
       }
       if (activeVoucherType === "sale" && name === "buyer_id") {
         next.company_id = value;
-        const matchingConsignee = consignees.find((c) => String(c.buyer_id || "") === String(value));
-        next.consignee_id = matchingConsignee ? getRecordId(matchingConsignee) : "";
+        next.consignee_id = "";
       }
       if (activeVoucherType === "sale" && name === "consignee_id") {
         const consignee = consignees.find((c) => String(c.id || c._id) === String(value));
