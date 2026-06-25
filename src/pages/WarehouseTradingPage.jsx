@@ -70,6 +70,7 @@ const defaultForm = () => ({
   description: "",
   journey_note: "",
   journey_token: "",
+  reject_qty: "",
 });
 
 const toNumber = (value) => {
@@ -297,6 +298,7 @@ export default function WarehouseTradingPage() {
   const allowedReports = Object.keys(reportPermissionMap).filter((type) => hasPermission(user, reportPermissionMap[type]));
   const saleDispatchQty = toNumber(formData.quantity) || toNumber(formData.unloading_qty);
   const saleUnloadingQty = toNumber(formData.unloading_qty);
+  const saleRejectQty = toNumber(formData.reject_qty);
   const saleShortageQty = Math.max(saleDispatchQty - saleUnloadingQty, 0);
   const saleShortageAmount = saleShortageQty * toNumber(formData.rate);
   const saleQualityDeduction =
@@ -1371,6 +1373,7 @@ export default function WarehouseTradingPage() {
       cd_amount: finalCdAmount,
       total_deduction: saleQualityDeduction + finalCdAmount,
       tds_amount: finalTdsAmount,
+      reject_qty: toNumber(formData.reject_qty),
       amount: saleBillAmountFromData(formData),
     };
 
@@ -1453,6 +1456,7 @@ export default function WarehouseTradingPage() {
       cd_amount: finalCdAmount,
       total_deduction: saleQualityDeduction + finalCdAmount,
       tds_amount: finalTdsAmount,
+      reject_qty: toNumber(formData.reject_qty),
       amount: saleBillAmountFromData(formData),
     };
 
@@ -4202,6 +4206,17 @@ export default function WarehouseTradingPage() {
                   onChange={(e) => setFormData(prev => ({ ...prev, unloading_qty: e.target.value }))}
                   style={inp}
                   placeholder="Weight"
+                />
+              </div>
+              <div>
+                <label style={lbl}>Reject Qty</label>
+                <input
+                  type="number"
+                  step="0.0001"
+                  value={formData.reject_qty || ""}
+                  onChange={(e) => setFormData(prev => ({ ...prev, reject_qty: e.target.value }))}
+                  style={inp}
+                  placeholder="Reject quantity"
                 />
               </div>
               <div>
