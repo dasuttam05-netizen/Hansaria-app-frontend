@@ -1378,8 +1378,26 @@ export default function WarehouseTradingPage() {
     try {
       await axios.put(`/api/wh-vouchers/sale/${editId}`, payload);
       alert("Sale voucher pass saved successfully");
+      const remainingQtyAfterSave = Math.max(saleDispatchQty - saleUnloadingQty, 0);
       setShowSaleDeductionModal(false);
-      setFormData(defaultForm());
+      setFormData({
+        ...defaultForm(),
+        warehouse_id: formData.warehouse_id || "",
+        company_account_id: formData.company_account_id || "",
+        employee_id: formData.employee_id || "",
+        location_id: formData.location_id || "",
+        lorry_no: formData.lorry_no || "",
+        journey_token: formData.journey_token || "",
+        bill_date: new Date().toISOString().slice(0, 10),
+        date: new Date().toISOString().slice(0, 10),
+        unloading_qty: remainingQtyAfterSave > 0 ? remainingQtyAfterSave.toFixed(4) : "",
+        company_id: "",
+        buyer_id: "",
+        consignee_id: "",
+        unloading_date: "",
+        due_days: "",
+        due_date: "",
+      });
       setEditId(null);
       await loadVouchers();
       if (activeTab === "reports") await loadReport();
@@ -1442,13 +1460,11 @@ export default function WarehouseTradingPage() {
     try {
       await axios.put(`/api/wh-vouchers/sale/${editId}`, payload);
       alert("Sale voucher pass saved successfully");
+      const remainingQtyAfterSave = Math.max(saleDispatchQty - saleUnloadingQty, 0);
       setFormData((prev) => ({
         ...defaultForm(),
         warehouse_id: prev.warehouse_id || "",
-        company_id: prev.company_id || "",
-        buyer_id: prev.buyer_id || "",
         company_account_id: prev.company_account_id || "",
-        consignee_id: prev.consignee_id || "",
         employee_id: prev.employee_id || "",
         location_id: prev.location_id || "",
         lorry_no: prev.lorry_no || "",
@@ -1456,6 +1472,13 @@ export default function WarehouseTradingPage() {
         bill_no: "",
         bill_date: new Date().toISOString().slice(0, 10),
         date: new Date().toISOString().slice(0, 10),
+        unloading_qty: remainingQtyAfterSave > 0 ? remainingQtyAfterSave.toFixed(4) : "",
+        company_id: "",
+        buyer_id: "",
+        consignee_id: "",
+        unloading_date: "",
+        due_days: "",
+        due_date: "",
       }));
       setEditId(null);
       await loadVouchers();
