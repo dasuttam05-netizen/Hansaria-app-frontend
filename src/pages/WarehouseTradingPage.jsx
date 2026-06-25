@@ -69,6 +69,7 @@ const defaultForm = () => ({
   credit_account: "",
   description: "",
   journey_note: "",
+  journey_token: "",
 });
 
 const toNumber = (value) => {
@@ -90,6 +91,20 @@ const formatLedgerDate = (value) => {
   const match = datePart.match(/^(\d{4})-(\d{2})-(\d{2})$/);
   if (match) return `${match[3]}-${match[2]}-${match[1]}`;
   return raw || "-";
+};
+
+const normalizeJourneyTokenPart = (value) =>
+  String(value || "")
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+
+const buildJourneyToken = (lorryNo, billDate) => {
+  const lorryPart = normalizeJourneyTokenPart(lorryNo);
+  const datePart = normalizeJourneyTokenPart(billDate || new Date().toISOString().slice(0, 10));
+  if (!lorryPart) return "";
+  return `JNY-${lorryPart}-${datePart}`;
 };
 
 const diffDays = (start, end) => {
@@ -714,6 +729,13 @@ export default function WarehouseTradingPage() {
       if (name === "description") {
         next.journey_note = value;
       }
+      if (name === "lorry_no" || name === "date" || name === "bill_no" || name === "bill_date") {
+        const nextLorry = name === "lorry_no" ? value : prev.lorry_no;
+        const nextDate = name === "date" || name === "bill_date" ? value : (prev.bill_date || prev.date);
+        if (!next.journey_token || String(next.journey_token).startsWith("JNY-")) {
+          next.journey_token = buildJourneyToken(nextLorry, nextDate);
+        }
+      }
       if (activeVoucherType === "sale" && name === "unloading_date") {
         const dueDays = toNumber(prev.due_days);
         if (value && dueDays > 0) {
@@ -1292,6 +1314,7 @@ export default function WarehouseTradingPage() {
       ...voucher,
       bill_no: voucher.bill_no || voucher.voucher_no || "",
       bill_date: voucher.bill_date || voucher.date || "",
+      journey_token: voucher.journey_token || buildJourneyToken(voucher.lorry_no || voucher.reference_id || "", voucher.bill_date || voucher.date || ""),
       buyer_id: voucher.buyer_id || voucher.company_id || "",
       company_id: voucher.company_id || voucher.buyer_id || "",
       lorry_no: voucher.lorry_no || voucher.reference_id || "",
@@ -1345,6 +1368,7 @@ export default function WarehouseTradingPage() {
       date: formData.date || null,
       bill_no: formData.bill_no || formData.voucher_no || null,
       bill_date: formData.bill_date || formData.date || null,
+      journey_token: formData.journey_token || buildJourneyToken(formData.lorry_no, formData.bill_date || formData.date),
       unloading_date: unloadingDate,
       due_days: dueDays,
       due_date: dueDate,
@@ -3922,7 +3946,11 @@ export default function WarehouseTradingPage() {
                 <input
                   type="text"
                   value={formData.lorry_no}
-                  onChange={(e) => setFormData(prev => ({ ...prev, lorry_no: e.target.value }))}
+                  onChange={(e) => setFormData(prev => ({
+                    ...prev,
+                    lorry_no: e.target.value,
+                    journey_token: buildJourneyToken(e.target.value, prev.bill_date || prev.date),
+                  }))}
                   style={inp}
                   placeholder="Lorry / Trip"
                 />
@@ -3935,6 +3963,15 @@ export default function WarehouseTradingPage() {
                   onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value, journey_note: e.target.value }))}
                   style={inp}
                   placeholder="Loading / reject / palti / godown note"
+                />
+              </div>
+              <div>
+                <label style={lbl}>Journey Token</label>
+                <input
+                  type="text"
+                  value={formData.journey_token || buildJourneyToken(formData.lorry_no, formData.bill_date || formData.date)}
+                  readOnly
+                  style={readOnlyInp}
                 />
               </div>
               <div style={{ gridColumn: "1 / -1", fontSize: 12, fontWeight: 700, color: "#334155" }}>Unloading / Leg Details</div>
