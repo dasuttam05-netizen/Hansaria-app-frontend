@@ -8,7 +8,9 @@ import { hasPermission, loadSession } from "../utils/auth";
 
 const defaultForm = () => ({
   voucher_no: "",
+  bill_no: "",
   date: new Date().toISOString().slice(0, 10),
+  bill_date: new Date().toISOString().slice(0, 10),
   unloading_date: "",
   due_days: "",
   sale_type: "direct",
@@ -66,6 +68,7 @@ const defaultForm = () => ({
   debit_account: "",
   credit_account: "",
   description: "",
+  journey_note: "",
 });
 
 const toNumber = (value) => {
@@ -702,6 +705,15 @@ export default function WarehouseTradingPage() {
           next.company_id = String(consignee.buyer_id);
         }
       }
+      if (name === "voucher_no") {
+        next.bill_no = value;
+      }
+      if (name === "date") {
+        next.bill_date = value;
+      }
+      if (name === "description") {
+        next.journey_note = value;
+      }
       if (activeVoucherType === "sale" && name === "unloading_date") {
         const dueDays = toNumber(prev.due_days);
         if (value && dueDays > 0) {
@@ -1278,6 +1290,8 @@ export default function WarehouseTradingPage() {
     setFormData({
       ...defaultForm(),
       ...voucher,
+      bill_no: voucher.bill_no || voucher.voucher_no || "",
+      bill_date: voucher.bill_date || voucher.date || "",
       buyer_id: voucher.buyer_id || voucher.company_id || "",
       company_id: voucher.company_id || voucher.buyer_id || "",
       lorry_no: voucher.lorry_no || voucher.reference_id || "",
@@ -1295,6 +1309,7 @@ export default function WarehouseTradingPage() {
       cd_percent: voucher.cd_percent || "",
       cd_amount: voucher.cd_amount || "",
       tds_amount: voucher.tds_amount || "",
+      journey_note: voucher.journey_note || voucher.description || "",
     });
     setEditId(voucher.id || voucher._id);
   };
@@ -1326,6 +1341,10 @@ export default function WarehouseTradingPage() {
     const payload = {
       ...formData,
       deduction_only: true,
+      voucher_no: formData.voucher_no || null,
+      date: formData.date || null,
+      bill_no: formData.bill_no || formData.voucher_no || null,
+      bill_date: formData.bill_date || formData.date || null,
       unloading_date: unloadingDate,
       due_days: dueDays,
       due_date: dueDate,
@@ -3870,6 +3889,45 @@ export default function WarehouseTradingPage() {
                     </tbody>
                   </table>
                 </div>
+              </div>
+              <div>
+                <label style={lbl}>Bill No</label>
+                <input
+                  type="text"
+                  value={formData.bill_no || formData.voucher_no}
+                  onChange={(e) => setFormData(prev => ({ ...prev, voucher_no: e.target.value, bill_no: e.target.value }))}
+                  style={inp}
+                  placeholder="Manual bill no or leave blank for auto"
+                />
+              </div>
+              <div>
+                <label style={lbl}>Bill Date</label>
+                <input
+                  type="date"
+                  value={formData.bill_date || formData.date}
+                  onChange={(e) => setFormData(prev => ({ ...prev, date: e.target.value, bill_date: e.target.value }))}
+                  style={inp}
+                />
+              </div>
+              <div>
+                <label style={lbl}>Lorry No</label>
+                <input
+                  type="text"
+                  value={formData.lorry_no}
+                  onChange={(e) => setFormData(prev => ({ ...prev, lorry_no: e.target.value }))}
+                  style={inp}
+                  placeholder="Lorry / Trip"
+                />
+              </div>
+              <div>
+                <label style={lbl}>Journey Note</label>
+                <input
+                  type="text"
+                  value={formData.journey_note || formData.description}
+                  onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value, journey_note: e.target.value }))}
+                  style={inp}
+                  placeholder="Loading / reject / palti / godown note"
+                />
               </div>
               <div>
                 <label style={lbl}>Dispatch Weight</label>
