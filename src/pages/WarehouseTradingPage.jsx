@@ -401,6 +401,7 @@ export default function WarehouseTradingPage() {
     const isSaleType = String(item.voucher_type || "").toLowerCase() === "sale" || Boolean(item.buyer_id || item.company_id);
     return isSaleType && sameWarehouse && sameAccount && hasNoUnloadingDetails && (!search || searchable.includes(search));
   });
+  const selectedSalePassBill = saleVoucherPassBills.find((row) => String(row.id || row._id) === String(editId)) || null;
 
   const saleAdjustedBills = list.filter((item) => {
     const sameWarehouse = !formData.warehouse_id || String(item.warehouse_id || "") === String(formData.warehouse_id);
@@ -1466,20 +1467,20 @@ export default function WarehouseTradingPage() {
         company_account_id: prev.company_account_id || "",
         employee_id: prev.employee_id || "",
         location_id: prev.location_id || "",
-        lorry_no: prev.lorry_no || "",
+        lorry_no: selectedSalePassBill?.lorry_no || prev.lorry_no || "",
         journey_token: prev.journey_token || "",
         bill_no: "",
         bill_date: new Date().toISOString().slice(0, 10),
         date: new Date().toISOString().slice(0, 10),
         unloading_qty: remainingQtyAfterSave > 0 ? remainingQtyAfterSave.toFixed(4) : "",
-        company_id: "",
-        buyer_id: "",
+        company_id: selectedSalePassBill?.buyer_id || selectedSalePassBill?.company_id || "",
+        buyer_id: selectedSalePassBill?.buyer_id || selectedSalePassBill?.company_id || "",
         consignee_id: "",
         unloading_date: "",
         due_days: "",
         due_date: "",
       }));
-      setEditId(null);
+      setEditId(editId);
       await loadVouchers();
       if (activeTab === "reports") await loadReport();
       fetchNextVoucherNo(activeVoucherType);
@@ -2939,6 +2940,11 @@ export default function WarehouseTradingPage() {
                       </div>
                     )}
                     <Field label="Consignee">
+                      <div style={{ fontSize: 12, color: "#0f766e", fontWeight: 700, marginBottom: 4 }}>
+                        {activeVoucherType === "sale" && (formData.buyer_id || formData.company_id)
+                          ? `Buyer: ${getCompanyName({ company_id: formData.company_id || formData.buyer_id })}`
+                          : "Select a buyer first"}
+                      </div>
                       <select name="consignee_id" value={formData.consignee_id} onChange={handleChange} style={inp}>
                         <option value="">{activeVoucherType === "sale" && !(formData.buyer_id || formData.company_id) ? "Select Buyer First" : "Select Consignee"}</option>
                         {(activeVoucherType === "sale" ? filteredConsignees : consignees).map((c) => (
@@ -4020,6 +4026,15 @@ export default function WarehouseTradingPage() {
               <div>
                 <label style={lbl}>Account</label>
                 {renderAccountSelect(inp)}
+              </div>
+              <div style={{ gridColumn: "1 / -1", border: "1px solid #dbe3ef", borderRadius: 8, background: "#fff", padding: 10 }}>
+                <div style={{ fontSize: 12, fontWeight: 700, color: "#0f766e", marginBottom: 6 }}>Selected Bill Summary</div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 8, fontSize: 12 }}>
+                  <div><strong>Buyer:</strong> {selectedSalePassBill ? getBuyerName(selectedSalePassBill) : "-"}</div>
+                  <div><strong>Consignee:</strong> {selectedSalePassBill?.consignee_name || "-"}</div>
+                  <div><strong>Lorry No:</strong> {selectedSalePassBill?.lorry_no || formData.lorry_no || "-"}</div>
+                  <div><strong>Remaining Qty:</strong> {formatDecimal4(Math.max(saleDispatchQty - saleUnloadingQty, 0))}</div>
+                </div>
               </div>
               <div style={{ gridColumn: "1 / -1" }}>
                 <label style={lbl}>Sale Bill</label>
