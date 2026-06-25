@@ -93,18 +93,10 @@ const formatLedgerDate = (value) => {
   return raw || "-";
 };
 
-const normalizeJourneyTokenPart = (value) =>
-  String(value || "")
-    .trim()
-    .toUpperCase()
-    .replace(/[^A-Z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "");
-
-const buildJourneyToken = (lorryNo, billDate) => {
-  const lorryPart = normalizeJourneyTokenPart(lorryNo);
-  const datePart = normalizeJourneyTokenPart(billDate || new Date().toISOString().slice(0, 10));
-  if (!lorryPart) return "";
-  return `JNY-${lorryPart}-${datePart}`;
+const buildJourneyToken = () => {
+  const stamp = new Date().toISOString().replace(/[^0-9]/g, "").slice(0, 14);
+  const rand = Math.random().toString(36).slice(2, 8).toUpperCase();
+  return `JNY-${stamp}-${rand}`;
 };
 
 const diffDays = (start, end) => {
@@ -729,12 +721,11 @@ export default function WarehouseTradingPage() {
       if (name === "description") {
         next.journey_note = value;
       }
-      if (name === "lorry_no" || name === "date" || name === "bill_no" || name === "bill_date") {
-        const nextLorry = name === "lorry_no" ? value : prev.lorry_no;
-        const nextDate = name === "date" || name === "bill_date" ? value : (prev.bill_date || prev.date);
-        if (!next.journey_token || String(next.journey_token).startsWith("JNY-")) {
-          next.journey_token = buildJourneyToken(nextLorry, nextDate);
-        }
+      if (name === "lorry_no" && !next.journey_token && editId) {
+        next.journey_token = buildJourneyToken();
+      }
+      if ((name === "date" || name === "bill_date") && !next.journey_token && editId) {
+        next.journey_token = buildJourneyToken();
       }
       if (activeVoucherType === "sale" && name === "unloading_date") {
         const dueDays = toNumber(prev.due_days);
@@ -1314,7 +1305,7 @@ export default function WarehouseTradingPage() {
       ...voucher,
       bill_no: voucher.bill_no || voucher.voucher_no || "",
       bill_date: voucher.bill_date || voucher.date || "",
-      journey_token: voucher.journey_token || buildJourneyToken(voucher.lorry_no || voucher.reference_id || "", voucher.bill_date || voucher.date || ""),
+      journey_token: voucher.journey_token || "",
       buyer_id: voucher.buyer_id || voucher.company_id || "",
       company_id: voucher.company_id || voucher.buyer_id || "",
       lorry_no: voucher.lorry_no || voucher.reference_id || "",
@@ -1368,7 +1359,7 @@ export default function WarehouseTradingPage() {
       date: formData.date || null,
       bill_no: formData.bill_no || formData.voucher_no || null,
       bill_date: formData.bill_date || formData.date || null,
-      journey_token: formData.journey_token || buildJourneyToken(formData.lorry_no, formData.bill_date || formData.date),
+      journey_token: formData.journey_token || buildJourneyToken(),
       unloading_date: unloadingDate,
       due_days: dueDays,
       due_date: dueDate,
@@ -1389,6 +1380,83 @@ export default function WarehouseTradingPage() {
       alert("Sale voucher pass saved successfully");
       setShowSaleDeductionModal(false);
       setFormData(defaultForm());
+      setEditId(null);
+      await loadVouchers();
+      if (activeTab === "reports") await loadReport();
+      fetchNextVoucherNo(activeVoucherType);
+    } catch (err) {
+      console.error(err);
+      alert(err?.response?.data?.error || "Failed to save sale voucher pass");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const saveSaleVoucherPassAndNew = async () => {
+    if (!editId) {
+      alert("Please select sale bill");
+      return;
+    }
+    if (!formData.unloading_date) {
+      alert("Please enter unloading date");
+      return;
+    }
+    if (saleUnloadingQty <= 0) {
+      alert("Please enter unloading weight");
+      return;
+    }
+
+    const finalTdsAmount = tdsEligible ? autoTdsAmount : toNumber(formData.tds_amount);
+    const finalCdAmount = Number((saleBillAmountFromData(formData) * toNumber(formData.cd_percent) / 100).toFixed(2));
+    const unloadingDate = formData.unloading_date || "";
+    const dueDays = formData.due_days !== undefined && formData.due_days !== null && String(formData.due_days).trim() !== "" ? toNumber(formData.due_days) : "";
+    const dueDate = formData.due_date || (unloadingDate && dueDays !== "" ? (() => {
+      const parsed = new Date(`${unloadingDate}T00:00:00Z`);
+      if (Number.isNaN(parsed.getTime())) return "";
+      parsed.setUTCDate(parsed.getUTCDate() + toNumber(dueDays));
+      return parsed.toISOString().slice(0, 10);
+    })() : "");
+    const payload = {
+      ...formData,
+      deduction_only: true,
+      voucher_no: formData.voucher_no || null,
+      date: formData.date || null,
+      bill_no: formData.bill_no || formData.voucher_no || null,
+      bill_date: formData.bill_date || formData.date || null,
+      journey_token: formData.journey_token || buildJourneyToken(),
+      unloading_date: unloadingDate,
+      due_days: dueDays,
+      due_date: dueDate,
+      unloading_qty: saleUnloadingQty,
+      shortage_quantity: saleShortageQty,
+      shortage_amount: saleShortageAmount,
+      claim_amount: saleShortageAmount,
+      other_deduction: saleQualityDeduction,
+      cd_amount: finalCdAmount,
+      total_deduction: saleQualityDeduction + finalCdAmount,
+      tds_amount: finalTdsAmount,
+      amount: saleBillAmountFromData(formData),
+    };
+
+    setLoading(true);
+    try {
+      await axios.put(`/api/wh-vouchers/sale/${editId}`, payload);
+      alert("Sale voucher pass saved successfully");
+      setFormData((prev) => ({
+        ...defaultForm(),
+        warehouse_id: prev.warehouse_id || "",
+        company_id: prev.company_id || "",
+        buyer_id: prev.buyer_id || "",
+        company_account_id: prev.company_account_id || "",
+        consignee_id: prev.consignee_id || "",
+        employee_id: prev.employee_id || "",
+        location_id: prev.location_id || "",
+        lorry_no: prev.lorry_no || "",
+        journey_token: prev.journey_token || "",
+        bill_no: "",
+        bill_date: new Date().toISOString().slice(0, 10),
+        date: new Date().toISOString().slice(0, 10),
+      }));
       setEditId(null);
       await loadVouchers();
       if (activeTab === "reports") await loadReport();
@@ -1801,6 +1869,18 @@ export default function WarehouseTradingPage() {
     ? displayReportData.filter((row) => row.row_type === "entry" && row.voucher_type === "Sale")
     : [];
   const selectedSaleBill = saleBillRows.find((row) => String(row.sale_id || row.voucher_no) === String(selectedSaleLedgerBillId)) || saleBillRows[0] || null;
+  const selectedSaleJourneyKey = String(selectedSaleBill?.journey_token || selectedSaleBill?.journey_id || selectedSaleBill?.journey_group_no || "").trim();
+  const selectedSaleJourneyRows = selectedSaleJourneyKey
+    ? saleBillRows.filter((row) => String(row.journey_token || row.journey_id || row.journey_group_no || "") === selectedSaleJourneyKey)
+    : selectedSaleBill
+      ? saleBillRows.filter((row) => String(row.lorry_no || "") === String(selectedSaleBill.lorry_no || "") && String(row.date || "") === String(selectedSaleBill.date || ""))
+      : [];
+  const selectedSaleJourneyTotalQty = selectedSaleJourneyRows.reduce((sum, row) => sum + toNumber(row.quantity || row.total_quantity || row.unloading_qty || 0), 0);
+  const selectedSaleJourneyTotalAmount = selectedSaleJourneyRows.reduce((sum, row) => sum + toNumber(row.amount || row.total_amount || row.net_receivable_amount || 0), 0);
+  const selectedSaleJourneyBalanceQty = Math.max(
+    toNumber(selectedSaleBill?.total_quantity || selectedSaleBill?.quantity || selectedSaleBill?.unloading_qty || 0) - selectedSaleJourneyTotalQty,
+    0
+  );
 
   const getAccountDetails = (item) => {
     const accountId = String(item.company_account_id || item.account_id || item.companyAccountId || "");
@@ -3595,6 +3675,61 @@ export default function WarehouseTradingPage() {
                         <div style={{ color: "#64748b", fontSize: 13 }}>No deduction posted against this bill.</div>
                       )}
                     </div>
+
+                    <div style={{ ...paymentDetailBoxStyle, marginTop: 12 }}>
+                      <strong>Journey Details</strong>
+                      <div style={{ color: "#64748b", fontSize: 12, margin: "4px 0 8px" }}>
+                        Same journey token wise full leg summary
+                      </div>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 8, marginBottom: 10 }}>
+                        <div style={smartInfoBoxStyle}>
+                          <span>Leg Count</span>
+                          <strong>{selectedSaleJourneyRows.length}</strong>
+                        </div>
+                        <div style={smartInfoBoxStyle}>
+                          <span>Total Qty</span>
+                          <strong>{formatDecimal4(selectedSaleJourneyTotalQty)}</strong>
+                        </div>
+                        <div style={smartInfoBoxStyle}>
+                          <span>Total Amount</span>
+                          <strong>{formatMoney(selectedSaleJourneyTotalAmount)}</strong>
+                        </div>
+                        <div style={smartInfoBoxStyle}>
+                          <span>Balance Qty</span>
+                          <strong>{formatDecimal4(selectedSaleJourneyBalanceQty)}</strong>
+                        </div>
+                      </div>
+                      {selectedSaleJourneyRows.length > 0 ? (
+                        <div style={{ overflowX: "auto" }}>
+                          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                            <thead>
+                              <tr style={reportHeaderRowStyle}>
+                                <th style={th}>Bill No</th>
+                                <th style={th}>Bill Date</th>
+                                <th style={th}>Consignee</th>
+                                <th style={th}>Qty</th>
+                                <th style={th}>Rate</th>
+                                <th style={th}>Amount</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              {selectedSaleJourneyRows.map((row, index) => (
+                                <tr key={`${row.voucher_no || row.sale_id || index}-${index}`} style={{ background: index % 2 ? "#f8fafc" : "#fff" }}>
+                                  <td style={td}>{row.voucher_no || "-"}</td>
+                                  <td style={td}>{formatLedgerDate(row.date || "")}</td>
+                                  <td style={td}>{row.consignee_name || row.party_name || row.company_name || "-"}</td>
+                                  <td style={td}>{formatDecimal4(row.quantity || row.total_quantity || row.unloading_qty || 0)}</td>
+                                  <td style={td}>{formatMoney(row.rate || 0)}</td>
+                                  <td style={td}>{formatMoney(row.amount || row.total_amount || row.net_receivable_amount || 0)}</td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      ) : (
+                        <div style={{ color: "#64748b", fontSize: 13 }}>No journey entries found for this bill.</div>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
@@ -3949,7 +4084,7 @@ export default function WarehouseTradingPage() {
                   onChange={(e) => setFormData(prev => ({
                     ...prev,
                     lorry_no: e.target.value,
-                    journey_token: buildJourneyToken(e.target.value, prev.bill_date || prev.date),
+                    journey_token: prev.journey_token || "",
                   }))}
                   style={inp}
                   placeholder="Lorry / Trip"
@@ -3963,15 +4098,6 @@ export default function WarehouseTradingPage() {
                   onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value, journey_note: e.target.value }))}
                   style={inp}
                   placeholder="Loading / reject / palti / godown note"
-                />
-              </div>
-              <div>
-                <label style={lbl}>Journey Token</label>
-                <input
-                  type="text"
-                  value={formData.journey_token || buildJourneyToken(formData.lorry_no, formData.bill_date || formData.date)}
-                  readOnly
-                  style={readOnlyInp}
                 />
               </div>
               <div style={{ gridColumn: "1 / -1", fontSize: 12, fontWeight: 700, color: "#334155" }}>Unloading / Leg Details</div>
@@ -4182,6 +4308,9 @@ export default function WarehouseTradingPage() {
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 14 }}>
               <button type="button" onClick={saveSaleVoucherPass} disabled={loading} style={btnPrimary}>
                 {loading ? "Saving..." : "Final Save"}
+              </button>
+              <button type="button" onClick={saveSaleVoucherPassAndNew} disabled={loading} style={{ ...btnPrimary, background: "#0f766e" }}>
+                {loading ? "Saving..." : "Save & New"}
               </button>
             </div>
           </div>
