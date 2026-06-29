@@ -174,6 +174,7 @@ export default function WarehouseTradingPage() {
   const [voucherNumberLoading, setVoucherNumberLoading] = useState(false);
   const [showSaleDeductionModal, setShowSaleDeductionModal] = useState(false);
   const [saleBillSearch, setSaleBillSearch] = useState("");
+  const [journeyTemplateId, setJourneyTemplateId] = useState("");
   const [showSaleAdjustedModal, setShowSaleAdjustedModal] = useState(false);
   const [salePurchaseRows, setSalePurchaseRows] = useState([]);
   const [salePurchaseLinks, setSalePurchaseLinks] = useState([]);
@@ -404,6 +405,16 @@ export default function WarehouseTradingPage() {
     return isSaleType && sameWarehouse && sameAccount && hasNoUnloadingDetails && (!search || searchable.includes(search));
   });
   const selectedSalePassBill = saleVoucherPassBills.find((row) => String(row.id || row._id) === String(editId)) || null;
+  const selectedSalePassJourneyKey = String(selectedSalePassBill?.journey_token || selectedSalePassBill?.journey_id || selectedSalePassBill?.journey_group_no || "").trim();
+  const selectedSalePassJourneyRows = selectedSalePassJourneyKey
+    ? list.filter((row) => String(row.journey_token || row.journey_id || row.journey_group_no || "") === selectedSalePassJourneyKey)
+    : selectedSalePassBill
+      ? list.filter((row) => String(row.lorry_no || "") === String(selectedSalePassBill.lorry_no || "") && String(row.date || "") === String(selectedSalePassBill.date || ""))
+      : [];
+  const selectedSalePassJourneyRemainingQty = Math.max(
+    saleDispatchQty - selectedSalePassJourneyRows.reduce((sum, row) => sum + toNumber(row.unloading_qty || row.quantity || row.total_quantity || 0), 0),
+    0
+  );
 
   const saleAdjustedBills = list.filter((item) => {
     const sameWarehouse = !formData.warehouse_id || String(item.warehouse_id || "") === String(formData.warehouse_id);
@@ -1331,6 +1342,23 @@ export default function WarehouseTradingPage() {
       journey_note: voucher.journey_note || voucher.description || "",
     });
     setEditId(voucher.id || voucher._id);
+  };
+
+  const applyJourneyTemplate = (templateId) => {
+    setJourneyTemplateId(templateId);
+    const template = selectedSalePassJourneyRows.find((row) => String(row.id || row._id) === String(templateId));
+    if (!template) return;
+
+    setFormData((prev) => ({
+      ...prev,
+      buyer_id: template.buyer_id || template.company_id || prev.buyer_id || prev.company_id || "",
+      company_id: template.company_id || template.buyer_id || prev.company_id || prev.buyer_id || "",
+      consignee_id: template.consignee_id || prev.consignee_id || "",
+      lorry_no: template.lorry_no || template.reference_id || prev.lorry_no || "",
+      rate: template.rate || prev.rate || "",
+      dispatch_qty: formatDecimal4(toNumber(template.dispatch_qty || template.quantity || template.total_quantity || template.unloading_qty || saleDispatchQty)),
+      unloading_qty: template.unloading_qty || "",
+    }));
   };
 
   const saveSaleVoucherPass = async () => {
@@ -4043,6 +4071,81 @@ export default function WarehouseTradingPage() {
                   <div><strong>Consignee:</strong> {selectedSalePassBill?.consignee_name || "-"}</div>
                   <div><strong>Lorry No:</strong> {selectedSalePassBill?.lorry_no || formData.lorry_no || "-"}</div>
                   <div><strong>Remaining Qty:</strong> {formatDecimal4(Math.max(saleDispatchQty - saleUnloadingQty, 0))}</div>
+                </div>
+              </div>
+              <div style={{ gridColumn: "1 / -1", border: "1px solid #cfe6e2", borderRadius: 8, background: "#f7fffd", padding: 10 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap" }}>
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "#0f766e", marginBottom: 3 }}>Journey Chain</div>
+                    <div style={{ fontSize: 12, color: "#475569" }}>
+                      First to last unloading, transfer, palti or godown move in one chain.
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                    <select value={journeyTemplateId} onChange={(e) => applyJourneyTemplate(e.target.value)} style={inp} disabled={!selectedSalePassJourneyRows.length} >
+                      <option value="">Use previous leg</option>
+                      {selectedSalePassJourneyRows.map((row, index) => (
+                        <option key={row.id || row._id || index} value={row.id || row._id}>
+                          {`${index + 1}. ${row.voucher_no || row.bill_no || "-"} | ${row.lorry_no || "-"} | ${getBuyerName(row)} | ${row.consignee_name || "-"}`}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                </div>
+                <div style={{ marginTop: 10, overflowX: "auto" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                    <thead>
+                      <tr>
+                        <th style={th}>Leg</th>
+                        <th style={th}>Voucher</th>
+                        <th style={th}>Date</th>
+                        <th style={th}>Lorry</th>
+                        <th style={th}>Buyer</th>
+                        <th style={th}>Consignee</th>
+                        <th style={th}>Dispatch</th>
+                        <th style={th}>Unload</th>
+                        <th style={th}>Remain</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {selectedSalePassJourneyRows.length > 0 ? (
+                        selectedSalePassJourneyRows.map((row, index) => {
+                          const dispatchQty = toNumber(row.dispatch_qty || row.quantity || row.total_quantity || row.unloading_qty || 0);
+                          const unloadQty = toNumber(row.unloading_qty || 0);
+                          const remainQty = Math.max(dispatchQty - unloadQty, 0);
+                          return (
+                            <tr key={row.id || row._id || index}>
+                              <td style={td}>{index + 1}</td>
+                              <td style={td}>{row.voucher_no || row.bill_no || "-"}</td>
+                              <td style={td}>{formatLedgerDate(row.date || row.bill_date || "")}</td>
+                              <td style={td}>{row.lorry_no || row.reference_id || "-"}</td>
+                              <td style={td}>{getBuyerName(row)}</td>
+                              <td style={td}>{row.consignee_name || "-"}</td>
+                              <td style={td}>{formatDecimal4(dispatchQty)}</td>
+                              <td style={td}>{formatDecimal4(unloadQty)}</td>
+                              <td style={td}>{formatDecimal4(remainQty)}</td>
+                            </tr>
+                          );
+                        })
+                      ) : (
+                        <tr>
+                          <td colSpan={9} style={{ ...td, textAlign: "center", padding: 12 }}>
+                            No journey history found yet for this lorry.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                    {selectedSalePassJourneyRows.length > 0 && (
+                      <tfoot>
+                        <tr style={{ background: "#ecfeff", fontWeight: 800 }}>
+                          <td style={td} colSpan={6}>Total</td>
+                          <td style={td}>{formatDecimal4(selectedSalePassJourneyRows.reduce((sum, row) => sum + toNumber(row.dispatch_qty || row.quantity || row.total_quantity || row.unloading_qty || 0), 0))}</td>
+                          <td style={td}>{formatDecimal4(selectedSalePassJourneyRows.reduce((sum, row) => sum + toNumber(row.unloading_qty || 0), 0))}</td>
+                          <td style={td}>{formatDecimal4(selectedSalePassJourneyRemainingQty)}</td>
+                        </tr>
+                      </tfoot>
+                    )}
+                  </table>
                 </div>
               </div>
               <div style={{ gridColumn: "1 / -1" }}>
