@@ -223,7 +223,7 @@ export default function WarehouseTradingPage() {
   };
   const saleDispatchQtyFromData = (data) => {
     const newWeight = Math.max(toNumber(data.gross_weight) - toNumber(data.tare_weight), 0);
-    return toNumber(data.quantity) || newWeight || toNumber(data.unloading_qty);
+    return toNumber(data.dispatch_qty) || toNumber(data.quantity) || newWeight || toNumber(data.unloading_qty);
   };
   const saleGrossAmountFromData = (data) => saleDispatchQtyFromData(data) * toNumber(data.rate);
   const saleBillAmountFromData = (data) => toNumber(data.amount) || saleGrossAmountFromData(data);
@@ -296,7 +296,7 @@ export default function WarehouseTradingPage() {
   };
   const allowedVoucherTypes = Object.keys(voucherPermissionMap).filter((type) => hasPermission(user, voucherPermissionMap[type]));
   const allowedReports = Object.keys(reportPermissionMap).filter((type) => hasPermission(user, reportPermissionMap[type]));
-  const saleDispatchQty = toNumber(formData.quantity) || toNumber(formData.unloading_qty);
+  const saleDispatchQty = toNumber(formData.dispatch_qty) || toNumber(formData.quantity) || toNumber(formData.unloading_qty);
   const saleUnloadingQty = toNumber(formData.unloading_qty);
   const saleRejectQty = toNumber(formData.reject_qty);
   const saleShortageQty = Math.max(saleDispatchQty - saleUnloadingQty, 0);
@@ -941,6 +941,7 @@ export default function WarehouseTradingPage() {
     try {
       const numericFields = [
         "quantity",
+        "dispatch_qty",
         "shortage_quantity",
         "unloading_qty",
         "rate",
@@ -992,7 +993,8 @@ export default function WarehouseTradingPage() {
       if (activeVoucherType === "sale") {
         payload.buyer_id = payload.buyer_id || payload.company_id || "";
         payload.company_id = payload.buyer_id;
-        payload.quantity = saleDispatchQtyFromData(formData);
+        payload.dispatch_qty = saleDispatchQtyFromData(formData);
+        payload.quantity = payload.dispatch_qty;
         payload.unloading_qty = payload.quantity;
         payload.amount = saleGrossAmountFromData(formData);
         const grossAmount = payload.amount;
@@ -1311,6 +1313,7 @@ export default function WarehouseTradingPage() {
       buyer_id: voucher.buyer_id || voucher.company_id || "",
       company_id: voucher.company_id || voucher.buyer_id || "",
       lorry_no: voucher.lorry_no || voucher.reference_id || "",
+      dispatch_qty: formatDecimal4(toNumber(voucher.dispatch_qty || voucher.quantity || voucher.total_quantity || voucher.unloading_qty || 0)),
       unloading_qty: "",
       unloading_date: existingUnloadingDate || new Date().toISOString().slice(0, 10),
       due_days: derivedDueDays,
@@ -1391,6 +1394,7 @@ export default function WarehouseTradingPage() {
         location_id: formData.location_id || "",
         lorry_no: formData.lorry_no || "",
         journey_token: formData.journey_token || "",
+        dispatch_qty: formData.dispatch_qty || formData.quantity || "",
         bill_date: new Date().toISOString().slice(0, 10),
         date: new Date().toISOString().slice(0, 10),
         unloading_qty: remainingQtyAfterSave > 0 ? remainingQtyAfterSave.toFixed(4) : "",
@@ -1473,6 +1477,7 @@ export default function WarehouseTradingPage() {
         location_id: prev.location_id || "",
         lorry_no: selectedSalePassBill?.lorry_no || prev.lorry_no || "",
         journey_token: prev.journey_token || "",
+        dispatch_qty: prev.dispatch_qty || prev.quantity || "",
         bill_no: "",
         bill_date: new Date().toISOString().slice(0, 10),
         date: new Date().toISOString().slice(0, 10),
