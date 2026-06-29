@@ -404,17 +404,45 @@ export default function WarehouseTradingPage() {
     const isSaleType = String(item.voucher_type || "").toLowerCase() === "sale" || Boolean(item.buyer_id || item.company_id);
     return isSaleType && sameWarehouse && sameAccount && hasNoUnloadingDetails && (!search || searchable.includes(search));
   });
-  const selectedSalePassBill = saleVoucherPassBills.find((row) => String(row.id || row._id) === String(editId)) || null;
-  const selectedSalePassJourneyKey = String(selectedSalePassBill?.journey_token || selectedSalePassBill?.journey_id || selectedSalePassBill?.journey_group_no || "").trim();
+  const selectedSalePassBill =
+    list.find((row) => String(row.id || row._id) === String(editId)) ||
+    saleVoucherPassBills.find((row) => String(row.id || row._id) === String(editId)) ||
+    null;
+  const selectedSalePassJourneyKey = String(
+    selectedSalePassBill?.journey_token ||
+      selectedSalePassBill?.journey_id ||
+      selectedSalePassBill?.journey_group_no ||
+      formData.journey_token ||
+      ""
+  ).trim();
   const selectedSalePassJourneyRows = selectedSalePassJourneyKey
     ? list.filter((row) => String(row.journey_token || row.journey_id || row.journey_group_no || "") === selectedSalePassJourneyKey)
-    : selectedSalePassBill
-      ? list.filter((row) => String(row.lorry_no || "") === String(selectedSalePassBill.lorry_no || "") && String(row.date || "") === String(selectedSalePassBill.date || ""))
+    : (selectedSalePassBill || formData.lorry_no)
+      ? list.filter((row) => {
+          const sameLorry = String(row.lorry_no || "") === String(selectedSalePassBill?.lorry_no || formData.lorry_no || "");
+          const sameDate = selectedSalePassBill?.date ? String(row.date || "") === String(selectedSalePassBill.date || "") : true;
+          return sameLorry && sameDate;
+        })
       : [];
   const selectedSalePassJourneyRemainingQty = Math.max(
     saleDispatchQty - selectedSalePassJourneyRows.reduce((sum, row) => sum + toNumber(row.unloading_qty || row.quantity || row.total_quantity || 0), 0),
     0
   );
+
+  useEffect(() => {
+    if (activeTab !== "vouchers" || activeVoucherType !== "sale" || !showSaleDeductionModal) return;
+    if (editId && selectedSalePassBill) return;
+    const preferredLorry = String(formData.lorry_no || "").trim();
+    const preferredToken = String(formData.journey_token || "").trim();
+    const autoSelected =
+      saleVoucherPassBills.find((row) => preferredToken && String(row.journey_token || row.journey_id || row.journey_group_no || "") === preferredToken) ||
+      saleVoucherPassBills.find((row) => preferredLorry && String(row.lorry_no || "") === preferredLorry) ||
+      saleVoucherPassBills[0] ||
+      null;
+    if (autoSelected && String(editId || "") !== String(autoSelected.id || autoSelected._id || "")) {
+      selectSaleVoucherForPass(autoSelected.id || autoSelected._id);
+    }
+  }, [activeTab, activeVoucherType, showSaleDeductionModal, editId, selectedSalePassBill, saleVoucherPassBills, formData.lorry_no, formData.journey_token]);
 
   const saleAdjustedBills = list.filter((item) => {
     const sameWarehouse = !formData.warehouse_id || String(item.warehouse_id || "") === String(formData.warehouse_id);
