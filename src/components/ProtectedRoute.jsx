@@ -14,10 +14,12 @@ export default function ProtectedRoute({ children, permission }) {
     : hasPermission(user, permission);
 
   const getFallbackPath = () => {
+    if (hasPermission(user, "all")) return "/dashboard";
     if (hasPermission(user, "dashboard.view")) return "/dashboard";
     if (hasAnyPermission(user, ["expense.entry", "expense.view", "expense.create", "expense.edit", "expense.delete"])) return "/expenses";
     if (hasAnyPermission(user, ["inward.view", "inward.create", "inward.edit", "inward.delete"])) return "/inward";
     if (hasAnyPermission(user, ["outward.view", "outward.create", "outward.edit", "outward.delete"])) return "/outward";
+    if (hasPermission(user, "report.erp")) return "/erp-report";
     if (hasPermission(user, "report.inward")) return "/inward-report";
     return "/";
   };
