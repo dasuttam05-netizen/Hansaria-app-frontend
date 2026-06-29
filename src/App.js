@@ -48,6 +48,10 @@ import { getApiOrigin } from "./utils/api";
 // ✅ ONLY ONE IMPORTANT LINE
 axios.defaults.baseURL = getApiOrigin();
 
+const routeGuard = (permission, element) => (
+  <ProtectedRoute permission={permission}>{element}</ProtectedRoute>
+);
+
 function AppRoutes() {
   useEffect(() => {
     loadSession();
@@ -57,329 +61,77 @@ function AppRoutes() {
     <Routes>
       <Route path="/" element={<LoginPage />} />
 
-      <Route
-        path="/dashboard"
-        element={
-          <ProtectedRoute permission="dashboard.view">
-            <DashboardPage />
-          </ProtectedRoute>
-        }
-      />
+      <Route path="/dashboard" element={routeGuard("dashboard.view", <DashboardPage />)} />
 
-      <Route
-        path="/locations"
-        element={
-          <ProtectedRoute permission="locations.manage">
-            <LocationManagementPage />
-          </ProtectedRoute>
-        }
-      />
+      <Route path="/locations" element={routeGuard("locations.manage", <LocationManagementPage />)} />
 
-      <Route
-        path="/employees"
-        element={
-          <ProtectedRoute permission="employees.view">
-            <EmployeeManagementPage />
-          </ProtectedRoute>
-        }
-      />
+      <Route path="/employees" element={routeGuard("employees.view", <EmployeeManagementPage />)} />
 
-      <Route
-        path="/companies"
-        element={
-          <ProtectedRoute permission="companies.manage">
-            <CompanyManagementPage />
-          </ProtectedRoute>
-        }
-      />
+      <Route path="/companies" element={routeGuard("companies.manage", <CompanyManagementPage />)} />
 
-      <Route
-        path="/company-accounts"
-        element={
-          <ProtectedRoute permission="companyAccounts.manage">
-            <CompanyAccountsPage />
-          </ProtectedRoute>
-        }
-      />
+      <Route path="/company-accounts" element={routeGuard("companyAccounts.manage", <CompanyAccountsPage />)} />
 
-      <Route
-        path="/farmers"
-        element={
-          <ProtectedRoute permission={["farmers.view", "farmers.create", "farmers.edit", "farmers.delete"]}>
-            <FarmerManagementPage />
-          </ProtectedRoute>
-        }
-      />
+      <Route path="/farmers" element={routeGuard(["farmers.view", "farmers.create", "farmers.edit", "farmers.delete"], <FarmerManagementPage />)} />
 
-      <Route
-        path="/warehouses"
-        element={
-          <ProtectedRoute permission="warehouses.manage">
-            <WarehouseManagementPage />
-          </ProtectedRoute>
-        }
-      />
+      <Route path="/warehouses" element={routeGuard("warehouses.manage", <WarehouseManagementPage />)} />
 
-      <Route
-        path="/warehouse-trading"
-        element={
-          <ProtectedRoute permission={["warehouse.trading.view", "warehouse.trading.manage"]}>
-            <WarehouseTradingPage />
-          </ProtectedRoute>
-        }
-      />
+      <Route path="/warehouse-trading" element={routeGuard(["warehouse.trading.view", "warehouse.trading.manage"], <WarehouseTradingPage />)} />
 
-      <Route
-        path="/products"
-        element={
-          <ProtectedRoute permission="products.manage">
-            <ProductsManagementPage />
-          </ProtectedRoute>
-        }
-      />
+      <Route path="/products" element={routeGuard("products.manage", <ProductsManagementPage />)} />
 
-      <Route
-        path="/inward"
-        element={
-          <ProtectedRoute permission={["inward.view", "inward.create", "inward.edit", "inward.delete"]}>
-            <InwardPage />
-          </ProtectedRoute>
-        }
-      />
+      <Route path="/inward" element={routeGuard(["inward.view", "inward.create", "inward.edit", "inward.delete"], <InwardPage />)} />
 
-      <Route
-        path="/inward-report"
-        element={
-          <ProtectedRoute permission="report.inward">
-            <InwardReportPage />
-          </ProtectedRoute>
-        }
-      />
+      <Route path="/inward-report" element={routeGuard("report.inward", <InwardReportPage />)} />
 
-      <Route
-        path="/outward"
-        element={
-          <ProtectedRoute permission={["outward.view", "outward.create", "outward.edit", "outward.delete"]}>
-            <OutwardPage />
-          </ProtectedRoute>
-        }
-      />
+      <Route path="/outward" element={routeGuard(["outward.view", "outward.create", "outward.edit", "outward.delete"], <OutwardPage />)} />
 
-      <Route
-        path="/pending"
-        element={
-          <ProtectedRoute permission="adjustment.manage">
-            <PendingAdjustment />
-          </ProtectedRoute>
-        }
-      />
+      <Route path="/pending" element={routeGuard("adjustment.manage", <PendingAdjustment />)} />
 
-      <Route
-        path="/erp-report"
-        element={
-          <ProtectedRoute permission="report.erp">
-            <ERPReportPage />
-          </ProtectedRoute>
-        }
-      />
+      <Route path="/erp-report" element={routeGuard("report.erp", <ERPReportPage />)} />
 
-      <Route
-        path="/party-ledger-report"
-        element={
-          <ProtectedRoute permission="report.partyLedger">
-            <PartyLedgerReportPage />
-          </ProtectedRoute>
-        }
-      />
+      <Route path="/party-ledger-report" element={routeGuard("report.partyLedger", <PartyLedgerReportPage />)} />
 
-      <Route
-        path="/party-stock-report"
-        element={
-          <ProtectedRoute permission="report.partyStock">
-            <PartyStockReportPage />
-          </ProtectedRoute>
-        }
-      />
+      <Route path="/party-stock-report" element={routeGuard("report.partyStock", <PartyStockReportPage />)} />
 
-      <Route
-        path="/warehouse-rent-ledger"
-        element={
-          <ProtectedRoute permission="report.warehouseRentLedger">
-            <WarehouseRentLedgerPage />
-          </ProtectedRoute>
-        }
-      />
+      <Route path="/warehouse-rent-ledger" element={routeGuard("report.warehouseRentLedger", <WarehouseRentLedgerPage />)} />
 
-      <Route
-        path="/warehouse-rent-dashboard"
-        element={
-          <ProtectedRoute permission="report.warehouseRentMonthEnd">
-            <WarehouseRentDashboard />
-          </ProtectedRoute>
-        }
-      />
+      <Route path="/warehouse-rent-dashboard" element={routeGuard("report.warehouseRentMonthEnd", <WarehouseRentDashboard />)} />
 
-      <Route
-        path="/outward-settlement-report"
-        element={
-          <ProtectedRoute permission="report.outwardSettlement">
-            <OutwardSettlementReportPage />
-          </ProtectedRoute>
-        }
-      />
+      <Route path="/outward-settlement-report" element={routeGuard("report.outwardSettlement", <OutwardSettlementReportPage />)} />
 
-      <Route
-        path="/outward-entry-details-report"
-        element={
-          <ProtectedRoute permission="report.outwardSettlement">
-            <OutwardEntryDetailsReportPage />
-          </ProtectedRoute>
-        }
-      />
+      <Route path="/outward-entry-details-report" element={routeGuard("report.outwardSettlement", <OutwardEntryDetailsReportPage />)} />
 
-      <Route
-        path="/transport-management"
-        element={
-          <ProtectedRoute permission="transport.manage">
-            <TransportManagementPage />
-          </ProtectedRoute>
-        }
-      />
+      <Route path="/transport-management" element={routeGuard("transport.manage", <TransportManagementPage />)} />
 
-      <Route
-        path="/transport-bilti"
-        element={
-          <ProtectedRoute permission="transport.manage">
-            <TransportBiltiPage />
-          </ProtectedRoute>
-        }
-      />
+      <Route path="/transport-bilti" element={routeGuard("transport.manage", <TransportBiltiPage />)} />
 
-      <Route
-        path="/transport-report"
-        element={
-          <ProtectedRoute permission="transport.manage">
-            <TransportReportPage />
-          </ProtectedRoute>
-        }
-      />
+      <Route path="/transport-report" element={routeGuard("transport.manage", <TransportReportPage />)} />
 
-      <Route
-        path="/expenses"
-        element={
-          <ProtectedRoute permission={["expense.entry", "expense.view", "expense.create", "expense.edit", "expense.delete"]}>
-            <ExpenseManagementPage />
-          </ProtectedRoute>
-        }
-      />
+      <Route path="/expenses" element={routeGuard(["expense.entry", "expense.view", "expense.create", "expense.edit", "expense.delete"], <ExpenseManagementPage />)} />
 
-      <Route
-        path="/expense-report"
-        element={
-          <ProtectedRoute permission="report.expense">
-            <ExpenseReportPage />
-          </ProtectedRoute>
-        }
-      />
+      <Route path="/expense-report" element={routeGuard("report.expense", <ExpenseReportPage />)} />
 
-      <Route
-        path="/expense-posted-inward"
-        element={
-          <ProtectedRoute permission="expense.postedInward">
-            <ExpensePostedInwardPage />
-          </ProtectedRoute>
-        }
-      />
+      <Route path="/expense-posted-inward" element={routeGuard("expense.postedInward", <ExpensePostedInwardPage />)} />
 
-      <Route
-        path="/palti-lorry"
-        element={
-          <ProtectedRoute permission="expense.palti">
-            <PaltiLorryPage />
-          </ProtectedRoute>
-        }
-      />
+      <Route path="/palti-lorry" element={routeGuard("expense.palti", <PaltiLorryPage />)} />
 
-      <Route
-        path="/palti-lorry-adjustment-report"
-        element={
-          <ProtectedRoute permission="report.paltiLorryAdjustment">
-            <PaltiLorryAdjustmentReportPage />
-          </ProtectedRoute>
-        }
-      />
+      <Route path="/palti-lorry-adjustment-report" element={routeGuard("report.paltiLorryAdjustment", <PaltiLorryAdjustmentReportPage />)} />
 
-      <Route
-        path="/self-loading"
-        element={
-          <ProtectedRoute permission="expense.selfLoading">
-            <SelfLoadingPage />
-          </ProtectedRoute>
-        }
-      />
+      <Route path="/self-loading" element={routeGuard("expense.selfLoading", <SelfLoadingPage />)} />
 
-      <Route
-        path="/local-sale"
-        element={
-          <ProtectedRoute permission="expense.localSale">
-            <LocalSalePage />
-          </ProtectedRoute>
-        }
-      />
+      <Route path="/local-sale" element={routeGuard("expense.localSale", <LocalSalePage />)} />
 
-      <Route
-        path="/cash-entries"
-        element={
-          <ProtectedRoute permission="cash.create">
-            <CashEntriesPage />
-          </ProtectedRoute>
-        }
-      />
+      <Route path="/cash-entries" element={routeGuard("cash.create", <CashEntriesPage />)} />
 
-      <Route
-        path="/expenses-pending"
-        element={
-          <ProtectedRoute permission="expense.pending">
-            <ExpensesPendingPage />
-          </ProtectedRoute>
-        }
-      />
+      <Route path="/expenses-pending" element={routeGuard("expense.pending", <ExpensesPendingPage />)} />
 
-      <Route
-        path="/cash-book"
-        element={
-          <ProtectedRoute permission="cash.mainBook.view">
-            <MainCashBookPage />
-          </ProtectedRoute>
-        }
-      />
+      <Route path="/cash-book" element={routeGuard("cash.mainBook.view", <MainCashBookPage />)} />
 
-      <Route
-        path="/parties-cash-book"
-        element={
-          <ProtectedRoute permission="cash.partiesBook.view">
-            <PartiesCashBookPage />
-          </ProtectedRoute>
-        }
-      />
+      <Route path="/parties-cash-book" element={routeGuard("cash.partiesBook.view", <PartiesCashBookPage />)} />
 
-      <Route
-        path="/employee-cash-book"
-        element={
-          <ProtectedRoute permission="cash.employeeBook.view">
-            <EmployeeCashBookPage />
-          </ProtectedRoute>
-        }
-      />
+      <Route path="/employee-cash-book" element={routeGuard("cash.employeeBook.view", <EmployeeCashBookPage />)} />
 
-      <Route
-        path="/cash-activity-logs"
-        element={
-          <ProtectedRoute permission="all">
-            <CashActivityLogPage />
-          </ProtectedRoute>
-        }
-      />
+      <Route path="/cash-activity-logs" element={routeGuard("all", <CashActivityLogPage />)} />
     </Routes>
   );
 }
