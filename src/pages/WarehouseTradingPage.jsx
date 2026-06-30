@@ -256,6 +256,15 @@ export default function WarehouseTradingPage() {
     setActiveTab("reports");
     setActiveReport("sale-journey");
   };
+  const applyAddQty = (extraQty) => {
+    const current = toNumber(formData.dispatch_qty || saleDispatchQty);
+    const next = Math.max(current + toNumber(extraQty), 0);
+    setFormData((prev) => ({
+      ...prev,
+      dispatch_qty: formatDecimal4(next),
+      quantity: formatDecimal4(next),
+    }));
+  };
   const purchaseDeductionTotal = purchaseDeductionFields.reduce((sum, field) => sum + toNumber(formData[field.key]), 0);
   const purchaseNewWeight = toNumber(formData.gross_weight) - toNumber(formData.tare_weight);
   const safePurchaseNewWeight = Math.max(purchaseNewWeight, 0);
@@ -1994,16 +2003,24 @@ export default function WarehouseTradingPage() {
     ? displayReportData.filter((row) => row.row_type === "entry" && row.voucher_type === "Purchase")
     : [];
   const selectedBill = purchaseBillRows.find((row) => String(row.purchase_id || row.voucher_no) === String(selectedLedgerBillId)) || purchaseBillRows[0] || null;
-  const saleBillRows = activeReport === "sale-party-ledger" || activeReport === "sale-journey"
+  const saleBillRows = activeReport === "sale-party-ledger"
     ? displayReportData.filter((row) => row.row_type === "entry" && row.voucher_type === "Sale")
     : [];
+  const saleJourneyRows = activeReport === "sale-journey"
+    ? (Array.isArray(reportData) ? reportData : [])
+    : [];
   const selectedSaleBill = saleBillRows.find((row) => String(row.sale_id || row.voucher_no) === String(selectedSaleLedgerBillId)) || saleBillRows[0] || null;
-  const selectedSaleJourneyKey = String(selectedSaleBill?.journey_token || selectedSaleBill?.journey_id || selectedSaleBill?.journey_group_no || "").trim();
-  const selectedSaleJourneyRows = selectedSaleJourneyKey
-    ? saleBillRows.filter((row) => String(row.journey_token || row.journey_id || row.journey_group_no || "") === selectedSaleJourneyKey)
-    : selectedSaleBill
-      ? saleBillRows.filter((row) => String(row.lorry_no || "") === String(selectedSaleBill.lorry_no || "") && String(row.date || "") === String(selectedSaleBill.date || ""))
-      : [];
+  const selectedSaleJourneySeed = activeReport === "sale-journey" ? (saleJourneyRows[0] || null) : selectedSaleBill;
+  const selectedSaleJourneyKey = String(selectedSaleJourneySeed?.journey_token || selectedSaleJourneySeed?.journey_id || selectedSaleJourneySeed?.journey_group_no || "").trim();
+  const selectedSaleJourneyRows = activeReport === "sale-journey"
+    ? (selectedSaleJourneyKey
+      ? saleJourneyRows.filter((row) => String(row.journey_token || row.journey_id || row.journey_group_no || "") === selectedSaleJourneyKey)
+      : saleJourneyRows)
+    : (selectedSaleJourneyKey
+      ? saleBillRows.filter((row) => String(row.journey_token || row.journey_id || row.journey_group_no || "") === selectedSaleJourneyKey)
+      : selectedSaleBill
+        ? saleBillRows.filter((row) => String(row.lorry_no || "") === String(selectedSaleBill.lorry_no || "") && String(row.date || "") === String(selectedSaleBill.date || ""))
+        : []);
   const selectedSaleJourneyTotalQty = selectedSaleJourneyRows.reduce((sum, row) => sum + toNumber(row.quantity || row.total_quantity || row.unloading_qty || 0), 0);
   const selectedSaleJourneyTotalAmount = selectedSaleJourneyRows.reduce((sum, row) => sum + toNumber(row.amount || row.total_amount || row.net_receivable_amount || 0), 0);
   const selectedSaleJourneyBalanceQty = Math.max(
@@ -4187,6 +4204,15 @@ export default function WarehouseTradingPage() {
                   <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
                     <button type="button" onClick={openSaleJourneyReport} style={{ ...btnAction, background: "#0f766e" }} disabled={!selectedSalePassBill && !formData.lorry_no}>
                       Open Journey Report
+                    </button>
+                    <button type="button" onClick={() => applyAddQty(5)} style={{ ...btnAction, background: "#2563eb" }}>
+                      +5
+                    </button>
+                    <button type="button" onClick={() => applyAddQty(10)} style={{ ...btnAction, background: "#2563eb" }}>
+                      +10
+                    </button>
+                    <button type="button" onClick={() => applyAddQty(Math.max(saleDispatchQty - saleUnloadingQty, 0))} style={{ ...btnAction, background: "#2563eb" }}>
+                      +Remaining
                     </button>
                     <select value={journeyTemplateId} onChange={(e) => applyJourneyTemplate(e.target.value)} style={inp} disabled={!selectedSalePassJourneyRows.length} >
                       <option value="">Use previous leg</option>
