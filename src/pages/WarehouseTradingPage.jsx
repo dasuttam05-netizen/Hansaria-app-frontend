@@ -154,7 +154,15 @@ export default function WarehouseTradingPage() {
   const [reportData, setReportData] = useState([]);
   const [warehouseStockReport, setWarehouseStockReport] = useState([]);
   const [availableSaleStock, setAvailableSaleStock] = useState(null);
-  const [reportFilters, setReportFilters] = useState({ farmer_id: "", company_account_id: "", sale_buyer_id: "", sale_company_account_id: "" });
+  const [reportFilters, setReportFilters] = useState({
+    farmer_id: "",
+    company_account_id: "",
+    sale_buyer_id: "",
+    sale_company_account_id: "",
+    sale_journey_token: "",
+    sale_lorry_no: "",
+    sale_bill_no: "",
+  });
   const [saleFollowupFilter, setSaleFollowupFilter] = useState("all");
   const [selectedLedgerBillId, setSelectedLedgerBillId] = useState("");
   const [partyOutstanding, setPartyOutstanding] = useState(null);
@@ -238,6 +246,16 @@ export default function WarehouseTradingPage() {
     setStockDrilldownToDate("");
     setStockDrilldown({ item, mode });
   };
+  const openSaleJourneyReport = () => {
+    setReportFilters((prev) => ({
+      ...prev,
+      sale_journey_token: formData.journey_token || selectedSalePassBill?.journey_token || "",
+      sale_lorry_no: selectedSalePassBill?.lorry_no || formData.lorry_no || "",
+      sale_bill_no: selectedSalePassBill?.voucher_no || selectedSalePassBill?.bill_no || formData.bill_no || "",
+    }));
+    setActiveTab("reports");
+    setActiveReport("sale-journey");
+  };
   const purchaseDeductionTotal = purchaseDeductionFields.reduce((sum, field) => sum + toNumber(formData[field.key]), 0);
   const purchaseNewWeight = toNumber(formData.gross_weight) - toNumber(formData.tare_weight);
   const safePurchaseNewWeight = Math.max(purchaseNewWeight, 0);
@@ -271,6 +289,7 @@ export default function WarehouseTradingPage() {
     "purchase-party-ledger": "warehouse.trading.report.purchase",
     "sale-party-ledger": "warehouse.trading.report.sale",
     "sale-followup": "warehouse.trading.report.sale",
+    "sale-journey": "warehouse.trading.report.sale",
     "warehouse-stock": "warehouse.trading.report.purchase",
     "fifo-stock": "warehouse.trading.report.purchase",
     "profit-loss": "warehouse.trading.report.profitLoss",
@@ -281,6 +300,7 @@ export default function WarehouseTradingPage() {
     "purchase-party-ledger": "purchase-party-ledger",
     "sale-party-ledger": "sale-party-ledger",
     "sale-followup": "sale-followup",
+    "sale-journey": "sale-journey",
     "warehouse-stock": "warehouse-stock",
     "fifo-stock": "fifo-stock",
     "profit-loss": "profit-loss",
@@ -291,6 +311,7 @@ export default function WarehouseTradingPage() {
     "purchase-party-ledger": "Purchase Party Ledger",
     "sale-party-ledger": "Sale Party Ledger",
     "sale-followup": "Sale Follow-up",
+    "sale-journey": "Sale Journey Report",
     "warehouse-stock": "Warehouse Stock",
     "fifo-stock": "FIFO Stock",
     "profit-loss": "Profit/Loss",
@@ -525,7 +546,7 @@ export default function WarehouseTradingPage() {
     if (activeTab === "reports") {
       loadReport();
     }
-  }, [activeTab, activeReport, reportFilters.farmer_id, reportFilters.company_account_id, reportFilters.sale_buyer_id, reportFilters.sale_company_account_id]);
+  }, [activeTab, activeReport, reportFilters.farmer_id, reportFilters.company_account_id, reportFilters.sale_buyer_id, reportFilters.sale_company_account_id, reportFilters.sale_journey_token, reportFilters.sale_lorry_no, reportFilters.sale_bill_no]);
 
   useEffect(() => {
     if (activeReport !== "purchase-party-ledger") setShowPurchaseBillWise(false);
@@ -543,7 +564,7 @@ export default function WarehouseTradingPage() {
     };
     window.addEventListener("keydown", handleLedgerRefresh);
     return () => window.removeEventListener("keydown", handleLedgerRefresh);
-  }, [activeTab, activeReport, reportFilters.farmer_id, reportFilters.company_account_id, reportFilters.sale_buyer_id, reportFilters.sale_company_account_id]);
+  }, [activeTab, activeReport, reportFilters.farmer_id, reportFilters.company_account_id, reportFilters.sale_buyer_id, reportFilters.sale_company_account_id, reportFilters.sale_journey_token, reportFilters.sale_lorry_no, reportFilters.sale_bill_no]);
 
   useEffect(() => {
     const handleF2Key = (event) => {
@@ -705,6 +726,11 @@ export default function WarehouseTradingPage() {
       }
       if (activeReport === "sale-party-ledger" && reportFilters.sale_buyer_id) {
         params.buyer_id = reportFilters.sale_buyer_id;
+      }
+      if (activeReport === "sale-journey") {
+        if (reportFilters.sale_journey_token) params.journey_token = reportFilters.sale_journey_token;
+        if (reportFilters.sale_lorry_no) params.lorry_no = reportFilters.sale_lorry_no;
+        if (reportFilters.sale_bill_no) params.bill_no = reportFilters.sale_bill_no;
       }
       if (reportFilters.company_account_id || reportFilters.sale_company_account_id) {
         params.company_account_id = reportFilters.company_account_id || reportFilters.sale_company_account_id;
@@ -1441,6 +1467,10 @@ export default function WarehouseTradingPage() {
       await axios.put(`/api/wh-vouchers/sale/${editId}`, payload);
       alert("Sale voucher pass saved successfully");
       const remainingQtyAfterSave = Math.max(saleDispatchQty - saleUnloadingQty, 0);
+      const nextVoucherNo = await axios
+        .get(`/api/wh-vouchers/next-voucher-no`, { params: { type: "sale" } })
+        .then((res) => res.data?.voucher_no || "")
+        .catch(() => "");
       setShowSaleDeductionModal(false);
       setFormData({
         ...defaultForm(),
@@ -1449,11 +1479,13 @@ export default function WarehouseTradingPage() {
         employee_id: formData.employee_id || "",
         location_id: formData.location_id || "",
         lorry_no: formData.lorry_no || "",
-        journey_token: formData.journey_token || "",
-        dispatch_qty: remainingQtyAfterSave > 0 ? remainingQtyAfterSave.toFixed(4) : "",
+        journey_token: formData.journey_token || buildJourneyToken(),
+        bill_no: nextVoucherNo || "",
+        voucher_no: nextVoucherNo || "",
         bill_date: new Date().toISOString().slice(0, 10),
         date: new Date().toISOString().slice(0, 10),
-        unloading_qty: remainingQtyAfterSave > 0 ? remainingQtyAfterSave.toFixed(4) : "",
+        dispatch_qty: remainingQtyAfterSave > 0 ? remainingQtyAfterSave.toFixed(4) : "",
+        unloading_qty: "",
         company_id: "",
         buyer_id: "",
         consignee_id: "",
@@ -1526,6 +1558,10 @@ export default function WarehouseTradingPage() {
       await axios.put(`/api/wh-vouchers/sale/${editId}`, payload);
       alert("Sale voucher pass saved successfully");
       const remainingQtyAfterSave = Math.max(saleDispatchQty - saleUnloadingQty, 0);
+      const nextVoucherNo = await axios
+        .get(`/api/wh-vouchers/next-voucher-no`, { params: { type: "sale" } })
+        .then((res) => res.data?.voucher_no || "")
+        .catch(() => "");
       setFormData((prev) => ({
         ...defaultForm(),
         warehouse_id: prev.warehouse_id || "",
@@ -1533,15 +1569,17 @@ export default function WarehouseTradingPage() {
         employee_id: prev.employee_id || "",
         location_id: prev.location_id || "",
         lorry_no: selectedSalePassBill?.lorry_no || prev.lorry_no || "",
-        journey_token: prev.journey_token || "",
-        dispatch_qty: prev.dispatch_qty || prev.quantity || "",
-        bill_no: "",
+        journey_token: prev.journey_token || buildJourneyToken(),
+        bill_no: nextVoucherNo || "",
+        voucher_no: nextVoucherNo || "",
         bill_date: new Date().toISOString().slice(0, 10),
         date: new Date().toISOString().slice(0, 10),
-        unloading_qty: remainingQtyAfterSave > 0 ? remainingQtyAfterSave.toFixed(4) : "",
+        dispatch_qty: remainingQtyAfterSave > 0 ? remainingQtyAfterSave.toFixed(4) : "",
+        unloading_qty: "",
         company_id: selectedSalePassBill?.buyer_id || selectedSalePassBill?.company_id || "",
         buyer_id: selectedSalePassBill?.buyer_id || selectedSalePassBill?.company_id || "",
         consignee_id: "",
+        rate: "",
         unloading_date: "",
         due_days: "",
         due_date: "",
@@ -1864,7 +1902,7 @@ export default function WarehouseTradingPage() {
     ],
   };
 
-  const activeReportColumns = reportColumns[activeReport] || reportColumns.sale;
+  const activeReportColumns = reportColumns[activeReport] || (activeReport === "sale-journey" ? reportColumns["sale-party-ledger"] : reportColumns.sale);
   const displayReportData = useMemo(() => {
     if (activeReport === "sale-followup") {
       const rows = Array.isArray(reportData) ? reportData : [];
@@ -1954,7 +1992,7 @@ export default function WarehouseTradingPage() {
     ? displayReportData.filter((row) => row.row_type === "entry" && row.voucher_type === "Purchase")
     : [];
   const selectedBill = purchaseBillRows.find((row) => String(row.purchase_id || row.voucher_no) === String(selectedLedgerBillId)) || purchaseBillRows[0] || null;
-  const saleBillRows = activeReport === "sale-party-ledger"
+  const saleBillRows = activeReport === "sale-party-ledger" || activeReport === "sale-journey"
     ? displayReportData.filter((row) => row.row_type === "entry" && row.voucher_type === "Sale")
     : [];
   const selectedSaleBill = saleBillRows.find((row) => String(row.sale_id || row.voucher_no) === String(selectedSaleLedgerBillId)) || saleBillRows[0] || null;
@@ -3453,7 +3491,7 @@ export default function WarehouseTradingPage() {
                 {(reportFilters.farmer_id || reportFilters.company_account_id) && (
                   <button
                     type="button"
-                    onClick={() => setReportFilters({ farmer_id: "", company_account_id: "", sale_buyer_id: "", sale_company_account_id: "" })}
+                    onClick={() => setReportFilters({ farmer_id: "", company_account_id: "", sale_buyer_id: "", sale_company_account_id: "", sale_journey_token: "", sale_lorry_no: "", sale_bill_no: "" })}
                     style={{ ...btnAction, background: "#64748b", marginBottom: 1 }}
                   >
                     Clear Filters
@@ -3494,7 +3532,7 @@ export default function WarehouseTradingPage() {
                 {(reportFilters.sale_buyer_id || reportFilters.sale_company_account_id) && (
                   <button
                     type="button"
-                    onClick={() => setReportFilters((prev) => ({ ...prev, sale_buyer_id: "", sale_company_account_id: "" }))}
+                    onClick={() => setReportFilters((prev) => ({ ...prev, sale_buyer_id: "", sale_company_account_id: "", sale_journey_token: "", sale_lorry_no: "", sale_bill_no: "" }))}
                     style={{ ...btnAction, background: "#64748b", marginBottom: 1 }}
                   >
                     Clear Filters
@@ -3659,7 +3697,7 @@ export default function WarehouseTradingPage() {
                 </div>
                 )}
               </div>
-            ) : activeReport === "sale-party-ledger" || activeReport === "sale-followup" ? (
+            ) : activeReport === "sale-party-ledger" || activeReport === "sale-followup" || activeReport === "sale-journey" ? (
               <div style={ledgerSplitStyle}>
                 <div style={tableCard}>
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
@@ -4111,6 +4149,9 @@ export default function WarehouseTradingPage() {
                     </div>
                   </div>
                   <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                    <button type="button" onClick={openSaleJourneyReport} style={{ ...btnAction, background: "#0f766e" }} disabled={!selectedSalePassBill && !formData.lorry_no}>
+                      Open Journey Report
+                    </button>
                     <select value={journeyTemplateId} onChange={(e) => applyJourneyTemplate(e.target.value)} style={inp} disabled={!selectedSalePassJourneyRows.length} >
                       <option value="">Use previous leg</option>
                       {selectedSalePassJourneyRows.map((row, index) => (
