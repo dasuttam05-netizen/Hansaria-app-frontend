@@ -2836,6 +2836,15 @@ export default function WarehouseTradingPage() {
                         </thead>
                         <tbody>
                           <tr><td style={erpTd}>Lorry No</td><td style={erpTd}><input name="lorry_no" value={formData.lorry_no} onChange={handleChange} style={erpCellInput} /></td></tr>
+                          <tr><td style={erpTd}>Add Mall Qty</td><td style={erpTd}><input
+                            name="dispatch_qty"
+                            type="number"
+                            step="0.0001"
+                            value={formData.dispatch_qty}
+                            onChange={handleChange}
+                            style={erpCellInput}
+                            placeholder="Remaining / Add qty"
+                          /></td></tr>
                           <tr><td style={erpTd}>Other Deduction</td><td style={erpTd}><input name="other_deduction" type="number" step="0.0001" value={formData.other_deduction} onChange={handleChange} style={erpCellInput} /></td></tr>
                           <tr>
                             <td style={erpTd}>CD %</td>
@@ -4135,11 +4144,36 @@ export default function WarehouseTradingPage() {
               </div>
               <div style={{ gridColumn: "1 / -1", border: "1px solid #dbe3ef", borderRadius: 8, background: "#fff", padding: 10 }}>
                 <div style={{ fontSize: 12, fontWeight: 700, color: "#0f766e", marginBottom: 6 }}>Selected Bill Summary</div>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 8, fontSize: 12 }}>
-                  <div><strong>Buyer:</strong> {selectedSalePassBill ? getBuyerName(selectedSalePassBill) : "-"}</div>
-                  <div><strong>Consignee:</strong> {selectedSalePassBill?.consignee_name || "-"}</div>
-                  <div><strong>Lorry No:</strong> {selectedSalePassBill?.lorry_no || formData.lorry_no || "-"}</div>
-                  <div><strong>Remaining Qty:</strong> {formatDecimal4(Math.max(saleDispatchQty - saleUnloadingQty, 0))}</div>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10, fontSize: 12, alignItems: "end" }}>
+                  <div>
+                    <label style={lbl}>Buyer</label>
+                    <select name="buyer_id" value={formData.buyer_id || formData.company_id} onChange={handleChange} style={inp}>
+                      <option value="">Select Buyer</option>
+                      {buyerNames.map((buyer) => (
+                        <option key={buyer.id || buyer._id} value={buyer.id || buyer._id}>{buyer.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={lbl}>Consignee</label>
+                    <select name="consignee_id" value={formData.consignee_id} onChange={handleChange} style={inp}>
+                      <option value="">{formData.buyer_id || formData.company_id ? "Select Consignee" : "Select Buyer First"}</option>
+                      {filteredConsignees.map((c) => (
+                        <option key={c.id || c._id} value={c.id || c._id}>{c.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={lbl}>Lorry No</label>
+                    <input value={selectedSalePassBill?.lorry_no || formData.lorry_no || ""} readOnly style={readOnlyInp} />
+                  </div>
+                  <div>
+                    <label style={lbl}>Remaining Qty</label>
+                    <input value={formatDecimal4(Math.max(saleDispatchQty - saleUnloadingQty, 0))} readOnly style={readOnlyInp} />
+                  </div>
+                </div>
+                <div style={{ marginTop: 8, fontSize: 11, color: "#64748b" }}>
+                  Same lorry will stay fixed. Buyer and consignee can change for every next leg before save.
                 </div>
               </div>
               <div style={{ gridColumn: "1 / -1", border: "1px solid #cfe6e2", borderRadius: 8, background: "#f7fffd", padding: 10 }}>
