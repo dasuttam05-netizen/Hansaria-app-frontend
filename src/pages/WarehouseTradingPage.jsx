@@ -1095,6 +1095,7 @@ export default function WarehouseTradingPage() {
         payload.against_purchase_enabled = payload.sale_type !== "direct" && Boolean(formData.against_purchase_enabled && salePurchaseLinks.length);
         payload.against_purchase_farmer_id = payload.sale_type === "direct" ? formData.farmer_id : (formData.against_purchase_farmer_id || "");
         payload.against_purchase_links = payload.against_purchase_enabled ? salePurchaseLinks : [];
+        payload.create_against_purchase = payload.sale_type === "direct" && !editId;
         if (payload.sale_type === "direct") payload.warehouse_id = "";
         if (editId) payload.deduction_only = true;
       }
@@ -4225,6 +4226,18 @@ export default function WarehouseTradingPage() {
                         <option key={c.id || c._id} value={c.id || c._id}>{c.name}</option>
                       ))}
                     </select>
+                  </div>
+                  <div>
+                    <label style={lbl}>Rate</label>
+                    <input
+                      type="number"
+                      step="0.0001"
+                      name="rate"
+                      value={formData.rate}
+                      onChange={handleChange}
+                      style={inp}
+                      placeholder="Rate for next bill"
+                    />
                   </div>
                   <div>
                     <label style={lbl}>Lorry No</label>
