@@ -338,6 +338,8 @@ export default function WarehouseTradingPage() {
   const saleRejectQty = toNumber(formData.reject_qty);
   const saleShortageQty = Math.max(saleDispatchQty - saleUnloadingQty, 0);
   const saleShortageAmount = saleShortageQty * toNumber(formData.rate);
+  const saleAddQty = Math.max(toNumber(formData.add_qty), 0);
+  const saleTotalQtyPreview = Math.max(saleShortageQty + saleAddQty, 0);
   const saleQualityDeduction =
     toNumber(formData.moisture) +
     toNumber(formData.dunki) +
@@ -4250,6 +4252,10 @@ export default function WarehouseTradingPage() {
                       style={inp}
                       placeholder="Manual add qty"
                     />
+                  </div>
+                  <div>
+                    <label style={lbl}>Total Qty</label>
+                    <input value={formatDecimal4(saleTotalQtyPreview)} readOnly style={readOnlyInp} />
                   </div>
                 </div>
                 <div style={{ marginTop: 8, fontSize: 11, color: "#64748b" }}>
