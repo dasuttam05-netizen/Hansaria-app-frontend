@@ -1577,6 +1577,8 @@ export default function WarehouseTradingPage() {
       const remainingQtyAfterSave = Math.max(saleDispatchQty - saleUnloadingQty, 0);
       const addQty = Math.max(toNumber(formData.add_qty), 0);
       const nextDispatchQty = Math.max(remainingQtyAfterSave + addQty, 0);
+      const nextRate = toNumber(formData.rate);
+      const nextAmount = Number((nextDispatchQty * nextRate).toFixed(2));
       const nextVoucherNo = await axios
         .get(`/api/wh-vouchers/next-voucher-no`, { params: { type: "sale" } })
         .then((res) => res.data?.voucher_no || "")
@@ -1603,6 +1605,8 @@ export default function WarehouseTradingPage() {
         add_qty: "",
         dispatch_qty: formatDecimal4(nextDispatchQty),
         quantity: formatDecimal4(nextDispatchQty),
+        rate: formData.rate || "",
+        amount: nextAmount,
         buyer_id: "",
         consignee_id: "",
         company_id: "",
@@ -1625,6 +1629,8 @@ export default function WarehouseTradingPage() {
         dispatch_qty: nextDispatchQty > 0 ? nextDispatchQty.toFixed(4) : "",
         quantity: nextDispatchQty > 0 ? nextDispatchQty.toFixed(4) : "",
         add_qty: "",
+        rate: formData.rate || "",
+        amount: nextAmount,
         unloading_qty: "",
         company_id: "",
         buyer_id: "",
