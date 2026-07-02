@@ -652,6 +652,16 @@ export default function OutwardPage() {
         self_loading: formData.self_loading || "No",
       };
 
+      if (!isSelfLoading && !payload.warehouse_id) {
+        toast.error("Please select warehouse", { theme: "colored" });
+        return;
+      }
+
+      if (!payload.product_id) {
+        toast.error("Please select product", { theme: "colored" });
+        return;
+      }
+
       if (warehouseStock.loading) {
         toast.error("Warehouse stock is still loading", { theme: "colored" });
         return;
