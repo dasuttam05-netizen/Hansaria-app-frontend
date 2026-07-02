@@ -263,6 +263,14 @@ export default function WarehouseTradingPage() {
       add_qty: formatDecimal4(Math.max(toNumber(extraQty), 0)),
     }));
   };
+  const getJourneySourceLabel = (row) => {
+    const parts = [
+      row.warehouse_name || getWarehouseName(row),
+      row.location_name || "",
+      row.journey_note || row.description || row.reference_id || "",
+    ].map((value) => String(value || "").trim()).filter(Boolean);
+    return parts.join(" | ") || "-";
+  };
   const purchaseDeductionTotal = purchaseDeductionFields.reduce((sum, field) => sum + toNumber(formData[field.key]), 0);
   const purchaseNewWeight = toNumber(formData.gross_weight) - toNumber(formData.tare_weight);
   const safePurchaseNewWeight = Math.max(purchaseNewWeight, 0);
@@ -4218,9 +4226,21 @@ export default function WarehouseTradingPage() {
                     <label style={lbl}>Remaining Qty</label>
                     <input value={formatDecimal4(Math.max(saleDispatchQty - saleUnloadingQty, 0))} readOnly style={readOnlyInp} />
                   </div>
+                  <div>
+                    <label style={lbl}>Add Qty</label>
+                    <input
+                      type="number"
+                      step="0.0001"
+                      name="add_qty"
+                      value={formData.add_qty}
+                      onChange={handleChange}
+                      style={inp}
+                      placeholder="Manual add qty"
+                    />
+                  </div>
                 </div>
                 <div style={{ marginTop: 8, fontSize: 11, color: "#64748b" }}>
-                  Same lorry will stay fixed. Buyer and consignee can change for every next leg before save.
+                  Same lorry will stay fixed. Buyer, consignee, account and add qty can change for every next leg before save.
                 </div>
               </div>
               <div style={{ gridColumn: "1 / -1", border: "1px solid #cfe6e2", borderRadius: 8, background: "#f7fffd", padding: 10 }}>
@@ -4262,8 +4282,10 @@ export default function WarehouseTradingPage() {
                         <th style={th}>Voucher</th>
                         <th style={th}>Date</th>
                         <th style={th}>Lorry</th>
+                        <th style={th}>Source / Remark</th>
                         <th style={th}>Buyer</th>
                         <th style={th}>Consignee</th>
+                        <th style={th}>Rate</th>
                         <th style={th}>Dispatch</th>
                         <th style={th}>Unload</th>
                         <th style={th}>Remain</th>
@@ -4281,8 +4303,10 @@ export default function WarehouseTradingPage() {
                               <td style={td}>{row.voucher_no || row.bill_no || "-"}</td>
                               <td style={td}>{formatLedgerDate(row.date || row.bill_date || "")}</td>
                               <td style={td}>{row.lorry_no || row.reference_id || "-"}</td>
+                              <td style={td}>{getJourneySourceLabel(row)}</td>
                               <td style={td}>{getBuyerName(row)}</td>
                               <td style={td}>{row.consignee_name || "-"}</td>
+                              <td style={td}>{formatMoney(row.rate || 0)}</td>
                               <td style={td}>{formatDecimal4(dispatchQty)}</td>
                               <td style={td}>{formatDecimal4(unloadQty)}</td>
                               <td style={td}>{formatDecimal4(remainQty)}</td>
@@ -4291,7 +4315,7 @@ export default function WarehouseTradingPage() {
                         })
                       ) : (
                         <tr>
-                          <td colSpan={9} style={{ ...td, textAlign: "center", padding: 12 }}>
+                          <td colSpan={11} style={{ ...td, textAlign: "center", padding: 12 }}>
                             No journey history found yet for this lorry.
                           </td>
                         </tr>
@@ -4300,7 +4324,7 @@ export default function WarehouseTradingPage() {
                     {selectedSalePassJourneyRows.length > 0 && (
                       <tfoot>
                         <tr style={{ background: "#ecfeff", fontWeight: 800 }}>
-                          <td style={td} colSpan={6}>Total</td>
+                          <td style={td} colSpan={7}>Total</td>
                           <td style={td}>{formatDecimal4(selectedSalePassJourneyRows.reduce((sum, row) => sum + toNumber(row.dispatch_qty || row.quantity || row.total_quantity || row.unloading_qty || 0), 0))}</td>
                           <td style={td}>{formatDecimal4(selectedSalePassJourneyRows.reduce((sum, row) => sum + toNumber(row.unloading_qty || 0), 0))}</td>
                           <td style={td}>{formatDecimal4(selectedSalePassJourneyRemainingQty)}</td>
