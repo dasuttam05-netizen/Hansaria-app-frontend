@@ -98,30 +98,120 @@ export default function DashboardPage() {
         "warehouse.trading.report.purchase",
         "warehouse.trading.report.profitLoss",
       ]);
+      const canReadCompanies = hasAnyPermission(currentUser, [
+        "companies.manage",
+        "inward.view",
+        "inward.create",
+        "outward.view",
+        "outward.create",
+        "adjustment.manage",
+        "expense.entry",
+        "expense.view",
+        "expense.create",
+        "cash.view",
+        "settlement.view",
+        "report.inward",
+        "report.erp",
+        "report.partyLedger",
+        "report.partyStock",
+        "report.warehouseRentLedger",
+        "report.warehouseRentMonthEnd",
+        "report.outwardSettlement",
+        "report.expense",
+      ]);
+      const canReadCompanyAccounts = hasAnyPermission(currentUser, [
+        "companyAccounts.manage",
+        "inward.view",
+        "inward.create",
+        "outward.view",
+        "outward.create",
+        "adjustment.manage",
+        "expense.entry",
+        "expense.view",
+        "expense.create",
+        "cash.view",
+        "settlement.view",
+        "report.inward",
+        "report.erp",
+        "report.partyLedger",
+        "report.partyStock",
+        "report.warehouseRentLedger",
+        "report.warehouseRentMonthEnd",
+        "report.outwardSettlement",
+        "report.expense",
+      ]);
+      const canReadLocations = hasAnyPermission(currentUser, [
+        "locations.manage",
+        "expense.entry",
+        "expense.view",
+        "expense.create",
+        "expense.edit",
+        "inward.view",
+        "inward.create",
+        "outward.view",
+        "outward.create",
+        "employees.view",
+        "report.partyStock",
+        "report.warehouseRentLedger",
+        "report.warehouseRentMonthEnd",
+      ]);
+      const canReadEmployees = hasAnyPermission(currentUser, [
+        "employees.view",
+        "inward.view",
+        "outward.view",
+        "expense.entry",
+        "report.erp",
+      ]);
+      const canReadWarehouses = hasAnyPermission(currentUser, [
+        "warehouses.manage",
+        "warehouse.trading.purchase.view",
+        "warehouse.trading.sale.view",
+        "warehouse.trading.payment.view",
+        "warehouse.trading.receipt.view",
+        "warehouse.trading.journal.view",
+        "outward.view",
+        "inward.view",
+      ]);
+      const canReadProducts = hasAnyPermission(currentUser, [
+        "products.manage",
+        "inward.view",
+        "inward.create",
+        "outward.view",
+        "outward.create",
+        "adjustment.manage",
+        "expense.entry",
+        "expense.view",
+        "expense.create",
+        "transport.manage",
+        "report.inward",
+        "report.erp",
+        "report.partyLedger",
+        "report.partyStock",
+      ]);
 
       const requests = [
-        hasPermission(currentUser, "locations.manage")
+        canReadLocations
           ? axios.get(`${API_BASE}/locations`)
           : Promise.resolve({ data: [] }),
-        hasPermission(currentUser, "employees.view")
+        canReadEmployees
           ? axios.get(`${API_BASE}/employees`)
           : Promise.resolve({ data: [] }),
-        hasPermission(currentUser, "companies.manage")
+        canReadCompanies
           ? axios.get(`${API_BASE}/companies`)
           : Promise.resolve({ data: [] }),
-        hasPermission(currentUser, "companyAccounts.manage")
+        canReadCompanyAccounts
           ? axios.get(`${API_BASE}/company-accounts`)
           : Promise.resolve({ data: [] }),
-        hasPermission(currentUser, "warehouses.manage")
+        canReadWarehouses
           ? axios.get(`${API_BASE}/warehouses`)
           : Promise.resolve({ data: [] }),
-        hasPermission(currentUser, "products.manage")
+        canReadProducts
           ? axios.get(`${API_BASE}/products`)
           : Promise.resolve({ data: [] }),
-        hasPermission(currentUser, "inward.manage")
+        hasAnyPermission(currentUser, ["inward.manage", "inward.view", "inward.create"])
           ? axios.get(`${API_BASE}/inward`)
           : Promise.resolve({ data: [] }),
-        hasPermission(currentUser, "outward.manage")
+        hasAnyPermission(currentUser, ["outward.manage", "outward.view", "outward.create"])
           ? axios.get(`${API_BASE}/outward`)
           : Promise.resolve({ data: [] }),
         canLoadStockInsights
@@ -818,9 +908,16 @@ export default function DashboardPage() {
 
   const canViewResourceOverview = hasAnyPermission(user, [
     "warehouses.manage",
+    "warehouse.trading.view",
     "companies.manage",
+    "companyAccounts.manage",
     "employees.view",
     "locations.manage",
+    "locations.manage",
+    "inward.view",
+    "inward.create",
+    "outward.view",
+    "outward.create",
     "inward.view",
     "outward.view",
   ]);
