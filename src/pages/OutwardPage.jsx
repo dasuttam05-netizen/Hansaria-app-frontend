@@ -7,7 +7,7 @@ import OutwardSettlementPage from "./OutwardSettlementPage";
 import BuyerAdjustmentListModal from "./BuyerAdjustmentListModal";
 import BuyerAdjustmentSavedListModal from "./BuyerAdjustmentSavedListModal";
 import BuyerAdjustmentForm from "./BuyerAdjustmentForm";
-import { hasPermission, loadSession } from "../utils/auth";
+import { hasAnyPermission, hasPermission, loadSession } from "../utils/auth";
 
 const lbl = {
   display: "block",
@@ -506,19 +506,25 @@ export default function OutwardPage() {
 
   const fetchDropdowns = async () => {
     try {
+      const canReadEmployees = hasAnyPermission(user, ["employees.view", "inward.view", "outward.view", "expense.entry", "report.erp"]);
+      const canReadLocations = hasAnyPermission(user, ["locations.manage", "expense.entry", "expense.view", "expense.create", "expense.edit", "inward.view", "inward.create", "outward.view", "outward.create", "employees.view", "report.partyStock", "report.warehouseRentLedger", "report.warehouseRentMonthEnd"]);
+      const canReadWarehouses = hasAnyPermission(user, ["warehouses.manage", "outward.view", "outward.create", "inward.view", "inward.create", "warehouse.trading.view"]);
+      const canReadProducts = hasAnyPermission(user, ["products.manage", "inward.view", "inward.create", "outward.view", "outward.create", "adjustment.manage", "expense.entry", "expense.view", "expense.create", "transport.manage", "report.inward", "report.erp", "report.partyLedger", "report.partyStock"]);
+      const canReadCompanies = hasAnyPermission(user, ["companies.manage", "inward.view", "inward.create", "outward.view", "outward.create", "adjustment.manage", "expense.entry", "expense.view", "expense.create", "cash.view", "settlement.view", "report.inward", "report.erp", "report.partyLedger", "report.partyStock", "report.warehouseRentLedger", "report.warehouseRentMonthEnd", "report.outwardSettlement", "report.expense"]);
+      const canReadCompanyAccounts = hasAnyPermission(user, ["companyAccounts.manage", "inward.view", "inward.create", "outward.view", "outward.create", "adjustment.manage", "expense.entry", "expense.view", "expense.create", "cash.view", "settlement.view", "report.inward", "report.erp", "report.partyLedger", "report.partyStock", "report.warehouseRentLedger", "report.warehouseRentMonthEnd", "report.outwardSettlement", "report.expense"]);
       const [empRes, locRes, whRes, prodRes, compRes, accRes, consigneeRes, buyerRes] = await Promise.all([
-        canViewEmployees
+        canReadEmployees
           ? axios.get(`${API_BASE}/employees`)
           : Promise.resolve({
               data: user
                 ? [{ id: getRecordId(user), name: user.name || user.username || "Current User", location_id: user.location_id }]
                 : [],
             }),
-        axios.get(`${API_BASE}/locations`),
-        axios.get(`${API_BASE}/warehouses`),
-        axios.get(`${API_BASE}/products`),
-        axios.get(`${API_BASE}/companies`),
-        axios.get(`${API_BASE}/company-accounts`),
+        canReadLocations ? axios.get(`${API_BASE}/locations`) : Promise.resolve({ data: [] }),
+        canReadWarehouses ? axios.get(`${API_BASE}/warehouses`) : Promise.resolve({ data: [] }),
+        canReadProducts ? axios.get(`${API_BASE}/products`) : Promise.resolve({ data: [] }),
+        canReadCompanies ? axios.get(`${API_BASE}/companies`) : Promise.resolve({ data: [] }),
+        canReadCompanyAccounts ? axios.get(`${API_BASE}/company-accounts`) : Promise.resolve({ data: [] }),
         axios.get(`${API_BASE}/consignee-names`).catch(() => ({ data: [] })),
         axios.get(`${API_BASE}/buyer-names`).catch(() => ({ data: [] })),
       ]);
