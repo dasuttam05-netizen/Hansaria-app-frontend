@@ -2,6 +2,8 @@ import axios from "axios";
 
 export const ROLE_PERMISSION_PRESETS = {
   admin: ["all"],
+  bm: ["all"],
+  ho: ["all"],
   manager: [
     "dashboard.view",
     "employees.view",
@@ -310,7 +312,7 @@ export function hasPermission(user, permission) {
 
   const permissions = normalizePermissions(user.role, user.permissions);
   return (
-    normalizeRole(user.role) === "admin" ||
+    ["admin", "bm", "ho"].includes(normalizeRole(user.role)) ||
     permissions.includes("all") ||
     permissions.includes(permission) ||
     (LEGACY_PERMISSION_MAP[permission] || []).some((item) => permissions.includes(item))
