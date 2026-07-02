@@ -421,13 +421,6 @@ export default function WarehouseTradingPage() {
   const saleVoucherPassBills = list.filter((item) => {
     const sameWarehouse = !formData.warehouse_id || String(item.warehouse_id || "") === String(formData.warehouse_id);
     const sameAccount = !formData.company_account_id || String(item.company_account_id || "") === String(formData.company_account_id);
-    const hasNoUnloadingDetails =
-      !item.unloading_date &&
-      toNumber(item.shortage_quantity) === 0 &&
-      toNumber(item.claim_amount) === 0 &&
-      toNumber(item.other_deduction) === 0 &&
-      toNumber(item.cd_amount) === 0 &&
-      toNumber(item.tds_amount) === 0;
     const search = saleBillSearch.trim().toLowerCase();
     const searchable = [
       item.voucher_no,
@@ -440,7 +433,7 @@ export default function WarehouseTradingPage() {
     // Ensure we only show sale vouchers here. Prefer explicit `voucher_type` when available,
     // otherwise fall back to presence of buyer/company fields which indicate sale.
     const isSaleType = String(item.voucher_type || "").toLowerCase() === "sale" || Boolean(item.buyer_id || item.company_id);
-    return isSaleType && sameWarehouse && sameAccount && hasNoUnloadingDetails && (!search || searchable.includes(search));
+    return isSaleType && sameWarehouse && sameAccount && (!search || searchable.includes(search));
   });
   const selectedSalePassBill =
     list.find((row) => String(row.id || row._id) === String(editId)) ||
