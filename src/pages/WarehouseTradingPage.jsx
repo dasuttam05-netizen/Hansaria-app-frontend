@@ -13,6 +13,7 @@ const defaultForm = () => ({
   bill_date: new Date().toISOString().slice(0, 10),
   unloading_date: "",
   due_days: "",
+  add_qty: "",
   sale_type: "direct",
   warehouse_id: "",
   buyer_id: "",
@@ -257,12 +258,9 @@ export default function WarehouseTradingPage() {
     setActiveReport("sale-journey");
   };
   const applyAddQty = (extraQty) => {
-    const current = toNumber(formData.dispatch_qty || saleDispatchQty);
-    const next = Math.max(current + toNumber(extraQty), 0);
     setFormData((prev) => ({
       ...prev,
-      dispatch_qty: formatDecimal4(next),
-      quantity: formatDecimal4(next),
+      add_qty: formatDecimal4(Math.max(toNumber(extraQty), 0)),
     }));
   };
   const purchaseDeductionTotal = purchaseDeductionFields.reduce((sum, field) => sum + toNumber(formData[field.key]), 0);
@@ -1493,8 +1491,9 @@ export default function WarehouseTradingPage() {
         voucher_no: nextVoucherNo || "",
         bill_date: new Date().toISOString().slice(0, 10),
         date: new Date().toISOString().slice(0, 10),
-        dispatch_qty: remainingQtyAfterSave > 0 ? remainingQtyAfterSave.toFixed(4) : "",
-        unloading_qty: "",
+      dispatch_qty: remainingQtyAfterSave > 0 ? remainingQtyAfterSave.toFixed(4) : "",
+      add_qty: "",
+      unloading_qty: "",
         company_id: "",
         buyer_id: "",
         consignee_id: "",
@@ -1568,14 +1567,45 @@ export default function WarehouseTradingPage() {
       await axios.put(`/api/wh-vouchers/sale/${editId}`, payload);
       alert("Sale voucher pass saved successfully");
       const remainingQtyAfterSave = Math.max(saleDispatchQty - saleUnloadingQty, 0);
+      const addQty = Math.max(toNumber(formData.add_qty), 0);
+      const nextDispatchQty = Math.max(remainingQtyAfterSave + addQty, 0);
       const nextVoucherNo = await axios
         .get(`/api/wh-vouchers/next-voucher-no`, { params: { type: "sale" } })
         .then((res) => res.data?.voucher_no || "")
         .catch(() => "");
+      const nextPayload = {
+        ...formData,
+        voucher_no: nextVoucherNo || "",
+        bill_no: nextVoucherNo || "",
+        bill_date: new Date().toISOString().slice(0, 10),
+        date: new Date().toISOString().slice(0, 10),
+        unloading_date: "",
+        due_days: "",
+        due_date: "",
+        unloading_qty: "",
+        shortage_quantity: "",
+        shortage_amount: "",
+        claim_amount: "",
+        other_deduction: "",
+        cd_percent: "",
+        cd_amount: "",
+        adjustment_amount: "",
+        tds_amount: "",
+        round_off: "",
+        add_qty: "",
+        dispatch_qty: formatDecimal4(nextDispatchQty),
+        quantity: formatDecimal4(nextDispatchQty),
+        buyer_id: "",
+        consignee_id: "",
+        company_id: "",
+        buyer_name: "",
+        consignee_name: "",
+      };
+      const createRes = await axios.post("/api/wh-vouchers/sale", nextPayload);
       setFormData((prev) => ({
-        ...defaultForm(),
+        ...nextPayload,
         warehouse_id: prev.warehouse_id || "",
-        company_account_id: "",
+        company_account_id: prev.company_account_id || "",
         employee_id: prev.employee_id || "",
         location_id: prev.location_id || "",
         lorry_no: selectedSalePassBill?.lorry_no || prev.lorry_no || "",
@@ -1584,18 +1614,18 @@ export default function WarehouseTradingPage() {
         voucher_no: nextVoucherNo || "",
         bill_date: new Date().toISOString().slice(0, 10),
         date: new Date().toISOString().slice(0, 10),
-        dispatch_qty: remainingQtyAfterSave > 0 ? remainingQtyAfterSave.toFixed(4) : "",
+        dispatch_qty: nextDispatchQty > 0 ? nextDispatchQty.toFixed(4) : "",
+        quantity: nextDispatchQty > 0 ? nextDispatchQty.toFixed(4) : "",
+        add_qty: "",
         unloading_qty: "",
         company_id: "",
         buyer_id: "",
         consignee_id: "",
-        product_id: "",
-        rate: "",
         unloading_date: "",
         due_days: "",
         due_date: "",
       }));
-      setEditId(editId);
+      setEditId(createRes.data?.id || createRes.data?._id || editId);
       await loadVouchers();
       if (activeTab === "reports") await loadReport();
       fetchNextVoucherNo(activeVoucherType);
@@ -2854,13 +2884,13 @@ export default function WarehouseTradingPage() {
                         <tbody>
                           <tr><td style={erpTd}>Lorry No</td><td style={erpTd}><input name="lorry_no" value={formData.lorry_no} onChange={handleChange} style={erpCellInput} /></td></tr>
                           <tr><td style={erpTd}>Add Mall Qty</td><td style={erpTd}><input
-                            name="dispatch_qty"
+                            name="add_qty"
                             type="number"
                             step="0.0001"
-                            value={formData.dispatch_qty}
+                            value={formData.add_qty}
                             onChange={handleChange}
                             style={erpCellInput}
-                            placeholder="Remaining / Add qty"
+                            placeholder="Manual add qty"
                           /></td></tr>
                           <tr><td style={erpTd}>Other Deduction</td><td style={erpTd}><input name="other_deduction" type="number" step="0.0001" value={formData.other_deduction} onChange={handleChange} style={erpCellInput} /></td></tr>
                           <tr>
