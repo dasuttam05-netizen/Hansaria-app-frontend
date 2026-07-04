@@ -139,8 +139,10 @@ export default function OutwardPage() {
   const [selectedUnloadingError, setSelectedUnloadingError] = useState("");
   const [showBuyerAdjustmentForm, setShowBuyerAdjustmentForm] = useState(false);
   const [selectedUnloadingDetail, setSelectedUnloadingDetail] = useState(null);
+  const [isSaving, setIsSaving] = useState(false);
   const selectedRowDetailRef = useRef(null);
   const rowRefs = useRef({});
+  const submitLockRef = useRef(false);
 
   const [formData, setFormData] = useState({
     date: "",
@@ -638,7 +640,13 @@ export default function OutwardPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    if (submitLockRef.current || isSaving) {
+      return;
+    }
+
     try {
+      submitLockRef.current = true;
+      setIsSaving(true);
       const payload = {
         ...formData,
         employee_id: formData.employee_id || null,
@@ -712,6 +720,9 @@ export default function OutwardPage() {
     } catch (err) {
       console.error(err);
       toast.error(err?.response?.data?.error || "Error saving outward", { theme: "colored" });
+    } finally {
+      submitLockRef.current = false;
+      setIsSaving(false);
     }
   };
 
@@ -1390,14 +1401,14 @@ Consignee: ${row.consignee_name}`;
                 <div style={{ gridColumn: "1 / -1", display: "flex", gap: "12px", marginTop: "6px", flexWrap: "wrap" }}>
                   <button
                     type="submit"
-                    disabled={(editData ? !canEdit : !canCreate) || hasInsufficientStock}
+                    disabled={(editData ? !canEdit : !canCreate) || hasInsufficientStock || isSaving}
                     style={{
                       ...btnPrimary,
-                      opacity: ((editData ? !canEdit : !canCreate) || hasInsufficientStock) ? 0.5 : 1,
-                      cursor: ((editData ? !canEdit : !canCreate) || hasInsufficientStock) ? "not-allowed" : "pointer",
+                      opacity: ((editData ? !canEdit : !canCreate) || hasInsufficientStock || isSaving) ? 0.5 : 1,
+                      cursor: ((editData ? !canEdit : !canCreate) || hasInsufficientStock || isSaving) ? "not-allowed" : "pointer",
                     }}
                   >
-                    Save
+                    {isSaving ? "Saving..." : "Save"}
                   </button>
                   <button type="button" onClick={closeFormModal} style={btnPrimary}>
                     Back To Outward List
