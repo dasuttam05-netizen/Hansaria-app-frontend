@@ -186,7 +186,12 @@ export default function OutwardPage() {
   const requestedQty = Number(formData.weight) || 0;
   const availableStock = Number(warehouseStock.availableStock) || 0;
   const hasStockSelection = !isSelfLoading && Boolean(formData.warehouse_id && formData.product_id);
-  const hasInsufficientStock = !isSelfLoading && hasStockSelection && requestedQty > 0 && requestedQty > availableStock;
+  const hasInsufficientStock =
+    !isSelfLoading &&
+    !warehouseStock.loading &&
+    hasStockSelection &&
+    requestedQty > 0 &&
+    requestedQty > availableStock;
 
   const openAdjustmentModal = (row) => {
     setSelectedSettlementOutward(null);
@@ -659,11 +664,6 @@ export default function OutwardPage() {
 
       if (!payload.product_id) {
         toast.error("Please select product", { theme: "colored" });
-        return;
-      }
-
-      if (warehouseStock.loading) {
-        toast.error("Warehouse stock is still loading", { theme: "colored" });
         return;
       }
 
@@ -1365,11 +1365,11 @@ Consignee: ${row.consignee_name}`;
                 <div style={{ gridColumn: "1 / -1", display: "flex", gap: "12px", marginTop: "6px", flexWrap: "wrap" }}>
                   <button
                     type="submit"
-                    disabled={(editData ? !canEdit : !canCreate) || warehouseStock.loading || hasInsufficientStock}
+                    disabled={(editData ? !canEdit : !canCreate) || hasInsufficientStock}
                     style={{
                       ...btnPrimary,
-                      opacity: ((editData ? !canEdit : !canCreate) || warehouseStock.loading || hasInsufficientStock) ? 0.5 : 1,
-                      cursor: ((editData ? !canEdit : !canCreate) || warehouseStock.loading || hasInsufficientStock) ? "not-allowed" : "pointer",
+                      opacity: ((editData ? !canEdit : !canCreate) || hasInsufficientStock) ? 0.5 : 1,
+                      cursor: ((editData ? !canEdit : !canCreate) || hasInsufficientStock) ? "not-allowed" : "pointer",
                     }}
                   >
                     Save
