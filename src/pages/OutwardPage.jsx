@@ -673,17 +673,42 @@ export default function OutwardPage() {
       }
 
       if (editData) {
-        await axios.put(`${API_BASE}/outward/${editData.id}`, payload);
+        const res = await axios.put(`${API_BASE}/outward/${editData.id}`, payload);
         toast.info("Outward updated successfully", { theme: "colored" });
+        if (res?.data) {
+          setOutwards((prev) => {
+            const next = Array.isArray(prev) ? [...prev] : [];
+            const idx = next.findIndex((row) => String(row.id) === String(res.data.id || editData.id));
+            const mergedRow = { ...(next[idx] || {}), ...res.data, id: String(res.data.id || editData.id) };
+            if (idx >= 0) {
+              next[idx] = mergedRow;
+              return next;
+            }
+            return [mergedRow, ...next];
+          });
+        }
       } else {
-        await axios.post(`${API_BASE}/outward`, payload);
+        const res = await axios.post(`${API_BASE}/outward`, payload);
         toast.success("Outward saved successfully", { theme: "colored" });
+        if (res?.data) {
+          setOutwards((prev) => {
+            const next = Array.isArray(prev) ? [...prev] : [];
+            const mergedRow = {
+              ...payload,
+              ...res.data,
+              id: String(res.data.id || ""),
+              voucher_no: res.data.voucher_no || res.data.outward_no || "",
+              saved_from: res.data.saved_to || "mongodb",
+            };
+            return [mergedRow, ...next.filter((row) => String(row.id) !== String(mergedRow.id))];
+          });
+        }
       }
 
       setShowForm(false);
       setEditData(null);
       resetForm();
-      fetchOutwards();
+      await fetchOutwards();
     } catch (err) {
       console.error(err);
       toast.error(err?.response?.data?.error || "Error saving outward", { theme: "colored" });
