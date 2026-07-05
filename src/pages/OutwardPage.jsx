@@ -550,7 +550,7 @@ export default function OutwardPage() {
     }
   };
 
-  const fetchOutwards = async () => {
+  const fetchOutwards = async (silent = false) => {
     try {
       const res = await axios.get(`${API_BASE}/outward`);
       setOutwards(Array.isArray(res.data) ? res.data : []);
@@ -563,8 +563,34 @@ export default function OutwardPage() {
       }
     } catch (err) {
       console.error(err);
-      toast.error("Error fetching outwards", { theme: "colored" });
+      if (!silent) {
+        toast.error("Error fetching outwards", { theme: "colored" });
+      }
     }
+  };
+
+  const buildSavedOutwardRow = (payload, responseData = {}, fallbackId = "") => {
+    const selectedLocation = locations.find((item) => sameId(getRecordId(item), payload.location_id));
+    const selectedEmployee = employees.find((item) => sameId(getRecordId(item), payload.employee_id));
+    const selectedWarehouse = warehouses.find((item) => sameId(getRecordId(item), payload.warehouse_id));
+    const selectedProduct = products.find((item) => sameId(getRecordId(item), payload.product_id));
+    const selectedCompany = companies.find((item) => sameId(getRecordId(item), payload.company_id));
+    const selectedAccount = companyAccounts.find((item) => sameId(getRecordId(item), payload.company_account_id));
+
+    return {
+      ...payload,
+      ...responseData,
+      id: String(responseData.id || fallbackId || ""),
+      voucher_no: responseData.voucher_no || responseData.outward_no || "",
+      location_name: responseData.location_name || selectedLocation?.name || "",
+      employee_name: responseData.employee_name || selectedEmployee?.name || "",
+      warehouse_name: responseData.warehouse_name || selectedWarehouse?.name || "",
+      product_name: responseData.product_name || selectedProduct?.name || "",
+      company_name: responseData.company_name || selectedCompany?.name || "",
+      party_name: responseData.party_name || selectedAccount?.account_name || "",
+      status: responseData.status || "Pending",
+      saved_from: responseData.saved_from || responseData.saved_to || "sqlite",
+    };
   };
 
   const handleChange = (e) => {
@@ -683,41 +709,31 @@ export default function OutwardPage() {
 
       if (editData) {
         const res = await axios.put(`${API_BASE}/outward/${editData.id}`, payload);
+        const savedRow = buildSavedOutwardRow(payload, res?.data || {}, editData.id);
+        setOutwards((prev) => {
+          const next = Array.isArray(prev) ? [...prev] : [];
+          const idx = next.findIndex((row) => String(row.id) === String(savedRow.id));
+          if (idx >= 0) {
+            next[idx] = { ...next[idx], ...savedRow };
+            return next;
+          }
+          return [savedRow, ...next];
+        });
         toast.info("Outward updated successfully", { theme: "colored" });
-        if (res?.data) {
-          setOutwards((prev) => {
-            const next = Array.isArray(prev) ? [...prev] : [];
-            const idx = next.findIndex((row) => String(row.id) === String(res.data.id || editData.id));
-            const mergedRow = { ...(next[idx] || {}), ...res.data, id: String(res.data.id || editData.id) };
-            if (idx >= 0) {
-              next[idx] = mergedRow;
-              return next;
-            }
-            return [mergedRow, ...next];
-          });
-        }
       } else {
         const res = await axios.post(`${API_BASE}/outward`, payload);
+        const savedRow = buildSavedOutwardRow(payload, res?.data || {});
+        setOutwards((prev) => {
+          const next = Array.isArray(prev) ? [...prev] : [];
+          return [savedRow, ...next.filter((row) => String(row.id) !== String(savedRow.id))];
+        });
         toast.success("Outward saved successfully", { theme: "colored" });
-        if (res?.data) {
-          setOutwards((prev) => {
-            const next = Array.isArray(prev) ? [...prev] : [];
-            const mergedRow = {
-              ...payload,
-              ...res.data,
-              id: String(res.data.id || ""),
-              voucher_no: res.data.voucher_no || res.data.outward_no || "",
-              saved_from: res.data.saved_to || "mongodb",
-            };
-            return [mergedRow, ...next.filter((row) => String(row.id) !== String(mergedRow.id))];
-          });
-        }
       }
 
       setShowForm(false);
       setEditData(null);
       resetForm();
-      await fetchOutwards();
+      fetchOutwards(true);
     } catch (err) {
       console.error(err);
       toast.error(err?.response?.data?.error || "Error saving outward", { theme: "colored" });
