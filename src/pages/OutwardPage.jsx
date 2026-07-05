@@ -644,41 +644,42 @@ export default function OutwardPage() {
       return;
     }
 
+    const payload = {
+      ...formData,
+      employee_id: formData.employee_id || null,
+      location_id: formData.location_id || null,
+      warehouse_id: formData.warehouse_id || null,
+      product_id: formData.product_id || null,
+      company_id: formData.company_id || null,
+      company_account_id: formData.company_account_id || null,
+      lorry_no: formData.lorry_no || "",
+      weight: Number(formData.weight) || 0,
+      quantity: Number(formData.weight) || 0,
+      rate: Number(formData.rate) || 0,
+      buyer_name: formData.buyer_name || "",
+      consignee_name: formData.consignee_name || "",
+      inv_no: (formData.inv_no || "").trim(),
+      self_loading: formData.self_loading || "No",
+    };
+
+    if (!isSelfLoading && !payload.warehouse_id) {
+      toast.error("Please select warehouse", { theme: "colored" });
+      return;
+    }
+
+    if (!payload.product_id) {
+      toast.error("Please select product", { theme: "colored" });
+      return;
+    }
+
+    if (hasInsufficientStock) {
+      toast.error(`Selected warehouse stock not available. Available stock is ${availableStock.toFixed(2)}.`, { theme: "colored" });
+      return;
+    }
+
     try {
       submitLockRef.current = true;
       setIsSaving(true);
-      const payload = {
-        ...formData,
-        employee_id: formData.employee_id || null,
-        location_id: formData.location_id || null,
-        warehouse_id: formData.warehouse_id || null,
-        product_id: formData.product_id || null,
-        company_id: formData.company_id || null,
-        company_account_id: formData.company_account_id || null,
-        lorry_no: formData.lorry_no || "",
-        weight: Number(formData.weight) || 0,
-        quantity: Number(formData.weight) || 0,
-        rate: Number(formData.rate) || 0,
-        buyer_name: formData.buyer_name || "",
-        consignee_name: formData.consignee_name || "",
-        inv_no: (formData.inv_no || "").trim(),
-        self_loading: formData.self_loading || "No",
-      };
-
-      if (!isSelfLoading && !payload.warehouse_id) {
-        toast.error("Please select warehouse", { theme: "colored" });
-        return;
-      }
-
-      if (!payload.product_id) {
-        toast.error("Please select product", { theme: "colored" });
-        return;
-      }
-
-      if (hasInsufficientStock) {
-        toast.error(`Selected warehouse stock not available. Available stock is ${availableStock.toFixed(2)}.`, { theme: "colored" });
-        return;
-      }
 
       if (editData) {
         const res = await axios.put(`${API_BASE}/outward/${editData.id}`, payload);
