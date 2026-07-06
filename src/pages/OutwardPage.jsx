@@ -1203,7 +1203,7 @@ Consignee: ${row.consignee_name}`;
                 <Field label="Outward entry no">
                   <input
                     readOnly
-                    value={editData?.sl_no != null ? String(editData.sl_no) : "— (auto)"}
+                    value={editData?.voucher_no || editData?.outward_no || (editData?.sl_no != null ? String(editData.sl_no) : "� (auto)")}
                     style={{ ...inp, background: "#f8fafc", color: "#64748b" }}
                   />
                 </Field>
@@ -1486,15 +1486,15 @@ Consignee: ${row.consignee_name}`;
                         onClick={() => openUnloadingDetails(row)}
                         style={{ background: rowBg, transition: "background-color 0.15s ease", cursor: "pointer" }}
                       >
-                        <td style={cellBase}>{row.sl_no != null ? row.sl_no : row.id}</td>
+                        <td style={cellBase}>{row.voucher_no || row.outward_no || (row.sl_no != null ? row.sl_no : row.id)}</td>
                         <td style={cellBase}>{row.inv_no || "—"}</td>
                         <td style={cellBase}>{formatDate(row.date)}</td>
-                        <td style={cellBase}>{row.employee_name}</td>
-                        <td style={cellBase}>{row.location_name}</td>
-                        <td style={cellBase}>{row.warehouse_name}</td>
-                        <td style={cellBase}>{row.product_name}</td>
-                        <td style={cellBase}>{row.company_name}</td>
-                        <td style={cellBase}>{row.party_name}</td>
+                        <td style={cellBase}>{row.employee_name || row.employee_id || "�"}</td>
+                        <td style={cellBase}>{row.location_name || row.location_id || "�"}</td>
+                        <td style={cellBase}>{row.warehouse_name || row.warehouse_id || "�"}</td>
+                        <td style={cellBase}>{row.product_name || row.product_id || "�"}</td>
+                        <td style={cellBase}>{row.company_name || row.company_id || "�"}</td>
+                        <td style={cellBase}>{row.party_name || row.account_name || row.company_account_id || "�"}</td>
                         <td style={cellBase}>{row.lorry_no}</td>
                         <td style={cellRight}>{formatWeight(row.weight)}</td>
                         <td style={cellRight}>{formatRate(row.rate)}</td>
