@@ -7,7 +7,7 @@ import OutwardSettlementPage from "./OutwardSettlementPage";
 import BuyerAdjustmentListModal from "./BuyerAdjustmentListModal";
 import BuyerAdjustmentSavedListModal from "./BuyerAdjustmentSavedListModal";
 import BuyerAdjustmentForm from "./BuyerAdjustmentForm";
-import { hasPermission, loadSession } from "../utils/auth";
+import { hasAnyPermission, hasPermission, loadSession } from "../utils/auth";
 
 const lbl = {
   display: "block",
@@ -139,8 +139,10 @@ export default function OutwardPage() {
   const [selectedUnloadingError, setSelectedUnloadingError] = useState("");
   const [showBuyerAdjustmentForm, setShowBuyerAdjustmentForm] = useState(false);
   const [selectedUnloadingDetail, setSelectedUnloadingDetail] = useState(null);
+  const [isSaving, setIsSaving] = useState(false);
   const selectedRowDetailRef = useRef(null);
   const rowRefs = useRef({});
+  const submitLockRef = useRef(false);
 
   const [formData, setFormData] = useState({
     date: "",
@@ -186,7 +188,12 @@ export default function OutwardPage() {
   const requestedQty = Number(formData.weight) || 0;
   const availableStock = Number(warehouseStock.availableStock) || 0;
   const hasStockSelection = !isSelfLoading && Boolean(formData.warehouse_id && formData.product_id);
-  const hasInsufficientStock = !isSelfLoading && hasStockSelection && requestedQty > 0 && requestedQty > availableStock;
+  const hasInsufficientStock =
+    !isSelfLoading &&
+    !warehouseStock.loading &&
+    hasStockSelection &&
+    requestedQty > 0 &&
+    requestedQty > availableStock;
 
   const openAdjustmentModal = (row) => {
     setSelectedSettlementOutward(null);
@@ -506,19 +513,25 @@ export default function OutwardPage() {
 
   const fetchDropdowns = async () => {
     try {
+      const canReadEmployees = hasAnyPermission(user, ["employees.view", "inward.view", "outward.view", "expense.entry", "report.erp"]);
+      const canReadLocations = hasAnyPermission(user, ["locations.manage", "expense.entry", "expense.view", "expense.create", "expense.edit", "inward.view", "inward.create", "outward.view", "outward.create", "employees.view", "report.partyStock", "report.warehouseRentLedger", "report.warehouseRentMonthEnd"]);
+      const canReadWarehouses = hasAnyPermission(user, ["warehouses.manage", "outward.view", "outward.create", "inward.view", "inward.create", "warehouse.trading.view"]);
+      const canReadProducts = hasAnyPermission(user, ["products.manage", "inward.view", "inward.create", "outward.view", "outward.create", "adjustment.manage", "expense.entry", "expense.view", "expense.create", "transport.manage", "report.inward", "report.erp", "report.partyLedger", "report.partyStock"]);
+      const canReadCompanies = hasAnyPermission(user, ["companies.manage", "inward.view", "inward.create", "outward.view", "outward.create", "adjustment.manage", "expense.entry", "expense.view", "expense.create", "cash.view", "settlement.view", "report.inward", "report.erp", "report.partyLedger", "report.partyStock", "report.warehouseRentLedger", "report.warehouseRentMonthEnd", "report.outwardSettlement", "report.expense"]);
+      const canReadCompanyAccounts = hasAnyPermission(user, ["companyAccounts.manage", "inward.view", "inward.create", "outward.view", "outward.create", "adjustment.manage", "expense.entry", "expense.view", "expense.create", "cash.view", "settlement.view", "report.inward", "report.erp", "report.partyLedger", "report.partyStock", "report.warehouseRentLedger", "report.warehouseRentMonthEnd", "report.outwardSettlement", "report.expense"]);
       const [empRes, locRes, whRes, prodRes, compRes, accRes, consigneeRes, buyerRes] = await Promise.all([
-        canViewEmployees
+        canReadEmployees
           ? axios.get(`${API_BASE}/employees`)
           : Promise.resolve({
               data: user
                 ? [{ id: getRecordId(user), name: user.name || user.username || "Current User", location_id: user.location_id }]
                 : [],
             }),
-        axios.get(`${API_BASE}/locations`),
-        axios.get(`${API_BASE}/warehouses`),
-        axios.get(`${API_BASE}/products`),
-        axios.get(`${API_BASE}/companies`),
-        axios.get(`${API_BASE}/company-accounts`),
+        canReadLocations ? axios.get(`${API_BASE}/locations`) : Promise.resolve({ data: [] }),
+        canReadWarehouses ? axios.get(`${API_BASE}/warehouses`) : Promise.resolve({ data: [] }),
+        canReadProducts ? axios.get(`${API_BASE}/products`) : Promise.resolve({ data: [] }),
+        canReadCompanies ? axios.get(`${API_BASE}/companies`) : Promise.resolve({ data: [] }),
+        canReadCompanyAccounts ? axios.get(`${API_BASE}/company-accounts`) : Promise.resolve({ data: [] }),
         axios.get(`${API_BASE}/consignee-names`).catch(() => ({ data: [] })),
         axios.get(`${API_BASE}/buyer-names`).catch(() => ({ data: [] })),
       ]);
@@ -627,7 +640,13 @@ export default function OutwardPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
 
+    if (submitLockRef.current || isSaving) {
+      return;
+    }
+
     try {
+      submitLockRef.current = true;
+      setIsSaving(true);
       const payload = {
         ...formData,
         employee_id: formData.employee_id || null,
@@ -646,8 +665,13 @@ export default function OutwardPage() {
         self_loading: formData.self_loading || "No",
       };
 
-      if (warehouseStock.loading) {
-        toast.error("Warehouse stock is still loading", { theme: "colored" });
+      if (!isSelfLoading && !payload.warehouse_id) {
+        toast.error("Please select warehouse", { theme: "colored" });
+        return;
+      }
+
+      if (!payload.product_id) {
+        toast.error("Please select product", { theme: "colored" });
         return;
       }
 
@@ -657,20 +681,50 @@ export default function OutwardPage() {
       }
 
       if (editData) {
-        await axios.put(`${API_BASE}/outward/${editData.id}`, payload);
+        const res = await axios.put(`${API_BASE}/outward/${editData.id}`, payload);
         toast.info("Outward updated successfully", { theme: "colored" });
+        if (res?.data) {
+          setOutwards((prev) => {
+            const next = Array.isArray(prev) ? [...prev] : [];
+            const idx = next.findIndex((row) => String(row.id) === String(res.data.id || editData.id));
+            const mergedRow = { ...(next[idx] || {}), ...res.data, id: String(res.data.id || editData.id) };
+            if (idx >= 0) {
+              next[idx] = mergedRow;
+              return next;
+            }
+            return [mergedRow, ...next];
+          });
+        }
       } else {
-        await axios.post(`${API_BASE}/outward`, payload);
+        const res = await axios.post(`${API_BASE}/outward`, payload);
         toast.success("Outward saved successfully", { theme: "colored" });
+        if (res?.data) {
+          setOutwards((prev) => {
+            const next = Array.isArray(prev) ? [...prev] : [];
+            const mergedRow = {
+              ...payload,
+              ...res.data,
+              id: String(res.data.id || ""),
+              voucher_no: res.data.voucher_no || res.data.outward_no || "",
+              saved_from: res.data.saved_to || "mongodb",
+            };
+            return [mergedRow, ...next.filter((row) => String(row.id) !== String(mergedRow.id))];
+          });
+        }
       }
 
       setShowForm(false);
       setEditData(null);
       resetForm();
-      fetchOutwards();
+      window.setTimeout(() => {
+        fetchOutwards();
+      }, 800);
     } catch (err) {
       console.error(err);
       toast.error(err?.response?.data?.error || "Error saving outward", { theme: "colored" });
+    } finally {
+      submitLockRef.current = false;
+      setIsSaving(false);
     }
   };
 
@@ -1349,14 +1403,14 @@ Consignee: ${row.consignee_name}`;
                 <div style={{ gridColumn: "1 / -1", display: "flex", gap: "12px", marginTop: "6px", flexWrap: "wrap" }}>
                   <button
                     type="submit"
-                    disabled={(editData ? !canEdit : !canCreate) || warehouseStock.loading || hasInsufficientStock}
+                    disabled={(editData ? !canEdit : !canCreate) || hasInsufficientStock || isSaving}
                     style={{
                       ...btnPrimary,
-                      opacity: ((editData ? !canEdit : !canCreate) || warehouseStock.loading || hasInsufficientStock) ? 0.5 : 1,
-                      cursor: ((editData ? !canEdit : !canCreate) || warehouseStock.loading || hasInsufficientStock) ? "not-allowed" : "pointer",
+                      opacity: ((editData ? !canEdit : !canCreate) || hasInsufficientStock || isSaving) ? 0.5 : 1,
+                      cursor: ((editData ? !canEdit : !canCreate) || hasInsufficientStock || isSaving) ? "not-allowed" : "pointer",
                     }}
                   >
-                    Save
+                    {isSaving ? "Saving..." : "Save"}
                   </button>
                   <button type="button" onClick={closeFormModal} style={btnPrimary}>
                     Back To Outward List
@@ -2141,6 +2195,7 @@ Consignee: ${row.consignee_name}`;
   </div>
   );
 }
+
 
 
 
