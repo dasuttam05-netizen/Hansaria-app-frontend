@@ -863,7 +863,7 @@ Account: ${row.party_name || row.account_name}
 Lorry: ${row.lorry_no}
 Weight: ${row.weight}
 Rate: ${row.rate}
-Inv No: ${row.inv_no || "—"}
+Inv No: ${row.inv_no || "�"}
 Self Loading: ${row.self_loading || "No"}
 Buyer: ${row.buyer_name}
 Consignee: ${row.consignee_name}`;
@@ -1203,7 +1203,7 @@ Consignee: ${row.consignee_name}`;
                 <Field label="Outward entry no">
                   <input
                     readOnly
-                    value={editData?.voucher_no || editData?.outward_no || (editData?.sl_no != null ? String(editData.sl_no) : "� (auto)")}
+                    value={editData?.sl_no != null ? String(editData.sl_no) : "� (auto)"}
                     style={{ ...inp, background: "#f8fafc", color: "#64748b" }}
                   />
                 </Field>
@@ -1486,8 +1486,8 @@ Consignee: ${row.consignee_name}`;
                         onClick={() => openUnloadingDetails(row)}
                         style={{ background: rowBg, transition: "background-color 0.15s ease", cursor: "pointer" }}
                       >
-                        <td style={cellBase}>{row.voucher_no || row.outward_no || (row.sl_no != null ? row.sl_no : row.id)}</td>
-                        <td style={cellBase}>{row.inv_no || "—"}</td>
+                        <td style={cellBase}>{row.sl_no != null ? row.sl_no : row.id}</td>
+                        <td style={cellBase}>{row.inv_no || "�"}</td>
                         <td style={cellBase}>{formatDate(row.date)}</td>
                         <td style={cellBase}>{row.employee_name || row.employee_id || "�"}</td>
                         <td style={cellBase}>{row.location_name || row.location_id || "�"}</td>
@@ -1734,10 +1734,10 @@ Consignee: ${row.consignee_name}`;
                     <div style={mobileCardTitle}>
                       <div>
                         <div style={{ fontSize: 16, fontWeight: 800, color: "#1f3d05" }}>
-                          {row.sl_no != null ? row.sl_no : row.id} · {row.inv_no || "-"}
+                          {row.sl_no != null ? row.sl_no : row.id} � {row.inv_no || "-"}
                         </div>
                         <div style={{ fontSize: 13, color: "#365314", marginTop: 2 }}>
-                          {formatDate(row.date)} · {row.self_loading || "No"}
+                          {formatDate(row.date)} � {row.self_loading || "No"}
                         </div>
                       </div>
                       <span style={mobileCardBadge}>{row.lorry_no || "No Lorry"}</span>
@@ -2192,6 +2192,8 @@ Consignee: ${row.consignee_name}`;
   </div>
   );
 }
+
+
 
 
 
