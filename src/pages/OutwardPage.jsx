@@ -716,9 +716,6 @@ export default function OutwardPage() {
       setShowForm(false);
       setEditData(null);
       resetForm();
-      window.setTimeout(() => {
-        fetchOutwards();
-      }, 800);
     } catch (err) {
       console.error(err);
       toast.error(err?.response?.data?.error || "Error saving outward", { theme: "colored" });
