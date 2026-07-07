@@ -45,6 +45,28 @@ const getRecordId = (record) => {
 const sameId = (left, right) =>
   String(left || "") !== "" && String(left || "") === String(right || "");
 
+const firstNonEmpty = (...values) => values.find((value) => String(value || "").trim() !== "") || "";
+
+const buildLookupMap = (items) => {
+  const map = new Map();
+  (Array.isArray(items) ? items : []).forEach((item) => {
+    const id = getRecordId(item);
+    if (!id) return;
+    map.set(id, item);
+  });
+  return map;
+};
+
+const displayName = (row, id, lookup, fields, fallbackPrefix) => {
+  const key = getRecordId(id);
+  const source = key ? lookup.get(key) : null;
+  return firstNonEmpty(
+    ...fields.map((field) => source?.[field]),
+    ...fields.map((field) => row?.[field]),
+    key ? `${fallbackPrefix} ${key}` : ""
+  );
+};
+
 const mobileCard = {
   border: "1px solid #bbf7d0",
   borderRadius: 14,
@@ -171,6 +193,13 @@ export default function OutwardPage() {
   const [companyAccounts, setCompanyAccounts] = useState([]);
   const [consigneeNames, setConsigneeNames] = useState([]);
   const [buyerNames, setBuyerNames] = useState([]);
+
+  const employeeLookup = useMemo(() => buildLookupMap(employees), [employees]);
+  const locationLookup = useMemo(() => buildLookupMap(locations), [locations]);
+  const warehouseLookup = useMemo(() => buildLookupMap(warehouses), [warehouses]);
+  const productLookup = useMemo(() => buildLookupMap(products), [products]);
+  const companyLookup = useMemo(() => buildLookupMap(companies), [companies]);
+  const accountLookup = useMemo(() => buildLookupMap(companyAccounts), [companyAccounts]);
   const [warehouseStock, setWarehouseStock] = useState({ currentStock: 0, reservedStock: 0, availableStock: 0, loading: false, error: "" });
 
   const consigneesForBuyer = useMemo(() => {
@@ -1489,12 +1518,12 @@ Consignee: ${row.consignee_name}`;
                         <td style={cellBase}>{row.sl_no != null ? row.sl_no : row.id}</td>
                         <td style={cellBase}>{row.inv_no || "�"}</td>
                         <td style={cellBase}>{formatDate(row.date)}</td>
-                        <td style={cellBase}>{row.employee_name || row.employee_id || "�"}</td>
-                        <td style={cellBase}>{row.location_name || row.location_id || "�"}</td>
-                        <td style={cellBase}>{row.warehouse_name || row.warehouse_id || "�"}</td>
-                        <td style={cellBase}>{row.product_name || row.product_id || "�"}</td>
-                        <td style={cellBase}>{row.company_name || row.company_id || "�"}</td>
-                        <td style={cellBase}>{row.party_name || row.account_name || row.company_account_id || "�"}</td>
+                        <td style={cellBase}>{displayName(row, row.employee_id, employeeLookup, ["name", "employee_name", "username"], "Employee")}</td>
+                        <td style={cellBase}>{displayName(row, row.location_id, locationLookup, ["name", "location_name"], "Location")}</td>
+                        <td style={cellBase}>{displayName(row, row.warehouse_id, warehouseLookup, ["name", "warehouse_name"], "Warehouse")}</td>
+                        <td style={cellBase}>{displayName(row, row.product_id, productLookup, ["name", "product_name"], "Product")}</td>
+                        <td style={cellBase}>{displayName(row, row.company_id, companyLookup, ["name", "company_name"], "Company")}</td>
+                        <td style={cellBase}>{displayName(row, row.company_account_id, accountLookup, ["account_name", "name", "party_name"], "Account")}</td>
                         <td style={cellBase}>{row.lorry_no}</td>
                         <td style={cellRight}>{formatWeight(row.weight)}</td>
                         <td style={cellRight}>{formatRate(row.rate)}</td>
@@ -2192,6 +2221,10 @@ Consignee: ${row.consignee_name}`;
   </div>
   );
 }
+
+
+
+
 
 
 
