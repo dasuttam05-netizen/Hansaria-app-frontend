@@ -730,10 +730,12 @@ export default function OutwardPage() {
         toast.success("Outward saved successfully", { theme: "colored" });
       }
 
-      await fetchOutwards();
       setShowForm(false);
       setEditData(null);
       resetForm();
+      fetchOutwards().catch((fetchErr) => {
+        console.error("Failed to refresh outward list after save:", fetchErr);
+      });
     } catch (err) {
       console.error(err);
       toast.error(err?.response?.data?.error || "Error saving outward", { theme: "colored" });
@@ -1419,7 +1421,6 @@ Consignee: ${row.consignee_name}`;
                   <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
                     <button
                       type="submit"
-                      onClick={handleSubmit}
                       disabled={(editData ? !canEdit : !canCreate) || hasInsufficientStock || isSaving}
                       style={{
                         ...btnPrimary,
