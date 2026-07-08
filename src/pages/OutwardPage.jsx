@@ -673,75 +673,64 @@ export default function OutwardPage() {
       return;
     }
 
-    try {
-      submitLockRef.current = true;
-      setIsSaving(true);
-      const payload = {
+    if (!formData.date || !formData.employee_id) {
+      toast.error("Please select date and employee", { theme: "colored" });
+      return;
+    }
+
+    const payload = (() => {
+      const selectedBuyer = buyerNames.find((item) => sameId(getRecordId(item), formData.buyer_id));
+      const selectedConsignee = consigneeNames.find((item) => sameId(getRecordId(item), formData.consignee_id));
+
+      return {
         ...formData,
         employee_id: formData.employee_id || null,
         location_id: formData.location_id || null,
-        warehouse_id: formData.warehouse_id || null,
+        warehouse_id: String(formData.self_loading || "No").trim().toLowerCase() === "yes" ? null : formData.warehouse_id || null,
         product_id: formData.product_id || null,
         company_id: formData.company_id || null,
         company_account_id: formData.company_account_id || null,
-        lorry_no: formData.lorry_no || "",
+        lorry_no: String(formData.lorry_no || "").trim(),
         weight: Number(formData.weight) || 0,
         quantity: Number(formData.weight) || 0,
         rate: Number(formData.rate) || 0,
-        buyer_name: formData.buyer_name || "",
-        consignee_name: formData.consignee_name || "",
-        inv_no: (formData.inv_no || "").trim(),
-        self_loading: formData.self_loading || "No",
+        buyer_name: String(formData.buyer_name || selectedBuyer?.name || "").trim(),
+        consignee_name: String(formData.consignee_name || selectedConsignee?.name || "").trim(),
+        inv_no: String(formData.inv_no || "").trim(),
+        self_loading: String(formData.self_loading || "No").trim() || "No",
       };
+    })();
 
-      if (!isSelfLoading && !payload.warehouse_id) {
+    if (!payload.self_loading || String(payload.self_loading).trim().toLowerCase() !== "yes") {
+      if (!payload.warehouse_id) {
         toast.error("Please select warehouse", { theme: "colored" });
         return;
       }
+    }
 
-      if (!payload.product_id) {
-        toast.error("Please select product", { theme: "colored" });
-        return;
-      }
+    if (!payload.product_id) {
+      toast.error("Please select product", { theme: "colored" });
+      return;
+    }
 
-      if (hasInsufficientStock) {
-        toast.error(`Selected warehouse stock not available. Available stock is ${availableStock.toFixed(2)}.`, { theme: "colored" });
-        return;
-      }
+    if (hasInsufficientStock) {
+      toast.error(`Selected warehouse stock not available. Available stock is ${availableStock.toFixed(2)}.`, { theme: "colored" });
+      return;
+    }
+
+    try {
+      submitLockRef.current = true;
+      setIsSaving(true);
 
       if (editData) {
-        const res = await axios.put(`${API_BASE}/outward/${editData.id}`, payload);
+        await axios.put(`${API_BASE}/outward/${editData.id}`, payload);
         toast.info("Outward updated successfully", { theme: "colored" });
-        if (res?.data) {
-          setOutwards((prev) => {
-            const next = Array.isArray(prev) ? [...prev] : [];
-            const idx = next.findIndex((row) => String(row.id) === String(res.data.id || editData.id));
-            const mergedRow = { ...(next[idx] || {}), ...res.data, id: String(res.data.id || editData.id) };
-            if (idx >= 0) {
-              next[idx] = mergedRow;
-              return next;
-            }
-            return [mergedRow, ...next];
-          });
-        }
       } else {
-        const res = await axios.post(`${API_BASE}/outward`, payload);
+        await axios.post(`${API_BASE}/outward`, payload);
         toast.success("Outward saved successfully", { theme: "colored" });
-        if (res?.data) {
-          setOutwards((prev) => {
-            const next = Array.isArray(prev) ? [...prev] : [];
-            const mergedRow = {
-              ...payload,
-              ...res.data,
-              id: String(res.data.id || ""),
-              voucher_no: res.data.voucher_no || res.data.outward_no || "",
-              saved_from: res.data.saved_to || "mongodb",
-            };
-            return [mergedRow, ...next.filter((row) => String(row.id) !== String(mergedRow.id))];
-          });
-        }
       }
 
+      await fetchOutwards();
       setShowForm(false);
       setEditData(null);
       resetForm();
