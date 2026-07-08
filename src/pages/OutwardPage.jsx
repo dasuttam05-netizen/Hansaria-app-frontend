@@ -1415,21 +1415,34 @@ Consignee: ${row.consignee_name}`;
                   </select>
                 </Field>
 
-                <div style={{ gridColumn: "1 / -1", display: "flex", gap: "12px", marginTop: "6px", flexWrap: "wrap" }}>
-                  <button
-                    type="submit"
-                    disabled={(editData ? !canEdit : !canCreate) || hasInsufficientStock || isSaving}
-                    style={{
-                      ...btnPrimary,
-                      opacity: ((editData ? !canEdit : !canCreate) || hasInsufficientStock || isSaving) ? 0.5 : 1,
-                      cursor: ((editData ? !canEdit : !canCreate) || hasInsufficientStock || isSaving) ? "not-allowed" : "pointer",
-                    }}
-                  >
-                    {isSaving ? "Saving..." : "Save"}
-                  </button>
-                  <button type="button" onClick={closeFormModal} style={btnPrimary}>
-                    Back To Outward List
-                  </button>
+                <div style={{ gridColumn: "1 / -1", display: "flex", flexDirection: "column", gap: "8px", marginTop: "6px" }}>
+                  <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
+                    <button
+                      type="submit"
+                      onClick={handleSubmit}
+                      disabled={(editData ? !canEdit : !canCreate) || hasInsufficientStock || isSaving}
+                      style={{
+                        ...btnPrimary,
+                        opacity: ((editData ? !canEdit : !canCreate) || hasInsufficientStock || isSaving) ? 0.5 : 1,
+                        cursor: ((editData ? !canEdit : !canCreate) || hasInsufficientStock || isSaving) ? "not-allowed" : "pointer",
+                      }}
+                    >
+                      {isSaving ? "Saving..." : "Save"}
+                    </button>
+                    <button type="button" onClick={closeFormModal} style={btnPrimary}>
+                      Back To Outward List
+                    </button>
+                  </div>
+                  {warehouseStock.loading && !isSelfLoading ? (
+                    <div style={{ color: "#475569", fontSize: "12px" }}>
+                      Loading warehouse stock... Save will still work once the data is ready.
+                    </div>
+                  ) : null}
+                  {hasInsufficientStock ? (
+                    <div style={{ color: "#dc2626", fontSize: "12px" }}>
+                      Insufficient stock: available {availableStock.toFixed(2)}. Reduce weight or choose another warehouse/product.
+                    </div>
+                  ) : null}
                 </div>
               </form>
             </div>
