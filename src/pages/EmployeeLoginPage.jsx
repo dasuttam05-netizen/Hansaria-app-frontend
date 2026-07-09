@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import axios from "axios";
+import { saveSession } from "../utils/auth";
 
 export default function EmployeeLoginPage({ onLogin }) {
   const [username, setUsername] = useState("");
@@ -13,9 +14,18 @@ export default function EmployeeLoginPage({ onLogin }) {
         username,
         password,
       });
+      const savedUser = saveSession(res.data.token, res.data.user || {
+        id: res.data.id || null,
+        username,
+        name: res.data.name || username,
+        role: res.data.role || "staff",
+        permissions: res.data.permissions || [],
+        location_id: res.data.location_id || null,
+        location_ids: res.data.location_ids || (res.data.location_id ? [res.data.location_id] : []),
+      });
       localStorage.setItem("employeeToken", res.data.token);
-      localStorage.setItem("employeeLocation", res.data.location_id);
-      localStorage.setItem("employeeName", res.data.name);
+      localStorage.setItem("employeeLocation", savedUser.location_id || res.data.location_id || "");
+      localStorage.setItem("employeeName", savedUser.name || res.data.name || "");
       onLogin(res.data); // pass employee info
     } catch (err) {
       setError(err.response?.data?.error || "Login failed");
