@@ -225,7 +225,18 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
         signal: abortControllerRef.current.signal,
       });
       if (isMountedRef.current) {
-        setCompanyList(Array.isArray(res.data) ? res.data : []);
+        const rows = Array.isArray(res.data) ? res.data : [];
+        const deduped = [];
+        const seen = new Set();
+        rows.forEach((row) => {
+          const id = String(row?.id || "").trim();
+          const source = String(row?.source_type || "inward").trim();
+          const key = `${source}:${id}`;
+          if (!id || seen.has(key)) return;
+          seen.add(key);
+          deduped.push(row);
+        });
+        setCompanyList(deduped);
       }
     } catch (err) {
       if (isMountedRef.current && err.name !== "CanceledError") {
