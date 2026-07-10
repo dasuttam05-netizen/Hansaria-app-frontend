@@ -38,7 +38,7 @@ export const ROLE_PERMISSION_PRESETS = {
     "report.expense",
     "report.cash",
   ],
-  ho: ["all"],
+  ho: [],
   manager: [
     "dashboard.view",
     "employees.view",
@@ -363,7 +363,7 @@ export function hasPermission(user, permission) {
 
   const permissions = normalizePermissions(user.role, user.permissions);
   return (
-    ["admin", "ho"].includes(normalizeRole(user.role)) ||
+    ["admin"].includes(normalizeRole(user.role)) ||
     permissions.includes("all") ||
     permissions.includes(permission)
   );
