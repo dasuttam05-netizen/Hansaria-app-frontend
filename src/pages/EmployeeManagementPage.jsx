@@ -192,7 +192,7 @@ const getActionOptions = (groupKey, item) => {
     return ACTIONS.map((action) => ({
       id: `${item.key}:${action}`,
       label: action[0].toUpperCase() + action.slice(1),
-      permissions: [`${baseName}.${action}`, basePermission].filter(Boolean),
+      permission: `${baseName}.${action}`,
     }));
   }
   if (groupKey === "reports") {
