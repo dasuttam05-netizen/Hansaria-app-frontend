@@ -931,73 +931,69 @@ export default function ExpenseManagementPage() {
                   />
                 </Field>
 
-                {(canCreate || canEdit) && (
-                  <>
-                    <Field label="Product">
-                      <select
-                        name="product_id"
-                        value={formData.product_id}
-                        onChange={handleFieldChange}
-                        style={inputStyle}
-                      >
-                        <option value="">Select Product</option>
-                        {productOptions.map((product) => (
-                          <option key={getRecordId(product)} value={getRecordId(product)}>
-                            {product.name}
-                          </option>
-                        ))}
-                      </select>
-                    </Field>
+                <Field label="Product">
+                  <select
+                    name="product_id"
+                    value={formData.product_id}
+                    onChange={handleFieldChange}
+                    style={inputStyle}
+                  >
+                    <option value="">Select Product</option>
+                    {productOptions.map((product) => (
+                      <option key={getRecordId(product)} value={getRecordId(product)}>
+                        {product.name}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
 
-                    <Field label="Party (Company)">
-                      <select
-                        name="company_id"
-                        value={formData.company_id}
-                        onChange={handleFieldChange}
-                        style={inputStyle}
-                      >
-                        <option value="">Select company party</option>
-                        {companyOptions.map((company) => (
-                          <option key={getRecordId(company)} value={getRecordId(company)}>
-                            {company.name}
-                          </option>
-                        ))}
-                      </select>
-                    </Field>
+                <Field label="Party (Company)">
+                  <select
+                    name="company_id"
+                    value={formData.company_id}
+                    onChange={handleFieldChange}
+                    style={inputStyle}
+                  >
+                    <option value="">Select company party</option>
+                    {companyOptions.map((company) => (
+                      <option key={getRecordId(company)} value={getRecordId(company)}>
+                        {company.name}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
 
-                    <Field label="Party Company / A/C">
-                      <select
-                        name="company_account_id"
-                        value={formData.company_account_id}
-                        onChange={handleFieldChange}
-                        style={inputStyle}
-                      >
-                        <option value="">Select Account</option>
-                        {accountOptions.map((account) => (
-                          <option key={getRecordId(account)} value={getRecordId(account)}>
-                            {account.account_name}
-                          </option>
-                        ))}
-                      </select>
-                    </Field>
+                <Field label="Party Company / A/C">
+                  <select
+                    name="company_account_id"
+                    value={formData.company_account_id}
+                    onChange={handleFieldChange}
+                    style={inputStyle}
+                  >
+                    <option value="">Select Account</option>
+                    {accountOptions.map((account) => (
+                      <option key={getRecordId(account)} value={getRecordId(account)}>
+                        {account.account_name}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
 
-                    <Field label="Reg From (Consignee name)">
-                      <select
-                        name="reg_from_consignee_id"
-                        value={formData.reg_from_consignee_id}
-                        onChange={handleFieldChange}
-                        style={inputStyle}
-                      >
-                        <option value="">Select consignee name</option>
-                        {consigneeNames.map((c) => (
-                          <option key={c.id} value={c.id}>
-                            {c.buyer_name ? `${c.name} (${c.buyer_name})` : c.name}
-                          </option>
-                        ))}
-                      </select>
-                    </Field>
-                  </>
-                )}
+                <Field label="Reg From (Consignee name)">
+                  <select
+                    name="reg_from_consignee_id"
+                    value={formData.reg_from_consignee_id}
+                    onChange={handleFieldChange}
+                    style={inputStyle}
+                  >
+                    <option value="">Select consignee name</option>
+                    {consigneeNames.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.buyer_name ? `${c.name} (${c.buyer_name})` : c.name}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
 
                 <Field label="Work Description">
                   <select
@@ -1052,7 +1048,7 @@ export default function ExpenseManagementPage() {
                   </>
                 )}
 
-                {(canCreate || canEdit) && (["Warehouse Inward", "Warehouse Outward"].includes(formData.work_description)) && (
+                {(["Warehouse Inward", "Warehouse Outward"].includes(formData.work_description)) && (
                   <Field label="Warehouse">
                     <select
                       name="send_to_unified"
@@ -1072,7 +1068,7 @@ export default function ExpenseManagementPage() {
                   </Field>
                 )}
 
-                {(canCreate || canEdit) && (formData.work_description === "Others") && (
+                {(formData.work_description === "Others") && (
                   <Field label="Send To">
                     <select
                       name="send_to_unified"
