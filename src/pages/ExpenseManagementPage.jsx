@@ -234,8 +234,8 @@ export default function ExpenseManagementPage() {
   const canOpenLocalSale = hasPermission(user, "expense.localSale");
   const canViewEmployees = hasPermission(user, "employees.view");
   const canViewCashEntries = hasPermission(user, "cash.view");
-  const isHoOrBm = ["ho", "bm"].includes(String(user?.role || "").trim().toLowerCase());
-  const canApproveToCashBook = canEdit && (hasPermission(user, "cash.create") || isHoOrBm);
+  const isBm = String(user?.role || "").trim().toLowerCase() === "bm";
+  const canApproveToCashBook = canEdit && (hasPermission(user, "cash.create") || isBm);
   const canAccessPage =
     canCreate || canEdit || canDelete || canExpenseEntryAccess;
 
