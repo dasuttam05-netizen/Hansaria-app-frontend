@@ -45,6 +45,8 @@ const PERMISSION_GROUPS = [
       { key: "adjustment_access", label: "Outward Adjustment", permissions: ["adjustment.manage"] },
       { key: "settlement_access", label: "Settlement", permissions: ["settlement.view", "settlement.companyRate"] },
       { key: "expense_access", label: "Expense Entry", permissions: ["expense.entry", "expense.create", "expense.edit", "expense.delete"] },
+      { key: "buyer_names_access", label: "Buyer Names", permissions: ["buyerNames.view", "buyerNames.create", "buyerNames.edit", "buyerNames.delete"] },
+      { key: "consignee_names_access", label: "Consignee Names", permissions: ["consigneeNames.view", "consigneeNames.create", "consigneeNames.edit", "consigneeNames.delete"] },
       { key: "expense_posted_inward_access", label: "Expense to Inward Posted", permissions: ["expense.postedInward"] },
       { key: "expense_palti_access", label: "Palti Lorry", permissions: ["expense.palti"] },
       { key: "expense_self_loading_access", label: "Self Loading", permissions: ["expense.selfLoading"] },
