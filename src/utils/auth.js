@@ -297,10 +297,10 @@ export function normalizePermissions(role = "staff", permissions = []) {
 
   const parsedPermissions = parsePermissionInput(permissions);
   if (parsedPermissions !== null) {
-    return expandPermissions([...new Set(parsedPermissions)]);
+    return [...new Set(parsedPermissions)];
   }
 
-  return expandPermissions(ROLE_PERMISSION_PRESETS[normalizedRole] || ROLE_PERMISSION_PRESETS.staff);
+  return [...new Set(ROLE_PERMISSION_PRESETS[normalizedRole] || ROLE_PERMISSION_PRESETS.staff)];
 }
 
 export function applyAuthToken(token) {
@@ -365,8 +365,7 @@ export function hasPermission(user, permission) {
   return (
     ["admin", "ho"].includes(normalizeRole(user.role)) ||
     permissions.includes("all") ||
-    permissions.includes(permission) ||
-    (LEGACY_PERMISSION_MAP[permission] || []).some((item) => permissions.includes(item))
+    permissions.includes(permission)
   );
 }
 
