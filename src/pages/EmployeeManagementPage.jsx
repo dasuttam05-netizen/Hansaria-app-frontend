@@ -146,7 +146,7 @@ const actionKindFromOption = (option = {}) => {
 };
 
 export function getActionOptions(groupKey, item, roleContext = "staff") {
-  const useAccessOnly = roleContext !== "senior" && ACCESS_ONLY_ITEM_KEYS.has(item.key);
+  const useAccessOnly = ACCESS_ONLY_ITEM_KEYS.has(item.key);
 
   if (item.allAccess) {
     return [
