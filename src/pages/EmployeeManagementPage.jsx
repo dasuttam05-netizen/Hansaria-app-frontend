@@ -44,9 +44,9 @@ const PERMISSION_GROUPS = [
       { key: "outward_access", label: "Outward", permissions: ["outward.view", "outward.create", "outward.edit", "outward.delete"] },
       { key: "adjustment_access", label: "Outward Adjustment", permissions: ["adjustment.manage"] },
       { key: "settlement_access", label: "Settlement", permissions: ["settlement.view", "settlement.companyRate"] },
-      { key: "expense_access", label: "Expense Entry", permissions: ["expense.entry", "expense.create", "expense.edit", "expense.delete"] },
-      { key: "buyer_names_access", label: "Buyer Names", permissions: ["buyerNames.view", "buyerNames.create", "buyerNames.edit", "buyerNames.delete"] },
-      { key: "consignee_names_access", label: "Consignee Names", permissions: ["consigneeNames.view", "consigneeNames.create", "consigneeNames.edit", "consigneeNames.delete"] },
+      { key: "expense_access", label: "Expense Entry", dropdown: true, permissions: ["expense.view", "expense.create", "expense.edit", "expense.delete"] },
+      { key: "buyer_names_access", label: "Buyer Names", dropdown: true, permissions: ["buyerNames.view", "buyerNames.create", "buyerNames.edit", "buyerNames.delete"] },
+      { key: "consignee_names_access", label: "Consignee Names", dropdown: true, permissions: ["consigneeNames.view", "consigneeNames.create", "consigneeNames.edit", "consigneeNames.delete"] },
       { key: "expense_posted_inward_access", label: "Expense to Inward Posted", permissions: ["expense.postedInward"] },
       { key: "expense_palti_access", label: "Palti Lorry", permissions: ["expense.palti"] },
       { key: "expense_self_loading_access", label: "Self Loading", permissions: ["expense.selfLoading"] },
@@ -98,17 +98,29 @@ const PERMISSION_GROUPS = [
     items: [
       { key: "employees_manage", label: "Employees", permissions: ["employees.view", "employees.create", "employees.edit", "employees.delete"] },
       { key: "employees_non_admin_edit", label: "Employees Edit (Non-admin)", permissions: ["employees.edit.non_admin"] },
-      { key: "locations_manage", label: "Location", permissions: ["locations.view", "locations.create", "locations.edit", "locations.delete"] },
-      { key: "warehouses_manage", label: "Warehouse", permissions: ["warehouses.view", "warehouses.create", "warehouses.edit", "warehouses.delete"] },
-      { key: "companies_manage", label: "Companies", permissions: ["companies.view", "companies.create", "companies.edit", "companies.delete"] },
-      { key: "accounts_manage", label: "Company Accounts", permissions: ["companyAccounts.view", "companyAccounts.create", "companyAccounts.edit", "companyAccounts.delete"] },
-      { key: "products_manage", label: "Products", permissions: ["products.view", "products.create", "products.edit", "products.delete"] },
+      { key: "locations_manage", label: "Location", dropdown: true, permissions: ["locations.view", "locations.create", "locations.edit", "locations.delete"] },
+      { key: "warehouses_manage", label: "Warehouse", dropdown: true, permissions: ["warehouses.view", "warehouses.create", "warehouses.edit", "warehouses.delete"] },
+      { key: "companies_manage", label: "Companies", dropdown: true, permissions: ["companies.view", "companies.create", "companies.edit", "companies.delete"] },
+      { key: "accounts_manage", label: "Company Accounts", dropdown: true, permissions: ["companyAccounts.view", "companyAccounts.create", "companyAccounts.edit", "companyAccounts.delete"] },
+      { key: "products_manage", label: "Products", dropdown: true, permissions: ["products.view", "products.create", "products.edit", "products.delete"] },
       { key: "dashboard_view", label: "Dashboard", permissions: ["dashboard.view"] },
     ],
   },
 ];
 
 const ALL_PERMISSION_ITEMS = PERMISSION_GROUPS.flatMap((group) => group.items);
+const SENIOR_ROLE_KEYS = new Set(["ho", "bm"]);
+export const ACCESS_ONLY_ITEM_KEYS = new Set([
+  "expense_access",
+  "buyer_names_access",
+  "consignee_names_access",
+  "locations_manage",
+  "warehouses_manage",
+  "companies_manage",
+  "accounts_manage",
+  "products_manage",
+  "warehouse_setup",
+]);
 const ACTIONS = ["view", "create", "edit", "delete"];
 const ACTION_META = {
   access: { icon: FaShieldAlt, label: "Access" },
@@ -133,7 +145,9 @@ const actionKindFromOption = (option = {}) => {
   return ACTION_META[key] ? key : "access";
 };
 
-const getActionOptions = (groupKey, item) => {
+export function getActionOptions(groupKey, item, roleContext = "staff") {
+  const useAccessOnly = roleContext !== "senior" && ACCESS_ONLY_ITEM_KEYS.has(item.key);
+
   if (item.allAccess) {
     return [
       {
@@ -146,6 +160,10 @@ const getActionOptions = (groupKey, item) => {
   }
 
   if (item.grantTogether) {
+    return [{ id: `${item.key}:access`, label: "Access", permissions: item.permissions || [] }];
+  }
+
+  if (useAccessOnly) {
     return [{ id: `${item.key}:access`, label: "Access", permissions: item.permissions || [] }];
   }
 
@@ -209,9 +227,10 @@ const getActionOptions = (groupKey, item) => {
   return [{ id: item.key, label: item.label, permission: item.permissions[0] || null }];
 };
 
-const ALL_ACTION_OPTIONS = PERMISSION_GROUPS.flatMap((group) =>
-  group.items.flatMap((item) => getActionOptions(group.key, item))
-);
+const getAllActionOptions = (roleContext = "staff") =>
+  PERMISSION_GROUPS.flatMap((group) => group.items.flatMap((item) => getActionOptions(group.key, item, roleContext)));
+
+const ALL_ACTION_OPTIONS = getAllActionOptions("staff");
 
 const optionPermissions = (option) =>
   Array.isArray(option.permissions)
@@ -230,8 +249,8 @@ const isOptionEnabledByPermissions = (option, permissionSet) => {
   return optionPermissions(option).some((permission) => permissionSet.has(permission));
 };
 
-const flattenPermissionsFromToggles = (toggles) =>
-  Array.from(new Set(ALL_ACTION_OPTIONS.flatMap((option) => (toggles[option.id] ? optionPermissions(option) : []))));
+const flattenPermissionsFromToggles = (toggles, roleContext = "staff") =>
+  Array.from(new Set(getAllActionOptions(roleContext).flatMap((option) => (toggles[option.id] ? optionPermissions(option) : []))));
 
 const countEnabledToggles = (toggles = {}) =>
   Object.values(toggles || {}).filter(Boolean).length;
@@ -239,9 +258,14 @@ const countEnabledToggles = (toggles = {}) =>
 const formatSerial = (index) =>
   String(index + 1).padStart(2, "0");
 
-const togglesFromPermissions = (permissions = []) => {
+const roleKey = (role) => String(role || "").trim().toLowerCase();
+const isSeniorRole = (role) => SENIOR_ROLE_KEYS.has(roleKey(role));
+const findRoleByName = (roles = [], name) =>
+  (roles || []).find((role) => roleKey(role?.name) === roleKey(name));
+
+const togglesFromPermissions = (permissions = [], roleContext = "staff") => {
   const permissionSet = new Set(permissions || []);
-  return ALL_ACTION_OPTIONS.reduce((acc, option) => {
+  return getAllActionOptions(roleContext).reduce((acc, option) => {
     acc[option.id] = isOptionEnabledByPermissions(option, permissionSet);
     return acc;
   }, {});
@@ -389,6 +413,12 @@ export default function EmployeeManagementPage() {
   const [isSubmittingRole, setIsSubmittingRole] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
 
+  const seniorRoles = useMemo(() => roles.filter((role) => isSeniorRole(role.name)), [roles]);
+  const employeeRoleContext = useMemo(() => (isSeniorRole(formData.role) ? "senior" : "staff"), [formData.role]);
+  const roleEditorContext = useMemo(() => (isSeniorRole(roleForm.name) ? "senior" : "staff"), [roleForm.name]);
+  const otherRoles = useMemo(() => roles.filter((role) => !isSeniorRole(role.name)), [roles]);
+  const editingSeniorRole = isSeniorRole(roleForm.name);
+
   const fetchEmployees = async () => {
     const res = await requestWithRetry(() => axios.get("/api/employees"));
 
@@ -465,7 +495,6 @@ export default function EmployeeManagementPage() {
   [warehouses]
 );
 
-  const roleOptions = useMemo(() => roles.map((role) => ({ value: String(role.id), label: role.name })), [roles]);
   const locationOptions = useMemo(
     () =>
       locations.map((item) => ({
@@ -486,9 +515,9 @@ export default function EmployeeManagementPage() {
     (allWarehouseIds.length > 0 && allWarehouseIds.every((id) => selectedWarehouseIds.includes(id)));
 
   const permissionSummary = useMemo(() => {
-    const selected = flattenPermissionsFromToggles(employeeToggles);
+    const selected = flattenPermissionsFromToggles(employeeToggles, employeeRoleContext);
     return selected.length ? `${countEnabledToggles(employeeToggles)} access selected` : "No access selected";
-  }, [employeeToggles]);
+  }, [employeeToggles, employeeRoleContext]);
 
   const mergeSelectedOptions = (options, selectedIds, fallbackLabel) => {
     const existing = new Set((options || []).map((item) => String(item.value)));
@@ -500,7 +529,7 @@ export default function EmployeeManagementPage() {
 
   const resetEmployeeForm = () => {
     setFormData(createDefaultFormData());
-    setEmployeeToggles(togglesFromPermissions(["dashboard.view"]));
+    setEmployeeToggles(togglesFromPermissions(["dashboard.view"], "staff"));
     setEditId(null);
     setShowPassword(false);
     setShowEmployeeForm(false);
@@ -518,8 +547,14 @@ export default function EmployeeManagementPage() {
       const selectedRole = roles.find((item) => String(item.id) === String(value));
       if (selectedRole) {
         const selectedPermissions = selectedRole.is_admin ? ["all"] : selectedRole.permissions || [];
+        const nextRoleContext = isSeniorRole(selectedRole.name) ? "senior" : "staff";
         setFormData((prev) => ({ ...prev, role: selectedRole.name }));
-        setEmployeeToggles(togglesFromPermissions(selectedPermissions.includes("all") ? ALL_PERMISSION_ITEMS.flatMap((item) => item.permissions) : selectedPermissions));
+        setEmployeeToggles(
+          togglesFromPermissions(
+            selectedPermissions.includes("all") ? ALL_PERMISSION_ITEMS.flatMap((item) => item.permissions) : selectedPermissions,
+            nextRoleContext
+          )
+        );
       } else {
         setFormData((prev) => ({ ...prev, role: "" }));
       }
@@ -536,23 +571,20 @@ export default function EmployeeManagementPage() {
     setRoleForm((prev) => ({ ...prev, toggles: { ...prev.toggles, [key]: !prev.toggles[key] } }));
   };
 
-  const allToggleMap = () =>
-    ALL_ACTION_OPTIONS.reduce((acc, option) => {
-      acc[option.id] = true;
+  const buildToggleMap = (roleContext, value) =>
+    getAllActionOptions(roleContext).reduce((acc, option) => {
+      acc[option.id] = value;
       return acc;
     }, {});
 
-  const viewOnlyToggleMap = () =>
-    ALL_ACTION_OPTIONS.reduce((acc, option) => {
+  const viewOnlyToggleMap = (roleContext) =>
+    getAllActionOptions(roleContext).reduce((acc, option) => {
       acc[option.id] = ["view", "access"].includes(actionKindFromOption(option));
       return acc;
     }, {});
 
-  const clearToggleMap = () =>
-    ALL_ACTION_OPTIONS.reduce((acc, option) => {
-      acc[option.id] = false;
-      return acc;
-    }, {});
+  const clearToggleMap = (roleContext) =>
+    buildToggleMap(roleContext, false);
 
   const setAllLocations = () => {
     setFormData((prev) => ({
@@ -604,7 +636,7 @@ export default function EmployeeManagementPage() {
   }
 
   const permissions =
-    flattenPermissionsFromToggles(employeeToggles);
+    flattenPermissionsFromToggles(employeeToggles, employeeRoleContext);
 
   const payload = {
     ...formData,
@@ -683,7 +715,7 @@ export default function EmployeeManagementPage() {
     e.preventDefault();
     if (isSubmittingRole) return;
     
-    const permissions = roleForm.is_admin ? ["all"] : flattenPermissionsFromToggles(roleForm.toggles);
+    const permissions = roleForm.is_admin ? ["all"] : flattenPermissionsFromToggles(roleForm.toggles, roleEditorContext);
     const payload = { name: roleForm.name, permissions, is_admin: roleForm.is_admin };
 
     if (!payload.name) {
@@ -699,6 +731,7 @@ export default function EmployeeManagementPage() {
         await axios.post("/api/roles", payload);
       }
       await fetchRoles();
+      await fetchEmployees();
       resetRoleForm();
     } catch (err) {
       console.error(err);
@@ -762,7 +795,7 @@ export default function EmployeeManagementPage() {
       assigned_warehouse_ids: assignedWarehouseIds,
       all_warehouse_access: !!detail.all_warehouse_access,
     });
-    setEmployeeToggles(togglesFromPermissions(detail.permissions || []));
+    setEmployeeToggles(togglesFromPermissions(detail.permissions || [], isSeniorRole(detail.role) ? "senior" : "staff"));
     setEditId(String(recordId));
     setShowEmployeeForm(true);
   };
@@ -824,7 +857,7 @@ export default function EmployeeManagementPage() {
     setRoleForm({
       name: role.name || "",
       is_admin: !!role.is_admin,
-      toggles: togglesFromPermissions(role.permissions || []),
+      toggles: togglesFromPermissions(role.permissions || [], isSeniorRole(role.name) ? "senior" : "staff"),
     });
     setEditRoleId(role.id);
     setShowRoleEditor(true);
@@ -996,7 +1029,7 @@ export default function EmployeeManagementPage() {
               <Field label="Role">
                 <select
                   name="role"
-                  value={roleOptions.find((item) => item.label === formData.role)?.value || ""}
+                  value={findRoleByName(roles, formData.role)?.id || ""}
                   onChange={handleEmployeeChange}
                   style={inputStyle}
                   disabled={!isAdminUser}
@@ -1077,9 +1110,9 @@ export default function EmployeeManagementPage() {
                   <div style={{ color: "#64748b", fontSize: 13 }}>Tick only the modules this employee can use.</div>
                 </div>
                 <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
-                  <button type="button" onClick={() => setEmployeeToggles(allToggleMap())} style={miniGreen} disabled={!isAdminUser}>Full Access</button>
-                  <button type="button" onClick={() => setEmployeeToggles(viewOnlyToggleMap())} style={miniSlate} disabled={!isAdminUser}>View Only</button>
-                  <button type="button" onClick={() => setEmployeeToggles(clearToggleMap())} style={miniRedSoft} disabled={!isAdminUser}>Clear</button>
+                  <button type="button" onClick={() => setEmployeeToggles(buildToggleMap(employeeRoleContext, true))} style={miniGreen} disabled={!isAdminUser}>Full Access</button>
+                  <button type="button" onClick={() => setEmployeeToggles(viewOnlyToggleMap(employeeRoleContext))} style={miniSlate} disabled={!isAdminUser}>View Only</button>
+                  <button type="button" onClick={() => setEmployeeToggles(clearToggleMap(employeeRoleContext))} style={miniRedSoft} disabled={!isAdminUser}>Clear</button>
                   <span style={accessCountBadge}>{permissionSummary}</span>
                 </div>
               </div>
@@ -1091,7 +1124,15 @@ export default function EmployeeManagementPage() {
                       <div key={item.key} style={checkBlock}>
                         <div style={checkLabel}>{item.label}</div>
                         <div style={actionRowWrap}>
-                              {getActionOptions(group.key, item).map((option) => (
+                              {item.dropdown ? (
+                                <PermissionDropdown
+                                  item={item}
+                                  options={getActionOptions(group.key, item, employeeRoleContext)}
+                                  toggles={employeeToggles}
+                                  onToggle={handleEmployeeToggle}
+                                  disabled={!isAdminUser}
+                                />
+                              ) : getActionOptions(group.key, item, employeeRoleContext).map((option) => (
                                 <PermissionToggle
                                   key={option.id}
                                   option={option}
@@ -1119,51 +1160,65 @@ export default function EmployeeManagementPage() {
       {showRoleManager && canManageRoles ? (
         <Modal onClose={() => { setShowRoleManager(false); resetRoleForm(); }} title="Role Security">
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-            <div style={{ color: "#64748b" }}>Create clean roles once, then assign that role to employees.</div>
+            <div style={{ color: "#64748b" }}>HO and BM are separate senior roles above Staff. Their access is only what you tick below.</div>
             <button type="button" onClick={() => setShowRoleEditor(true)} style={primaryButton}>New Role</button>
           </div>
-          <div style={tableCardStyle}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-              <thead>
-                <tr style={{ background: "#0f172a", color: "#fff" }}>
-                  <th style={thStyle}>Role</th>
-                  <th style={thStyle}>Type</th>
-                  <th style={thStyle}>Security</th>
-                  <th style={thStyle}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {roles.map((role) => (
-                  <tr key={role.id}>
-                    <td style={tdStyle}><span style={roleBadge(!!role.is_admin || (role.permissions || []).includes("all"))}>{role.name}</span></td>
-                    <td style={tdStyle}>{role.is_admin ? "Administrator" : "Limited Role"}</td>
-                    <td style={tdStyle}>{summarizeRoleAccess(role)}</td>
-                    <td style={tdStyle}>
-                      <button type="button" onClick={() => handleEditRole(role)} style={iconButton("#2563eb")} title="Edit Role"><FaPencilAlt /></button>
-                      {role.id ? <button type="button" onClick={() => handleDeleteRole(role.id)} style={iconButton("#dc2626")} title="Delete Role"><FaTrash /></button> : null}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div style={roleSectionGrid}>
+            {[
+              { key: "senior", title: "Senior roles", description: "HO and BM — above Staff", roles: seniorRoles, protected: true },
+              { key: "staff", title: "Other roles", description: "Staff and custom roles", roles: otherRoles, protected: false },
+            ].map((section) => (
+              <div key={section.key} style={tableCardStyle}>
+                <div style={roleSectionHeader}>
+                  <strong>{section.title}</strong>
+                  <span>{section.description}</span>
+                </div>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                  <thead>
+                    <tr style={{ background: section.protected ? "#1d4ed8" : "#0f172a", color: "#fff" }}>
+                      <th style={thStyle}>Role</th>
+                      <th style={thStyle}>Level</th>
+                      <th style={thStyle}>Security</th>
+                      <th style={thStyle}>Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {section.roles.map((role) => (
+                      <tr key={role.id}>
+                        <td style={tdStyle}><span style={roleBadge(!!role.is_admin || (role.permissions || []).includes("all"), isSeniorRole(role.name))}>{role.name}</span></td>
+                        <td style={tdStyle}>{isSeniorRole(role.name) ? "Senior" : role.is_admin ? "Administrator" : "Staff"}</td>
+                        <td style={tdStyle}>{summarizeRoleAccess(role)}</td>
+                        <td style={tdStyle}>
+                          <button type="button" onClick={() => handleEditRole(role)} style={iconButton("#2563eb")} title="Edit Role"><FaPencilAlt /></button>
+                          {role.id && !isSeniorRole(role.name) ? <button type="button" onClick={() => handleDeleteRole(role.id)} style={iconButton("#dc2626")} title="Delete Role"><FaTrash /></button> : null}
+                        </td>
+                      </tr>
+                    ))}
+                    {section.roles.length === 0 ? <tr><td colSpan={4} style={{ ...tdStyle, color: "#64748b" }}>No roles in this group.</td></tr> : null}
+                  </tbody>
+                </table>
+              </div>
+            ))}
           </div>
 
           {showRoleEditor ? (
             <div style={{ ...securityCard, marginTop: 16 }}>
               <form onSubmit={handleSubmitRole}>
                 <div style={formGrid}>
-                  <Field label="Role Name"><input value={roleForm.name} onChange={(e) => setRoleForm((prev) => ({ ...prev, name: e.target.value }))} style={inputStyle} /></Field>
-                  <label style={{ ...checkRow, alignSelf: "end", paddingBottom: 10 }}>
-                    <input type="checkbox" checked={roleForm.is_admin} onChange={(e) => setRoleForm((prev) => ({ ...prev, is_admin: e.target.checked }))} />
-                    <span>Administrator Role</span>
-                  </label>
+                  <Field label="Role Name"><input value={roleForm.name} onChange={(e) => setRoleForm((prev) => ({ ...prev, name: e.target.value }))} style={inputStyle} disabled={editingSeniorRole} /></Field>
+                  {!editingSeniorRole ? (
+                    <label style={{ ...checkRow, alignSelf: "end", paddingBottom: 10 }}>
+                      <input type="checkbox" checked={roleForm.is_admin} onChange={(e) => setRoleForm((prev) => ({ ...prev, is_admin: e.target.checked }))} />
+                      <span>Administrator Role</span>
+                    </label>
+                  ) : <div style={{ ...checkRow, alignSelf: "end", paddingBottom: 10, color: "#1d4ed8", fontWeight: 700 }}>Senior role label is fixed; tick its access below.</div>}
                 </div>
                 {!roleForm.is_admin ? (
                   <>
                   <div style={{ ...accessToolbar, marginBottom: 12 }}>
-                    <button type="button" onClick={() => setRoleForm((prev) => ({ ...prev, toggles: allToggleMap() }))} style={miniGreen}>Full Access</button>
-                    <button type="button" onClick={() => setRoleForm((prev) => ({ ...prev, toggles: viewOnlyToggleMap() }))} style={miniSlate}>View Only</button>
-                    <button type="button" onClick={() => setRoleForm((prev) => ({ ...prev, toggles: clearToggleMap() }))} style={miniRedSoft}>Clear</button>
+                    <button type="button" onClick={() => setRoleForm((prev) => ({ ...prev, toggles: buildToggleMap(roleEditorContext, true) }))} style={miniGreen}>Full Access</button>
+                    <button type="button" onClick={() => setRoleForm((prev) => ({ ...prev, toggles: viewOnlyToggleMap(roleEditorContext) }))} style={miniSlate}>View Only</button>
+                    <button type="button" onClick={() => setRoleForm((prev) => ({ ...prev, toggles: clearToggleMap(roleEditorContext) }))} style={miniRedSoft}>Clear</button>
                   </div>
                   <div style={groupGrid}>
                     {PERMISSION_GROUPS.map((group) => (
@@ -1173,7 +1228,14 @@ export default function EmployeeManagementPage() {
                           <div key={item.key} style={checkBlock}>
                             <div style={checkLabel}>{item.label}</div>
                             <div style={actionRowWrap}>
-                              {getActionOptions(group.key, item).map((option) => (
+                              {item.dropdown ? (
+                                <PermissionDropdown
+                                  item={item}
+                                  options={getActionOptions(group.key, item, roleEditorContext)}
+                                  toggles={roleForm.toggles}
+                                  onToggle={handleRoleToggle}
+                                />
+                              ) : getActionOptions(group.key, item, roleEditorContext).map((option) => (
                                 <PermissionToggle
                                   key={option.id}
                                   option={option}
@@ -1243,21 +1305,61 @@ function PermissionToggle({ option, checked, onChange, disabled = false }) {
   );
 }
 
+function PermissionDropdown({ item, options, toggles, onToggle, disabled = false }) {
+  const selected = options.filter((option) => toggles?.[option.id]);
+  const summary = selected.length
+    ? selected.map((option) => option.label).join(", ")
+    : "No access";
+
+  return (
+    <details style={{ position: "relative", width: "100%" }}>
+      <summary
+        style={{
+          listStyle: "none",
+          cursor: "pointer",
+          border: "1px solid #cbd5e1",
+          borderRadius: 8,
+          padding: "8px 10px",
+          color: selected.length ? "#0f172a" : "#64748b",
+          background: "#fff",
+          fontSize: 12,
+          fontWeight: 700,
+        }}
+      >
+        {summary} ▾
+      </summary>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, paddingTop: 8 }}>
+        {options.map((option) => (
+          <PermissionToggle
+            key={option.id}
+            option={option}
+            checked={!!toggles?.[option.id]}
+            onChange={() => onToggle(option.id)}
+            disabled={disabled}
+          />
+        ))}
+      </div>
+    </details>
+  );
+}
+
 const pageStyle = { padding: 14, fontFamily: "Segoe UI, Arial, sans-serif" };
 const heroCard = { background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, padding: 18, marginBottom: 16, boxShadow: "0 10px 24px rgba(15,23,42,0.08)", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" };
 const tableCardStyle = { background: "#fff", border: "1px solid #e2e8f0", borderRadius: 16, overflowX: "auto", boxShadow: "0 10px 24px rgba(15,23,42,0.08)" };
+const roleSectionGrid = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(420px, 1fr))", gap: 14 };
+const roleSectionHeader = { display: "flex", flexDirection: "column", gap: 3, padding: "12px", color: "#0f172a", background: "#f8fafc", fontSize: 12 };
 const thStyle = { padding: "10px 12px", textAlign: "left", whiteSpace: "nowrap" };
 const tdStyle = { padding: "10px 12px", borderTop: "1px solid #e2e8f0", verticalAlign: "top" };
 const serialBadge = { display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: 34, height: 26, borderRadius: 8, background: "#ecfeff", color: "#0f766e", fontWeight: 800, border: "1px solid #99f6e4" };
-const roleBadge = (isAdmin = false) => ({
+const roleBadge = (isAdmin = false, isSenior = false) => ({
   display: "inline-flex",
   alignItems: "center",
   minHeight: 26,
   padding: "4px 10px",
   borderRadius: 999,
-  background: isAdmin ? "#fef2f2" : "#eff6ff",
-  color: isAdmin ? "#991b1b" : "#1d4ed8",
-  border: `1px solid ${isAdmin ? "#fecaca" : "#bfdbfe"}`,
+  background: isAdmin ? "#fef2f2" : isSenior ? "#eef2ff" : "#eff6ff",
+  color: isAdmin ? "#991b1b" : isSenior ? "#3730a3" : "#1d4ed8",
+  border: `1px solid ${isAdmin ? "#fecaca" : isSenior ? "#c7d2fe" : "#bfdbfe"}`,
   fontWeight: 800,
   whiteSpace: "nowrap",
 });
