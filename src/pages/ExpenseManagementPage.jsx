@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import axios from "axios";
+import axios from "./axiosInstance";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { formatDisplayDate } from "../utils/date";
 import { ToastContainer, toast, Slide } from "react-toastify";
