@@ -110,17 +110,6 @@ const PERMISSION_GROUPS = [
 
 const ALL_PERMISSION_ITEMS = PERMISSION_GROUPS.flatMap((group) => group.items);
 const SENIOR_ROLE_KEYS = new Set(["ho", "bm"]);
-export const ACCESS_ONLY_ITEM_KEYS = new Set([
-  "expense_access",
-  "buyer_names_access",
-  "consignee_names_access",
-  "locations_manage",
-  "warehouses_manage",
-  "companies_manage",
-  "accounts_manage",
-  "products_manage",
-  "warehouse_setup",
-]);
 const ACTIONS = ["view", "create", "edit", "delete"];
 const ACTION_META = {
   access: { icon: FaShieldAlt, label: "Access" },
@@ -146,8 +135,6 @@ const actionKindFromOption = (option = {}) => {
 };
 
 export function getActionOptions(groupKey, item, roleContext = "staff") {
-  const useAccessOnly = ACCESS_ONLY_ITEM_KEYS.has(item.key);
-
   if (item.allAccess) {
     return [
       {
@@ -160,10 +147,6 @@ export function getActionOptions(groupKey, item, roleContext = "staff") {
   }
 
   if (item.grantTogether) {
-    return [{ id: `${item.key}:access`, label: "Access", permissions: item.permissions || [] }];
-  }
-
-  if (useAccessOnly) {
     return [{ id: `${item.key}:access`, label: "Access", permissions: item.permissions || [] }];
   }
 
