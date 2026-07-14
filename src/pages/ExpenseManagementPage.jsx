@@ -4,7 +4,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { formatDisplayDate } from "../utils/date";
 import { ToastContainer, toast, Slide } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
-import { hasPermission, loadSession } from "../utils/auth";
+import { hasAnyPermission, hasPermission, loadSession } from "../utils/auth";
 import PageBackCloseActions from "../components/PageBackCloseActions";
 
 const defaultItems = [
@@ -232,7 +232,7 @@ export default function ExpenseManagementPage() {
   const canOpenPalti = hasPermission(user, "expense.palti");
   const canOpenSelfLoading = hasPermission(user, "expense.selfLoading");
   const canOpenLocalSale = hasPermission(user, "expense.localSale");
-  const canViewEmployees = hasPermission(user, "employees.view");
+  const canViewEmployees = hasAnyPermission(user, ["employees.view", "expense.entry", "expense.view", "expense.create", "expense.edit"]);
   const canViewCashEntries = hasPermission(user, "cash.view");
   const isBm = String(user?.role || "").trim().toLowerCase() === "bm";
   const canApproveToCashBook = canEdit && (hasPermission(user, "cash.create") || isBm);
