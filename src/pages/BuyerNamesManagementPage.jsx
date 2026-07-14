@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import axios from "axios";
-import { loadSession } from "../utils/auth";
+import { loadSession, hasPermission } from "../utils/auth";
 import MasterPartyDetailForm from "../components/MasterPartyDetailForm";
 
 const emptyForm = () => ({
@@ -24,6 +24,9 @@ export default function BuyerNamesManagementPage() {
   const API_URL = "/api/buyer-names";
   const { user } = loadSession();
   const isAdmin = user?.role === "admin";
+  const canCreate = hasPermission(user, "buyerNames.create");
+  const canEdit = hasPermission(user, "buyerNames.edit");
+  const canDelete = hasPermission(user, "buyerNames.delete");
 
   const fetchRows = useCallback(async () => {
     try {
@@ -281,9 +284,11 @@ export default function BuyerNamesManagementPage() {
               </label>
             </>
           )}
-          <button type="button" onClick={goAdd} style={{ ...btnPrimary, background: "#0f766e" }}>
-            Add Buyer
-          </button>
+          {canCreate && (
+            <button type="button" onClick={goAdd} style={{ ...btnPrimary, background: "#0f766e" }}>
+              Add Buyer
+            </button>
+          )}
         </div>
       </div>
       <div style={{ overflowX: "auto", border: "1px solid #e2e8f0", borderRadius: "10px", background: "#fff" }}>
@@ -307,12 +312,16 @@ export default function BuyerNamesManagementPage() {
                 <td style={td}>{row.state || "—"}</td>
                 <td style={td}>{row.gst_no || "—"}</td>
                 <td style={td}>
-                  <button type="button" onClick={() => handleEdit(row)} style={{ ...mini, background: "#2563eb" }}>
-                    Edit
-                  </button>{" "}
-                  <button type="button" onClick={() => handleDelete(row.id)} style={{ ...mini, background: "#dc2626" }}>
-                    Delete
-                  </button>
+                  {canEdit && (
+                    <button type="button" onClick={() => handleEdit(row)} style={{ ...mini, background: "#2563eb" }}>
+                      Edit
+                    </button>
+                  )}
+                  {canDelete && (
+                    <button type="button" onClick={() => handleDelete(row.id)} style={{ ...mini, background: "#dc2626" }}>
+                      Delete
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}
