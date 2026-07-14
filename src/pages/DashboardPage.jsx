@@ -602,17 +602,17 @@ export default function DashboardPage() {
     },
     {
       title: "Names",
-      permission: ["outward.view", "outward.create", "outward.edit", "outward.delete"],
+      permission: ["buyerNames.view", "buyerNames.create", "buyerNames.edit", "buyerNames.delete", "consigneeNames.view", "consigneeNames.create", "consigneeNames.edit", "consigneeNames.delete"],
       icon: <FaUserTag />,
       submenu: [
         {
           label: "Buyer Names",
-          permission: ["outward.view", "outward.create", "outward.edit", "outward.delete"],
+          permission: ["buyerNames.view", "buyerNames.create", "buyerNames.edit", "buyerNames.delete"],
           action: () => setShowBuyerNamesPopup(true),
         },
         {
           label: "Consignee Names",
-          permission: ["outward.view", "outward.create", "outward.edit", "outward.delete"],
+          permission: ["consigneeNames.view", "consigneeNames.create", "consigneeNames.edit", "consigneeNames.delete"],
           action: () => setShowConsigneeNamesPopup(true),
         },
       ],
@@ -725,14 +725,14 @@ export default function DashboardPage() {
       icon: <FaUserTag />,
       subtitle: "Manage buyer list",
       action: () => setShowBuyerNamesPopup(true),
-      permission: ["outward.view", "outward.create", "outward.edit", "outward.delete"],
+      permission: ["buyerNames.view", "buyerNames.create", "buyerNames.edit", "buyerNames.delete"],
     },
     {
       title: "Consignee Names",
       icon: <FaUserTag />,
       subtitle: "Manage consignee list",
       action: () => setShowConsigneeNamesPopup(true),
-      permission: ["outward.view", "outward.create", "outward.edit", "outward.delete"],
+      permission: ["consigneeNames.view", "consigneeNames.create", "consigneeNames.edit", "consigneeNames.delete"],
     },
   ];
   const visibleQuickActions = quickActions.filter(
