@@ -10,6 +10,8 @@ import CompanyManagementPage from "./pages/CompanyManagementPage";
 import CompanyAccountsPage from "./pages/CompanyAccountsPage";
 import WarehouseManagementPage from "./pages/WarehouseManagementPage";
 import ProductsManagementPage from "./pages/ProductsManagementPage";
+import BuyerNamesManagementPage from "./pages/BuyerNamesManagementPage";
+import ConsigneeNamesManagementPage from "./pages/ConsigneeNamesManagementPage";
 import InwardPage from "./pages/InwardPage";
 import InwardReportPage from "./pages/InwardReportPage";
 import OutwardPage from "./pages/OutwardPage";
@@ -87,7 +89,7 @@ function AppRoutes() {
       <Route
         path="/companies"
         element={
-          <ProtectedRoute permission="companies.manage">
+          <ProtectedRoute permission={["companies.view", "companies.create", "companies.edit", "companies.delete"]}>
             <CompanyManagementPage />
           </ProtectedRoute>
         }
@@ -96,8 +98,26 @@ function AppRoutes() {
       <Route
         path="/company-accounts"
         element={
-          <ProtectedRoute permission="companyAccounts.manage">
+          <ProtectedRoute permission={["companyAccounts.view", "companyAccounts.create", "companyAccounts.edit", "companyAccounts.delete"]}>
             <CompanyAccountsPage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/buyer-names"
+        element={
+          <ProtectedRoute permission={["buyerNames.view", "buyerNames.create", "buyerNames.edit", "buyerNames.delete"]}>
+            <BuyerNamesManagementPage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/consignee-names"
+        element={
+          <ProtectedRoute permission={["consigneeNames.view", "consigneeNames.create", "consigneeNames.edit", "consigneeNames.delete"]}>
+            <ConsigneeNamesManagementPage />
           </ProtectedRoute>
         }
       />
@@ -132,7 +152,7 @@ function AppRoutes() {
       <Route
         path="/products"
         element={
-          <ProtectedRoute permission="products.manage">
+          <ProtectedRoute permission={["products.view", "products.create", "products.edit", "products.delete"]}>
             <ProductsManagementPage />
           </ProtectedRoute>
         }
