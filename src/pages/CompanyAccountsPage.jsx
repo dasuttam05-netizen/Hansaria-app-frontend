@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import axios from "axios";
-import { loadSession } from "../utils/auth";
+import { loadSession, hasPermission } from "../utils/auth";
 const emptyForm = () => ({
   account_name: "",
   address: "",
@@ -20,6 +20,9 @@ export default function CompanyAccountsPage() {
   const API_URL = "/api/company-accounts";
   const { user } = loadSession();
   const isAdmin = user?.role === "admin";
+  const canCreate = hasPermission(user, "companyAccounts.create");
+  const canEdit = hasPermission(user, "companyAccounts.edit");
+  const canDelete = hasPermission(user, "companyAccounts.delete");
   const COMP_API = "/api/companies";
 
   const fetchAccounts = useCallback(async () => {
@@ -326,9 +329,11 @@ export default function CompanyAccountsPage() {
               </label>
             </>
           )}
-          <button type="button" onClick={goAdd} style={{ ...btnPrimary, background: "#0f766e" }}>
-            Add New Account
-          </button>
+          {canCreate && (
+            <button type="button" onClick={goAdd} style={{ ...btnPrimary, background: "#0f766e" }}>
+              Add New Account
+            </button>
+          )}
         </div>
       </div>
 
@@ -353,12 +358,16 @@ export default function CompanyAccountsPage() {
                 <td style={td}>{acc.pan_no || "-"}</td>
                 <td style={td}>{acc.mobile || "-"}</td>
                 <td style={td}>
-                  <button type="button" onClick={() => handleEdit(acc)} style={{ ...mini, background: "#2563eb" }}>
-                    Edit
-                  </button>{" "}
-                  <button type="button" onClick={() => handleDelete(acc._id)} style={{ ...mini, background: "#dc2626" }}>
-                    Delete
-                  </button>
+                  {canEdit && (
+                    <button type="button" onClick={() => handleEdit(acc)} style={{ ...mini, background: "#2563eb" }}>
+                      Edit
+                    </button>
+                  )}
+                  {canDelete && (
+                    <button type="button" onClick={() => handleDelete(acc._id)} style={{ ...mini, background: "#dc2626" }}>
+                      Delete
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}
