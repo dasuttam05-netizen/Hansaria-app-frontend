@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
+import { loadSession, hasPermission } from "../utils/auth";
 
 const emptyForm = () => ({
   name: "",
@@ -15,6 +16,10 @@ export default function CompanyManagementPage() {
   const [formData, setFormData] = useState(emptyForm);
   const [editId, setEditId] = useState(null);
   const API_URL = "/api/companies";
+  const { user } = loadSession();
+  const canCreate = hasPermission(user, "companies.create");
+  const canEdit = hasPermission(user, "companies.edit");
+  const canDelete = hasPermission(user, "companies.delete");
 
   const fetchCompanies = async () => {
     try {
@@ -124,7 +129,11 @@ export default function CompanyManagementPage() {
         <>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px", gap: 10, flexWrap: "wrap" }}>
             <h2 style={titleStyle}>Company Management</h2>
-            <button type="button" onClick={() => setShowForm(true)} style={{ ...btnPrimary, background: "#0f766e" }}>Add Company</button>
+            {canCreate && (
+              <button type="button" onClick={() => setShowForm(true)} style={{ ...btnPrimary, background: "#0f766e" }}>
+                Add Company
+              </button>
+            )}
           </div>
           <div style={tableCard}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
@@ -150,8 +159,16 @@ export default function CompanyManagementPage() {
                       <td style={td}>{comp.mobile || "-"}</td>
                       <td style={td}>{`${openingBalance.toFixed(2)} ${openingType}`}</td>
                       <td style={td}>
-                        <button type="button" onClick={() => handleEdit(comp)} style={{ ...mini, background: "#2563eb" }}>Edit</button>{" "}
-                        <button type="button" onClick={() => handleDelete(comp._id)} style={{ ...mini, background: "#dc2626" }}>Delete</button>
+                        {canEdit && (
+                          <button type="button" onClick={() => handleEdit(comp)} style={{ ...mini, background: "#2563eb" }}>
+                            Edit
+                          </button>
+                        )}
+                        {canDelete && (
+                          <button type="button" onClick={() => handleDelete(comp._id)} style={{ ...mini, background: "#dc2626" }}>
+                            Delete
+                          </button>
+                        )}
                       </td>
                     </tr>
                   );
