@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
+import { loadSession, hasPermission } from "../utils/auth";
 
 const emptyForm = () => ({ name: "", address: "", abbr: "" });
 
@@ -9,6 +10,10 @@ export default function LocationManagementPage() {
   const [formData, setFormData] = useState(emptyForm);
   const [editId, setEditId] = useState(null);
   const API_URL = "/api/locations";
+  const { user } = loadSession();
+  const canCreate = hasPermission(user, "locations.create");
+  const canEdit = hasPermission(user, "locations.edit");
+  const canDelete = hasPermission(user, "locations.delete");
   const getId = (item) =>
   item?._id || item?.id;
   
@@ -103,7 +108,11 @@ export default function LocationManagementPage() {
         <>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px", gap: 10, flexWrap: "wrap" }}>
             <h2 style={titleStyle}>Location Management</h2>
-            <button type="button" onClick={() => setShowForm(true)} style={{ ...btnPrimary, background: "#0f766e" }}>Add Location</button>
+            {canCreate && (
+              <button type="button" onClick={() => setShowForm(true)} style={{ ...btnPrimary, background: "#0f766e" }}>
+                Add Location
+              </button>
+            )}
           </div>
           <div style={tableCard}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
@@ -124,8 +133,16 @@ export default function LocationManagementPage() {
                     <td style={td}><strong>{loc.abbr || "-"}</strong></td>
                     <td style={td}>{loc.address || "-"}</td>
                     <td style={td}>
-                      <button type="button" onClick={() => handleEdit(loc)} style={{ ...mini, background: "#2563eb" }}>Edit</button>{" "}
-                      <button type="button" onClick={() => handleDelete(getId(loc))} style={{ ...mini, background: "#dc2626" }}>Delete</button>
+                      {canEdit && (
+                        <button type="button" onClick={() => handleEdit(loc)} style={{ ...mini, background: "#2563eb" }}>
+                          Edit
+                        </button>
+                      )}
+                      {canDelete && (
+                        <button type="button" onClick={() => handleDelete(getId(loc))} style={{ ...mini, background: "#dc2626" }}>
+                          Delete
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}
