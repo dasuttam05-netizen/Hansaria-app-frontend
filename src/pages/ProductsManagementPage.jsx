@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
+import { loadSession, hasPermission } from "../utils/auth";
 
 const emptyForm = () => ({
   name: "",
@@ -22,6 +23,11 @@ export default function ProductsManagementPage() {
 
   const API_URL =
     "/api/products";
+
+  const { user } = loadSession();
+  const canCreate = hasPermission(user, "products.create");
+  const canEdit = hasPermission(user, "products.edit");
+  const canDelete = hasPermission(user, "products.delete");
 
   const getId = (item) =>
     item?._id || item?.id;
