@@ -431,38 +431,88 @@ export default function ExpenseManagementPage() {
     );
 
     const failedDropdowns = [];
+    const permissionDeniedDropdowns = [];
+    const tempUnavailableDropdowns = [];
+    
     const dataByName = dropdownRequests.reduce((acc, [name], index) => {
       const result = settled[index];
+      
       if (result.status === "fulfilled") {
         const data = result.value?.data;
-        // Check if response contains an error (e.g., 503 response)
-        if (data && typeof data === "object" && data.error && !Array.isArray(data)) {
-          console.error(`Failed to load expense dropdown: ${name}`, data.error);
+        // Valid array or object data
+        if (Array.isArray(data) || (data && typeof data === "object" && !data.error)) {
+          acc[name] = data;
+        } else {
+          // Response contains error structure
+          console.error(`Failed to load expense dropdown: ${name}`, data?.error);
           failedDropdowns.push(name);
           acc[name] = [];
-        } else {
-          acc[name] = data;
         }
       } else {
-        console.error(`Failed to load expense dropdown: ${name}`, result.reason);
+        // Promise rejected - check error details
+        const error = result.reason;
+        const statusCode = error?.response?.status;
+        
+        if (statusCode === 403) {
+          // Permission denied - log security event
+          console.warn(
+            `SECURITY: Access denied to dropdown '${name}'. User: ${user?.name || user?.username || "unknown"}`,
+            error.response?.data?.error
+          );
+          permissionDeniedDropdowns.push(name);
+        } else if (statusCode === 503) {
+          // Database temporarily unavailable
+          console.warn(`Database unavailable for dropdown: ${name}`);
+          tempUnavailableDropdowns.push(name);
+        } else {
+          console.error(`Failed to load expense dropdown: ${name}`, error.message || error);
+        }
+        
         failedDropdowns.push(name);
         acc[name] = [];
       }
+      
       return acc;
     }, {});
 
-    // Show warning if critical dropdowns failed to load
-    const criticalDropdowns = ["locations", "employees", "products", "companies"];
-    const failedCritical = failedDropdowns.filter((d) => criticalDropdowns.includes(d));
-    
-    if (failedCritical.length > 0) {
+    // Handle permission denied dropdowns
+    if (permissionDeniedDropdowns.length > 0) {
       console.warn(
-        `Failed to load critical dropdowns: ${failedCritical.join(", ")}. This may be due to database connectivity issues. Please try refreshing the page.`
+        `Permission denied for dropdowns: ${permissionDeniedDropdowns.join(", ")}. User may not have required permissions.`
       );
       toast.warning(
-        `Some dropdown data failed to load (${failedCritical.join(", ")}). Please try refreshing the page if fields appear empty.`,
+        `You don't have permission to access: ${permissionDeniedDropdowns.join(", ")}`,
+        { theme: "colored", autoClose: 4000 }
+      );
+    }
+
+    // Handle temporary unavailability
+    if (tempUnavailableDropdowns.length > 0) {
+      console.warn(
+        `Database temporarily unavailable for: ${tempUnavailableDropdowns.join(", ")}`
+      );
+      toast.warning(
+        `Database is busy. Dropdowns for ${tempUnavailableDropdowns.join(", ")} may be loading. Please refresh if they remain empty.`,
         { theme: "colored", autoClose: 5000 }
       );
+    }
+
+    // Check if critical dropdowns are missing due to permissions
+    const criticalDropdowns = ["locations", "employees", "products", "companies"];
+    const failedCritical = failedDropdowns.filter((d) => criticalDropdowns.includes(d));
+    const deniedCritical = permissionDeniedDropdowns.filter((d) => criticalDropdowns.includes(d));
+    
+    if (deniedCritical.length > 0) {
+      console.error(
+        `SECURITY: Critical dropdowns blocked by permissions: ${deniedCritical.join(", ")}`
+      );
+      toast.error(
+        `Access denied. You don't have permission to access required fields: ${deniedCritical.join(", ")}. Contact your administrator.`,
+        { theme: "colored", autoClose: 6000 }
+      );
+      // Don't show the form if critical permissions are denied
+      setShowForm(false);
+      return;
     }
 
     const nextLocations = Array.isArray(dataByName.locations) ? dataByName.locations : [];
@@ -846,6 +896,25 @@ export default function ExpenseManagementPage() {
     return weight ? `${Number(weight).toFixed(2)} MT` : "PENDING";
   };
 
+  const handleOpenForm = () => {
+    // Security: Verify permission before opening form
+    if (!canCreate) {
+      console.warn(
+        `[SECURITY] User attempted to open expense entry form without create permission`,
+        { user: user?.name || user?.username || "unknown", timestamp: new Date().toISOString() }
+      );
+      toast.error("You do not have permission to create expense entries.", { theme: "colored" });
+      return;
+    }
+    
+    if (!locations || locations.length === 0) {
+      toast.warning("Locations data is still loading. Please try again in a moment.", { theme: "colored" });
+      return;
+    }
+    
+    setShowForm(true);
+  };
+
   const handleApproveForCashBook = async (expense) => {
     if (!canApproveToCashBook) {
       toast.error("Approve is not allowed for this user.", { theme: "colored" });
@@ -885,7 +954,7 @@ export default function ExpenseManagementPage() {
 
         <div style={{ display: "flex", gap: 8 }}>
           <button
-            onClick={() => setShowForm(true)}
+            onClick={handleOpenForm}
             disabled={!canCreate}
             style={{
               ...primaryButtonStyle,
