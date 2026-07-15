@@ -430,16 +430,40 @@ export default function ExpenseManagementPage() {
       dropdownRequests.map(([, request]) => request)
     );
 
+    const failedDropdowns = [];
     const dataByName = dropdownRequests.reduce((acc, [name], index) => {
       const result = settled[index];
       if (result.status === "fulfilled") {
-        acc[name] = result.value?.data;
+        const data = result.value?.data;
+        // Check if response contains an error (e.g., 503 response)
+        if (data && typeof data === "object" && data.error && !Array.isArray(data)) {
+          console.error(`Failed to load expense dropdown: ${name}`, data.error);
+          failedDropdowns.push(name);
+          acc[name] = [];
+        } else {
+          acc[name] = data;
+        }
       } else {
         console.error(`Failed to load expense dropdown: ${name}`, result.reason);
+        failedDropdowns.push(name);
         acc[name] = [];
       }
       return acc;
     }, {});
+
+    // Show warning if critical dropdowns failed to load
+    const criticalDropdowns = ["locations", "employees", "products", "companies"];
+    const failedCritical = failedDropdowns.filter((d) => criticalDropdowns.includes(d));
+    
+    if (failedCritical.length > 0) {
+      console.warn(
+        `Failed to load critical dropdowns: ${failedCritical.join(", ")}. This may be due to database connectivity issues. Please try refreshing the page.`
+      );
+      toast.warning(
+        `Some dropdown data failed to load (${failedCritical.join(", ")}). Please try refreshing the page if fields appear empty.`,
+        { theme: "colored", autoClose: 5000 }
+      );
+    }
 
     const nextLocations = Array.isArray(dataByName.locations) ? dataByName.locations : [];
     const nextWarehouses = Array.isArray(dataByName.warehouses) ? dataByName.warehouses : [];
