@@ -9,7 +9,7 @@ export default function ExpensesPendingPage() {
   const API_BASE = "/api";
   const navigate = useNavigate();
   const { user } = loadSession();
-  const canPostEntry = hasPermission(user, "cash.edit");
+  const canPostEntry = hasPermission(user, "cash.pending.post") || hasPermission(user, "cash.edit");
   const [loading, setLoading] = useState(false);
   const [pendingExpenses, setPendingExpenses] = useState([]);
   const [selectedEntryId, setSelectedEntryId] = useState(null);
