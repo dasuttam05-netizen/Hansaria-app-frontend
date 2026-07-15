@@ -273,7 +273,7 @@ export default function ExpenseManagementPage() {
       ].filter(Boolean)
     );
 
-    if (!user || user.role === "admin" || hasPermission(user, "locations.manage") || allowedIds.size === 0) {
+    if (!user || hasPermission(user, "all") || hasPermission(user, "locations.manage") || allowedIds.size === 0) {
       return locations;
     }
 
