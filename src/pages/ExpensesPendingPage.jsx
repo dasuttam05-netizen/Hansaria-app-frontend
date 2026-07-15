@@ -10,6 +10,11 @@ export default function ExpensesPendingPage() {
   const navigate = useNavigate();
   const { user } = loadSession();
   const canPostEntry = hasPermission(user, "cash.pending.post") || hasPermission(user, "cash.edit");
+  const canSeeFullCashBook = hasPermission(user, "cash.view") ||
+    hasPermission(user, "cash.mainBook.view") ||
+    hasPermission(user, "cash.partiesBook.view") ||
+    hasPermission(user, "cash.employeeBook.view");
+  const minimalMode = hasPermission(user, "cash.pending.post") && !canSeeFullCashBook;
   const [loading, setLoading] = useState(false);
   const [pendingExpenses, setPendingExpenses] = useState([]);
   const [selectedEntryId, setSelectedEntryId] = useState(null);
@@ -81,9 +86,9 @@ export default function ExpensesPendingPage() {
       <div style={headerCardStyle}>
         <div style={headerContentStyle}>
           <div>
-            <h2 style={{ margin: 0, color: "#0f172a" }}>Expenses Pending</h2>
+            <h2 style={{ margin: 0, color: "#0f172a" }}>Pending Expenses</h2>
             <p style={{ margin: "6px 0 0", color: "#64748b" }}>
-              Pending expense entries awaiting Cash Book posting
+              Review and post approved expenses
             </p>
           </div>
           <PageBackCloseActions navigate={navigate} size="compact" />
@@ -103,8 +108,14 @@ export default function ExpensesPendingPage() {
           <>
             <div style={pendingHeaderStyle}>
               <div>
-                <div style={{ fontWeight: 800, color: "#0f172a" }}>Pending Approval</div>
-                <div style={{ color: "#64748b", fontSize: 13 }}>Select an expense to view actions.</div>
+                <div style={{ fontWeight: 800, color: "#0f172a" }}>
+                  {minimalMode ? "Post Queue" : "Pending Approval"}
+                </div>
+                <div style={{ color: "#64748b", fontSize: 13 }}>
+                  {minimalMode
+                    ? "Post approved expenses only."
+                    : "Select an expense to view actions."}
+                </div>
               </div>
               <span style={pendingCountStyle}>{pendingExpenses.length}</span>
             </div>
@@ -149,16 +160,25 @@ export default function ExpensesPendingPage() {
 
                     {selected ? (
                       <div style={selectedPanelStyle}>
-                        <div style={detailGridStyle}>
-                          <div><strong>Age:</strong> {calculateAge(entry.entry_date)} days</div>
-                          <div><strong>Warehouse:</strong> {entry.warehouse_name || "-"}</div>
-                          <div><strong>Employee:</strong> {entry.source_expense_employee_name || entry.employee_name || "-"}</div>
-                          <div><strong>Work:</strong> {getWorkDescription(entry)}</div>
-                          <div><strong>Paid By:</strong> {entry.source_expense_paid_by || "-"}</div>
-                          <div><strong>Grand Total:</strong> {formatAmount(entry.source_expense_amount || entry.amount)}</div>
-                          <div><strong>Pending Amount:</strong> {formatAmount(entry.pending_amount || entry.amount)}</div>
-                          <div><strong>Net Expense:</strong> {formatAmount(entry.amount)}</div>
-                        </div>
+                        {minimalMode ? (
+                          <div style={minimalDetailsStyle}>
+                            <div><strong>Work:</strong> {getWorkDescription(entry)}</div>
+                            <div><strong>Warehouse:</strong> {entry.warehouse_name || "-"}</div>
+                            <div><strong>Employee:</strong> {entry.source_expense_employee_name || entry.employee_name || "-"}</div>
+                            <div><strong>Pending:</strong> {formatAmount(entry.pending_amount || entry.amount)}</div>
+                          </div>
+                        ) : (
+                          <div style={detailGridStyle}>
+                            <div><strong>Age:</strong> {calculateAge(entry.entry_date)} days</div>
+                            <div><strong>Warehouse:</strong> {entry.warehouse_name || "-"}</div>
+                            <div><strong>Employee:</strong> {entry.source_expense_employee_name || entry.employee_name || "-"}</div>
+                            <div><strong>Work:</strong> {getWorkDescription(entry)}</div>
+                            <div><strong>Paid By:</strong> {entry.source_expense_paid_by || "-"}</div>
+                            <div><strong>Grand Total:</strong> {formatAmount(entry.source_expense_amount || entry.amount)}</div>
+                            <div><strong>Pending Amount:</strong> {formatAmount(entry.pending_amount || entry.amount)}</div>
+                            <div><strong>Net Expense:</strong> {formatAmount(entry.amount)}</div>
+                          </div>
+                        )}
 
                         <div style={selectedActionStyle} onClick={stopCardClick}>
                           {canPostEntry ? (
@@ -166,7 +186,7 @@ export default function ExpensesPendingPage() {
                               onClick={() => handlePostEntry(entry.id)}
                               style={{ ...miniButtonStyle, background: "#16a34a" }}
                             >
-                              Post Entry
+                              Post
                             </button>
                           ) : (
                             <span style={viewOnlyStyle}>View Only</span>
@@ -293,6 +313,14 @@ const selectedPanelStyle = {
   marginTop: 12,
   paddingTop: 12,
   borderTop: "1px solid #dbe4ea",
+};
+
+const minimalDetailsStyle = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+  gap: "6px 10px",
+  color: "#334155",
+  fontSize: 12,
 };
 
 const detailGridStyle = {
