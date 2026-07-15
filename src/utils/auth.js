@@ -292,7 +292,19 @@ export const ROLE_PERMISSION_PRESETS = {
     "report.inward",
     "report.outwardSettlement",
   ],
-  viewer: ["dashboard.view", "report.inward"],
+  viewer: [
+    "dashboard.view",
+    "dropdown.view",
+    "employees.view",
+    "companies.view",
+    "companyAccounts.view",
+    "warehouses.view",
+    "products.view",
+    "consigneeNames.view",
+    "buyerNames.view",
+    "farmers.view",
+    "report.inward",
+  ],
 };
 
 export function normalizeRole(role = "staff") {
