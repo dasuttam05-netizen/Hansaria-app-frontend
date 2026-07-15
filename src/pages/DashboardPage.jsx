@@ -1014,7 +1014,9 @@ export default function DashboardPage() {
       return acc;
     }, {})
   ).sort((a, b) => b.available_balance_qty - a.available_balance_qty);
-  const assignedWarehouseNames = (user?.assigned_warehouses || []).map((item) => item.name);
+  const assignedWarehouseNames = Array.isArray(user?.assigned_warehouses)
+    ? user.assigned_warehouses.map((item) => item?.name).filter(Boolean)
+    : [];
 
   const openPartyStockReport = () => navigate("/party-stock-report");
   const openMonthEndRentReport = () => navigate("/warehouse-rent-dashboard");
