@@ -25,7 +25,7 @@ export default function ConsigneeNamesManagementPage() {
 
   const API = "/api";
   const { user } = loadSession();
-  const isAdmin = user?.role === "admin";
+  const isAdmin = hasPermission(user, "all");
   const canCreate = hasPermission(user, "consigneeNames.create");
   const canEdit = hasPermission(user, "consigneeNames.edit");
   const canDelete = hasPermission(user, "consigneeNames.delete");
