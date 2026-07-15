@@ -100,11 +100,11 @@ const PERMISSION_GROUPS = [
     items: [
       { key: "employees_manage", label: "Employees", permissions: ["employees.view", "employees.create", "employees.edit", "employees.delete"] },
       { key: "employees_non_admin_edit", label: "Employees Edit (Non-admin)", permissions: ["employees.edit.non_admin"] },
-      { key: "locations_manage", label: "Location", dropdown: true, permissions: ["locations.view", "locations.create", "locations.edit", "locations.delete"] },
-      { key: "warehouses_manage", label: "Warehouse", dropdown: true, permissions: ["warehouses.view", "warehouses.create", "warehouses.edit", "warehouses.delete"] },
-      { key: "companies_manage", label: "Companies", dropdown: true, permissions: ["companies.view", "companies.create", "companies.edit", "companies.delete"] },
-      { key: "accounts_manage", label: "Company Accounts", dropdown: true, permissions: ["companyAccounts.view", "companyAccounts.create", "companyAccounts.edit", "companyAccounts.delete"] },
-      { key: "products_manage", label: "Products", dropdown: true, permissions: ["products.view", "products.create", "products.edit", "products.delete"] },
+      { key: "locations_manage", label: "Location", dropdown: true, granular: true, permissions: ["locations.view", "locations.create", "locations.edit", "locations.delete"] },
+      { key: "warehouses_manage", label: "Warehouse", dropdown: true, granular: true, permissions: ["warehouses.view", "warehouses.create", "warehouses.edit", "warehouses.delete"] },
+      { key: "companies_manage", label: "Companies", dropdown: true, granular: true, permissions: ["companies.view", "companies.create", "companies.edit", "companies.delete"] },
+      { key: "accounts_manage", label: "Company Accounts", dropdown: true, granular: true, permissions: ["companyAccounts.view", "companyAccounts.create", "companyAccounts.edit", "companyAccounts.delete"] },
+      { key: "products_manage", label: "Products", dropdown: true, granular: true, permissions: ["products.view", "products.create", "products.edit", "products.delete"] },
       { key: "dashboard_view", label: "Dashboard", permissions: ["dashboard.view"] },
     ],
   },
@@ -192,7 +192,8 @@ export function getActionOptions(groupKey, item, roleContext = "staff") {
     }
     const basePermission = item.permissions[0] || null;
     const baseName = basePermission ? basePermission.replace(/\.manage$|\.view$/g, "") : item.key;
-    return ACTIONS.map((action) => ({
+    const itemActions = Array.isArray(item.actions) && item.actions.length ? item.actions : ACTIONS;
+    return itemActions.map((action) => ({
       id: `${item.key}:${action}`,
       label: action[0].toUpperCase() + action.slice(1),
       permission: `${baseName}.${action}`,
