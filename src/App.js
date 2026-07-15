@@ -359,7 +359,7 @@ function AppRoutes() {
       <Route
         path="/expenses-pending"
         element={
-          <ProtectedRoute permission="expense.pending">
+          <ProtectedRoute permission={["expense.pending", "cash.pending.post"]}>
             <ExpensesPendingPage />
           </ProtectedRoute>
         }
