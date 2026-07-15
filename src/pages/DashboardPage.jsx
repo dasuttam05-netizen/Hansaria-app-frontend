@@ -504,6 +504,25 @@ export default function DashboardPage() {
       ],
     },
     {
+      title: "Masters and Admin",
+      permission: [
+        "employees.view",
+        "locations.view",
+        "companies.view",
+        "companyAccounts.view",
+        "products.view",
+        "dashboard.view",
+      ],
+      icon: <FaCog />,
+      submenu: [
+        { label: "Employees", permission: "employees.view", action: () => setShowEmployeePopup(true) },
+        { label: "Location", permission: "locations.view", action: () => setShowLocationPopup(true) },
+        { label: "Companies", permission: "companies.view", action: () => setShowCompanyPopup(true) },
+        { label: "Company Accounts", permission: "companyAccounts.view", action: () => setShowCompanyAccountPopup(true) },
+        { label: "Products", permission: "products.view", action: () => setShowProductsPopup(true) },
+      ],
+    },
+    {
       title: "Entry",
       permission: ["inward.view", "inward.create", "inward.edit", "inward.delete"],
       icon: <FaFileAlt />,
