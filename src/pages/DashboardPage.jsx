@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { Component, useState, useEffect, useRef } from "react";
 import API from "./axiosInstance";
 import { useNavigate } from "react-router-dom";
 import logo from "./logo.png";
@@ -1774,6 +1774,67 @@ export default function DashboardPage() {
     </div>
   );
 
+}
+
+class DashboardErrorBoundary extends Component {
+  constructor(props) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError() {
+    return { hasError: true };
+  }
+
+  componentDidCatch(error) {
+    console.error("Dashboard render failed:", error);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div
+          style={{
+            minHeight: "100vh",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            background: "linear-gradient(180deg, #f8fafc 0%, #eef2ff 100%)",
+            color: "#0f172a",
+            fontFamily: "Segoe UI, Arial, sans-serif",
+            padding: 24,
+            textAlign: "center",
+          }}
+        >
+          <div
+            style={{
+              background: "#fff",
+              border: "1px solid #e2e8f0",
+              borderRadius: 18,
+              padding: "22px 26px",
+              boxShadow: "0 18px 40px rgba(15, 23, 42, 0.12)",
+              maxWidth: 520,
+            }}
+          >
+            <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 8 }}>Dashboard could not load</div>
+            <div style={{ color: "#64748b", fontSize: 14 }}>
+              Something in the dashboard view crashed. Please refresh the page.
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    return this.props.children;
+  }
+}
+
+export function DashboardPageSafe() {
+  return (
+    <DashboardErrorBoundary>
+      <DashboardPage />
+    </DashboardErrorBoundary>
+  );
 }
 
 const tableHead = {
