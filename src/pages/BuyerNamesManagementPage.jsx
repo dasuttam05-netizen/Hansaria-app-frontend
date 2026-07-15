@@ -23,7 +23,7 @@ export default function BuyerNamesManagementPage() {
 
   const API_URL = "/api/buyer-names";
   const { user } = loadSession();
-  const isAdmin = user?.role === "admin";
+  const isAdmin = hasPermission(user, "all");
   const canCreate = hasPermission(user, "buyerNames.create");
   const canEdit = hasPermission(user, "buyerNames.edit");
   const canDelete = hasPermission(user, "buyerNames.delete");
