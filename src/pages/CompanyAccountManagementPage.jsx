@@ -19,7 +19,7 @@ export default function CompanyAccountsPage() {
 
   const API_URL = "/api/company-accounts";
   const { user } = loadSession();
-  const isAdmin = user?.role === "admin";
+  const isAdmin = hasPermission(user, "all");
   const COMP_API = "/api/companies";
 
   const fetchAccounts = useCallback(async () => {
