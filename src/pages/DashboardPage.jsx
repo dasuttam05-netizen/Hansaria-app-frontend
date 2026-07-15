@@ -561,44 +561,53 @@ export default function DashboardPage() {
         "cash.create",
         "cash.edit",
         "cash.delete",
+        "cash.pending.post",
         "cash.mainBook.view",
         "cash.partiesBook.view",
         "cash.employeeBook.view",
         "expense.pending",
       ],
       icon: <FaMoneyBillWave />,
-      submenu: [
-        {
-          label: "New Cash Entry",
-          permission: "cash.create",
-          action: () => navigate("/cash-entries"),
-        },
-        {
-          label: "Expenses Pending",
-          permission: "expense.pending",
-          action: () => navigate("/expenses-pending"),
-        },
-        {
-          label: "Main Cash Book Report",
-          permission: "cash.mainBook.view",
-          action: () => navigate("/cash-book"),
-        },
-        {
-          label: "Parties Cash Book Report",
-          permission: "cash.partiesBook.view",
-          action: () => navigate("/parties-cash-book"),
-        },
-        {
-          label: "Employee Cash Book Report",
-          permission: "cash.employeeBook.view",
-          action: () => navigate("/employee-cash-book"),
-        },
-        {
-          label: "Cash Activity Logs (Admin)",
-          permission: "all",
-          action: () => navigate("/cash-activity-logs"),
-        },
-      ],
+      submenu: canPostCashOnly
+        ? [
+            {
+              label: "Expense Approvals",
+              permission: "cash.pending.post",
+              action: () => navigate("/expenses-pending"),
+            },
+          ]
+        : [
+            {
+              label: "New Cash Entry",
+              permission: "cash.create",
+              action: () => navigate("/cash-entries"),
+            },
+            {
+              label: "Expenses Pending",
+              permission: "expense.pending",
+              action: () => navigate("/expenses-pending"),
+            },
+            {
+              label: "Main Cash Book Report",
+              permission: "cash.mainBook.view",
+              action: () => navigate("/cash-book"),
+            },
+            {
+              label: "Parties Cash Book Report",
+              permission: "cash.partiesBook.view",
+              action: () => navigate("/parties-cash-book"),
+            },
+            {
+              label: "Employee Cash Book Report",
+              permission: "cash.employeeBook.view",
+              action: () => navigate("/employee-cash-book"),
+            },
+            {
+              label: "Cash Activity Logs (Admin)",
+              permission: "all",
+              action: () => navigate("/cash-activity-logs"),
+            },
+          ],
     },
     {
       title: "Names",
@@ -747,6 +756,14 @@ export default function DashboardPage() {
   const formattedDate = `${String(today.getDate()).padStart(2, "0")}.${String(
     today.getMonth() + 1
   ).padStart(2, "0")}.${today.getFullYear()}`;
+
+  const canViewFullCashBook = hasAnyPermission(user, [
+    "cash.view",
+    "cash.mainBook.view",
+    "cash.partiesBook.view",
+    "cash.employeeBook.view",
+  ]);
+  const canPostCashOnly = hasPermission(user, "cash.pending.post") && !canViewFullCashBook;
 
   const filteredList = (showListPopup.data || []).filter((item) => {
     if (item && typeof item === "object") {
