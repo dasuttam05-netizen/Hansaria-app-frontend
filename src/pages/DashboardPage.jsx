@@ -173,8 +173,8 @@ export default function DashboardPage() {
         "outward.view",
         "inward.view",
       ]);
-      const canReadProducts = hasAnyPermission(currentUser, [
-        "products.manage",
+  const canReadProducts = hasAnyPermission(currentUser, [
+      "products.manage",
         "inward.view",
         "inward.create",
         "outward.view",
@@ -294,6 +294,14 @@ export default function DashboardPage() {
       alive = false;
     };
   }, [navigate]);
+
+  const canViewFullCashBook = hasAnyPermission(user, [
+    "cash.view",
+    "cash.mainBook.view",
+    "cash.partiesBook.view",
+    "cash.employeeBook.view",
+  ]);
+  const canPostCashOnly = hasPermission(user, "cash.pending.post") && !canViewFullCashBook;
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -778,14 +786,6 @@ export default function DashboardPage() {
   const formattedDate = `${String(today.getDate()).padStart(2, "0")}.${String(
     today.getMonth() + 1
   ).padStart(2, "0")}.${today.getFullYear()}`;
-
-  const canViewFullCashBook = hasAnyPermission(user, [
-    "cash.view",
-    "cash.mainBook.view",
-    "cash.partiesBook.view",
-    "cash.employeeBook.view",
-  ]);
-  const canPostCashOnly = hasPermission(user, "cash.pending.post") && !canViewFullCashBook;
 
   const filteredList = (showListPopup.data || []).filter((item) => {
     if (item && typeof item === "object") {
