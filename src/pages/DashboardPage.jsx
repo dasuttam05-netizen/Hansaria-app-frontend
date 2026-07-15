@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import axios from "axios";
+import API from "./axiosInstance";
 import { useNavigate } from "react-router-dom";
 import logo from "./logo.png";
 import { clearSession, hasAnyPermission, hasPermission, loadSession } from "../utils/auth";
@@ -191,40 +191,40 @@ export default function DashboardPage() {
 
       const requests = [
         canReadLocations
-          ? axios.get(`${API_BASE}/locations`)
+          ? API.get(`${API_BASE}/locations`)
           : Promise.resolve({ data: [] }),
         canReadEmployees
-          ? axios.get(`${API_BASE}/employees`)
+          ? API.get(`${API_BASE}/employees`)
           : Promise.resolve({ data: [] }),
         canReadCompanies
-          ? axios.get(`${API_BASE}/companies`)
+          ? API.get(`${API_BASE}/companies`)
           : Promise.resolve({ data: [] }),
         canReadCompanyAccounts
-          ? axios.get(`${API_BASE}/company-accounts`)
+          ? API.get(`${API_BASE}/company-accounts`)
           : Promise.resolve({ data: [] }),
         canReadWarehouses
-          ? axios.get(`${API_BASE}/warehouses`)
+          ? API.get(`${API_BASE}/warehouses`)
           : Promise.resolve({ data: [] }),
         canReadProducts
-          ? axios.get(`${API_BASE}/products`)
+          ? API.get(`${API_BASE}/products`)
           : Promise.resolve({ data: [] }),
         hasAnyPermission(currentUser, ["inward.manage", "inward.view", "inward.create"])
-          ? axios.get(`${API_BASE}/inward`)
+          ? API.get(`${API_BASE}/inward`)
           : Promise.resolve({ data: [] }),
         hasAnyPermission(currentUser, ["outward.manage", "outward.view", "outward.create"])
-          ? axios.get(`${API_BASE}/outward`)
+          ? API.get(`${API_BASE}/outward`)
           : Promise.resolve({ data: [] }),
         canLoadStockInsights
-          ? axios.get(`${API_BASE}/reports/party-stock`)
+          ? API.get(`${API_BASE}/reports/party-stock`)
           : Promise.resolve({ data: { summary: [] } }),
         canLoadStockInsights
-          ? axios.get(`${API_BASE}/reports/warehouse-stock`)
+          ? API.get(`${API_BASE}/reports/warehouse-stock`)
           : Promise.resolve({ data: [] }),
         canLoadStockInsights
-          ? axios.get(`${API_BASE}/reports/total-stock`)
+          ? API.get(`${API_BASE}/reports/total-stock`)
           : Promise.resolve({ data: { total: 0 } }),
         canLoadStockInsights
-          ? axios.get(`${API_BASE}/reports/warehouse-rent-month-end`, {
+          ? API.get(`${API_BASE}/reports/warehouse-rent-month-end`, {
               params: { month: currentMonth },
             })
           : Promise.resolve({ data: { summary: [] } }),
