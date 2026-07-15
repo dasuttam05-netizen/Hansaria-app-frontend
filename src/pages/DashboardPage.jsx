@@ -45,6 +45,7 @@ export default function DashboardPage() {
   const [active, setActive] = useState("Dashboard");
   const [username, setUsername] = useState("");
   const [user, setUser] = useState(null);
+  const [booting, setBooting] = useState(true);
 
   const [locations, setLocations] = useState([]);
   const [employees, setEmployees] = useState([]);
@@ -263,14 +264,35 @@ export default function DashboardPage() {
   };
 
   useEffect(() => {
-    const { user: sessionUser } = loadSession();
-    if (!sessionUser) {
-      navigate("/");
-    } else {
-      setUser(sessionUser);
-      setUsername(sessionUser.name || sessionUser.username || "User");
-      fetchData(sessionUser);
-    }
+    let alive = true;
+
+    const initDashboard = async () => {
+      try {
+        const { user: sessionUser } = loadSession();
+        if (!sessionUser) {
+          navigate("/");
+          return;
+        }
+
+        if (!alive) {
+          return;
+        }
+
+        setUser(sessionUser);
+        setUsername(sessionUser.name || sessionUser.username || "User");
+        await fetchData(sessionUser);
+      } finally {
+        if (alive) {
+          setBooting(false);
+        }
+      }
+    };
+
+    initDashboard();
+
+    return () => {
+      alive = false;
+    };
   }, [navigate]);
 
   useEffect(() => {
@@ -1031,6 +1053,37 @@ export default function DashboardPage() {
     params.set("dashboard_view", "1");
     navigate(`/warehouse-rent-dashboard?${params.toString()}`);
   };
+
+  if (booting) {
+    return (
+      <div
+        style={{
+          minHeight: "100vh",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          background: "linear-gradient(180deg, #eef2ff 0%, #f8fafc 55%, #ffffff 100%)",
+          color: "#0f172a",
+          fontFamily: "Segoe UI, Arial, sans-serif",
+        }}
+      >
+        <div
+          style={{
+            background: "#fff",
+            border: "1px solid #e2e8f0",
+            borderRadius: 18,
+            padding: "22px 26px",
+            boxShadow: "0 18px 40px rgba(15, 23, 42, 0.12)",
+            textAlign: "center",
+            minWidth: 280,
+          }}
+        >
+          <div style={{ fontSize: 18, fontWeight: 800, marginBottom: 8 }}>Loading Dashboard</div>
+          <div style={{ color: "#64748b", fontSize: 14 }}>Please wait while your session loads.</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="dashboard-shell">
