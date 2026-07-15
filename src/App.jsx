@@ -10,7 +10,7 @@ import {
 import { loadSession } from "./utils/auth";
 
 import LoginPage from "./pages/LoginPage";
-import DashboardPage from "./pages/DashboardPage";
+import { DashboardPageSafe } from "./pages/DashboardPage";
 import LocationManagementPage from "./pages/LocationManagementPage";
 import EmployeeManagementPage from "./pages/EmployeeManagementPage";
 import CompanyManagementPage from "./pages/CompanyManagementPage";
@@ -73,7 +73,7 @@ function App() {
 
         <Route
           path="/dashboard"
-          element={<DashboardPage />}
+          element={<DashboardPageSafe />}
         />
 
         <Route
