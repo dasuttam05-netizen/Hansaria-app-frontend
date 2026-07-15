@@ -3,7 +3,7 @@ import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import axios from "axios";
 
 import LoginPage from "./pages/LoginPage";
-import DashboardPage from "./pages/DashboardPage";
+import { DashboardPageSafe } from "./pages/DashboardPage";
 import LocationManagementPage from "./pages/LocationManagementPage";
 import EmployeeManagementPage from "./pages/EmployeeManagementPage";
 import CompanyManagementPage from "./pages/CompanyManagementPage";
@@ -63,7 +63,7 @@ function AppRoutes() {
         path="/dashboard"
         element={
           <ProtectedRoute permission="dashboard.view">
-            <DashboardPage />
+            <DashboardPageSafe />
           </ProtectedRoute>
         }
       />
