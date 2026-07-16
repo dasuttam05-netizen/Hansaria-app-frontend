@@ -418,7 +418,7 @@ function expandPermissions(permissions = []) {
   const expanded = new Set(permissions || []);
 
   const addDependencies = (permission) => {
-    const deps = PERMISSION_DEPENDENCIES[permission] || [];
+    const deps = LEGACY_PERMISSION_MAP[permission] || PERMISSION_DEPENDENCIES[permission] || [];
     deps.forEach((dep) => {
       if (!expanded.has(dep)) {
         expanded.add(dep);
@@ -475,13 +475,13 @@ export function normalizePermissions(role = "staff", permissions = []) {
   const parsedPermissions = parsePermissionInput(permissions);
   if (parsedPermissions !== null) {
     if (parsedPermissions.length > 0) {
-      return [...new Set(parsedPermissions)];
+      return expandPermissions(parsedPermissions);
     }
 
-    return [...new Set(ROLE_PERMISSION_PRESETS[normalizedRole] || ROLE_PERMISSION_PRESETS.staff)];
+    return expandPermissions(ROLE_PERMISSION_PRESETS[normalizedRole] || ROLE_PERMISSION_PRESETS.staff);
   }
 
-  return [...new Set(ROLE_PERMISSION_PRESETS[normalizedRole] || ROLE_PERMISSION_PRESETS.staff)];
+  return expandPermissions(ROLE_PERMISSION_PRESETS[normalizedRole] || ROLE_PERMISSION_PRESETS.staff);
 }
 
 export function applyAuthToken(token) {
