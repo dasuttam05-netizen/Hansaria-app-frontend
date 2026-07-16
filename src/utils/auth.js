@@ -474,7 +474,11 @@ export function normalizePermissions(role = "staff", permissions = []) {
 
   const parsedPermissions = parsePermissionInput(permissions);
   if (parsedPermissions !== null) {
-    return [...new Set(parsedPermissions)];
+    if (parsedPermissions.length > 0) {
+      return [...new Set(parsedPermissions)];
+    }
+
+    return [...new Set(ROLE_PERMISSION_PRESETS[normalizedRole] || ROLE_PERMISSION_PRESETS.staff)];
   }
 
   return [...new Set(ROLE_PERMISSION_PRESETS[normalizedRole] || ROLE_PERMISSION_PRESETS.staff)];
