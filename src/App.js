@@ -143,7 +143,33 @@ function AppRoutes() {
       <Route
         path="/warehouse-trading"
         element={
-          <ProtectedRoute permission={["warehouse.trading.view", "warehouse.trading.manage"]}>
+          <ProtectedRoute permission={[
+            "warehouse.trading.view",
+            "warehouse.trading.manage",
+            "warehouse.trading.purchase.view",
+            "warehouse.trading.purchase.create",
+            "warehouse.trading.purchase.edit",
+            "warehouse.trading.purchase.delete",
+            "warehouse.trading.sale.view",
+            "warehouse.trading.sale.create",
+            "warehouse.trading.sale.edit",
+            "warehouse.trading.sale.delete",
+            "warehouse.trading.payment.view",
+            "warehouse.trading.payment.create",
+            "warehouse.trading.payment.edit",
+            "warehouse.trading.payment.delete",
+            "warehouse.trading.receipt.view",
+            "warehouse.trading.receipt.create",
+            "warehouse.trading.receipt.edit",
+            "warehouse.trading.receipt.delete",
+            "warehouse.trading.journal.view",
+            "warehouse.trading.journal.create",
+            "warehouse.trading.journal.edit",
+            "warehouse.trading.journal.delete",
+            "warehouse.trading.report.sale",
+            "warehouse.trading.report.purchase",
+            "warehouse.trading.report.profitLoss",
+          ]}>
             <WarehouseTradingPage />
           </ProtectedRoute>
         }
