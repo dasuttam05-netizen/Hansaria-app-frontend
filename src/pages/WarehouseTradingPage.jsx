@@ -331,8 +331,32 @@ export default function WarehouseTradingPage() {
     "fifo-stock": "FIFO Stock",
     "profit-loss": "Profit/Loss",
   };
-  const allowedVoucherTypes = Object.keys(voucherPermissionMap).filter((type) => hasPermission(user, voucherPermissionMap[type]));
-  const allowedReports = Object.keys(reportPermissionMap).filter((type) => hasPermission(user, reportPermissionMap[type]));
+  const canUseTrading = hasPermission(user, "warehouse.trading.view") || hasPermission(user, "warehouse.trading.manage");
+  const canUsePurchase = hasPermission(user, "warehouse.trading.purchase.view") || hasPermission(user, "warehouse.trading.purchase.manage");
+  const canUseSale = hasPermission(user, "warehouse.trading.sale.view") || hasPermission(user, "warehouse.trading.sale.manage");
+  const canUsePayment = hasPermission(user, "warehouse.trading.payment.view") || hasPermission(user, "warehouse.trading.payment.manage");
+  const canUseReceipt = hasPermission(user, "warehouse.trading.receipt.view") || hasPermission(user, "warehouse.trading.receipt.manage");
+  const canUseJournal = hasPermission(user, "warehouse.trading.journal.view") || hasPermission(user, "warehouse.trading.journal.manage");
+  const allowedVoucherTypes = Object.keys(voucherPermissionMap).filter((type) => {
+    if (type === "purchase") return canUsePurchase;
+    if (type === "sale") return canUseSale;
+    if (type === "payment") return canUsePayment;
+    if (type === "receipt") return canUseReceipt;
+    if (type === "journal") return canUseJournal;
+    return false;
+  });
+  const allowedReports = Object.keys(reportPermissionMap).filter((type) => {
+    if (type === "sale" || type === "sale-party-ledger" || type === "sale-followup" || type === "sale-journey") {
+      return hasPermission(user, "warehouse.trading.report.sale");
+    }
+    if (type === "purchase" || type === "purchase-party-ledger" || type === "warehouse-stock" || type === "fifo-stock") {
+      return hasPermission(user, "warehouse.trading.report.purchase");
+    }
+    if (type === "profit-loss") {
+      return hasPermission(user, "warehouse.trading.report.profitLoss");
+    }
+    return false;
+  });
   const saleDispatchQty = toNumber(formData.dispatch_qty) || toNumber(formData.quantity) || toNumber(formData.unloading_qty);
   const saleUnloadingQty = toNumber(formData.unloading_qty);
   const saleRejectQty = toNumber(formData.reject_qty);
