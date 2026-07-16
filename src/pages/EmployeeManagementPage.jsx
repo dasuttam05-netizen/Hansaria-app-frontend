@@ -68,11 +68,11 @@ const PERMISSION_GROUPS = [
     items: [
       { key: "warehouse_setup", label: "Warehouse Setup", permissions: ["warehouses.manage"] },
       { key: "warehouse_farmers", label: "Farmers", permissions: ["farmers.view", "farmers.create", "farmers.edit", "farmers.delete"] },
-      { key: "warehouse_purchase", label: "Purchase Voucher", permissions: ["warehouse.trading.purchase.view", "warehouse.trading.purchase.manage"] },
-      { key: "warehouse_sale", label: "Sale Voucher", permissions: ["warehouse.trading.sale.view", "warehouse.trading.sale.manage"] },
-      { key: "warehouse_payment", label: "Payment Voucher", permissions: ["warehouse.trading.payment.view", "warehouse.trading.payment.manage"] },
-      { key: "warehouse_receipt", label: "Receipt Voucher", permissions: ["warehouse.trading.receipt.view", "warehouse.trading.receipt.manage"] },
-      { key: "warehouse_journal", label: "Journal Voucher", permissions: ["warehouse.trading.journal.view", "warehouse.trading.journal.manage"] },
+      { key: "warehouse_purchase", label: "Purchase Voucher", permissions: ["warehouse.trading.purchase.view", "warehouse.trading.purchase.create", "warehouse.trading.purchase.edit", "warehouse.trading.purchase.delete"] },
+      { key: "warehouse_sale", label: "Sale Voucher", permissions: ["warehouse.trading.sale.view", "warehouse.trading.sale.create", "warehouse.trading.sale.edit", "warehouse.trading.sale.delete"] },
+      { key: "warehouse_payment", label: "Payment Voucher", permissions: ["warehouse.trading.payment.view", "warehouse.trading.payment.create", "warehouse.trading.payment.edit", "warehouse.trading.payment.delete"] },
+      { key: "warehouse_receipt", label: "Receipt Voucher", permissions: ["warehouse.trading.receipt.view", "warehouse.trading.receipt.create", "warehouse.trading.receipt.edit", "warehouse.trading.receipt.delete"] },
+      { key: "warehouse_journal", label: "Journal Voucher", permissions: ["warehouse.trading.journal.view", "warehouse.trading.journal.create", "warehouse.trading.journal.edit", "warehouse.trading.journal.delete"] },
       { key: "warehouse_report_sale", label: "Sales Report", permissions: ["warehouse.trading.report.sale"] },
       { key: "warehouse_report_purchase", label: "Purchase Report", permissions: ["warehouse.trading.report.purchase"] },
       { key: "warehouse_report_profit_loss", label: "Profit/Loss Report", permissions: ["warehouse.trading.report.profitLoss"] },
@@ -175,7 +175,9 @@ export function getActionOptions(groupKey, item, roleContext = "staff") {
     ) {
       return [
         { id: `${item.key}:view`, label: "View", permission: item.permissions[0] || null },
-        { id: `${item.key}:manage`, label: "Create/Edit", permission: item.permissions[1] || null },
+        { id: `${item.key}:create`, label: "Add", permission: item.permissions[1] || null },
+        { id: `${item.key}:edit`, label: "Edit", permission: item.permissions[2] || null },
+        { id: `${item.key}:delete`, label: "Delete", permission: item.permissions[3] || null },
       ];
     }
     if (item.key === "warehouse_farmers") {
