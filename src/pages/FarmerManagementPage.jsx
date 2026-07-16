@@ -1,5 +1,7 @@
-import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
+import { useNavigate } from "react-router-dom";
+import PageBackCloseActions from "../components/PageBackCloseActions";
 
 const emptyForm = () => ({
   name: "",
@@ -60,10 +62,12 @@ const checkIfsc = (value) => {
 };
 
 export default function FarmerManagementPage() {
+  const navigate = useNavigate();
   const [farmers, setFarmers] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState(emptyForm);
   const [editId, setEditId] = useState(null);
+  const [searchTerm, setSearchTerm] = useState("");
   const [ifscLookupStatus, setIfscLookupStatus] = useState("");
   const [pinLookupStatus, setPinLookupStatus] = useState("");
   const [importStatus, setImportStatus] = useState("");
@@ -277,6 +281,31 @@ export default function FarmerManagementPage() {
     fetchFarmers();
   }, []);
 
+  const filteredFarmers = useMemo(() => {
+    const query = searchTerm.trim().toLowerCase();
+    if (!query) return farmers;
+    return farmers.filter((farmer) => {
+      const searchable = [
+        farmer._id,
+        farmer.name,
+        farmer.mobile,
+        farmer.email,
+        farmer.address,
+        farmer.pincode,
+        farmer.state,
+        farmer.district,
+        farmer.city,
+        farmer.bank_name,
+        farmer.bank_account_no,
+        farmer.ifsc_code,
+        farmer.branch_name,
+      ]
+        .map((value) => String(value || "").toLowerCase())
+        .join(" ");
+      return searchable.includes(query);
+    });
+  }, [farmers, searchTerm]);
+
   useEffect(() => {
     const ifsc = compactUpper(formData.ifsc_code);
     if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(ifsc)) {
@@ -484,11 +513,14 @@ export default function FarmerManagementPage() {
 
   return (
     <div style={{ fontFamily: "Segoe UI, Arial, sans-serif", padding: "8px" }}>
+      <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "12px" }}>
+        <PageBackCloseActions navigate={navigate} size="compact" />
+      </div>
       {showForm ? (
         <div style={card}>
           <div style={headerRow}>
             <h2 style={titleStyle}>{editId ? "Edit Farmer" : "Add Farmer"}</h2>
-            <button type="button" onClick={resetForm} style={btnPrimary}>Back To Farmer List</button>
+            <button type="button" onClick={resetForm} style={btnSecondary}>Back To Farmer List</button>
           </div>
           <form onSubmit={handleSubmit}>
             <div style={formGrid}>
@@ -575,7 +607,7 @@ export default function FarmerManagementPage() {
             </div>
             <div style={actionRow}>
               <button type="submit" style={btnPrimary}>Save</button>
-              <button type="button" onClick={resetForm} style={btnPrimary}>Back To Farmer List</button>
+              <button type="button" onClick={resetForm} style={btnSecondary}>Back To Farmer List</button>
             </div>
           </form>
         </div>
@@ -588,6 +620,16 @@ export default function FarmerManagementPage() {
               <button type="button" onClick={triggerImportFile} style={{ ...btnPrimary, background: "#10b981" }}>Import Farmer Excel</button>
               <button type="button" onClick={() => setShowForm(true)} style={{ ...btnPrimary, background: "#2563eb" }}>Add Farmer</button>
             </div>
+          </div>
+          <div style={searchBarRow}>
+            <input
+              type="search"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="Search farmer name, mobile, PIN, bank, IFSC..."
+              style={searchInput}
+            />
+            <button type="button" onClick={() => setSearchTerm("")} style={btnSecondary}>Clear</button>
           </div>
           <input ref={importInputRef} type="file" accept=".csv,text/csv" onChange={handleImportFileChange} style={{ display: "none" }} />
           {importStatus ? <div style={{ marginBottom: 12, color: "#334155", fontWeight: 600 }}>{importStatus}</div> : null}
@@ -620,7 +662,7 @@ export default function FarmerManagementPage() {
                 </tr>
               </thead>
               <tbody>
-                {farmers.map((farmer, i) => (
+                {filteredFarmers.map((farmer, i) => (
                   <tr key={farmer._id || i} style={{ background: i % 2 ? "#f8fafc" : "#fff" }}>
                     <td style={td}>{String(i + 1).padStart(2, "0")}</td>
                     <td style={td}>{farmer.name || "-"}</td>
@@ -642,7 +684,7 @@ export default function FarmerManagementPage() {
                     </td>
                   </tr>
                 ))}
-                {farmers.length === 0 ? (
+                {filteredFarmers.length === 0 ? (
                   <tr><td colSpan={15} style={{ ...td, textAlign: "center", padding: "20px" }}>No farmers found.</td></tr>
                 ) : null}
               </tbody>
@@ -682,6 +724,9 @@ const inlineFieldRow = { display: "grid", gridTemplateColumns: "1fr auto", gap: 
 const miniUtilityBtn = { border: "none", background: "#0f766e", color: "#fff", borderRadius: 8, padding: "9px 12px", cursor: "pointer", fontWeight: 700 };
 const sectionTitle = { padding: "10px 12px", background: "#eef6f5", color: "#0f766e", fontWeight: 800, borderRadius: 8, border: "1px solid #cfe8e4" };
 const btnPrimary = { background: "#2563eb", color: "#fff", border: "none", padding: "10px 18px", borderRadius: "8px", cursor: "pointer", fontWeight: 600, fontSize: "14px" };
+const btnSecondary = { background: "#fff", color: "#334155", border: "1px solid #cbd5e1", padding: "10px 18px", borderRadius: "8px", cursor: "pointer", fontWeight: 700, fontSize: "14px" };
+const searchBarRow = { display: "flex", gap: "10px", alignItems: "center", marginBottom: "12px", flexWrap: "wrap" };
 const th = { padding: "10px 8px", textAlign: "left", borderBottom: "1px solid #0d5c56" };
 const td = { padding: "8px", borderBottom: "1px solid #e2e8f0" };
 const mini = { border: "none", color: "#fff", padding: "5px 10px", borderRadius: "6px", cursor: "pointer", fontSize: "12px", fontWeight: 600 };
+const searchInput = { maxWidth: "420px", minWidth: "260px", ...inp };
