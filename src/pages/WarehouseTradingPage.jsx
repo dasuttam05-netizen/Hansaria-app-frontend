@@ -2526,7 +2526,11 @@ export default function WarehouseTradingPage() {
           <div style={card}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 12 }}>
               <h3 style={{ margin: 0 }}>{editId ? "Edit" : "New"} {activeVoucherType.charAt(0).toUpperCase() + activeVoucherType.slice(1)} Voucher</h3>
-              {isPurchaseVoucher && hasPermission(user, "warehouse.trading.purchase.manage") && (
+              {isPurchaseVoucher && (
+                hasPermission(user, "warehouse.trading.purchase.create") ||
+                hasPermission(user, "warehouse.trading.purchase.edit") ||
+                hasPermission(user, "warehouse.trading.purchase.delete")
+              ) && (
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                   <button type="button" onClick={downloadPurchaseImportTemplate} style={{ ...btnAction, background: "#0f766e" }}>
                     Download Excel Format
