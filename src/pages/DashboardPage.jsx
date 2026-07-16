@@ -91,14 +91,8 @@ export default function DashboardPage() {
 
   const fetchData = async (currentUser) => {
     try {
-      const canLoadStockInsights = hasAnyPermission(currentUser, [
-        "report.partyStock",
-        "report.warehouseRentLedger",
-        "report.warehouseRentMonthEnd",
-        "warehouse.trading.report.sale",
-        "warehouse.trading.report.purchase",
-        "warehouse.trading.report.profitLoss",
-      ]);
+      const canLoadPartyStockInsights = hasPermission(currentUser, "report.partyStock");
+      const canLoadWarehouseRentInsights = hasPermission(currentUser, "report.warehouseRentMonthEnd");
       const canReadCompanies = hasAnyPermission(currentUser, [
         "companies.manage",
         "inward.view",
@@ -215,16 +209,16 @@ export default function DashboardPage() {
         hasAnyPermission(currentUser, ["outward.manage", "outward.view", "outward.create"])
           ? API.get(`${API_BASE}/outward`)
           : Promise.resolve({ data: [] }),
-        canLoadStockInsights
+        canLoadPartyStockInsights
           ? API.get(`${API_BASE}/reports/party-stock`)
           : Promise.resolve({ data: { summary: [] } }),
-        canLoadStockInsights
+        canLoadPartyStockInsights
           ? API.get(`${API_BASE}/reports/warehouse-stock`)
           : Promise.resolve({ data: [] }),
-        canLoadStockInsights
+        canLoadPartyStockInsights
           ? API.get(`${API_BASE}/reports/total-stock`)
           : Promise.resolve({ data: { total: 0 } }),
-        canLoadStockInsights
+        canLoadWarehouseRentInsights
           ? API.get(`${API_BASE}/reports/warehouse-rent-month-end`, {
               params: { month: currentMonth },
             })
