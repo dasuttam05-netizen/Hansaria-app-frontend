@@ -331,12 +331,12 @@ export default function WarehouseTradingPage() {
     "fifo-stock": "FIFO Stock",
     "profit-loss": "Profit/Loss",
   };
-  const canUseTrading = hasPermission(user, "warehouse.trading.view") || hasPermission(user, "warehouse.trading.manage");
-  const canUsePurchase = hasPermission(user, "warehouse.trading.purchase.view") || hasPermission(user, "warehouse.trading.purchase.manage");
-  const canUseSale = hasPermission(user, "warehouse.trading.sale.view") || hasPermission(user, "warehouse.trading.sale.manage");
-  const canUsePayment = hasPermission(user, "warehouse.trading.payment.view") || hasPermission(user, "warehouse.trading.payment.manage");
-  const canUseReceipt = hasPermission(user, "warehouse.trading.receipt.view") || hasPermission(user, "warehouse.trading.receipt.manage");
-  const canUseJournal = hasPermission(user, "warehouse.trading.journal.view") || hasPermission(user, "warehouse.trading.journal.manage");
+  const canUseTrading = hasPermission(user, "warehouse.trading.view");
+  const canUsePurchase = hasPermission(user, "warehouse.trading.purchase.view") || hasPermission(user, "warehouse.trading.purchase.create") || hasPermission(user, "warehouse.trading.purchase.edit") || hasPermission(user, "warehouse.trading.purchase.delete");
+  const canUseSale = hasPermission(user, "warehouse.trading.sale.view") || hasPermission(user, "warehouse.trading.sale.create") || hasPermission(user, "warehouse.trading.sale.edit") || hasPermission(user, "warehouse.trading.sale.delete");
+  const canUsePayment = hasPermission(user, "warehouse.trading.payment.view") || hasPermission(user, "warehouse.trading.payment.create") || hasPermission(user, "warehouse.trading.payment.edit") || hasPermission(user, "warehouse.trading.payment.delete");
+  const canUseReceipt = hasPermission(user, "warehouse.trading.receipt.view") || hasPermission(user, "warehouse.trading.receipt.create") || hasPermission(user, "warehouse.trading.receipt.edit") || hasPermission(user, "warehouse.trading.receipt.delete");
+  const canUseJournal = hasPermission(user, "warehouse.trading.journal.view") || hasPermission(user, "warehouse.trading.journal.create") || hasPermission(user, "warehouse.trading.journal.edit") || hasPermission(user, "warehouse.trading.journal.delete");
   const allowedVoucherTypes = Object.keys(voucherPermissionMap).filter((type) => {
     if (type === "purchase") return canUsePurchase;
     if (type === "sale") return canUseSale;
