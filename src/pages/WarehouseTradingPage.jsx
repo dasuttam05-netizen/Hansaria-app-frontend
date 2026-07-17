@@ -187,6 +187,7 @@ export default function WarehouseTradingPage() {
   const [showSaleAdjustedModal, setShowSaleAdjustedModal] = useState(false);
   const [salePurchaseRows, setSalePurchaseRows] = useState([]);
   const [salePurchaseLinks, setSalePurchaseLinks] = useState([]);
+  const [showPurchasePreview, setShowPurchasePreview] = useState(false);
   const selectedVoucher = list.find((item) => String(item.id || item._id) === String(selectedPaymentId));
   const selectedReceiptVoucher = list.find((item) => String(item.id || item._id) === String(selectedReceiptId));
   const selectedWarehouse = warehouses.find((w) => String(w.id || w._id) === String(formData.warehouse_id));
@@ -959,8 +960,42 @@ export default function WarehouseTradingPage() {
     }
   };
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const buildWhatsappShareUrl = (message) => `https://wa.me/?text=${encodeURIComponent(message)}`;
+
+  const sharePurchasePdfOnWhatsapp = async (voucherId, voucherNo, voucherDate) => {
+    const response = await axios.get(`/api/wh-vouchers/purchase/${voucherId}/pdf`, {
+      responseType: "blob",
+    });
+    const pdfBlob = new Blob([response.data], { type: "application/pdf" });
+    const fileName = `Purchase-Voucher-${voucherNo || voucherId}.pdf`;
+    const pdfFile = new File([pdfBlob], fileName, { type: "application/pdf" });
+    const whatsappMessage = [
+      "Purchase voucher attached.",
+      `Voucher No: ${voucherNo || voucherId}`,
+      `Date: ${formatLedgerDate(voucherDate)}`,
+    ].join("\n");
+
+    if (navigator.share && navigator.canShare?.({ files: [pdfFile] })) {
+      await navigator.share({
+        title: "Purchase Voucher",
+        text: whatsappMessage,
+        files: [pdfFile],
+      });
+      return;
+    }
+
+    const pdfUrl = window.URL.createObjectURL(pdfBlob);
+    const link = document.createElement("a");
+    link.href = pdfUrl;
+    link.download = fileName;
+    document.body.appendChild(link);
+    link.click();
+    link.parentNode.removeChild(link);
+    window.open(buildWhatsappShareUrl(`${whatsappMessage}\nPlease attach the downloaded PDF in WhatsApp.`), "_blank", "noopener,noreferrer");
+    window.URL.revokeObjectURL(pdfUrl);
+  };
+
+  const saveVoucher = async () => {
     if (!formData.voucher_no || !formData.date) {
       alert("Voucher no. and date are required");
       return;
@@ -1171,12 +1206,28 @@ export default function WarehouseTradingPage() {
       setEditId(null);
       loadVouchers();
       fetchNextVoucherNo(activeVoucherType);
+
+      if (activeVoucherType === "purchase" && !isEdit) {
+        const shouldShare = window.confirm("Purchase voucher saved. Do you want to send the PDF on WhatsApp?");
+        if (shouldShare) {
+          await sharePurchasePdfOnWhatsapp(res.data?.id || res.data?.voucher_id || res.data?.insertId || formData.voucher_no, formData.voucher_no, formData.date);
+        }
+      }
     } catch (err) {
       console.error(err);
       alert(err?.response?.data?.error || `Failed to ${editId ? "update" : "save"} voucher`);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (isPurchaseVoucher && !editId) {
+      setShowPurchasePreview(true);
+      return;
+    }
+    await saveVoucher();
   };
 
   const isPurchaseVoucher = activeVoucherType === "purchase";
@@ -1303,6 +1354,24 @@ export default function WarehouseTradingPage() {
       alert("Failed to generate PDF");
     }
   };
+
+  const getPurchasePreviewData = () => ({
+    voucherNo: formData.voucher_no || "-",
+    date: formatLedgerDate(formData.date),
+    party: selectedFarmer?.name || "-",
+    warehouse: selectedWarehouse?.name || "-",
+    account: getAccountName({ company_account_id: formData.company_account_id }),
+    product: getProductName({ product_id: formData.product_id }),
+    packet: formatDecimal4(formData.packet),
+    grossWeight: formatDecimal4(formData.gross_weight),
+    tareWeight: formatDecimal4(formData.tare_weight),
+    newWeight: formatDecimal4(safePurchaseNewWeight),
+    netQty: formatDecimal4(safePurchaseNetWeight),
+    rate: formatMoney(formData.rate),
+    grossAmount: formatMoney(purchaseGrossAmount),
+    totalDeduction: formatMoney(purchaseTotalDeduction),
+    netPayable: formatMoney(purchaseNetPayable),
+  });
 
   const downloadPurchaseImportTemplate = async () => {
     try {
@@ -4934,6 +5003,98 @@ export default function WarehouseTradingPage() {
                 )}
               </table>
             </div>
+          </div>
+        </div>
+      )}
+      {showPurchasePreview && isPurchaseVoucher && (
+        <div style={modalOverlayStyle}>
+          <div style={{ ...paymentAdjustModalStyle, width: "min(1080px, 96vw)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", marginBottom: 14 }}>
+              <div>
+                <h3 style={{ margin: 0 }}>Purchase Preview</h3>
+                <div style={{ marginTop: 4, fontSize: 13, color: "#475569" }}>Please verify every entry before saving.</div>
+              </div>
+              <button type="button" onClick={() => setShowPurchasePreview(false)} style={{ ...btnAction, background: "#64748b" }}>
+                Close
+              </button>
+            </div>
+
+            {(() => {
+              const preview = getPurchasePreviewData();
+              const detailRows = [
+                ["Voucher No", preview.voucherNo],
+                ["Date", preview.date],
+                ["Party", preview.party],
+                ["Warehouse", preview.warehouse],
+                ["Account", preview.account],
+                ["Product", preview.product],
+                ["Packet", preview.packet],
+                ["Gross Weight", preview.grossWeight],
+                ["Tare Weight", preview.tareWeight],
+                ["New Weight", preview.newWeight],
+                ["Net Qty", preview.netQty],
+                ["Rate", preview.rate],
+                ["Gross Amount", preview.grossAmount],
+                ["Total Deduction", preview.totalDeduction],
+                ["Net Payable", preview.netPayable],
+              ];
+              return (
+                <>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))", gap: 10 }}>
+                    {detailRows.map(([label, value]) => (
+                      <div key={label} style={{ border: "1px solid #cbd5e1", borderRadius: 8, padding: 12, background: "#fff" }}>
+                        <div style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>{label}</div>
+                        <div style={{ fontSize: 14, fontWeight: 700, color: "#0f172a" }}>{value}</div>
+                      </div>
+                    ))}
+                  </div>
+
+                  <div style={{ marginTop: 14, overflowX: "auto" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                      <thead>
+                        <tr style={reportHeaderRowStyle}>
+                          <th style={th}>Particulars</th>
+                          <th style={th}>Value</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {purchaseDeductionFields.map((field) => (
+                          <tr key={field.key}>
+                            <td style={td}>{field.label}</td>
+                            <td style={td}>{formatMoney(formData[field.key])}</td>
+                          </tr>
+                        ))}
+                        <tr>
+                          <td style={td}>Bags Claim</td>
+                          <td style={td}>{formatMoney(formData.bags_claim)}</td>
+                        </tr>
+                        <tr>
+                          <td style={td}>Labour</td>
+                          <td style={td}>{formatMoney(formData.labour)}</td>
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+
+                  <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 16, flexWrap: "wrap" }}>
+                    <button type="button" onClick={() => setShowPurchasePreview(false)} style={{ ...btnPrimary, background: "#64748b" }}>
+                      Back to Edit
+                    </button>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        setShowPurchasePreview(false);
+                        await saveVoucher();
+                      }}
+                      disabled={loading}
+                      style={btnPrimary}
+                    >
+                      {loading ? "Saving..." : "Confirm Save"}
+                    </button>
+                  </div>
+                </>
+              );
+            })()}
           </div>
         </div>
       )}
