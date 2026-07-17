@@ -5008,11 +5008,12 @@ export default function WarehouseTradingPage() {
       )}
       {showPurchasePreview && isPurchaseVoucher && (
         <div style={modalOverlayStyle}>
-          <div style={{ ...paymentAdjustModalStyle, width: "min(1080px, 96vw)" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", marginBottom: 14 }}>
+          <div style={{ ...paymentAdjustModalStyle, width: "min(1180px, 98vw)", background: "#fafafa" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start", marginBottom: 14, borderBottom: "1px solid #d1d5db", paddingBottom: 12 }}>
               <div>
-                <h3 style={{ margin: 0 }}>Purchase Preview</h3>
-                <div style={{ marginTop: 4, fontSize: 13, color: "#475569" }}>Please verify every entry before saving.</div>
+                <div style={{ fontSize: 12, letterSpacing: 1.1, fontWeight: 800, color: "#6b7280" }}>PURCHASE VOUCHER PREVIEW</div>
+                <h3 style={{ margin: "4px 0 0", fontSize: 24, color: "#111827" }}>Please verify every entry before saving</h3>
+                <div style={{ marginTop: 4, fontSize: 13, color: "#4b5563" }}>This preview follows a clean black-and-white report layout for easy checking.</div>
               </div>
               <button type="button" onClick={() => setShowPurchasePreview(false)} style={{ ...btnAction, background: "#64748b" }}>
                 Close
@@ -5021,59 +5022,142 @@ export default function WarehouseTradingPage() {
 
             {(() => {
               const preview = getPurchasePreviewData();
-              const detailRows = [
-                ["Voucher No", preview.voucherNo],
-                ["Date", preview.date],
-                ["Party", preview.party],
-                ["Warehouse", preview.warehouse],
-                ["Account", preview.account],
-                ["Product", preview.product],
-                ["Packet", preview.packet],
-                ["Gross Weight", preview.grossWeight],
-                ["Tare Weight", preview.tareWeight],
-                ["New Weight", preview.newWeight],
-                ["Net Qty", preview.netQty],
-                ["Rate", preview.rate],
-                ["Gross Amount", preview.grossAmount],
-                ["Total Deduction", preview.totalDeduction],
-                ["Net Payable", preview.netPayable],
+              const topSummary = [
+                { label: "Voucher No", value: preview.voucherNo },
+                { label: "Date", value: preview.date },
+                { label: "Party", value: preview.party },
+                { label: "Warehouse", value: preview.warehouse },
+              ];
+              const accountingSummary = [
+                { label: "Account", value: preview.account },
+                { label: "Product", value: preview.product },
+                { label: "Rate", value: preview.rate },
+                { label: "Net Qty", value: preview.netQty },
               ];
               return (
                 <>
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(230px, 1fr))", gap: 10 }}>
-                    {detailRows.map(([label, value]) => (
-                      <div key={label} style={{ border: "1px solid #cbd5e1", borderRadius: 8, padding: 12, background: "#fff" }}>
-                        <div style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>{label}</div>
-                        <div style={{ fontSize: 14, fontWeight: 700, color: "#0f172a" }}>{value}</div>
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 }}>
+                    {topSummary.map((item) => (
+                      <div key={item.label} style={{ border: "1px solid #d1d5db", borderRadius: 10, padding: 14, background: "#fff" }}>
+                        <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 0.7, color: "#6b7280", marginBottom: 4 }}>{item.label}</div>
+                        <div style={{ fontSize: 15, fontWeight: 800, color: "#111827" }}>{item.value}</div>
                       </div>
                     ))}
                   </div>
 
-                  <div style={{ marginTop: 14, overflowX: "auto" }}>
-                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                      <thead>
-                        <tr style={reportHeaderRowStyle}>
-                          <th style={th}>Particulars</th>
-                          <th style={th}>Value</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {purchaseDeductionFields.map((field) => (
-                          <tr key={field.key}>
-                            <td style={td}>{field.label}</td>
-                            <td style={td}>{formatMoney(formData[field.key])}</td>
-                          </tr>
+                  <div style={{ display: "grid", gridTemplateColumns: "1.35fr 0.65fr", gap: 14, marginTop: 14 }}>
+                    <div style={{ border: "1px solid #d1d5db", borderRadius: 10, overflow: "hidden", background: "#fff" }}>
+                      <div style={{ padding: "10px 12px", background: "#f3f4f6", borderBottom: "1px solid #d1d5db", fontWeight: 800, color: "#111827" }}>
+                        Purchase Details
+                      </div>
+                      <div style={{ overflowX: "auto" }}>
+                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                          <thead>
+                            <tr style={reportHeaderRowStyle}>
+                              <th style={th}>Particulars</th>
+                              <th style={th}>Value</th>
+                              <th style={th}>Particulars</th>
+                              <th style={th}>Value</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <tr>
+                              <td style={td}>Packet</td>
+                              <td style={td}>{preview.packet}</td>
+                              <td style={td}>Gross Weight</td>
+                              <td style={td}>{preview.grossWeight}</td>
+                            </tr>
+                            <tr>
+                              <td style={td}>Tare Weight</td>
+                              <td style={td}>{preview.tareWeight}</td>
+                              <td style={td}>New Weight</td>
+                              <td style={td}>{preview.newWeight}</td>
+                            </tr>
+                            <tr>
+                              <td style={td}>Net Qty</td>
+                              <td style={td}>{preview.netQty}</td>
+                              <td style={td}>Rate</td>
+                              <td style={td}>{preview.rate}</td>
+                            </tr>
+                            <tr>
+                              <td style={td}>Gross Amount</td>
+                              <td style={td}>{preview.grossAmount}</td>
+                              <td style={td}>Net Payable</td>
+                              <td style={td}>{preview.netPayable}</td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    <div style={{ border: "1px solid #d1d5db", borderRadius: 10, overflow: "hidden", background: "#fff" }}>
+                      <div style={{ padding: "10px 12px", background: "#f3f4f6", borderBottom: "1px solid #d1d5db", fontWeight: 800, color: "#111827" }}>
+                        Account Summary
+                      </div>
+                      <div style={{ display: "grid", gap: 10, padding: 12 }}>
+                        {accountingSummary.map((item) => (
+                          <div key={item.label} style={{ paddingBottom: 10, borderBottom: "1px dashed #d1d5db" }}>
+                            <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 0.7, color: "#6b7280", marginBottom: 4 }}>{item.label}</div>
+                            <div style={{ fontSize: 14, fontWeight: 800, color: "#111827" }}>{item.value}</div>
+                          </div>
                         ))}
-                        <tr>
-                          <td style={td}>Bags Claim</td>
-                          <td style={td}>{formatMoney(formData.bags_claim)}</td>
-                        </tr>
-                        <tr>
-                          <td style={td}>Labour</td>
-                          <td style={td}>{formatMoney(formData.labour)}</td>
-                        </tr>
-                      </tbody>
-                    </table>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div style={{ marginTop: 14, border: "1px solid #d1d5db", borderRadius: 10, overflow: "hidden", background: "#fff" }}>
+                    <div style={{ padding: "10px 12px", background: "#f3f4f6", borderBottom: "1px solid #d1d5db", fontWeight: 800, color: "#111827" }}>
+                      Deduction Breakdown
+                    </div>
+                    <div style={{ overflowX: "auto" }}>
+                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                        <thead>
+                          <tr style={reportHeaderRowStyle}>
+                            <th style={th}>Particulars</th>
+                            <th style={th}>Value</th>
+                            <th style={th}>Particulars</th>
+                            <th style={th}>Value</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr>
+                            <td style={td}>Less Bags Weight</td>
+                            <td style={td}>{formatMoney(formData.less_bags_weight)}</td>
+                            <td style={td}>Moisture</td>
+                            <td style={td}>{formatMoney(formData.moisture)}</td>
+                          </tr>
+                          <tr>
+                            <td style={td}>Dunki</td>
+                            <td style={td}>{formatMoney(formData.dunki)}</td>
+                            <td style={td}>Fungus</td>
+                            <td style={td}>{formatMoney(formData.fungus)}</td>
+                          </tr>
+                          <tr>
+                            <td style={td}>Discolour</td>
+                            <td style={td}>{formatMoney(formData.discolour)}</td>
+                            <td style={td}>Others</td>
+                            <td style={td}>{formatMoney(formData.others)}</td>
+                          </tr>
+                          <tr>
+                            <td style={td}>Bags Claim</td>
+                            <td style={td}>{formatMoney(formData.bags_claim)}</td>
+                            <td style={td}>Labour</td>
+                            <td style={td}>{formatMoney(formData.labour)}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  <div style={{ marginTop: 14, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 10 }}>
+                    <div style={{ border: "1px solid #d1d5db", borderRadius: 10, padding: 12, background: "#fff" }}>
+                      <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 0.7, color: "#6b7280", marginBottom: 4 }}>Total Deduction</div>
+                      <div style={{ fontSize: 16, fontWeight: 900, color: "#111827" }}>{preview.totalDeduction}</div>
+                    </div>
+                    <div style={{ border: "1px solid #111827", borderRadius: 10, padding: 12, background: "#111827" }}>
+                      <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 0.7, color: "#d1d5db", marginBottom: 4 }}>Net Payable</div>
+                      <div style={{ fontSize: 18, fontWeight: 900, color: "#fff" }}>{preview.netPayable}</div>
+                    </div>
                   </div>
 
                   <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 16, flexWrap: "wrap" }}>
