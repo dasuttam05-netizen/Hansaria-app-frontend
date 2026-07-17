@@ -1207,7 +1207,7 @@ export default function WarehouseTradingPage() {
       loadVouchers();
       fetchNextVoucherNo(activeVoucherType);
 
-      if (activeVoucherType === "purchase" && !isEdit) {
+      if (activeVoucherType === "purchase") {
         const shouldShare = window.confirm("Purchase voucher saved. Do you want to send the PDF on WhatsApp?");
         if (shouldShare) {
           await sharePurchasePdfOnWhatsapp(res.data?.id || res.data?.voucher_id || res.data?.insertId || formData.voucher_no, formData.voucher_no, formData.date);
@@ -1224,6 +1224,10 @@ export default function WarehouseTradingPage() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     if (isPurchaseVoucher && !editId) {
+      setShowPurchasePreview(true);
+      return;
+    }
+    if (isPurchaseVoucher && editId) {
       setShowPurchasePreview(true);
       return;
     }
