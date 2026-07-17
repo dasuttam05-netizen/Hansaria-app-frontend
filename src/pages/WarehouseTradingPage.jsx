@@ -188,6 +188,7 @@ export default function WarehouseTradingPage() {
   const [salePurchaseRows, setSalePurchaseRows] = useState([]);
   const [salePurchaseLinks, setSalePurchaseLinks] = useState([]);
   const [showPurchasePreview, setShowPurchasePreview] = useState(false);
+  const [globalSearch, setGlobalSearch] = useState("");
   const selectedVoucher = list.find((item) => String(item.id || item._id) === String(selectedPaymentId));
   const selectedReceiptVoucher = list.find((item) => String(item.id || item._id) === String(selectedReceiptId));
   const selectedWarehouse = warehouses.find((w) => String(w.id || w._id) === String(formData.warehouse_id));
@@ -975,15 +976,6 @@ export default function WarehouseTradingPage() {
       `Date: ${formatLedgerDate(voucherDate)}`,
     ].join("\n");
 
-    if (navigator.share && navigator.canShare?.({ files: [pdfFile] })) {
-      await navigator.share({
-        title: "Purchase Voucher",
-        text: whatsappMessage,
-        files: [pdfFile],
-      });
-      return;
-    }
-
     const pdfUrl = window.URL.createObjectURL(pdfBlob);
     const link = document.createElement("a");
     link.href = pdfUrl;
@@ -1210,7 +1202,12 @@ export default function WarehouseTradingPage() {
       if (activeVoucherType === "purchase") {
         const shouldShare = window.confirm("Purchase voucher saved. Do you want to send the PDF on WhatsApp?");
         if (shouldShare) {
-          await sharePurchasePdfOnWhatsapp(res.data?.id || res.data?.voucher_id || res.data?.insertId || formData.voucher_no, formData.voucher_no, formData.date);
+          try {
+            await sharePurchasePdfOnWhatsapp(res.data?.id || res.data?.voucher_id || res.data?.insertId || formData.voucher_no, formData.voucher_no, formData.date);
+          } catch (shareErr) {
+            console.error("WhatsApp share failed:", shareErr);
+            alert("Voucher saved, but WhatsApp share could not be completed.");
+          }
         }
       }
     } catch (err) {
@@ -2128,14 +2125,70 @@ export default function WarehouseTradingPage() {
     return grouped;
   }, [activeReport, reportData, farmers, buyerNames, companyAccounts, saleFollowupFilter]);
   const saleFollowupRows = activeReport === "sale-followup" ? displayReportData : [];
+  const normalizedGlobalSearch = String(globalSearch || "").trim().toLowerCase();
+  const matchesGlobalSearch = (value) =>
+    !normalizedGlobalSearch || String(value ?? "").toLowerCase().includes(normalizedGlobalSearch);
+  const matchesAnyValue = (values) => values.some((value) => matchesGlobalSearch(value));
+  const filteredVoucherList = useMemo(() => {
+    if (!normalizedGlobalSearch) return list;
+    return list.filter((item) =>
+      matchesAnyValue([
+        item.voucher_no,
+        item.bill_no,
+        item.date,
+        getWarehouseName(item),
+        getAccountName(item),
+        getFarmerName(item),
+        getBuyerName(item),
+        item.consignee_name,
+        getProductName(item),
+        item.po_no,
+        item.reference_id,
+        item.lorry_no,
+        item.description,
+        item.amount,
+        item.quantity,
+        item.total_qty,
+        item.net_weight,
+      ])
+    );
+  }, [list, normalizedGlobalSearch, activeVoucherType, warehouses, companyAccounts, farmers, buyerNames, companies, products, consignees]);
+  const filteredReportData = useMemo(() => {
+    if (!normalizedGlobalSearch) return displayReportData;
+    return displayReportData.filter((item) =>
+      matchesAnyValue([
+        item.voucher_no,
+        item.bill_no,
+        item.date,
+        item.party_name,
+        item.farmer_name,
+        item.buyer_name,
+        item.company_name,
+        item.company_account_name,
+        item.warehouse_name,
+        item.product_name,
+        item.description,
+        item.reference_id,
+        item.lorry_no,
+        item.po_no,
+        item.due_date,
+        item.quantity,
+        item.total_qty,
+        item.amount,
+        item.net_amount,
+        item.net_receivable_amount,
+        item.outstanding,
+      ])
+    );
+  }, [displayReportData, normalizedGlobalSearch]);
   const saleFollowupCounts = useMemo(() => {
-    const counts = { all: saleFollowupRows.length, payment_done: 0, unloading_pending: 0, pending: 0, overdue: 0 };
-    saleFollowupRows.forEach((row) => {
+    const counts = { all: filteredReportData.length, payment_done: 0, unloading_pending: 0, pending: 0, overdue: 0 };
+    filteredReportData.forEach((row) => {
       const status = String(row.followup_status || "pending").toLowerCase();
       if (counts[status] !== undefined) counts[status] += 1;
     });
     return counts;
-  }, [saleFollowupRows]);
+  }, [filteredReportData]);
   const saleFollowupStatusMeta = {
     all: { label: "All Bills", bg: "#0f172a", color: "#fff" },
     payment_done: { label: "Payment Done", bg: "#dcfce7", color: "#166534" },
@@ -2576,9 +2629,17 @@ export default function WarehouseTradingPage() {
           <h2 style={titleStyle}>Warehouse Trading</h2>
           <p style={subtitleStyle}>Manage trading vouchers and view reports</p>
         </div>
-        <div style={tabRow}>
-          <button onClick={() => setActiveTab("vouchers")} style={activeTab === "vouchers" ? activeTabStyle : tabStyle}>Vouchers</button>
-          <button onClick={() => setActiveTab("reports")} style={activeTab === "reports" ? activeTabStyle : tabStyle}>Reports</button>
+        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+          <input
+            value={globalSearch}
+            onChange={(event) => setGlobalSearch(event.target.value)}
+            placeholder="Search all tabs..."
+            style={{ ...inp, width: 280, background: "#fff" }}
+          />
+          <div style={tabRow}>
+            <button onClick={() => setActiveTab("vouchers")} style={activeTab === "vouchers" ? activeTabStyle : tabStyle}>Vouchers</button>
+            <button onClick={() => setActiveTab("reports")} style={activeTab === "reports" ? activeTabStyle : tabStyle}>Reports</button>
+          </div>
         </div>
       </div>
 
@@ -3503,7 +3564,7 @@ export default function WarehouseTradingPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {list.map((item, i) => {
+                  {filteredVoucherList.map((item, i) => {
                     const isSelectedRow = activeVoucherType === "payment" && String(item.id || item._id) === String(selectedPaymentId);
                     const saleShortageValue = toNumber(item.claim_amount);
                     const saleTotalDeductionValue =
@@ -3563,7 +3624,7 @@ export default function WarehouseTradingPage() {
                       </tr>
                     );
                   })}
-                  {list.length === 0 && (
+                  {filteredVoucherList.length === 0 && (
                     <tr><td colSpan={activeVoucherType === "sale" ? 20 : 11} style={{ ...td, textAlign: "center", padding: 20 }}>No vouchers found.</td></tr>
                   )}
                 </tbody>
@@ -3788,14 +3849,14 @@ export default function WarehouseTradingPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {displayReportData.map((item, i) => (
+                      {filteredReportData.map((item, i) => (
                         <tr key={item.id || `${item.voucher_type || item.row_type}-${item.voucher_no || i}-${i}`} style={{ background: item.row_type === "closing" ? "#eef6ff" : (i % 2 ? "#f8fafc" : "#fff"), fontWeight: item.row_type === "closing" ? 700 : 400 }}>
                           {activeReportColumns.map(([key, _label, render]) => (
                             <td key={key} style={td}>{render(item, i)}</td>
                           ))}
                         </tr>
                       ))}
-                      {displayReportData.length === 0 && (
+                      {filteredReportData.length === 0 && (
                         <tr><td colSpan={activeReportColumns.length} style={{ ...td, textAlign: "center", padding: 20 }}>No data available.</td></tr>
                       )}
                     </tbody>
@@ -3885,7 +3946,7 @@ export default function WarehouseTradingPage() {
                       </tr>
                     </thead>
                     <tbody>
-                      {displayReportData.map((item, i) => {
+                      {filteredReportData.map((item, i) => {
                         const statusKey = String(item.followup_status || "").toLowerCase();
                         const followupBg =
                           activeReport === "sale-followup"
@@ -3899,7 +3960,7 @@ export default function WarehouseTradingPage() {
                           </tr>
                         );
                       })}
-                      {displayReportData.length === 0 && (
+                      {filteredReportData.length === 0 && (
                         <tr><td colSpan={activeReportColumns.length} style={{ ...td, textAlign: "center", padding: 20 }}>No data available.</td></tr>
                       )}
                     </tbody>
@@ -4052,14 +4113,14 @@ export default function WarehouseTradingPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {displayReportData.map((item, i) => (
+                    {filteredReportData.map((item, i) => (
                       <tr key={item.id || i} style={{ background: i % 2 ? "#f8fafc" : "#fff" }}>
                         {activeReportColumns.map(([key, _label, render]) => (
                           <td key={key} style={td}>{render(item, i)}</td>
                         ))}
                       </tr>
                     ))}
-                    {displayReportData.length === 0 && (
+                    {filteredReportData.length === 0 && (
                       <tr><td colSpan={activeReportColumns.length} style={{ ...td, textAlign: "center", padding: 20 }}>No data available.</td></tr>
                     )}
                   </tbody>
