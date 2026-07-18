@@ -140,16 +140,16 @@ body {
 .dashboard-sidebar {
   width: 280px;
   background:
-    radial-gradient(circle at top left, rgba(0, 61, 122, 0.15) 0%, rgba(0, 61, 122, 0) 25%),
-    radial-gradient(circle at bottom right, rgba(0, 75, 158, 0.1) 0%, rgba(0, 75, 158, 0) 30%),
-    linear-gradient(180deg, #0f1620 0%, #132838 35%, #1a3347 100%);
-  color: #d0dce8;
+    radial-gradient(circle at top left, rgba(255, 212, 0, 0.08) 0%, rgba(255, 212, 0, 0) 24%),
+    radial-gradient(circle at bottom right, rgba(25, 145, 140, 0.16) 0%, rgba(25, 145, 140, 0) 32%),
+    linear-gradient(180deg, #09131e 0%, #102231 45%, #173447 100%);
+  color: #d7e4ee;
   display: flex;
   flex-direction: column;
   padding: 28px 20px;
   flex-shrink: 0;
-  border-right: 3px solid rgba(0, 102, 217, 0.3);
-  box-shadow: 12px 0 50px rgba(0, 102, 217, 0.18), inset 0 0 40px rgba(0, 102, 217, 0.06);
+  border-right: 3px solid rgba(255, 212, 0, 0.18);
+  box-shadow: 12px 0 50px rgba(5, 18, 32, 0.3), inset 0 0 40px rgba(255, 212, 0, 0.04);
 }
 
 .dashboard-sidebar-overlay {
@@ -172,12 +172,12 @@ body {
   font-weight: 800;
   letter-spacing: -0.03em;
   text-align: center;
-  background: linear-gradient(135deg, #0f766e 0%, #065f4d 50%, #0f766e 100%);
+  background: linear-gradient(135deg, #ffd400 0%, #ffec8a 50%, #ffd400 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   background-clip: text;
   margin-bottom: 28px;
-  text-shadow: 0 10px 24px rgba(15, 118, 110, 0.25);
+  text-shadow: 0 10px 24px rgba(255, 212, 0, 0.2);
 }
 
 .sidebar-nav {
@@ -197,36 +197,36 @@ body {
   margin-bottom: 10px;
   font-size: 14px;
   font-weight: 500;
-  border: 1px solid rgba(15, 118, 110, 0.2);
+  border: 1px solid rgba(46, 107, 135, 0.28);
   position: relative;
   overflow: hidden;
-  background: rgba(15, 118, 110, 0.12);
+  background: rgba(18, 52, 71, 0.82);
 }
 
 .sidebar-nav-item::before {
   content: "";
   position: absolute;
   inset: 0;
-  background: linear-gradient(90deg, rgba(15, 118, 110, 0.08), rgba(15, 118, 110, 0.04));
+  background: linear-gradient(90deg, rgba(255, 212, 0, 0.08), rgba(255, 212, 0, 0.03));
   opacity: 0;
   z-index: -1;
 }
 
 .sidebar-nav-item:hover {
-  background: linear-gradient(135deg, rgba(15, 118, 110, 0.18) 0%, rgba(15, 118, 110, 0.14) 100%);
+  background: linear-gradient(135deg, rgba(255, 212, 0, 0.16) 0%, rgba(255, 212, 0, 0.1) 100%);
   color: #ffffff;
-  border-color: rgba(15, 118, 110, 0.35);
-  box-shadow: 0 6px 16px rgba(15, 118, 110, 0.12);
+  border-color: rgba(255, 212, 0, 0.35);
+  box-shadow: 0 6px 16px rgba(255, 212, 0, 0.1);
   font-weight: 600;
 }
 
 .sidebar-nav-item.active {
-  background: linear-gradient(135deg, #e0f9f6 0%, #c0f4ed 45%, #a0ede5 100%);
-  color: #0a5550;
-  border-color: rgba(15, 118, 110, 0.3);
-  border-left: 5px solid #0f766e;
+  background: linear-gradient(135deg, #e6fff7 0%, #c8f5ec 45%, #a8e8de 100%);
+  color: #0b4f4a;
+  border-color: rgba(20, 160, 150, 0.28);
+  border-left: 5px solid #0e7c73;
   padding-left: 11px;
-  box-shadow: 0 10px 28px rgba(15, 118, 110, 0.15);
+  box-shadow: 0 10px 28px rgba(14, 124, 115, 0.12);
   font-weight: 700;
 }
 
@@ -236,11 +236,11 @@ body {
 }
 
 .sidebar-nav-item:hover svg {
-  color: #0f766e;
+  color: #ffd400;
 }
 
 .sidebar-nav-item.active svg {
-  color: #0f766e;
+  color: #0e7c73;
 }
 
 .sidebar-submenu {
@@ -257,8 +257,8 @@ body {
   font-weight: 500;
   cursor: pointer;
   margin-bottom: 8px;
-  background: rgba(15, 118, 110, 0.1);
-  border: 1px solid rgba(15, 118, 110, 0.18);
+  background: rgba(18, 52, 71, 0.86);
+  border: 1px solid rgba(46, 107, 135, 0.18);
   position: relative;
   overflow: hidden;
 }
@@ -275,10 +275,10 @@ body {
 }
 
 .sidebar-submenu-item:hover {
-  background: linear-gradient(135deg, rgba(15, 118, 110, 0.16) 0%, rgba(15, 118, 110, 0.12) 100%);
+  background: linear-gradient(135deg, rgba(255, 212, 0, 0.14) 0%, rgba(255, 212, 0, 0.08) 100%);
   color: #ffffff;
-  border-color: rgba(15, 118, 110, 0.3);
-  box-shadow: 0 4px 12px rgba(15, 118, 110, 0.1);
+  border-color: rgba(255, 212, 0, 0.3);
+  box-shadow: 0 4px 12px rgba(255, 212, 0, 0.08);
   font-weight: 600;
 }
 
@@ -288,7 +288,7 @@ body {
 }
 
 .sidebar-submenu-item:hover svg {
-  color: #0f766e;
+  color: #ffd400;
 }
 
 .dashboard-sidebar-footer {
@@ -296,10 +296,10 @@ body {
   padding-top: 20px;
   text-align: center;
   font-size: 13px;
-  color: #6b7a8f;
-  border-top: 2px solid rgba(0, 102, 217, 0.22);
+  color: #91a7bb;
+  border-top: 2px solid rgba(255, 212, 0, 0.18);
   padding-bottom: 8px;
-  background: linear-gradient(180deg, transparent, rgba(0, 102, 217, 0.08));
+  background: linear-gradient(180deg, transparent, rgba(255, 212, 0, 0.06));
   border-radius: 10px;
   margin: 0 -10px -8px;
   padding-left: 10px;
@@ -308,9 +308,9 @@ body {
 }
 
 .dashboard-sidebar-footer:hover {
-  color: #a8b8cc;
-  border-top-color: rgba(0, 102, 217, 0.35);
-  background: linear-gradient(180deg, rgba(0, 102, 217, 0.12), rgba(0, 102, 217, 0.18));
+  color: #d7e4ee;
+  border-top-color: rgba(255, 212, 0, 0.32);
+  background: linear-gradient(180deg, rgba(255, 212, 0, 0.08), rgba(255, 212, 0, 0.14));
 }
 
 .dashboard-main {
