@@ -188,6 +188,9 @@ export default function WarehouseTradingPage() {
   const [salePurchaseRows, setSalePurchaseRows] = useState([]);
   const [salePurchaseLinks, setSalePurchaseLinks] = useState([]);
   const [showPurchasePreview, setShowPurchasePreview] = useState(false);
+  const [purchasePreviewRow, setPurchasePreviewRow] = useState(null);
+  const [showMobileVoucherHeader, setShowMobileVoucherHeader] = useState(true);
+  const [showMobileReportHeader, setShowMobileReportHeader] = useState(true);
   const [globalSearch, setGlobalSearch] = useState("");
   const selectedVoucher = list.find((item) => String(item.id || item._id) === String(selectedPaymentId));
   const selectedReceiptVoucher = list.find((item) => String(item.id || item._id) === String(selectedReceiptId));
@@ -1356,6 +1359,11 @@ export default function WarehouseTradingPage() {
     }
   };
 
+  const showPurchaseReportPreview = (voucher) => {
+    setPurchasePreviewRow(voucher);
+    setShowPurchasePreview(true);
+  };
+
   const getPurchasePreviewData = () => ({
     voucherNo: formData.voucher_no || "-",
     date: formatLedgerDate(formData.date),
@@ -1373,6 +1381,48 @@ export default function WarehouseTradingPage() {
     totalDeduction: formatMoney(purchaseTotalDeduction),
     netPayable: formatMoney(purchaseNetPayable),
   });
+
+  const getPurchasePreviewDataForRow = (row) => {
+    const newWeight = Math.max(toNumber(row?.gross_weight) - toNumber(row?.tare_weight), 0);
+    const netQty = toNumber(row?.total_qty || row?.total_quantity || row?.net_weight || row?.quantity || 0);
+    const grossAmount = toNumber(row?.gross_amount || row?.amount || 0);
+    const totalDeduction =
+      toNumber(row?.total_deduction) ||
+      toNumber(row?.less_bags_weight) +
+        toNumber(row?.moisture) +
+        toNumber(row?.dunki) +
+        toNumber(row?.fungus) +
+        toNumber(row?.discolour) +
+        toNumber(row?.others) +
+        toNumber(row?.bags_claim) +
+        toNumber(row?.labour);
+
+    return {
+      voucherNo: row?.voucher_no || "-",
+      date: formatLedgerDate(row?.date),
+      party: row?.farmer_name || getFarmerName(row) || "-",
+      warehouse: getWarehouseName(row),
+      account: getAccountName(row),
+      product: getProductName(row),
+      packet: formatDecimal4(row?.packet),
+      grossWeight: formatDecimal4(row?.gross_weight),
+      tareWeight: formatDecimal4(row?.tare_weight),
+      newWeight: formatDecimal4(row?.new_weight || newWeight),
+      netQty: formatDecimal4(netQty),
+      rate: formatMoney(row?.rate),
+      grossAmount: formatMoney(grossAmount || netQty * toNumber(row?.rate)),
+      totalDeduction: formatMoney(totalDeduction),
+      netPayable: formatMoney(row?.net_amount_payable || row?.total_amount || row?.amount || grossAmount - totalDeduction),
+      lessBagsWeight: formatMoney(row?.less_bags_weight),
+      moisture: formatMoney(row?.moisture),
+      dunki: formatMoney(row?.dunki),
+      fungus: formatMoney(row?.fungus),
+      discolour: formatMoney(row?.discolour),
+      others: formatMoney(row?.others),
+      bagsClaim: formatMoney(row?.bags_claim),
+      labour: formatMoney(row?.labour),
+    };
+  };
 
   const downloadPurchaseImportTemplate = async () => {
     try {
@@ -1877,6 +1927,7 @@ export default function WarehouseTradingPage() {
           <span style={{ color: "#64748b" }}>Old Entry</span>
         ) : (
           <div style={{ display: "flex", gap: 6 }}>
+            <button onClick={() => showPurchaseReportPreview(item)} style={{ ...btnAction, background: "#315f7d" }} title="View">View</button>
             <button onClick={() => handleEditPurchaseReport(item)} style={btnAction} title="Edit">Edit</button>
             <button onClick={() => handlePurchaseReportPDF(item.id || item._id)} style={{ ...btnAction, background: "#ea580c" }} title="Download PDF">PDF</button>
           </div>
@@ -3528,7 +3579,7 @@ export default function WarehouseTradingPage() {
           </div>
 
           <div style={card}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <div className={`mobile-collapsible-header ${showMobileVoucherHeader ? "" : "is-mobile-hidden"}`} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
               <h3 style={{ marginTop: 0 }}>{activeVoucherType.charAt(0).toUpperCase() + activeVoucherType.slice(1)} Vouchers</h3>
               {activeVoucherType === "sale" && (
                 <button type="button" onClick={() => setShowSaleAdjustedModal(true)} style={{ ...btnAction, background: "#0f766e" }}>
@@ -3536,7 +3587,14 @@ export default function WarehouseTradingPage() {
                 </button>
               )}
             </div>
-            <div style={tableCard}>
+            <button
+              type="button"
+              className="mobile-section-toggle"
+              onClick={() => setShowMobileVoucherHeader((prev) => !prev)}
+            >
+              {showMobileVoucherHeader ? "Hide Voucher Header" : "Show Voucher Header"}
+            </button>
+            <div className={activeVoucherType === "purchase" ? "purchase-mobile-table-source" : ""} style={tableCard}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                 <thead>
                   <tr style={reportHeaderRowStyle}>
@@ -3630,6 +3688,37 @@ export default function WarehouseTradingPage() {
                 </tbody>
               </table>
             </div>
+            {activeVoucherType === "purchase" && (
+              <div className="purchase-mobile-entry-list">
+                {filteredVoucherList.map((item, i) => (
+                  <div key={item.id || item._id || i} className="purchase-mobile-entry-card">
+                    <div className="purchase-mobile-entry-head">
+                      <div>
+                        <span>#{i + 1}</span>
+                        <strong>{item.voucher_no || "-"}</strong>
+                      </div>
+                      <em>{formatLedgerDate(item.date)}</em>
+                    </div>
+                    <div className="purchase-mobile-entry-grid">
+                      <div><span>Farmer</span><strong>{getFarmerName(item)}</strong></div>
+                      <div><span>Warehouse</span><strong>{getWarehouseName(item)}</strong></div>
+                      <div><span>Account</span><strong>{getAccountName(item)}</strong></div>
+                      <div><span>Product</span><strong>{getProductName(item)}</strong></div>
+                      <div><span>Qty</span><strong>{formatDecimal4(item.total_qty || item.net_weight || item.quantity || 0)}</strong></div>
+                      <div><span>Rate</span><strong>{formatMoney(item.rate || 0)}</strong></div>
+                      <div className="wide"><span>Amount</span><strong>Rs.{formatMoney(item.net_amount_payable || item.amount || 0)}</strong></div>
+                    </div>
+                    <div className="purchase-mobile-entry-actions">
+                      <button type="button" onClick={() => handleEditVoucher(item.id || item._id)}>Edit</button>
+                      <button type="button" className="danger" onClick={() => handleDeleteVoucher(item.id || item._id)}>Delete</button>
+                    </div>
+                  </div>
+                ))}
+                {filteredVoucherList.length === 0 && (
+                  <div className="purchase-mobile-empty">No vouchers found.</div>
+                )}
+              </div>
+            )}
             {activeVoucherType === "payment" && selectedVoucher && (
               <div style={{ marginTop: 14, padding: 14, border: "1px solid #cbd5e1", borderRadius: 8, background: "#f8fafc" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
@@ -3674,7 +3763,7 @@ export default function WarehouseTradingPage() {
             ))}
           </div>
           <div style={card}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+            <div className={`mobile-collapsible-header ${showMobileReportHeader ? "" : "is-mobile-hidden"}`} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
               <h3 style={{ marginTop: 0, marginBottom: 0 }}>{reportLabels[activeReport] || titleCase(activeReport)}</h3>
               {(activeReport === "purchase-party-ledger" || activeReport === "sale-party-ledger") && (
                 <div style={{ display: "flex", gap: 8 }}>
@@ -3695,6 +3784,13 @@ export default function WarehouseTradingPage() {
                 </div>
               )}
             </div>
+            <button
+              type="button"
+              className="mobile-section-toggle"
+              onClick={() => setShowMobileReportHeader((prev) => !prev)}
+            >
+              {showMobileReportHeader ? "Hide Report Header" : "Show Report Header"}
+            </button>
             {activeReport === "purchase-party-ledger" && (
               <div style={{ display: "flex", gap: 12, alignItems: "end", flexWrap: "wrap", marginBottom: 14 }}>
                 <Field label="Farmer Filter">
@@ -3839,7 +3935,7 @@ export default function WarehouseTradingPage() {
             )}
             {activeReport === "purchase-party-ledger" ? (
               <div style={ledgerSplitStyle}>
-                <div style={tableCard}>
+                <div className="purchase-mobile-table-source" style={tableCard}>
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                     <thead>
                       <tr style={reportHeaderRowStyle}>
@@ -3861,6 +3957,40 @@ export default function WarehouseTradingPage() {
                       )}
                     </tbody>
                   </table>
+                </div>
+                <div className="purchase-mobile-report-list">
+                  {filteredReportData.map((item, i) => (
+                    <div
+                      key={item.id || `${item.voucher_type || item.row_type}-${item.voucher_no || i}-${i}`}
+                      className={`purchase-mobile-report-card ${item.row_type === "closing" ? "is-closing" : ""}`}
+                    >
+                      <div className="purchase-mobile-entry-head">
+                        <div>
+                          <span>{item.row_type === "closing" ? "Closing" : item.voucher_type || "Entry"}</span>
+                          <strong>{item.voucher_no || item.farmer_name || "-"}</strong>
+                        </div>
+                        <em>{item.row_type === "closing" ? "" : formatLedgerDate(item.date)}</em>
+                      </div>
+                      <div className="purchase-mobile-entry-grid">
+                        <div><span>Farmer</span><strong>{item.row_type === "closing" ? `Closing (${item.closing_side || ""})` : item.farmer_name || getFarmerName(item) || "-"}</strong></div>
+                        <div><span>Account</span><strong>{item.row_type === "closing" ? "-" : getAccountName(item)}</strong></div>
+                        <div><span>Warehouse</span><strong>{item.row_type === "closing" ? "-" : getWarehouseName(item)}</strong></div>
+                        <div><span>Debit</span><strong>{formatMoney(item.debit || 0)}</strong></div>
+                        <div><span>Credit</span><strong>{formatMoney(item.credit || 0)}</strong></div>
+                        <div className="wide"><span>Balance</span><strong>Rs.{formatMoney(Math.abs(item.balance || 0))}</strong></div>
+                      </div>
+                      {item.row_type !== "closing" && item.voucher_type === "Purchase" && (
+                        <div className="purchase-mobile-entry-actions">
+                          <button type="button" onClick={() => showPurchaseReportPreview(item)}>View</button>
+                          <button type="button" onClick={() => handleEditPurchaseReport(item)}>Edit</button>
+                          <button type="button" className="pdf" onClick={() => handlePurchaseReportPDF(item.purchase_id || item.id || item._id)}>PDF</button>
+                        </div>
+                      )}
+                    </div>
+                  ))}
+                  {filteredReportData.length === 0 && (
+                    <div className="purchase-mobile-empty">No data available.</div>
+                  )}
                 </div>
                 {showPurchaseBillWise && (
                 <div style={billWisePanelStyle}>
@@ -4103,29 +4233,62 @@ export default function WarehouseTradingPage() {
                 )}
               </div>
             ) : (
-              <div style={tableCard}>
-                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                  <thead>
-                    <tr style={reportHeaderRowStyle}>
-                      {activeReportColumns.map(([key, label]) => (
-                        <th key={key} style={th}>{label}</th>
-                      ))}
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredReportData.map((item, i) => (
-                      <tr key={item.id || i} style={{ background: i % 2 ? "#f8fafc" : "#fff" }}>
-                        {activeReportColumns.map(([key, _label, render]) => (
-                          <td key={key} style={td}>{render(item, i)}</td>
+              <>
+                <div className={activeReport === "purchase" ? "purchase-mobile-table-source" : ""} style={tableCard}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                    <thead>
+                      <tr style={reportHeaderRowStyle}>
+                        {activeReportColumns.map(([key, label]) => (
+                          <th key={key} style={th}>{label}</th>
                         ))}
                       </tr>
+                    </thead>
+                    <tbody>
+                      {filteredReportData.map((item, i) => (
+                        <tr key={item.id || i} style={{ background: i % 2 ? "#f8fafc" : "#fff" }}>
+                          {activeReportColumns.map(([key, _label, render]) => (
+                            <td key={key} style={td}>{render(item, i)}</td>
+                          ))}
+                        </tr>
+                      ))}
+                      {filteredReportData.length === 0 && (
+                        <tr><td colSpan={activeReportColumns.length} style={{ ...td, textAlign: "center", padding: 20 }}>No data available.</td></tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+                {activeReport === "purchase" && (
+                  <div className="purchase-mobile-report-list">
+                    {filteredReportData.map((item, i) => (
+                      <div key={item.id || item._id || i} className="purchase-mobile-report-card">
+                        <div className="purchase-mobile-entry-head">
+                          <div>
+                            <span>#{i + 1}</span>
+                            <strong>{item.voucher_no || "-"}</strong>
+                          </div>
+                          <em>{formatLedgerDate(item.date)}</em>
+                        </div>
+                        <div className="purchase-mobile-entry-grid">
+                          <div><span>Farmer</span><strong>{item.farmer_name || getFarmerName(item)}</strong></div>
+                          <div><span>Warehouse</span><strong>{getWarehouseName(item)}</strong></div>
+                          <div><span>Product</span><strong>{getProductName(item)}</strong></div>
+                          <div><span>Net Qty</span><strong>{formatDecimal4(item.total_quantity || item.total_qty || item.net_weight || 0)}</strong></div>
+                          <div><span>Rate</span><strong>{formatMoney(item.rate || 0)}</strong></div>
+                          <div className="wide"><span>Net Payable</span><strong>Rs.{formatMoney(item.total_amount || item.net_amount_payable || 0)}</strong></div>
+                        </div>
+                        <div className="purchase-mobile-entry-actions">
+                          <button type="button" onClick={() => showPurchaseReportPreview(item)}>View</button>
+                          <button type="button" onClick={() => handleEditPurchaseReport(item)}>Edit</button>
+                          <button type="button" className="pdf" onClick={() => handlePurchaseReportPDF(item.id || item._id)}>PDF</button>
+                        </div>
+                      </div>
                     ))}
                     {filteredReportData.length === 0 && (
-                      <tr><td colSpan={activeReportColumns.length} style={{ ...td, textAlign: "center", padding: 20 }}>No data available.</td></tr>
+                      <div className="purchase-mobile-empty">No data available.</div>
                     )}
-                  </tbody>
-                </table>
-              </div>
+                  </div>
+                )}
+              </>
             )}
           </div>
         </>
@@ -5071,22 +5234,24 @@ export default function WarehouseTradingPage() {
           </div>
         </div>
       )}
-      {showPurchasePreview && isPurchaseVoucher && (
+      {showPurchasePreview && (isPurchaseVoucher || purchasePreviewRow) && (
         <div style={modalOverlayStyle}>
-          <div style={{ ...paymentAdjustModalStyle, width: "min(1180px, 98vw)", background: "#fafafa" }}>
+          <div className="purchase-preview-modal" style={{ ...paymentAdjustModalStyle, width: "min(1180px, 98vw)", background: "#fafafa" }}>
             <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start", marginBottom: 14, borderBottom: "1px solid #d1d5db", paddingBottom: 12 }}>
               <div>
                 <div style={{ fontSize: 12, letterSpacing: 1.1, fontWeight: 800, color: "#6b7280" }}>PURCHASE VOUCHER PREVIEW</div>
-                <h3 style={{ margin: "4px 0 0", fontSize: 24, color: "#111827" }}>Please verify every entry before saving</h3>
-                <div style={{ marginTop: 4, fontSize: 13, color: "#4b5563" }}>This preview follows a clean black-and-white report layout for easy checking.</div>
+                <h3 style={{ margin: "4px 0 0", fontSize: 24, color: "#111827" }}>
+                  {purchasePreviewRow ? "Full purchase report view" : "Please verify every entry before saving"}
+                </h3>
+                <div style={{ marginTop: 4, fontSize: 13, color: "#4b5563" }}>This preview follows a clean report layout for easy checking.</div>
               </div>
-              <button type="button" onClick={() => setShowPurchasePreview(false)} style={{ ...btnAction, background: "#64748b" }}>
+              <button type="button" onClick={() => { setShowPurchasePreview(false); setPurchasePreviewRow(null); }} style={{ ...btnAction, background: "#64748b" }}>
                 Close
               </button>
             </div>
 
             {(() => {
-              const preview = getPurchasePreviewData();
+              const preview = purchasePreviewRow ? getPurchasePreviewDataForRow(purchasePreviewRow) : getPurchasePreviewData();
               const topSummary = [
                 { label: "Voucher No", value: preview.voucherNo },
                 { label: "Date", value: preview.date },
@@ -5187,27 +5352,27 @@ export default function WarehouseTradingPage() {
                         <tbody>
                           <tr>
                             <td style={td}>Less Bags Weight</td>
-                            <td style={td}>{formatMoney(formData.less_bags_weight)}</td>
+                            <td style={td}>{purchasePreviewRow ? preview.lessBagsWeight : formatMoney(formData.less_bags_weight)}</td>
                             <td style={td}>Moisture</td>
-                            <td style={td}>{formatMoney(formData.moisture)}</td>
+                            <td style={td}>{purchasePreviewRow ? preview.moisture : formatMoney(formData.moisture)}</td>
                           </tr>
                           <tr>
                             <td style={td}>Dunki</td>
-                            <td style={td}>{formatMoney(formData.dunki)}</td>
+                            <td style={td}>{purchasePreviewRow ? preview.dunki : formatMoney(formData.dunki)}</td>
                             <td style={td}>Fungus</td>
-                            <td style={td}>{formatMoney(formData.fungus)}</td>
+                            <td style={td}>{purchasePreviewRow ? preview.fungus : formatMoney(formData.fungus)}</td>
                           </tr>
                           <tr>
                             <td style={td}>Discolour</td>
-                            <td style={td}>{formatMoney(formData.discolour)}</td>
+                            <td style={td}>{purchasePreviewRow ? preview.discolour : formatMoney(formData.discolour)}</td>
                             <td style={td}>Others</td>
-                            <td style={td}>{formatMoney(formData.others)}</td>
+                            <td style={td}>{purchasePreviewRow ? preview.others : formatMoney(formData.others)}</td>
                           </tr>
                           <tr>
                             <td style={td}>Bags Claim</td>
-                            <td style={td}>{formatMoney(formData.bags_claim)}</td>
+                            <td style={td}>{purchasePreviewRow ? preview.bagsClaim : formatMoney(formData.bags_claim)}</td>
                             <td style={td}>Labour</td>
-                            <td style={td}>{formatMoney(formData.labour)}</td>
+                            <td style={td}>{purchasePreviewRow ? preview.labour : formatMoney(formData.labour)}</td>
                           </tr>
                         </tbody>
                       </table>
@@ -5226,20 +5391,22 @@ export default function WarehouseTradingPage() {
                   </div>
 
                   <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 16, flexWrap: "wrap" }}>
-                    <button type="button" onClick={() => setShowPurchasePreview(false)} style={{ ...btnPrimary, background: "#64748b" }}>
-                      Back to Edit
+                    <button type="button" onClick={() => { setShowPurchasePreview(false); setPurchasePreviewRow(null); }} style={{ ...btnPrimary, background: "#64748b" }}>
+                      {purchasePreviewRow ? "Close" : "Back to Edit"}
                     </button>
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        setShowPurchasePreview(false);
-                        await saveVoucher();
-                      }}
-                      disabled={loading}
-                      style={btnPrimary}
-                    >
-                      {loading ? "Saving..." : "Confirm Save"}
-                    </button>
+                    {!purchasePreviewRow && (
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          setShowPurchasePreview(false);
+                          await saveVoucher();
+                        }}
+                        disabled={loading}
+                        style={btnPrimary}
+                      >
+                        {loading ? "Saving..." : "Confirm Save"}
+                      </button>
+                    )}
                   </div>
                 </>
               );
