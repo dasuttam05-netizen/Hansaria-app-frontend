@@ -33,6 +33,8 @@ import {
   FaEye,
   FaChevronLeft,
   FaChevronRight,
+  FaChevronUp,
+  FaChevronDown,
   FaBars,
   FaBell,
   FaLink,
@@ -74,6 +76,7 @@ export default function DashboardPage() {
   const [showBuyerNamesPopup, setShowBuyerNamesPopup] = useState(false);
   const [showQuickActionsPanel, setShowQuickActionsPanel] = useState(false);
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
+  const [isMobileHeaderCollapsed, setIsMobileHeaderCollapsed] = useState(false);
   const [openTopbarMenu, setOpenTopbarMenu] = useState(null);
   const [activeStockTab, setActiveStockTab] = useState("warehouse_stock");
   const [stockReportQuery, setStockReportQuery] = useState("");
@@ -1202,7 +1205,7 @@ export default function DashboardPage() {
       </aside>
 
       <main className="dashboard-main">
-        <div className="dashboard-topbar">
+        <div className={`dashboard-topbar ${isMobileHeaderCollapsed ? "is-mobile-collapsed" : ""}`}>
           <div className="dashboard-topbar-left">
             <button
               type="button"
@@ -1211,6 +1214,17 @@ export default function DashboardPage() {
               title="Open menu"
             >
               <FaBars />
+            </button>
+            <button
+              type="button"
+              className="mobile-header-toggle"
+              onClick={() => {
+                setIsMobileHeaderCollapsed((prev) => !prev);
+                setOpenTopbarMenu(null);
+              }}
+              title={isMobileHeaderCollapsed ? "Show header" : "Hide header"}
+            >
+              {isMobileHeaderCollapsed ? <FaChevronDown /> : <FaChevronUp />}
             </button>
             <img src={logo} alt="Logo" className="dashboard-logo" />
             <div className="dashboard-topbar-info">
