@@ -528,6 +528,14 @@ button {
     font-size: 17px !important;
   }
 
+  .warehouse-trading-main-header {
+    display: none !important;
+  }
+
+  .warehouse-trading-page {
+    padding: 8px !important;
+  }
+
   .mobile-section-toggle {
     display: inline-flex !important;
     width: 100% !important;
@@ -536,10 +544,10 @@ button {
     justify-content: center !important;
     margin: 0 0 10px !important;
     padding: 9px 12px !important;
-    border: 1px solid #b7c6d8 !important;
+    border: 1px solid #9bc9c4 !important;
     border-radius: 9px !important;
-    background: #edf3fa !important;
-    color: #1f3a5f !important;
+    background: #e6f6f4 !important;
+    color: #0f766e !important;
     font-size: 13px !important;
     font-weight: 800 !important;
     box-shadow: none !important;
@@ -562,16 +570,16 @@ button {
 
   .purchase-mobile-entry-card,
   .purchase-mobile-report-card {
-    border: 1px solid #c7d3e1 !important;
+    border: 1px solid #b8d8d5 !important;
     border-radius: 10px !important;
-    background: linear-gradient(180deg, #ffffff 0%, #f7faff 100%) !important;
-    box-shadow: 0 8px 18px rgba(30, 41, 59, 0.07) !important;
+    background: linear-gradient(180deg, #ffffff 0%, #f3fbfa 100%) !important;
+    box-shadow: 0 8px 18px rgba(15, 118, 110, 0.08) !important;
     overflow: hidden !important;
   }
 
   .purchase-mobile-report-card.is-closing {
-    background: linear-gradient(180deg, #eef4fb 0%, #e4edf7 100%) !important;
-    border-color: #9fb2c8 !important;
+    background: linear-gradient(180deg, #e8f7f5 0%, #dff1ee 100%) !important;
+    border-color: #8fc4bd !important;
   }
 
   .purchase-mobile-entry-head {
@@ -580,7 +588,7 @@ button {
     justify-content: space-between !important;
     gap: 10px !important;
     padding: 10px 12px !important;
-    background: linear-gradient(135deg, #243b5a 0%, #315f7d 100%) !important;
+    background: linear-gradient(135deg, #0f766e 0%, #0b5f74 100%) !important;
     color: #ffffff !important;
   }
 
@@ -591,7 +599,7 @@ button {
   }
 
   .purchase-mobile-entry-head span {
-    color: #cbdff3 !important;
+    color: #c9fbf1 !important;
     font-size: 11px !important;
     font-weight: 800 !important;
     text-transform: uppercase !important;
@@ -605,7 +613,7 @@ button {
   }
 
   .purchase-mobile-entry-head em {
-    color: #dbeafe !important;
+    color: #d7fffa !important;
     font-size: 12px !important;
     font-style: normal !important;
     font-weight: 700 !important;
@@ -622,15 +630,15 @@ button {
   .purchase-mobile-entry-grid div {
     min-width: 0 !important;
     padding: 8px !important;
-    border: 1px solid #e0e8f2 !important;
+    border: 1px solid #d8ebe8 !important;
     border-radius: 8px !important;
     background: #ffffff !important;
   }
 
   .purchase-mobile-entry-grid div.wide {
     grid-column: 1 / -1 !important;
-    background: #eef4fb !important;
-    border-color: #c3d2e3 !important;
+    background: #e9f8f6 !important;
+    border-color: #b7d9d5 !important;
   }
 
   .purchase-mobile-entry-grid span {
@@ -663,7 +671,7 @@ button {
     padding: 8px 10px !important;
     border: none !important;
     border-radius: 8px !important;
-    background: #315f7d !important;
+    background: #0f766e !important;
     color: #ffffff !important;
     font-size: 13px !important;
     font-weight: 800 !important;
@@ -674,12 +682,12 @@ button {
   }
 
   .purchase-mobile-entry-actions button.pdf {
-    background: #a16207 !important;
+    background: #2563eb !important;
   }
 
   .purchase-mobile-empty {
     padding: 14px !important;
-    border: 1px dashed #b7c6d8 !important;
+    border: 1px dashed #9bc9c4 !important;
     border-radius: 10px !important;
     background: #f8fafc !important;
     color: #475569 !important;
@@ -697,22 +705,22 @@ button {
     border-radius: 0 !important;
     padding: 14px !important;
     overflow-y: auto !important;
-    background: #f7faff !important;
+    background: #f3fbfa !important;
   }
 
   .purchase-voucher-mobile-form {
     padding: 10px !important;
-    border: 1px solid #b7c6d8 !important;
+    border: 1px solid #9bc9c4 !important;
     border-radius: 10px !important;
-    background: #f6f8fb !important;
-    box-shadow: 0 10px 22px rgba(30, 41, 59, 0.08) !important;
+    background: #f3fbfa !important;
+    box-shadow: 0 10px 22px rgba(15, 118, 110, 0.08) !important;
   }
 
   .purchase-voucher-titlebar {
     margin: -10px -10px 10px !important;
     padding: 10px 12px !important;
     border-radius: 10px 10px 0 0 !important;
-    background: linear-gradient(135deg, #1f3a5f 0%, #315f7d 100%) !important;
+    background: linear-gradient(135deg, #0f766e 0%, #0b5f74 100%) !important;
     color: #ffffff !important;
     gap: 8px !important;
   }
@@ -726,7 +734,7 @@ button {
     height: 28px !important;
     border-radius: 8px !important;
     background: #f8fafc !important;
-    color: #1f3a5f !important;
+    color: #0f766e !important;
     font-size: 16px !important;
   }
 
@@ -738,7 +746,7 @@ button {
   .purchase-voucher-meta {
     width: 100% !important;
     gap: 6px !important;
-    color: #dbeafe !important;
+    color: #d7fffa !important;
     font-size: 11px !important;
   }
 
@@ -747,7 +755,7 @@ button {
     min-height: 34px !important;
     height: 34px !important;
     border-radius: 7px !important;
-    border-color: #93a9c4 !important;
+    border-color: #9bc9c4 !important;
     background: #ffffff !important;
     font-size: 13px !important;
     padding: 7px 9px !important;
@@ -765,12 +773,12 @@ button {
   .purchase-voucher-bottom-panel {
     padding: 9px !important;
     border-radius: 9px !important;
-    border: 1px solid #cad6e4 !important;
+    border: 1px solid #c6e1dd !important;
     background: #ffffff !important;
   }
 
   .purchase-voucher-doc-panel {
-    background: #f8fbff !important;
+    background: #f6fffd !important;
   }
 
   .purchase-voucher-row {
@@ -797,7 +805,7 @@ button {
     width: 100% !important;
     min-height: 36px !important;
     height: 36px !important;
-    border: 1px solid #b8c7d9 !important;
+    border: 1px solid #a9d0cb !important;
     border-radius: 7px !important;
     background: #ffffff !important;
     color: #0f172a !important;
@@ -815,14 +823,14 @@ button {
     margin: 10px 0 5px !important;
     padding: 7px 9px !important;
     border-radius: 7px !important;
-    background: #e8eef6 !important;
-    color: #1e3a5f !important;
+    background: #e4f5f2 !important;
+    color: #0f766e !important;
     font-size: 12px !important;
     font-weight: 800 !important;
   }
 
   .purchase-voucher-table-wrap {
-    border-color: #b8c7d9 !important;
+    border-color: #a9d0cb !important;
     border-radius: 8px !important;
     overflow-x: auto !important;
     -webkit-overflow-scrolling: touch !important;
@@ -836,17 +844,27 @@ button {
   .purchase-voucher-table-wrap th {
     height: 30px !important;
     padding: 6px 6px !important;
-    background: #dbe5f1 !important;
+    background: #d7efeb !important;
     color: #1e293b !important;
     font-size: 11px !important;
     font-weight: 800 !important;
-    border-color: #b8c7d9 !important;
+    border-color: #a9d0cb !important;
   }
 
   .purchase-voucher-table-wrap td {
     height: 34px !important;
     padding: 2px !important;
-    border-color: #cbd7e5 !important;
+    border-color: #c6e1dd !important;
+  }
+
+  .purchase-voucher-table-wrap th:nth-last-child(2),
+  .purchase-voucher-table-wrap td:nth-last-child(2) {
+    width: 130px !important;
+    min-width: 130px !important;
+  }
+
+  .purchase-voucher-table-wrap td:nth-last-child(2) input {
+    min-width: 120px !important;
   }
 
   .purchase-voucher-table-wrap input,
@@ -862,8 +880,8 @@ button {
     margin: 8px 0 !important;
     padding: 8px 10px !important;
     border-radius: 8px !important;
-    background: #eef4fb !important;
-    color: #1e3a5f !important;
+    background: #e4f5f2 !important;
+    color: #0f766e !important;
     font-size: 13px !important;
   }
 
@@ -875,7 +893,7 @@ button {
 
   .purchase-voucher-bottom-panel th {
     padding: 7px 8px !important;
-    background: #dbe5f1 !important;
+    background: #d7efeb !important;
     color: #1e293b !important;
     font-size: 12px !important;
   }
@@ -914,7 +932,7 @@ button {
     margin-top: 8px !important;
     padding: 10px !important;
     border-radius: 10px !important;
-    background: linear-gradient(135deg, #1f3a5f 0%, #25636f 100%) !important;
+    background: linear-gradient(135deg, #0f766e 0%, #0b5f74 100%) !important;
   }
 
   .purchase-voucher-total-panel span,
