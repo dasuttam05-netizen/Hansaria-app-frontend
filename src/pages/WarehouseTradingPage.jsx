@@ -2674,8 +2674,8 @@ export default function WarehouseTradingPage() {
   };
 
   return (
-    <div style={{ fontFamily: "Segoe UI, Arial, sans-serif", padding: "16px" }}>
-      <div style={headerRow}>
+    <div className="warehouse-trading-page" style={{ fontFamily: "Segoe UI, Arial, sans-serif", padding: "16px" }}>
+      <div className="warehouse-trading-main-header" style={headerRow}>
         <div>
           <h2 style={titleStyle}>Warehouse Trading</h2>
           <p style={subtitleStyle}>Manage trading vouchers and view reports</p>
@@ -2913,8 +2913,8 @@ export default function WarehouseTradingPage() {
                   </div>
                 </div>
               ) : isSaleVoucher ? (
-                <div style={erpShell}>
-                  <div style={erpTitleBar}>
+                <div className="sale-voucher-mobile-form purchase-voucher-mobile-form" style={erpShell}>
+                  <div className="purchase-voucher-titlebar sale-voucher-titlebar" style={erpTitleBar}>
                     <div style={erpTitleLeft}>
                       <span style={erpDocIcon}>S</span>
                       <span style={erpTitleText}>Sale</span>
@@ -2927,7 +2927,7 @@ export default function WarehouseTradingPage() {
                     </div>
                   </div>
 
-                  <div style={erpTopGrid}>
+                  <div className="purchase-voucher-top-grid" style={erpTopGrid}>
                     <div style={erpPanelWide}>
                       <div style={erpRow}>
                         <label style={erpLabel}>Buyer Name</label>
@@ -3061,8 +3061,8 @@ export default function WarehouseTradingPage() {
                     </div>
                   </div>
 
-                  <div style={erpSectionLabel}>GOODS SALE DETAILS</div>
-                  <div style={erpGridWrap}>
+                  <div className="purchase-voucher-section-label" style={erpSectionLabel}>GOODS SALE DETAILS</div>
+                  <div className="purchase-voucher-table-wrap" style={erpGridWrap}>
                     <table style={erpItemsTable}>
                       <thead>
                         <tr>
@@ -3594,7 +3594,7 @@ export default function WarehouseTradingPage() {
             >
               {showMobileVoucherHeader ? "Hide Voucher Header" : "Show Voucher Header"}
             </button>
-            <div className={activeVoucherType === "purchase" ? "purchase-mobile-table-source" : ""} style={tableCard}>
+            <div className={activeVoucherType === "purchase" || activeVoucherType === "sale" ? "purchase-mobile-table-source" : ""} style={tableCard}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                 <thead>
                   <tr style={reportHeaderRowStyle}>
@@ -3711,6 +3711,39 @@ export default function WarehouseTradingPage() {
                     <div className="purchase-mobile-entry-actions">
                       <button type="button" onClick={() => handleEditVoucher(item.id || item._id)}>Edit</button>
                       <button type="button" className="danger" onClick={() => handleDeleteVoucher(item.id || item._id)}>Delete</button>
+                    </div>
+                  </div>
+                ))}
+                {filteredVoucherList.length === 0 && (
+                  <div className="purchase-mobile-empty">No vouchers found.</div>
+                )}
+              </div>
+            )}
+            {activeVoucherType === "sale" && (
+              <div className="purchase-mobile-entry-list">
+                {filteredVoucherList.map((item, i) => (
+                  <div key={item.id || item._id || i} className="purchase-mobile-entry-card sale-mobile-entry-card">
+                    <div className="purchase-mobile-entry-head">
+                      <div>
+                        <span>#{i + 1}</span>
+                        <strong>{item.voucher_no || item.bill_no || "-"}</strong>
+                      </div>
+                      <em>{formatLedgerDate(item.date)}</em>
+                    </div>
+                    <div className="purchase-mobile-entry-grid">
+                      <div><span>Buyer</span><strong>{getBuyerName(item)}</strong></div>
+                      <div><span>Consignee</span><strong>{item.consignee_name || consignees.find((c) => String(c.id || c._id) === String(item.consignee_id))?.name || "-"}</strong></div>
+                      <div><span>Account</span><strong>{getAccountName(item)}</strong></div>
+                      <div><span>Warehouse</span><strong>{getWarehouseName(item)}</strong></div>
+                      <div><span>Product</span><strong>{getProductName(item)}</strong></div>
+                      <div><span>Qty</span><strong>{formatDecimal4(item.quantity || item.total_quantity || 0)}</strong></div>
+                      <div><span>Rate</span><strong>{formatMoney(item.rate || 0)}</strong></div>
+                      <div className="wide"><span>Net Receivable</span><strong>Rs.{formatMoney(item.net_receivable_amount || item.net_amount || item.amount || 0)}</strong></div>
+                    </div>
+                    <div className="purchase-mobile-entry-actions">
+                      <button type="button" onClick={() => handleEditVoucher(item.id || item._id)}>Edit</button>
+                      <button type="button" className="danger" onClick={() => handleDeleteVoucher(item.id || item._id)}>Delete</button>
+                      <button type="button" className="pdf" onClick={() => handleGeneratePDF(item.id || item._id)}>PDF</button>
                     </div>
                   </div>
                 ))}
@@ -4066,7 +4099,7 @@ export default function WarehouseTradingPage() {
               </div>
             ) : activeReport === "sale-party-ledger" || activeReport === "sale-followup" || activeReport === "sale-journey" ? (
               <div style={ledgerSplitStyle}>
-                <div style={tableCard}>
+                <div className={activeReport === "sale-party-ledger" ? "purchase-mobile-table-source" : ""} style={tableCard}>
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                     <thead>
                       <tr style={reportHeaderRowStyle}>
@@ -4096,6 +4129,35 @@ export default function WarehouseTradingPage() {
                     </tbody>
                   </table>
                 </div>
+                {activeReport === "sale-party-ledger" && (
+                  <div className="purchase-mobile-report-list">
+                    {filteredReportData.map((item, i) => (
+                      <div
+                        key={item.id || `${item.voucher_type || item.row_type}-${item.voucher_no || i}-${i}`}
+                        className={`purchase-mobile-report-card sale-mobile-entry-card ${item.row_type === "closing" ? "is-closing" : ""}`}
+                      >
+                        <div className="purchase-mobile-entry-head">
+                          <div>
+                            <span>{item.row_type === "closing" ? "Closing" : item.voucher_type || "Entry"}</span>
+                            <strong>{item.voucher_no || item.party_name || item.company_name || "-"}</strong>
+                          </div>
+                          <em>{item.row_type === "closing" ? "" : formatLedgerDate(item.date)}</em>
+                        </div>
+                        <div className="purchase-mobile-entry-grid">
+                          <div><span>Party</span><strong>{item.row_type === "closing" ? `Closing (${item.closing_side || ""})` : item.party_name || item.company_name || "-"}</strong></div>
+                          <div><span>Account</span><strong>{item.row_type === "closing" ? "-" : getAccountName(item)}</strong></div>
+                          <div><span>Warehouse</span><strong>{item.row_type === "closing" ? "-" : getWarehouseName(item)}</strong></div>
+                          <div><span>Debit</span><strong>{formatMoney(item.debit || 0)}</strong></div>
+                          <div><span>Credit</span><strong>{formatMoney(item.credit || 0)}</strong></div>
+                          <div className="wide"><span>Balance</span><strong>Rs.{formatMoney(Math.abs(item.balance || 0))}</strong></div>
+                        </div>
+                      </div>
+                    ))}
+                    {filteredReportData.length === 0 && (
+                      <div className="purchase-mobile-empty">No data available.</div>
+                    )}
+                  </div>
+                )}
 
                 {showSaleBillWise && activeReport === "sale-party-ledger" && (
                   <div style={billWisePanelStyle}>
@@ -4234,7 +4296,7 @@ export default function WarehouseTradingPage() {
               </div>
             ) : (
               <>
-                <div className={activeReport === "purchase" ? "purchase-mobile-table-source" : ""} style={tableCard}>
+                <div className={activeReport === "purchase" || activeReport === "sale" ? "purchase-mobile-table-source" : ""} style={tableCard}>
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                     <thead>
                       <tr style={reportHeaderRowStyle}>
@@ -4280,6 +4342,33 @@ export default function WarehouseTradingPage() {
                           <button type="button" onClick={() => showPurchaseReportPreview(item)}>View</button>
                           <button type="button" onClick={() => handleEditPurchaseReport(item)}>Edit</button>
                           <button type="button" className="pdf" onClick={() => handlePurchaseReportPDF(item.id || item._id)}>PDF</button>
+                        </div>
+                      </div>
+                    ))}
+                    {filteredReportData.length === 0 && (
+                      <div className="purchase-mobile-empty">No data available.</div>
+                    )}
+                  </div>
+                )}
+                {activeReport === "sale" && (
+                  <div className="purchase-mobile-report-list">
+                    {filteredReportData.map((item, i) => (
+                      <div key={item.id || item._id || i} className="purchase-mobile-report-card sale-mobile-entry-card">
+                        <div className="purchase-mobile-entry-head">
+                          <div>
+                            <span>#{i + 1}</span>
+                            <strong>{item.voucher_no || item.bill_no || "-"}</strong>
+                          </div>
+                          <em>{formatLedgerDate(item.date)}</em>
+                        </div>
+                        <div className="purchase-mobile-entry-grid">
+                          <div><span>Buyer</span><strong>{getBuyerName(item)}</strong></div>
+                          <div><span>Consignee</span><strong>{item.consignee_name || consignees.find((c) => String(c.id || c._id) === String(item.consignee_id))?.name || "-"}</strong></div>
+                          <div><span>Account</span><strong>{getAccountName(item)}</strong></div>
+                          <div><span>Warehouse</span><strong>{getWarehouseName(item)}</strong></div>
+                          <div><span>Product</span><strong>{getProductName(item)}</strong></div>
+                          <div><span>Total Qty</span><strong>{formatDecimal4(item.total_quantity || item.quantity || 0)}</strong></div>
+                          <div className="wide"><span>Total Amount</span><strong>Rs.{formatMoney(item.total_amount || item.amount || 0)}</strong></div>
                         </div>
                       </div>
                     ))}
