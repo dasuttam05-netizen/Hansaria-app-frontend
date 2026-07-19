@@ -2684,13 +2684,13 @@ export default function WarehouseTradingPage() {
             </div>
             <form onSubmit={handleSubmit}>
               {isPurchaseVoucher ? (
-                <div style={erpShell}>
-                  <div style={erpTitleBar}>
-                    <div style={erpTitleLeft}>
-                      <span style={erpDocIcon}>P</span>
-                      <span style={erpTitleText}>Purchase</span>
+                <div className="purchase-voucher-mobile-form" style={erpShell}>
+                  <div className="purchase-voucher-titlebar" style={erpTitleBar}>
+                    <div className="purchase-voucher-title-left" style={erpTitleLeft}>
+                      <span className="purchase-voucher-doc-icon" style={erpDocIcon}>P</span>
+                      <span className="purchase-voucher-title" style={erpTitleText}>Purchase</span>
                     </div>
-                    <div style={erpMetaLine}>
+                    <div className="purchase-voucher-meta" style={erpMetaLine}>
                       <span>Subdocument : <strong>Purchase</strong></span>
                       <span>Type : <strong>{editId ? "Regular [ Edit ]" : "Regular [ New ]"}</strong></span>
                       <span>Location</span>
@@ -2698,9 +2698,9 @@ export default function WarehouseTradingPage() {
                     </div>
                   </div>
 
-                  <div style={erpTopGrid}>
-                    <div style={erpPanelWide}>
-                      <div style={erpRow}>
+                  <div className="purchase-voucher-top-grid" style={erpTopGrid}>
+                    <div className="purchase-voucher-panel" style={erpPanelWide}>
+                      <div className="purchase-voucher-row" style={erpRow}>
                         <label style={erpLabel}>Name</label>
                         <select name="farmer_id" value={formData.farmer_id} onChange={handleChange} style={{ ...erpInput, ...erpFocusInput }}>
                           <option value="">Select Party</option>
@@ -2709,17 +2709,17 @@ export default function WarehouseTradingPage() {
                           ))}
                         </select>
                       </div>
-                      <div style={erpRow}>
+                      <div className="purchase-voucher-row" style={erpRow}>
                         <label style={erpLabel}>Account</label>
                         {renderAccountSelect(erpInput)}
                       </div>
-                      <div style={erpRow}>
+                      <div className="purchase-voucher-row" style={erpRow}>
                         <label style={erpLabel}>GSTIN</label>
                         <input value={selectedFarmerGst} readOnly style={erpInput} />
                         <label style={{ ...erpLabel, width: 42, textAlign: "right" }}>State</label>
                         <input value={selectedFarmerState} readOnly style={{ ...erpInput, width: 90 }} />
                       </div>
-                      <div style={erpRow}>
+                      <div className="purchase-voucher-row" style={erpRow}>
                         <label style={erpLabel}>PAN No.</label>
                         <input value={selectedFarmerPan} readOnly style={erpInput} />
                         <label style={{ ...erpLabel, width: 50, textAlign: "right" }}>Mobile</label>
@@ -2727,8 +2727,8 @@ export default function WarehouseTradingPage() {
                       </div>
                     </div>
 
-                    <div style={erpPanelWide}>
-                      <div style={erpRow}>
+                    <div className="purchase-voucher-panel" style={erpPanelWide}>
+                      <div className="purchase-voucher-row" style={erpRow}>
                         <label style={erpLabel}>Warehouse Name</label>
                         <select name="warehouse_id" value={formData.warehouse_id} onChange={handleChange} style={erpInput}>
                           <option value="">Select Warehouse</option>
@@ -2737,7 +2737,7 @@ export default function WarehouseTradingPage() {
                           ))}
                         </select>
                       </div>
-                      <div style={erpRow}>
+                      <div className="purchase-voucher-row" style={erpRow}>
                         <label style={erpLabel}>Employee Name</label>
                         <select name="employee_id" value={formData.employee_id} onChange={handleChange} style={erpInput}>
                           <option value="">Select Employee</option>
@@ -2746,30 +2746,30 @@ export default function WarehouseTradingPage() {
                           ))}
                         </select>
                       </div>
-                      <div style={erpRow}>
+                      <div className="purchase-voucher-row" style={erpRow}>
                         <label style={erpLabel}>Employee Mobile</label>
                         <input value={selectedEmployeeMobile} readOnly style={erpInput} />
                       </div>
                     </div>
 
-                    <div style={erpDocPanel}>
-                      <div style={erpRow}>
+                    <div className="purchase-voucher-panel purchase-voucher-doc-panel" style={erpDocPanel}>
+                      <div className="purchase-voucher-row" style={erpRow}>
                         <label style={erpLabel}>Number</label>
                         <input name="voucher_no" value={formData.voucher_no} onChange={handleChange} placeholder="Voucher No *" style={erpInput} required />
                       </div>
-                      <div style={erpRow}>
+                      <div className="purchase-voucher-row" style={erpRow}>
                         <label style={erpLabel}>Date</label>
                         <input name="date" type="date" value={formData.date} onChange={handleChange} style={erpInput} required />
                       </div>
-                      <div style={erpRow}>
+                      <div className="purchase-voucher-row" style={erpRow}>
                         <label style={erpLabel}>R. S. T No</label>
                         <input name="reference_id" value={formData.reference_id} onChange={handleChange} placeholder="R. S. T No" style={erpInput} />
                       </div>
                     </div>
                   </div>
 
-                  <div style={erpSectionLabel}>GOODS PURCHASE DETAILS</div>
-                  <div style={erpGridWrap}>
+                  <div className="purchase-voucher-section-label" style={erpSectionLabel}>GOODS PURCHASE DETAILS</div>
+                  <div className="purchase-voucher-table-wrap" style={erpGridWrap}>
                     <table style={erpItemsTable}>
                       <thead>
                         <tr>
@@ -2817,13 +2817,13 @@ export default function WarehouseTradingPage() {
                     </table>
                   </div>
 
-                  <div style={erpMiddleBar}>
+                  <div className="purchase-voucher-middle-bar" style={erpMiddleBar}>
                       <span></span>
                       <strong>Total Quantity : {formatDecimal4(safePurchaseNetWeight)}</strong>
                   </div>
 
-                  <div style={erpBottomGrid}>
-                    <div>
+                  <div className="purchase-voucher-bottom-grid" style={erpBottomGrid}>
+                    <div className="purchase-voucher-bottom-panel">
                       <table style={erpMiniTable}>
                         <thead>
                           <tr><th style={erpTh}>Particulars</th><th style={erpTh}>Amount</th></tr>
@@ -2835,13 +2835,13 @@ export default function WarehouseTradingPage() {
                           <tr><td style={erpTd}>Round Off</td><td style={erpTd}><input name="round_off" type="number" step="0.0001" value={formData.round_off} onChange={handleChange} style={erpCellInput} /></td></tr>
                         </tbody>
                       </table>
-                      <div style={erpRemarksRow}>
+                      <div className="purchase-voucher-remarks" style={erpRemarksRow}>
                         <label style={erpLabel}>Narration</label>
                         <textarea name="description" value={formData.description} onChange={handleChange} rows={2} style={erpTextarea} />
                       </div>
                     </div>
 
-                    <div>
+                    <div className="purchase-voucher-bottom-panel">
                       <table style={erpMiniTable}>
                         <thead>
                           <tr><th style={erpTh}>Purchase Summary</th><th style={erpTh}>Amount</th></tr>
@@ -2854,7 +2854,7 @@ export default function WarehouseTradingPage() {
                         </tbody>
                       </table>
 
-                      <div style={erpTotalPanel}>
+                      <div className="purchase-voucher-total-panel" style={erpTotalPanel}>
                         <span style={erpTotalLabel}>T O T A L</span>
                         <strong style={erpTotalAmount}>{formatMoney(purchaseNetPayable)}</strong>
                       </div>
