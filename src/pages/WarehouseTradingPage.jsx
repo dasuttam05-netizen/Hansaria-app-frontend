@@ -191,6 +191,7 @@ export default function WarehouseTradingPage() {
   const [purchasePreviewRow, setPurchasePreviewRow] = useState(null);
   const [showMobileVoucherHeader, setShowMobileVoucherHeader] = useState(true);
   const [showMobileReportHeader, setShowMobileReportHeader] = useState(true);
+  const [showMobileTradingTabs, setShowMobileTradingTabs] = useState(false);
   const [globalSearch, setGlobalSearch] = useState("");
   const selectedVoucher = list.find((item) => String(item.id || item._id) === String(selectedPaymentId));
   const selectedReceiptVoucher = list.find((item) => String(item.id || item._id) === String(selectedReceiptId));
@@ -2676,18 +2677,26 @@ export default function WarehouseTradingPage() {
   return (
     <div className="warehouse-trading-page" style={{ fontFamily: "Segoe UI, Arial, sans-serif", padding: "16px" }}>
       <div className="warehouse-trading-main-header" style={headerRow}>
-        <div>
+        <div className="warehouse-trading-title-block">
           <h2 style={titleStyle}>Warehouse Trading</h2>
           <p style={subtitleStyle}>Manage trading vouchers and view reports</p>
         </div>
-        <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+        <div className="warehouse-trading-control-block" style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
           <input
+            className="warehouse-trading-search"
             value={globalSearch}
             onChange={(event) => setGlobalSearch(event.target.value)}
             placeholder="Search all tabs..."
             style={{ ...inp, width: 280, background: "#fff" }}
           />
-          <div style={tabRow}>
+          <button
+            type="button"
+            className="mobile-section-toggle trading-tabs-toggle"
+            onClick={() => setShowMobileTradingTabs((prev) => !prev)}
+          >
+            {showMobileTradingTabs ? "Hide Voucher / Report" : "Show Voucher / Report"}
+          </button>
+          <div className={`warehouse-trading-tabs ${showMobileTradingTabs ? "is-mobile-visible" : ""}`} style={tabRow}>
             <button onClick={() => setActiveTab("vouchers")} style={activeTab === "vouchers" ? activeTabStyle : tabStyle}>Vouchers</button>
             <button onClick={() => setActiveTab("reports")} style={activeTab === "reports" ? activeTabStyle : tabStyle}>Reports</button>
           </div>
@@ -5324,7 +5333,7 @@ export default function WarehouseTradingPage() {
         </div>
       )}
       {showPurchasePreview && (isPurchaseVoucher || purchasePreviewRow) && (
-        <div style={modalOverlayStyle}>
+        <div className="purchase-preview-overlay" style={modalOverlayStyle}>
           <div className="purchase-preview-modal" style={{ ...paymentAdjustModalStyle, width: "min(1180px, 98vw)", background: "#fafafa" }}>
             <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start", marginBottom: 14, borderBottom: "1px solid #d1d5db", paddingBottom: 12 }}>
               <div>
