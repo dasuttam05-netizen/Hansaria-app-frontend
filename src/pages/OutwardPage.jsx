@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import axios from "axios";
+import { useNavigate } from "react-router-dom";
 import { ToastContainer, toast, Slide } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import AdjustmentPage from "./AdjustmentPage";
@@ -142,6 +143,7 @@ const warehouseHasEmployee = (warehouse, employeeId, employees = []) => {
 
 export default function OutwardPage() {
   const API_BASE = "/api";
+  const navigate = useNavigate();
   const { user } = loadSession();
 
   const [outwards, setOutwards] = useState([]);
@@ -1172,6 +1174,26 @@ Consignee: ${row.consignee_name}`;
     fontSize: "14px",
   };
 
+  const modalOverlay = {
+    position: "fixed",
+    inset: 0,
+    background: "rgba(15,23,42,0.45)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 2000,
+    padding: 12,
+  };
+
+  const modalCard = {
+    background: "#fff",
+    borderRadius: 12,
+    padding: 20,
+    width: "100%",
+    maxWidth: 520,
+    boxShadow: "0 20px 40px rgba(0,0,0,0.2)",
+  };
+
   const formCard = {
     background: "#fff",
     border: "1px solid #e2e8f0",
@@ -1179,6 +1201,18 @@ Consignee: ${row.consignee_name}`;
     padding: "20px",
     boxShadow: "0 4px 14px rgba(15, 23, 42, 0.06)",
     width: "100%",
+  };
+
+  const quickLinkButton = {
+    ...btnStyle,
+    background: "#e2e8f0",
+    color: "#0f172a",
+    border: "1px solid #cbd5e1",
+    whiteSpace: "nowrap",
+  };
+
+  const openMasterPage = (path) => {
+    navigate(path);
   };
 
   const closeFormModal = () => {
@@ -1520,6 +1554,7 @@ Consignee: ${row.consignee_name}`;
                     ))}
                   </select>
                   <button type="button" onClick={() => setShowCompanyModal(true)} style={{ ...btnStyle, background: "#0f766e", color: "#fff", whiteSpace: "nowrap" }}>+ Create</button>
+                  <button type="button" onClick={() => openMasterPage("/companies")} style={quickLinkButton}>Open</button>
                   </div>
                 </Field>
 
@@ -1550,6 +1585,7 @@ Consignee: ${row.consignee_name}`;
                   >
                     + Create
                   </button>
+                  <button type="button" onClick={() => openMasterPage("/company-accounts")} style={quickLinkButton}>Open</button>
                   </div>
                 </Field>
 
@@ -1619,6 +1655,7 @@ Consignee: ${row.consignee_name}`;
                       ))}
                     </select>
                     <button type="button" onClick={() => setShowBuyerModal(true)} style={{ ...btnStyle, background: "#2563eb", color: "#fff", whiteSpace: "nowrap" }}>+ Create</button>
+                    <button type="button" onClick={() => openMasterPage("/buyer-names")} style={quickLinkButton}>Open</button>
                   </div>
                 </Field>
 
@@ -1653,6 +1690,7 @@ Consignee: ${row.consignee_name}`;
                     >
                       + Create
                     </button>
+                    <button type="button" onClick={() => openMasterPage("/consignee-names")} style={quickLinkButton}>Open</button>
                   </div>
                 </Field>
 
