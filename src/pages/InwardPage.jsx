@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import { ToastContainer, toast, Slide } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
@@ -87,13 +87,58 @@ export default function InwardPage() {
   const [products, setProducts] = useState([]);
   const [companies, setCompanies] = useState([]);
   const [companyAccounts, setCompanyAccounts] = useState([]);
+  const inwardFileRef = useRef(null);
 
   const canCreate = hasPermission(user, "inward.create");
   const canEdit = hasPermission(user, "inward.edit");
   const canDelete = hasPermission(user, "inward.delete");
+  const canImport = hasPermission(user, "inward.import");
+  const canExport = hasPermission(user, "inward.export");
   const canViewEmployees = hasPermission(user, "employees.view");
   const canAccessPage = canCreate || canEdit || canDelete || hasPermission(user, "inward.view");
   const assignedWarehouseIds = user?.assigned_warehouse_ids || [];
+
+  const downloadInwardTemplate = async () => {
+    try {
+      const res = await axios.get(`${API_BASE}/inward/template-xlsx`, { responseType: "blob" });
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "inward-template.xlsx";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      toast.success("Inward template downloaded", { theme: "colored" });
+    } catch (err) {
+      console.error(err);
+      toast.error(err?.response?.data?.error || "Template download failed", { theme: "colored" });
+    }
+  };
+
+  const handleInwardUpload = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      const res = await axios.post(`${API_BASE}/inward/import-xlsx`, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      const data = res.data || {};
+      toast.success(`Imported ${data.inserted || 0} inward rows`, { theme: "colored" });
+      if (Array.isArray(data.errors) && data.errors.length > 0) {
+        toast.info(`${data.skipped || 0} rows skipped`, { theme: "colored" });
+      }
+      fetchInwards();
+    } catch (err) {
+      console.error(err);
+      toast.error(err?.response?.data?.error || "Inward import failed", { theme: "colored" });
+    }
+  };
 
   useEffect(() => {
     fetchDropdowns();
@@ -478,6 +523,38 @@ Weight: ${row.weight}`;
           <div style={{ color: "#0f172a", fontSize: "18px", fontWeight: 800, marginBottom: "10px" }}>
             {inwards.length}
           </div>
+          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", justifyContent: "flex-end", marginBottom: "10px" }}>
+            {canExport && (
+              <button
+                type="button"
+                onClick={downloadInwardTemplate}
+                style={{
+                  ...btnStyle,
+                  background: "#0f766e",
+                  color: "#fff",
+                  padding: "10px 14px",
+                  boxShadow: "0 10px 18px rgba(15, 118, 110, 0.18)",
+                }}
+              >
+                Download Excel
+              </button>
+            )}
+            {canImport && (
+              <button
+                type="button"
+                onClick={() => inwardFileRef.current?.click()}
+                style={{
+                  ...btnStyle,
+                  background: "#16a34a",
+                  color: "#fff",
+                  padding: "10px 14px",
+                  boxShadow: "0 10px 18px rgba(22, 163, 74, 0.18)",
+                }}
+              >
+                Upload Excel
+              </button>
+            )}
+          </div>
           <button
             onClick={() => {
               setEditData(null);
@@ -507,6 +584,14 @@ Weight: ${row.weight}`;
         newestOnTop
         closeOnClick
         transition={Slide}
+      />
+
+      <input
+        ref={inwardFileRef}
+        type="file"
+        accept=".xlsx,.xls"
+        style={{ display: "none" }}
+        onChange={handleInwardUpload}
       />
 
       {showForm && (
