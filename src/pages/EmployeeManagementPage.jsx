@@ -40,9 +40,18 @@ const PERMISSION_GROUPS = [
     key: "operations",
     title: "Operations",
     items: [
-      
-      { key: "inward_access", label: "Inward", permissions: ["inward.view", "inward.create", "inward.edit", "inward.delete"] },
-      { key: "outward_access", label: "Outward", permissions: ["outward.view", "outward.create", "outward.edit", "outward.delete"] },
+      {
+        key: "inward_access",
+        label: "Inward",
+        actions: ["view", "create", "edit", "delete", "import", "export"],
+        permissions: ["inward.view", "inward.create", "inward.edit", "inward.delete", "inward.import", "inward.export"],
+      },
+      {
+        key: "outward_access",
+        label: "Outward",
+        actions: ["view", "create", "edit", "delete", "import", "export"],
+        permissions: ["outward.view", "outward.create", "outward.edit", "outward.delete", "outward.import", "outward.export"],
+      },
       { key: "adjustment_access", label: "Outward Adjustment", permissions: ["adjustment.manage"] },
       { key: "settlement_access", label: "Settlement", permissions: ["settlement.view", "settlement.companyRate"] },
       { key: "expense_access", label: "Expense Entry", dropdown: true, permissions: ["expense.view", "expense.create", "expense.edit", "expense.delete"] },
@@ -121,6 +130,7 @@ const ACTION_META = {
   edit: { icon: FaPencilAlt, label: "Edit" },
   delete: { icon: FaTrash, label: "Delete" },
   manage: { icon: FaShieldAlt, label: "Manage" },
+  import: { icon: FaFileExport, label: "Import" },
   export: { icon: FaFileExport, label: "Export" },
 };
 
@@ -131,6 +141,7 @@ const actionKindFromOption = (option = {}) => {
   if (label.includes("create") || label.includes("add")) return "create";
   if (label.includes("edit") || label.includes("manage")) return label.includes("manage") ? "manage" : "edit";
   if (label.includes("delete")) return "delete";
+  if (label.includes("import")) return "import";
   if (label.includes("export")) return "export";
   if (label.includes("view")) return "view";
   return ACTION_META[key] ? key : "access";
@@ -153,7 +164,8 @@ export function getActionOptions(groupKey, item, roleContext = "staff") {
   }
 
   if (groupKey === "operations") {
-    const options = ACTIONS.map((action) => {
+    const itemActions = Array.isArray(item.actions) && item.actions.length ? item.actions : ACTIONS;
+    const options = itemActions.map((action) => {
       const direct = item.permissions.find((permission) => permission.endsWith(`.${action}`));
       return { id: `${item.key}:${action}`, label: action[0].toUpperCase() + action.slice(1), permission: direct || item.permissions[0] || null };
     }).filter((option, index, arr) => option.permission && arr.findIndex((x) => x.permission === option.permission) === index);
