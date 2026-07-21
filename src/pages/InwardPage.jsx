@@ -133,9 +133,20 @@ export default function InwardPage() {
         headers: { "Content-Type": "multipart/form-data" },
       });
       const data = res.data || {};
+      const errors = Array.isArray(data.errors) ? data.errors : [];
       toast.success(`Imported ${data.inserted || 0} inward rows`, { theme: "colored" });
-      if (Array.isArray(data.errors) && data.errors.length > 0) {
-        toast.info(`${data.skipped || 0} rows skipped`, { theme: "colored" });
+      if (errors.length > 0) {
+        const preview = errors
+          .slice(0, 3)
+          .map((err) => `Row ${err.row}: ${err.error}`)
+          .join("\n");
+        toast.info(
+          `${data.skipped || 0} rows skipped${preview ? `\n${preview}` : ""}`,
+          { theme: "colored", autoClose: 6000 }
+        );
+        if (data.inserted === 0) {
+          alert(`No inward rows were imported.\n\n${preview || "Please check the XLSX columns and values."}`);
+        }
       }
       fetchInwards();
     } catch (err) {
