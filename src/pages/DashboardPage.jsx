@@ -831,10 +831,26 @@ export default function DashboardPage() {
   const matchesStockWarehouse = (warehouseName) =>
     stockReportWarehouse === "all" || String(warehouseName || "") === stockReportWarehouse;
 
+  const safeWarehouseStock = Array.isArray(warehouseStock) ? warehouseStock : [];
+
+  const groupedWarehouseStock = Object.values(
+    safeWarehouseStock.reduce((acc, row) => {
+      const warehouseName = String(row.warehouse || "Unknown").trim() || "Unknown";
+      if (!acc[warehouseName]) {
+        acc[warehouseName] = {
+          warehouse: warehouseName,
+          stock: 0,
+        };
+      }
+      acc[warehouseName].stock += Number(row.stock || 0);
+      return acc;
+    }, {})
+  ).sort((a, b) => b.stock - a.stock);
+
   const stockWarehouseOptions = Array.from(
     new Set(
       [
-        ...warehouseStock.map((row) => row.warehouse),
+        ...safeWarehouseStock.map((row) => row.warehouse),
         ...partyStock.map((row) => row.warehouse_name),
         ...monthEndRentSummary.map((row) => row.warehouse_name),
       ]
@@ -843,7 +859,7 @@ export default function DashboardPage() {
     )
   ).sort((a, b) => a.localeCompare(b));
 
-  const filteredWarehouseStock = warehouseStock.filter(
+  const filteredWarehouseStock = groupedWarehouseStock.filter(
     (row) => matchesStockWarehouse(row.warehouse) && matchesStockSearch(row.warehouse, row.stock)
   );
 
