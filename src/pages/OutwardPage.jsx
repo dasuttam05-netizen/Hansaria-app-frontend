@@ -193,6 +193,7 @@ export default function OutwardPage() {
   const [companyAccounts, setCompanyAccounts] = useState([]);
   const [consigneeNames, setConsigneeNames] = useState([]);
   const [buyerNames, setBuyerNames] = useState([]);
+  const outwardFileRef = useRef(null);
 
   const employeeLookup = useMemo(() => buildLookupMap(employees), [employees]);
   const locationLookup = useMemo(() => buildLookupMap(locations), [locations]);
@@ -209,6 +210,8 @@ export default function OutwardPage() {
   const canCreate = hasPermission(user, "outward.create");
   const canEdit = hasPermission(user, "outward.edit");
   const canDelete = hasPermission(user, "outward.delete");
+  const canImport = hasPermission(user, "outward.import");
+  const canExport = hasPermission(user, "outward.export");
   const canAdjust = hasPermission(user, "adjustment.manage");
   const canViewEmployees = hasPermission(user, "employees.view");
   const canAccessPage =
@@ -223,6 +226,48 @@ export default function OutwardPage() {
     hasStockSelection &&
     requestedQty > 0 &&
     requestedQty > availableStock;
+
+  const downloadOutwardTemplate = async () => {
+    try {
+      const res = await axios.get(`${API_BASE}/outward/template-xlsx`, { responseType: "blob" });
+      const url = window.URL.createObjectURL(new Blob([res.data]));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "outward-template.xlsx";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      toast.success("Outward template downloaded", { theme: "colored" });
+    } catch (err) {
+      console.error(err);
+      toast.error(err?.response?.data?.error || "Template download failed", { theme: "colored" });
+    }
+  };
+
+  const handleOutwardUpload = async (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file) return;
+
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      const res = await axios.post(`${API_BASE}/outward/import-xlsx`, formData, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      const data = res.data || {};
+      toast.success(`Imported ${data.inserted || 0} outward rows`, { theme: "colored" });
+      if (Array.isArray(data.errors) && data.errors.length > 0) {
+        toast.info(`${data.skipped || 0} rows skipped`, { theme: "colored" });
+      }
+      fetchOutwards();
+    } catch (err) {
+      console.error(err);
+      toast.error(err?.response?.data?.error || "Outward import failed", { theme: "colored" });
+    }
+  };
 
   const openAdjustmentModal = (row) => {
     setSelectedSettlementOutward(null);
@@ -1070,6 +1115,42 @@ Consignee: ${row.consignee_name}`;
           </div>
 
           <div style={{ minWidth: "220px", flex: "1 1 220px", display: "flex", alignItems: "center", justifyContent: "flex-end" }}>
+            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", justifyContent: "flex-end", marginRight: "12px" }}>
+              {canExport && (
+                <button
+                  type="button"
+                  onClick={downloadOutwardTemplate}
+                  style={{
+                    ...btnStyle,
+                    background: "#0f766e",
+                    color: "#fff",
+                    padding: "12px 16px",
+                    borderRadius: "14px",
+                    fontSize: "13px",
+                    boxShadow: "0 10px 20px rgba(15, 118, 110, 0.18)",
+                  }}
+                >
+                  Download Excel
+                </button>
+              )}
+              {canImport && (
+                <button
+                  type="button"
+                  onClick={() => outwardFileRef.current?.click()}
+                  style={{
+                    ...btnStyle,
+                    background: "#16a34a",
+                    color: "#fff",
+                    padding: "12px 16px",
+                    borderRadius: "14px",
+                    fontSize: "13px",
+                    boxShadow: "0 10px 20px rgba(22, 163, 74, 0.18)",
+                  }}
+                >
+                  Upload Excel
+                </button>
+              )}
+            </div>
             <button
               onClick={() => {
                 setEditData(null);
@@ -1144,6 +1225,14 @@ Consignee: ${row.consignee_name}`;
         closeOnClick
         transition={Slide}
         style={{ zIndex: 99999 }}
+      />
+
+      <input
+        ref={outwardFileRef}
+        type="file"
+        accept=".xlsx,.xls"
+        style={{ display: "none" }}
+        onChange={handleOutwardUpload}
       />
 
       {showForm && (
