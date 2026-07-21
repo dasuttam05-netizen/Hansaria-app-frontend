@@ -162,6 +162,14 @@ export default function OutwardPage() {
   const [showBuyerAdjustmentForm, setShowBuyerAdjustmentForm] = useState(false);
   const [selectedUnloadingDetail, setSelectedUnloadingDetail] = useState(null);
   const [isSaving, setIsSaving] = useState(false);
+  const [showCompanyModal, setShowCompanyModal] = useState(false);
+  const [showAccountModal, setShowAccountModal] = useState(false);
+  const [showBuyerModal, setShowBuyerModal] = useState(false);
+  const [showConsigneeModal, setShowConsigneeModal] = useState(false);
+  const [companyForm, setCompanyForm] = useState({ name: "", mobile: "", address: "" });
+  const [accountForm, setAccountForm] = useState({ company_id: "", account_name: "", pan_no: "", mobile: "", address: "" });
+  const [buyerForm, setBuyerForm] = useState({ name: "", mobile: "", email: "", address: "", gst_no: "", pan_no: "", state: "", location: "" });
+  const [consigneeForm, setConsigneeForm] = useState({ buyer_id: "", name: "", mobile: "", email: "", address: "", gst_no: "", pan_no: "", state: "", location: "" });
   const selectedRowDetailRef = useRef(null);
   const rowRefs = useRef({});
   const submitLockRef = useRef(false);
@@ -258,9 +266,28 @@ export default function OutwardPage() {
         headers: { "Content-Type": "multipart/form-data" },
       });
       const data = res.data || {};
+      const errors = Array.isArray(data.errors) ? data.errors : [];
       toast.success(`Imported ${data.inserted || 0} outward rows`, { theme: "colored" });
-      if (Array.isArray(data.errors) && data.errors.length > 0) {
-        toast.info(`${data.skipped || 0} rows skipped`, { theme: "colored" });
+      if (errors.length > 0) {
+        const preview = errors
+          .slice(0, 3)
+          .map((err) => {
+            const sample = err.sample_row
+              ? ` | Sample: ${Object.entries(err.sample_row)
+                  .filter(([, value]) => String(value || "").trim() !== "")
+                  .map(([key, value]) => `${key}=${value}`)
+                  .join(", ")}`
+              : "";
+            return `Row ${err.row}: ${err.error}${sample}`;
+          })
+          .join("\n");
+        toast.info(
+          `${data.skipped || 0} rows skipped${preview ? `\n${preview}` : ""}`,
+          { theme: "colored", autoClose: 6000 }
+        );
+        if (data.inserted === 0) {
+          alert(`No outward rows were imported.\n\n${preview || "Please check the XLSX columns and values."}`);
+        }
       }
       fetchOutwards();
     } catch (err) {
@@ -641,6 +668,25 @@ export default function OutwardPage() {
     }
   };
 
+  const refreshMasters = async () => {
+    try {
+      const canReadCompanies = hasAnyPermission(user, ["companies.manage", "inward.view", "inward.create", "outward.view", "outward.create", "adjustment.manage", "expense.entry", "expense.view", "expense.create", "cash.view", "settlement.view", "report.inward", "report.erp", "report.partyLedger", "report.partyStock", "report.warehouseRentLedger", "report.warehouseRentMonthEnd", "report.outwardSettlement", "report.expense"]);
+      const canReadCompanyAccounts = hasAnyPermission(user, ["companyAccounts.manage", "inward.view", "inward.create", "outward.view", "outward.create", "adjustment.manage", "expense.entry", "expense.view", "expense.create", "cash.view", "settlement.view", "report.inward", "report.erp", "report.partyLedger", "report.partyStock", "report.warehouseRentLedger", "report.warehouseRentMonthEnd", "report.outwardSettlement", "report.expense"]);
+      const [compRes, accRes, buyerRes, consigneeRes] = await Promise.all([
+        canReadCompanies ? axios.get(`${API_BASE}/companies`) : Promise.resolve({ data: [] }),
+        canReadCompanyAccounts ? axios.get(`${API_BASE}/company-accounts`) : Promise.resolve({ data: [] }),
+        axios.get(`${API_BASE}/buyer-names`).catch(() => ({ data: [] })),
+        axios.get(`${API_BASE}/consignee-names`).catch(() => ({ data: [] })),
+      ]);
+      setCompanies(Array.isArray(compRes.data) ? compRes.data : []);
+      setCompanyAccounts(Array.isArray(accRes.data) ? accRes.data : []);
+      setBuyerNames(Array.isArray(buyerRes.data) ? buyerRes.data : []);
+      setConsigneeNames(Array.isArray(consigneeRes.data) ? consigneeRes.data : []);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   const handleChange = (e) => {
     const { name, value } = e.target;
 
@@ -686,6 +732,80 @@ export default function OutwardPage() {
     }
 
     setFormData((prev) => ({ ...prev, [name]: value }));
+  };
+
+  const handleCompanyQuickCreate = async (e) => {
+    e.preventDefault();
+    if (!String(companyForm.name || "").trim()) return toast.error("Company name is required", { theme: "colored" });
+    if (!String(companyForm.mobile || "").trim()) return toast.error("Mobile is required", { theme: "colored" });
+    try {
+      const res = await axios.post(`${API_BASE}/companies`, companyForm);
+      const createdId = String(res.data?.id || res.data?._id || "");
+      setCompanyForm({ name: "", mobile: "", address: "" });
+      setShowCompanyModal(false);
+      await refreshMasters();
+      if (createdId) setFormData((prev) => ({ ...prev, company_id: createdId }));
+      toast.success("Company created", { theme: "colored" });
+    } catch (err) {
+      toast.error(err?.response?.data?.error || "Failed to create company", { theme: "colored" });
+    }
+  };
+
+  const handleAccountQuickCreate = async (e) => {
+    e.preventDefault();
+    if (!String(accountForm.company_id || "").trim()) return toast.error("Select company", { theme: "colored" });
+    if (!String(accountForm.account_name || "").trim()) return toast.error("Account name is required", { theme: "colored" });
+    if (!String(accountForm.pan_no || "").trim()) return toast.error("PAN is required", { theme: "colored" });
+    if (!String(accountForm.mobile || "").trim()) return toast.error("Mobile is required", { theme: "colored" });
+    try {
+      const selectedCompanyId = String(accountForm.company_id || "");
+      const res = await axios.post(`${API_BASE}/company-accounts`, accountForm);
+      const createdId = String(res.data?.id || res.data?._id || "");
+      setAccountForm({ company_id: "", account_name: "", pan_no: "", mobile: "", address: "" });
+      setShowAccountModal(false);
+      await refreshMasters();
+      if (selectedCompanyId) {
+        setFormData((prev) => ({ ...prev, company_id: selectedCompanyId, company_account_id: createdId || prev.company_account_id }));
+      }
+      toast.success("Account created", { theme: "colored" });
+    } catch (err) {
+      toast.error(err?.response?.data?.error || "Failed to create account", { theme: "colored" });
+    }
+  };
+
+  const handleBuyerQuickCreate = async (e) => {
+    e.preventDefault();
+    if (!String(buyerForm.name || "").trim()) return toast.error("Buyer name is required", { theme: "colored" });
+    try {
+      const res = await axios.post(`${API_BASE}/buyer-names`, buyerForm);
+      const createdId = String(res.data?.id || res.data?._id || "");
+      setBuyerForm({ name: "", mobile: "", email: "", address: "", gst_no: "", pan_no: "", state: "", location: "" });
+      setShowBuyerModal(false);
+      await refreshMasters();
+      if (createdId) setFormData((prev) => ({ ...prev, buyer_id: createdId }));
+      toast.success("Buyer created", { theme: "colored" });
+    } catch (err) {
+      toast.error(err?.response?.data?.error || "Failed to create buyer", { theme: "colored" });
+    }
+  };
+
+  const handleConsigneeQuickCreate = async (e) => {
+    e.preventDefault();
+    if (!String(consigneeForm.buyer_id || "").trim()) return toast.error("Select buyer", { theme: "colored" });
+    if (!String(consigneeForm.name || "").trim()) return toast.error("Consignee name is required", { theme: "colored" });
+    try {
+      const payload = { ...consigneeForm, buyer_id: Number(consigneeForm.buyer_id) };
+      const res = await axios.post(`${API_BASE}/consignee-names`, payload);
+      const createdId = String(res.data?.id || res.data?._id || "");
+      const selectedBuyerId = String(consigneeForm.buyer_id || "");
+      setConsigneeForm({ buyer_id: "", name: "", mobile: "", email: "", address: "", gst_no: "", pan_no: "", state: "", location: "" });
+      setShowConsigneeModal(false);
+      await refreshMasters();
+      if (createdId) setFormData((prev) => ({ ...prev, buyer_id: selectedBuyerId, consignee_id: createdId }));
+      toast.success("Consignee created", { theme: "colored" });
+    } catch (err) {
+      toast.error(err?.response?.data?.error || "Failed to create consignee", { theme: "colored" });
+    }
   };
 
   const resetForm = () =>
@@ -1390,6 +1510,7 @@ Consignee: ${row.consignee_name}`;
                 </Field>
 
                 <Field label="Select Company">
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                   <select name="company_id" value={formData.company_id} onChange={handleChange} style={inp}>
                     <option value="">Select Company</option>
                     {companies.map((c) => (
@@ -1398,9 +1519,12 @@ Consignee: ${row.consignee_name}`;
                       </option>
                     ))}
                   </select>
+                  <button type="button" onClick={() => setShowCompanyModal(true)} style={{ ...btnStyle, background: "#0f766e", color: "#fff", whiteSpace: "nowrap" }}>+ Create</button>
+                  </div>
                 </Field>
 
                 <Field label="Select Account">
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                   <select
                     name="company_account_id"
                     value={formData.company_account_id}
@@ -1416,6 +1540,17 @@ Consignee: ${row.consignee_name}`;
                         </option>
                       ))}
                   </select>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAccountForm((prev) => ({ ...prev, company_id: formData.company_id || prev.company_id }));
+                      setShowAccountModal(true);
+                    }}
+                    style={{ ...btnStyle, background: "#16a34a", color: "#fff", whiteSpace: "nowrap" }}
+                  >
+                    + Create
+                  </button>
+                  </div>
                 </Field>
 
                 <Field label="Lorry No">
@@ -1474,36 +1609,51 @@ Consignee: ${row.consignee_name}`;
                 </Field>
 
                 <Field label="Select buyer name">
-                  <select name="buyer_id" value={formData.buyer_id} onChange={handleChange} style={inp}>
-                    <option value="">Select buyer name</option>
-                    {buyerNames.map((b) => (
-                      <option key={getRecordId(b)} value={getRecordId(b)}>
-                        {b.name}
-                      </option>
-                    ))}
-                  </select>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <select name="buyer_id" value={formData.buyer_id} onChange={handleChange} style={inp}>
+                      <option value="">Select buyer name</option>
+                      {buyerNames.map((b) => (
+                        <option key={getRecordId(b)} value={getRecordId(b)}>
+                          {b.name}
+                        </option>
+                      ))}
+                    </select>
+                    <button type="button" onClick={() => setShowBuyerModal(true)} style={{ ...btnStyle, background: "#2563eb", color: "#fff", whiteSpace: "nowrap" }}>+ Create</button>
+                  </div>
                 </Field>
 
                 <Field label="Select consignee">
-                  <select
-                    name="consignee_id"
-                    value={formData.consignee_id}
-                    onChange={handleChange}
-                    style={{
-                      ...inp,
-                      opacity: formData.buyer_id ? 1 : 0.65,
-                    }}
-                    disabled={!formData.buyer_id}
-                  >
-                    <option value="">
-                      {formData.buyer_id ? "Select consignee name" : "Select buyer first"}
-                    </option>
-                    {consigneesForBuyer.map((c) => (
-                      <option key={getRecordId(c)} value={getRecordId(c)}>
-                        {c.name}
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <select
+                      name="consignee_id"
+                      value={formData.consignee_id}
+                      onChange={handleChange}
+                      style={{
+                        ...inp,
+                        opacity: formData.buyer_id ? 1 : 0.65,
+                      }}
+                      disabled={!formData.buyer_id}
+                    >
+                      <option value="">
+                        {formData.buyer_id ? "Select consignee name" : "Select buyer first"}
                       </option>
-                    ))}
-                  </select>
+                      {consigneesForBuyer.map((c) => (
+                        <option key={getRecordId(c)} value={getRecordId(c)}>
+                          {c.name}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setConsigneeForm((prev) => ({ ...prev, buyer_id: formData.buyer_id || prev.buyer_id }));
+                        setShowConsigneeModal(true);
+                      }}
+                      style={{ ...btnStyle, background: "#7c3aed", color: "#fff", whiteSpace: "nowrap" }}
+                    >
+                      + Create
+                    </button>
+                  </div>
                 </Field>
 
                 <div style={{ gridColumn: "1 / -1", display: "flex", flexDirection: "column", gap: "8px", marginTop: "6px" }}>
@@ -2307,6 +2457,97 @@ Consignee: ${row.consignee_name}`;
           </div>
         </div>
       )}
+
+      {showCompanyModal ? (
+        <div style={modalOverlay}>
+          <div style={modalCard}>
+            <h3 style={{ marginTop: 0 }}>Create Company</h3>
+            <form onSubmit={handleCompanyQuickCreate} style={{ display: "grid", gap: 12 }}>
+              <input placeholder="Company name" value={companyForm.name} onChange={(e) => setCompanyForm((p) => ({ ...p, name: e.target.value }))} style={inp} />
+              <input placeholder="Mobile" value={companyForm.mobile} onChange={(e) => setCompanyForm((p) => ({ ...p, mobile: e.target.value }))} style={inp} />
+              <textarea placeholder="Address" value={companyForm.address} onChange={(e) => setCompanyForm((p) => ({ ...p, address: e.target.value }))} style={{ ...inp, minHeight: 72 }} />
+              <div style={{ display: "flex", gap: 8 }}>
+                <button type="submit" style={btnPrimary}>Save</button>
+                <button type="button" onClick={() => setShowCompanyModal(false)} style={btnPrimary}>Cancel</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
+
+      {showAccountModal ? (
+        <div style={modalOverlay}>
+          <div style={modalCard}>
+            <h3 style={{ marginTop: 0 }}>Create Company Account</h3>
+            <form onSubmit={handleAccountQuickCreate} style={{ display: "grid", gap: 12 }}>
+              <select value={accountForm.company_id} onChange={(e) => setAccountForm((p) => ({ ...p, company_id: e.target.value }))} style={inp}>
+                <option value="">Select Company</option>
+                {companies.map((c) => (
+                  <option key={getRecordId(c)} value={getRecordId(c)}>{c.name}</option>
+                ))}
+              </select>
+              <input placeholder="Account name" value={accountForm.account_name} onChange={(e) => setAccountForm((p) => ({ ...p, account_name: e.target.value }))} style={inp} />
+              <input placeholder="PAN no" value={accountForm.pan_no} onChange={(e) => setAccountForm((p) => ({ ...p, pan_no: e.target.value }))} style={inp} />
+              <input placeholder="Mobile" value={accountForm.mobile} onChange={(e) => setAccountForm((p) => ({ ...p, mobile: e.target.value }))} style={inp} />
+              <textarea placeholder="Address" value={accountForm.address} onChange={(e) => setAccountForm((p) => ({ ...p, address: e.target.value }))} style={{ ...inp, minHeight: 72 }} />
+              <div style={{ display: "flex", gap: 8 }}>
+                <button type="submit" style={btnPrimary}>Save</button>
+                <button type="button" onClick={() => setShowAccountModal(false)} style={btnPrimary}>Cancel</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
+
+      {showBuyerModal ? (
+        <div style={modalOverlay}>
+          <div style={modalCard}>
+            <h3 style={{ marginTop: 0 }}>Create Buyer</h3>
+            <form onSubmit={handleBuyerQuickCreate} style={{ display: "grid", gap: 12 }}>
+              <input placeholder="Buyer name" value={buyerForm.name} onChange={(e) => setBuyerForm((p) => ({ ...p, name: e.target.value }))} style={inp} />
+              <input placeholder="Mobile" value={buyerForm.mobile} onChange={(e) => setBuyerForm((p) => ({ ...p, mobile: e.target.value }))} style={inp} />
+              <input placeholder="Email" value={buyerForm.email} onChange={(e) => setBuyerForm((p) => ({ ...p, email: e.target.value }))} style={inp} />
+              <input placeholder="GST No" value={buyerForm.gst_no} onChange={(e) => setBuyerForm((p) => ({ ...p, gst_no: e.target.value }))} style={inp} />
+              <input placeholder="PAN No" value={buyerForm.pan_no} onChange={(e) => setBuyerForm((p) => ({ ...p, pan_no: e.target.value }))} style={inp} />
+              <input placeholder="State" value={buyerForm.state} onChange={(e) => setBuyerForm((p) => ({ ...p, state: e.target.value }))} style={inp} />
+              <input placeholder="Location" value={buyerForm.location} onChange={(e) => setBuyerForm((p) => ({ ...p, location: e.target.value }))} style={inp} />
+              <textarea placeholder="Address" value={buyerForm.address} onChange={(e) => setBuyerForm((p) => ({ ...p, address: e.target.value }))} style={{ ...inp, minHeight: 72 }} />
+              <div style={{ display: "flex", gap: 8 }}>
+                <button type="submit" style={btnPrimary}>Save</button>
+                <button type="button" onClick={() => setShowBuyerModal(false)} style={btnPrimary}>Cancel</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
+
+      {showConsigneeModal ? (
+        <div style={modalOverlay}>
+          <div style={modalCard}>
+            <h3 style={{ marginTop: 0 }}>Create Consignee</h3>
+            <form onSubmit={handleConsigneeQuickCreate} style={{ display: "grid", gap: 12 }}>
+              <select value={consigneeForm.buyer_id} onChange={(e) => setConsigneeForm((p) => ({ ...p, buyer_id: e.target.value }))} style={inp}>
+                <option value="">Select Buyer</option>
+                {buyerNames.map((b) => (
+                  <option key={getRecordId(b)} value={getRecordId(b)}>{b.name}</option>
+                ))}
+              </select>
+              <input placeholder="Consignee name" value={consigneeForm.name} onChange={(e) => setConsigneeForm((p) => ({ ...p, name: e.target.value }))} style={inp} />
+              <input placeholder="Mobile" value={consigneeForm.mobile} onChange={(e) => setConsigneeForm((p) => ({ ...p, mobile: e.target.value }))} style={inp} />
+              <input placeholder="Email" value={consigneeForm.email} onChange={(e) => setConsigneeForm((p) => ({ ...p, email: e.target.value }))} style={inp} />
+              <input placeholder="GST No" value={consigneeForm.gst_no} onChange={(e) => setConsigneeForm((p) => ({ ...p, gst_no: e.target.value }))} style={inp} />
+              <input placeholder="PAN No" value={consigneeForm.pan_no} onChange={(e) => setConsigneeForm((p) => ({ ...p, pan_no: e.target.value }))} style={inp} />
+              <input placeholder="State" value={consigneeForm.state} onChange={(e) => setConsigneeForm((p) => ({ ...p, state: e.target.value }))} style={inp} />
+              <input placeholder="Location" value={consigneeForm.location} onChange={(e) => setConsigneeForm((p) => ({ ...p, location: e.target.value }))} style={inp} />
+              <textarea placeholder="Address" value={consigneeForm.address} onChange={(e) => setConsigneeForm((p) => ({ ...p, address: e.target.value }))} style={{ ...inp, minHeight: 72 }} />
+              <div style={{ display: "flex", gap: 8 }}>
+                <button type="submit" style={btnPrimary}>Save</button>
+                <button type="button" onClick={() => setShowConsigneeModal(false)} style={btnPrimary}>Cancel</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
       </div>
       </>
     )}
