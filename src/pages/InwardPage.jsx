@@ -254,6 +254,23 @@ export default function InwardPage() {
       return;
     }
 
+    if (name === "company_id") {
+      const selectedCompany = companies.find((item) => sameId(getRecordId(item), value));
+      const matchingAccount = companyAccounts.find((acc) => {
+        return (
+          sameId(getRecordId(acc.company_id), value) ||
+          sameText(acc.company_name, selectedCompany?.name)
+        );
+      });
+
+      setFormData((prev) => ({
+        ...prev,
+        company_id: value,
+        company_account_id: matchingAccount ? getRecordId(matchingAccount) : "",
+      }));
+      return;
+    }
+
     setFormData({ ...formData, [name]: value });
   };
 
@@ -321,6 +338,11 @@ export default function InwardPage() {
       toast.error("You only have create access. Edit is not allowed.", { theme: "colored" });
       return;
     }
+    const rowCompany = companies.find((item) => sameId(getRecordId(item), row.company_id));
+    const rowCompanyAccount =
+      companyAccounts.find((acc) => sameId(getRecordId(acc), row.company_account_id)) ||
+      companyAccounts.find((acc) => sameId(getRecordId(acc.company_id), row.company_id)) ||
+      companyAccounts.find((acc) => sameText(acc.company_name, row.company_name || rowCompany?.name));
     setEditData(row);
     setFormData({
       date: row.date || "",
@@ -329,7 +351,7 @@ export default function InwardPage() {
       warehouse_id: row.warehouse_id || "",
       product_id: row.product_id || "",
       company_id: row.company_id || "",
-      company_account_id: row.company_account_id || "",
+      company_account_id: row.company_account_id || getRecordId(rowCompanyAccount) || "",
       lorry_no: row.lorry_no || "",
       weight: row.weight || "",
     });
