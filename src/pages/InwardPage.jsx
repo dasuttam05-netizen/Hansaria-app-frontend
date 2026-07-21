@@ -177,6 +177,24 @@ export default function InwardPage() {
     }
   }, [formData.employee_id, employees, warehouses, editData]);
 
+  useEffect(() => {
+    if (!formData.company_id || formData.company_account_id) return;
+
+    const matchingAccount = companyAccounts.find((acc) => {
+      return (
+        sameId(getRecordId(acc.company_id), formData.company_id) ||
+        sameText(acc.company_name, companies.find((c) => sameId(getRecordId(c), formData.company_id))?.name)
+      );
+    });
+
+    if (matchingAccount) {
+      setFormData((prev) => ({
+        ...prev,
+        company_account_id: getRecordId(matchingAccount),
+      }));
+    }
+  }, [formData.company_id, formData.company_account_id, companyAccounts, companies]);
+
   // Filter warehouses by selected location
   const warehousesForLocation = formData.location_id
     ? warehouses.filter((w) => sameId(getRecordId(w.location_id), formData.location_id))
@@ -263,6 +281,11 @@ export default function InwardPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    if (!formData.company_account_id) {
+      toast.error("Please select a company account", { theme: "colored" });
+      return;
+    }
 
     try {
       const payload = {
