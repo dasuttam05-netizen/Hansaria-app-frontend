@@ -92,6 +92,10 @@ export default function InwardPage() {
   const [companies, setCompanies] = useState([]);
   const [companyAccounts, setCompanyAccounts] = useState([]);
   const inwardFileRef = useRef(null);
+  const [showCompanyModal, setShowCompanyModal] = useState(false);
+  const [showAccountModal, setShowAccountModal] = useState(false);
+  const [companyForm, setCompanyForm] = useState({ name: "", mobile: "", address: "" });
+  const [accountForm, setAccountForm] = useState({ company_id: "", account_name: "", pan_no: "", mobile: "", address: "" });
 
   const canCreate = hasPermission(user, "inward.create");
   const canEdit = hasPermission(user, "inward.edit");
@@ -138,7 +142,15 @@ export default function InwardPage() {
       if (errors.length > 0) {
         const preview = errors
           .slice(0, 3)
-          .map((err) => `Row ${err.row}: ${err.error}`)
+          .map((err) => {
+            const sample = err.sample_row
+              ? ` | Sample: ${Object.entries(err.sample_row)
+                  .filter(([, value]) => String(value || "").trim() !== "")
+                  .map(([key, value]) => `${key}=${value}`)
+                  .join(", ")}`
+              : "";
+            return `Row ${err.row}: ${err.error}${sample}`;
+          })
           .join("\n");
         toast.info(
           `${data.skipped || 0} rows skipped${preview ? `\n${preview}` : ""}`,
@@ -252,6 +264,19 @@ export default function InwardPage() {
     }
   };
 
+  const refreshMasters = async () => {
+    try {
+      const [compRes, accRes] = await Promise.all([
+        axios.get(`${API_BASE}/companies`),
+        axios.get(`${API_BASE}/company-accounts`),
+      ]);
+      setCompanies(Array.isArray(compRes.data) ? compRes.data : []);
+      setCompanyAccounts(Array.isArray(accRes.data) ? accRes.data : []);
+    } catch (err) {
+      console.error(err);
+    }
+  };
+
   const handleChange = (e) => {
     const { name, value } = e.target;
 
@@ -283,6 +308,48 @@ export default function InwardPage() {
     }
 
     setFormData({ ...formData, [name]: value });
+  };
+
+  const handleCompanyQuickCreate = async (e) => {
+    e.preventDefault();
+    if (!String(companyForm.name || "").trim()) return toast.error("Company name is required", { theme: "colored" });
+    if (!String(companyForm.mobile || "").trim()) return toast.error("Mobile is required", { theme: "colored" });
+    try {
+      const res = await axios.post(`${API_BASE}/companies`, companyForm);
+      const createdId = String(res.data?.id || res.data?._id || "");
+      setCompanyForm({ name: "", mobile: "", address: "" });
+      setShowCompanyModal(false);
+      await refreshMasters();
+      if (createdId) {
+        setFormData((prev) => ({ ...prev, company_id: createdId }));
+      }
+      toast.success("Company created", { theme: "colored" });
+    } catch (err) {
+      toast.error(err?.response?.data?.error || "Failed to create company", { theme: "colored" });
+    }
+  };
+
+  const handleAccountQuickCreate = async (e) => {
+    e.preventDefault();
+    if (!String(accountForm.company_id || "").trim()) return toast.error("Select company", { theme: "colored" });
+    if (!String(accountForm.account_name || "").trim()) return toast.error("Account name is required", { theme: "colored" });
+    if (!String(accountForm.pan_no || "").trim()) return toast.error("PAN is required", { theme: "colored" });
+    if (!String(accountForm.mobile || "").trim()) return toast.error("Mobile is required", { theme: "colored" });
+    try {
+      const payload = { ...accountForm };
+      const res = await axios.post(`${API_BASE}/company-accounts`, payload);
+      const createdId = String(res.data?.id || res.data?._id || "");
+      const selectedCompanyId = String(accountForm.company_id || "");
+      setAccountForm({ company_id: "", account_name: "", pan_no: "", mobile: "", address: "" });
+      setShowAccountModal(false);
+      await refreshMasters();
+      if (selectedCompanyId) {
+        setFormData((prev) => ({ ...prev, company_id: selectedCompanyId, company_account_id: createdId || prev.company_account_id }));
+      }
+      toast.success("Account created", { theme: "colored" });
+    } catch (err) {
+      toast.error(err?.response?.data?.error || "Failed to create account", { theme: "colored" });
+    }
   };
 
   const resetForm = () => {
@@ -443,6 +510,24 @@ Weight: ${row.weight}`;
     cursor: "pointer",
     fontWeight: 600,
     fontSize: "13px",
+  };
+  const modalOverlay = {
+    position: "fixed",
+    inset: 0,
+    background: "rgba(15,23,42,0.45)",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+    zIndex: 2000,
+    padding: 12,
+  };
+  const modalCard = {
+    background: "#fff",
+    borderRadius: 12,
+    padding: 20,
+    width: "100%",
+    maxWidth: 520,
+    boxShadow: "0 20px 40px rgba(0,0,0,0.2)",
   };
 
   const formCard = {
@@ -798,6 +883,7 @@ Weight: ${row.weight}`;
                 </Field>
 
                 <Field label="Select Company">
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                   <select name="company_id" value={formData.company_id} onChange={handleChange} style={inp}>
                     <option value="">Select Company</option>
                     {companies.map((c) => (
@@ -806,9 +892,14 @@ Weight: ${row.weight}`;
                       </option>
                     ))}
                   </select>
+                  <button type="button" onClick={() => setShowCompanyModal(true)} style={{ ...btnStyle, background: "#0f766e", color: "#fff", whiteSpace: "nowrap" }}>
+                    + Create
+                  </button>
+                  </div>
                 </Field>
 
                 <Field label="Select Account">
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                   <select
                     name="company_account_id"
                     value={formData.company_account_id}
@@ -830,6 +921,17 @@ Weight: ${row.weight}`;
                         </option>
                       ))}
                   </select>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setAccountForm((prev) => ({ ...prev, company_id: formData.company_id || prev.company_id }));
+                      setShowAccountModal(true);
+                    }}
+                    style={{ ...btnStyle, background: "#16a34a", color: "#fff", whiteSpace: "nowrap" }}
+                  >
+                    + Create
+                  </button>
+                  </div>
                 </Field>
 
                 <Field label="Lorry No">
@@ -1000,6 +1102,46 @@ Weight: ${row.weight}`;
           </table>
         </div>
       </div>
+      {showCompanyModal ? (
+        <div style={modalOverlay}>
+          <div style={modalCard}>
+            <h3 style={{ marginTop: 0 }}>Create Company</h3>
+            <form onSubmit={handleCompanyQuickCreate} style={{ display: "grid", gap: 12 }}>
+              <input placeholder="Company name" value={companyForm.name} onChange={(e) => setCompanyForm((p) => ({ ...p, name: e.target.value }))} style={inp} />
+              <input placeholder="Mobile" value={companyForm.mobile} onChange={(e) => setCompanyForm((p) => ({ ...p, mobile: e.target.value }))} style={inp} />
+              <textarea placeholder="Address" value={companyForm.address} onChange={(e) => setCompanyForm((p) => ({ ...p, address: e.target.value }))} style={{ ...inp, minHeight: 72 }} />
+              <div style={{ display: "flex", gap: 8 }}>
+                <button type="submit" style={btnPrimary}>Save</button>
+                <button type="button" onClick={() => setShowCompanyModal(false)} style={btnPrimary}>Cancel</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
+
+      {showAccountModal ? (
+        <div style={modalOverlay}>
+          <div style={modalCard}>
+            <h3 style={{ marginTop: 0 }}>Create Company Account</h3>
+            <form onSubmit={handleAccountQuickCreate} style={{ display: "grid", gap: 12 }}>
+              <select value={accountForm.company_id} onChange={(e) => setAccountForm((p) => ({ ...p, company_id: e.target.value }))} style={inp}>
+                <option value="">Select Company</option>
+                {companies.map((c) => (
+                  <option key={getRecordId(c)} value={getRecordId(c)}>{c.name}</option>
+                ))}
+              </select>
+              <input placeholder="Account name" value={accountForm.account_name} onChange={(e) => setAccountForm((p) => ({ ...p, account_name: e.target.value }))} style={inp} />
+              <input placeholder="PAN no" value={accountForm.pan_no} onChange={(e) => setAccountForm((p) => ({ ...p, pan_no: e.target.value }))} style={inp} />
+              <input placeholder="Mobile" value={accountForm.mobile} onChange={(e) => setAccountForm((p) => ({ ...p, mobile: e.target.value }))} style={inp} />
+              <textarea placeholder="Address" value={accountForm.address} onChange={(e) => setAccountForm((p) => ({ ...p, address: e.target.value }))} style={{ ...inp, minHeight: 72 }} />
+              <div style={{ display: "flex", gap: 8 }}>
+                <button type="submit" style={btnPrimary}>Save</button>
+                <button type="button" onClick={() => setShowAccountModal(false)} style={btnPrimary}>Cancel</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      ) : null}
         </>
       )}
     </div>
