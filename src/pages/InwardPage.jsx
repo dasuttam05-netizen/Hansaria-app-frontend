@@ -40,6 +40,10 @@ const getRecordId = (record) => {
 const sameId = (left, right) =>
   String(left || "") !== "" && String(left || "") === String(right || "");
 
+const sameText = (left, right) =>
+  String(left || "").trim().toLowerCase() !== "" &&
+  String(left || "").trim().toLowerCase() === String(right || "").trim().toLowerCase();
+
 const normalizeIdList = (input) => {
   if (!Array.isArray(input)) return [];
   return input.map((item) => getRecordId(item)).filter(Boolean);
@@ -756,8 +760,14 @@ Weight: ${row.weight}`;
                     style={inp}
                   >
                     <option value="">Select Account</option>
-                    {formData.company_id && companyAccounts
-                      .filter((acc) => sameId(getRecordId(acc.company_id), formData.company_id))
+                    {companyAccounts
+                      .filter((acc) => {
+                        if (!formData.company_id) return true;
+                        return (
+                          sameId(getRecordId(acc.company_id), formData.company_id) ||
+                          sameText(acc.company_name, companies.find((c) => sameId(getRecordId(c), formData.company_id))?.name)
+                        );
+                      })
                       .map((acc) => (
                         <option key={getRecordId(acc)} value={getRecordId(acc)}>
                           {acc.account_name}
