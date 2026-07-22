@@ -793,7 +793,6 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
             setSelectedInward(null);
             setSelectedInwardIds([]);
             setAdjustQty("");
-            setAdjustments([]);
             if (nextCompanyId) loadInwardStock(nextCompanyId, nextSourceType || "inward");
             else setInwardList([]);
           }}
