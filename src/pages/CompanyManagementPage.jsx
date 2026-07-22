@@ -51,11 +51,18 @@ export default function CompanyManagementPage() {
       return;
     }
     try {
+      const payload = {
+        ...formData,
+        shortage_percent:
+          String(formData.shortage_percent || "").trim() === ""
+            ? null
+            : Number(formData.shortage_percent),
+      };
       if (editId) {
-        await axios.put(`${API_URL}/${editId}`, formData);
+        await axios.put(`${API_URL}/${editId}`, payload);
         alert("Company updated successfully");
       } else {
-        await axios.post(API_URL, formData);
+        await axios.post(API_URL, payload);
         alert("Company added successfully");
       }
       resetForm();
@@ -166,13 +173,16 @@ export default function CompanyManagementPage() {
                 {companies.map((comp, i) => {
                   const openingBalance = Number(comp.opening_balance ?? 0);
                   const openingType = String(comp.opening_balance_type || "dr").toUpperCase();
+                  const shortagePercent = comp.shortage_percent === "" || comp.shortage_percent === null || comp.shortage_percent === undefined
+                    ? null
+                    : Number(comp.shortage_percent);
                   return (
                     <tr key={comp._id} style={{ background: i % 2 ? "#f8fafc" : "#fff" }}>
                       <td style={td}>{String(i + 1).padStart(2, "0")}</td>
                       <td style={td}>{comp.name || "-"}</td>
                       <td style={td}>{comp.address || "-"}</td>
                       <td style={td}>{comp.mobile || "-"}</td>
-                      <td style={td}>{comp.shortage_percent == null || comp.shortage_percent === "" ? "Auto" : `${Number(comp.shortage_percent).toFixed(2)}%`}</td>
+                      <td style={td}>{shortagePercent === null ? "Auto" : `${shortagePercent.toFixed(2)}%`}</td>
                       <td style={td}>{`${openingBalance.toFixed(2)} ${openingType}`}</td>
                       <td style={td}>
                         {canEdit && (
