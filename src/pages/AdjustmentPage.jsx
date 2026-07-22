@@ -11,6 +11,7 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
   const [sourceType, setSourceType] = useState("inward");
   const [inwardList, setInwardList] = useState([]);
   const [selectedInward, setSelectedInward] = useState(null);
+  const [selectedInwardIds, setSelectedInwardIds] = useState([]);
   const [adjustQty, setAdjustQty] = useState("");
   const [adjustments, setAdjustments] = useState([]);
   const [adjustmentLog, setAdjustmentLog] = useState([]);
@@ -213,6 +214,8 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
     });
   }, [inwardList, adjustments]);
 
+  const selectedInwardCount = selectedInwardIds.length;
+
   const loadCompanyList = async () => {
     if (!outward?.warehouse_id && !outward?.location_id) return setCompanyList([]);
     try {
@@ -310,6 +313,7 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
     setSourceType("inward");
     setInwardList([]);
     setSelectedInward(null);
+    setSelectedInwardIds([]);
     setAdjustQty("");
     setAdjustments([]);
     setAdjustmentLog([]);
@@ -395,6 +399,66 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
     toast.success("✓ Adjustment added to draft list", { theme: "colored", autoClose: 2000 });
     setAdjustQty("");
     setSelectedInward(null);
+  };
+
+  const toggleInwardSelection = (row) => {
+    const rowId = String(row?.id || "");
+    if (!rowId) return;
+    setSelectedInward(row);
+    setAdjustQty(String(row?.available_qty || row?.net_opening_qty || ""));
+    setSelectedInwardIds((prev) => {
+      if (prev.includes(rowId)) return prev.filter((id) => id !== rowId);
+      return [...prev, rowId];
+    });
+  };
+
+  const addSelectedInwards = () => {
+    if (!companyId) {
+      toast.warning("Please select company first", { theme: "colored", autoClose: 2000 });
+      return;
+    }
+    if (selectedInwardIds.length === 0) {
+      toast.warning("Please select at least one inward row", { theme: "colored", autoClose: 2000 });
+      return;
+    }
+
+    const rowsToAdd = visibleInwardList.filter((row) => selectedInwardIds.includes(String(row.id)));
+    if (rowsToAdd.length === 0) {
+      toast.warning("Selected rows are not available", { theme: "colored", autoClose: 2000 });
+      return;
+    }
+
+    const selectedCompany = companyList.find((c) => String(c.id) === String(companyId));
+    const nextAdjustments = [...adjustments];
+
+    for (const row of rowsToAdd) {
+      const rowId = String(row.id);
+      const qty = Number(row.available_qty || 0);
+      if (!qty || qty <= 0) continue;
+
+      const existingIndex = nextAdjustments.findIndex((item) => item.inward_id === row.id);
+      if (existingIndex !== -1) {
+        nextAdjustments[existingIndex].qty = qty;
+      } else {
+        nextAdjustments.push({
+          inward_id: isPaltiSource ? null : row.id,
+          palti_lorry_id: isPaltiSource ? row.id : null,
+          source_type: row.source_type || sourceType,
+          voucher_no: row.voucher_no,
+          lorry_no: row.lorry_no,
+          company_id: Number(companyId),
+          company_name: selectedCompany?.name || "",
+          qty,
+        });
+      }
+
+      setSelectedInwardIds((prev) => prev.filter((id) => id !== rowId));
+    }
+
+    setAdjustments(nextAdjustments);
+    setSelectedInward(null);
+    setAdjustQty("");
+    toast.success("Selected inward rows added with auto qty", { theme: "colored", autoClose: 2000 });
   };
 
   const handleSave = async () => {
@@ -728,13 +792,25 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
                   key={`${row.source_type || sourceType}-${row.id}`}
                   onClick={() => {
                     setSelectedInward(row);
-                    setAdjustQty("");
+                    setAdjustQty(String(row.available_qty || row.net_opening_qty || ""));
                   }}
                   style={{
                     cursor: "pointer",
-                    background: selectedInward?.id === row.id ? "#dcfce7" : "#fff",
+                    background: selectedInwardIds.includes(String(row.id))
+                      ? "#dbeafe"
+                      : selectedInward?.id === row.id
+                      ? "#dcfce7"
+                      : "#fff",
                   }}
                 >
+                  <td style={tdStyle}>
+                    <input
+                      type="checkbox"
+                      checked={selectedInwardIds.includes(String(row.id))}
+                      onChange={() => toggleInwardSelection(row)}
+                      onClick={(e) => e.stopPropagation()}
+                    />
+                  </td>
                   <td style={tdStyle}>{row.voucher_no}</td>
                   <td style={tdStyle}>{formatDisplayDate(row.date)}</td>
                   <td style={tdStyle}>{formatDisplayDate(row.outward_date)}</td>
@@ -752,7 +828,7 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
               ))
             ) : (
               <tr>
-                <td style={tdStyle} colSpan="13">
+                  <td style={tdStyle} colSpan="14">
                   {isPaltiSource ? "No Palti Lorry found" : "No inward found"}
                 </td>
               </tr>
@@ -780,6 +856,12 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
               style={{ ...buttonStyle, background: "#2563eb", marginLeft: 10 }}
             >
               Add Adjustment
+            </button>
+            <button
+              onClick={addSelectedInwards}
+              style={{ ...buttonStyle, background: "#0f766e", marginLeft: 10 }}
+            >
+              Add Selected ({selectedInwardCount})
             </button>
           </div>
         )}
