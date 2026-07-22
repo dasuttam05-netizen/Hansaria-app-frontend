@@ -50,6 +50,7 @@ export default function InwardManagementPage() {
     company_account_id: "",
     lorry_no: "",
     weight: "",
+    shortage_percent: "",
     labour_charges: "",
   });
 
@@ -139,10 +140,14 @@ export default function InwardManagementPage() {
         warehouse_id: formData.warehouse_id || null,
         product_id: formData.product_id || null,
         company_id: formData.company_id || null,
-        company_account_id: formData.company_account_id || null,
-        weight: Number(formData.weight) || 0,
-        labour_charges: Number(formData.labour_charges) || 0,
-      };
+      company_account_id: formData.company_account_id || null,
+      weight: Number(formData.weight) || 0,
+      shortage_percent:
+        String(formData.shortage_percent || "").trim() === ""
+          ? null
+          : Number(formData.shortage_percent),
+      labour_charges: Number(formData.labour_charges) || 0,
+    };
 
       if (editData) await axios.put(`${API}/inward/${editData.id}`, payload);
       else await axios.post(`${API}/inward`, payload);
@@ -152,7 +157,7 @@ export default function InwardManagementPage() {
       setFormData({
         date: "", employee_id: "", location_id: "", warehouse_id: "",
         product_id: "", company_id: "", company_account_id: "",
-        lorry_no: "", weight: "", labour_charges: "",
+        lorry_no: "", weight: "", shortage_percent: "", labour_charges: "",
       });
       fetchInwards();
     } catch (err) {
@@ -173,6 +178,7 @@ export default function InwardManagementPage() {
       company_account_id: row.company_account_id || "",
       lorry_no: row.lorry_no || "",
       weight: row.weight || "",
+      shortage_percent: row.shortage_percent == null ? "" : String(row.shortage_percent),
       labour_charges: row.labour_charges || "",
     });
     setShowForm(true);
@@ -324,6 +330,10 @@ export default function InwardManagementPage() {
                 style={{ padding:"12px", fontSize:"16px", borderRadius:"6px", border:"1px solid #ccc" }}/>
 
               <input type="number" name="weight" placeholder="Weight" value={formData.weight} onChange={handleChange}
+                style={{ padding:"12px", fontSize:"16px", borderRadius:"6px", border:"1px solid #ccc" }}/>
+
+              <input type="number" name="shortage_percent" placeholder="Shortage % (1 / 2 / 0.50)" value={formData.shortage_percent} onChange={handleChange}
+                step="0.01" min="0"
                 style={{ padding:"12px", fontSize:"16px", borderRadius:"6px", border:"1px solid #ccc" }}/>
 
               <input type="number" name="labour_charges" placeholder="Labour Charges" value={formData.labour_charges} onChange={handleChange}
