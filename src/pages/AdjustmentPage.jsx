@@ -731,32 +731,6 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
 
       <div style={cardStyle}>
         <h3 style={sectionTitle}>Select Company</h3>
-        <div style={{ marginBottom: 10 }}>
-          <label style={{ display: "block", marginBottom: 6, fontWeight: 700, color: "#14532d" }}>
-            Adjustment Source
-          </label>
-          <select
-            value={sourceType}
-            onChange={(e) => {
-              const nextSourceType = e.target.value || "inward";
-              setSourceType(nextSourceType);
-              setCompanyId("");
-              setSelectedInward(null);
-              setSelectedInwardIds([]);
-              setAdjustQty("");
-              setAdjustments([]);
-              if (companyId) {
-                loadInwardStock(companyId, nextSourceType);
-              } else {
-                setInwardList([]);
-              }
-            }}
-            style={{ ...inputStyle, minWidth: 220 }}
-          >
-            <option value="inward">Inward</option>
-            <option value="palti_lorry">Palti Lorry</option>
-          </select>
-        </div>
         <select
           value={companyId ? `${sourceType}:${companyId}` : ""}
           onChange={(e) => {
@@ -766,6 +740,7 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
             setSelectedInward(null);
             setSelectedInwardIds([]);
             setAdjustQty("");
+            setAdjustments([]);
             if (nextCompanyId) loadInwardStock(nextCompanyId, nextSourceType || "inward");
             else setInwardList([]);
           }}
