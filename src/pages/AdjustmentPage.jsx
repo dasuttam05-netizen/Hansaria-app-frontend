@@ -35,6 +35,7 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
   };
 
   const num = (val) => Number(val || 0).toFixed(4);
+  const pct = (val) => `${Number(val || 0).toFixed(2)}%`;
   
   // Helper to round to 4 decimals to avoid floating point errors
   const roundTo4 = (val) => Math.round((val || 0) * 10000) / 10000;
@@ -825,7 +826,8 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
               <th style={thStyle}>Company</th>
               <th style={thStyle}>Location</th>
               <th style={thStyle}>Gross Qty</th>
-              <th style={thStyle}>Shortage</th>
+              <th style={thStyle}>Shortage %</th>
+              <th style={thStyle}>Shortage Qty</th>
               <th style={thStyle}>Net Opening</th>
               <th style={thStyle}>Already Adjusted</th>
               <th style={thStyle}>Available Balance</th>
@@ -869,6 +871,7 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
                   <td style={tdStyle}>{row.company_name}</td>
                   <td style={tdStyle}>{row.location_name || "-"}</td>
                   <td style={tdStyle}>{num(row.gross_qty)}</td>
+                  <td style={tdStyle}>{pct(row.shortage_percent ?? 0)}</td>
                   <td style={tdStyle}>{num(row.shortage_qty)}</td>
                   <td style={tdStyle}>{num(row.net_opening_qty)}</td>
                   <td style={tdStyle}>{num(row.already_adjusted)}</td>
@@ -877,7 +880,7 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
               ))
             ) : (
               <tr>
-                <td style={tdStyle} colSpan={isPaltiSource ? 17 : 14}>
+                <td style={tdStyle} colSpan={isPaltiSource ? 18 : 15}>
                   {isPaltiSource ? "No Palti Lorry found" : "No inward found"}
                 </td>
               </tr>
@@ -891,7 +894,7 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
               Selected Lorry: {selectedInward.display_lorry_no || selectedInward.lorry_no || "-"} | Voucher: {selectedInward.voucher_no}
             </div>
             <div style={{ marginBottom: 8, color: "#166534", fontWeight: 700 }}>
-              Days: {selectedInward.days_diff} | Months: {selectedInward.months_diff} | Gross: {num(selectedInward.gross_qty)} | Shortage: {num(selectedInward.shortage_qty)} | Net Opening: {num(selectedInward.net_opening_qty)} | Already Adjusted: {num(selectedInward.already_adjusted)} | Available: {num(selectedInward.available_qty)}
+              Days: {selectedInward.days_diff} | Months: {selectedInward.months_diff} | Gross: {num(selectedInward.gross_qty)} | Shortage %: {pct(selectedInward.shortage_percent ?? 0)} | Shortage Qty: {num(selectedInward.shortage_qty)} | Net Opening: {num(selectedInward.net_opening_qty)} | Already Adjusted: {num(selectedInward.already_adjusted)} | Available: {num(selectedInward.available_qty)}
             </div>
             {isPaltiSource && (
               <div style={{ marginBottom: 8, color: "#166534", fontWeight: 700 }}>
