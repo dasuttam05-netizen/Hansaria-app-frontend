@@ -731,6 +731,32 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
 
       <div style={cardStyle}>
         <h3 style={sectionTitle}>Select Company</h3>
+        <div style={{ marginBottom: 10 }}>
+          <label style={{ display: "block", marginBottom: 6, fontWeight: 700, color: "#14532d" }}>
+            Adjustment Source
+          </label>
+          <select
+            value={sourceType}
+            onChange={(e) => {
+              const nextSourceType = e.target.value || "inward";
+              setSourceType(nextSourceType);
+              setCompanyId("");
+              setSelectedInward(null);
+              setSelectedInwardIds([]);
+              setAdjustQty("");
+              setAdjustments([]);
+              if (companyId) {
+                loadInwardStock(companyId, nextSourceType);
+              } else {
+                setInwardList([]);
+              }
+            }}
+            style={{ ...inputStyle, minWidth: 220 }}
+          >
+            <option value="inward">Inward</option>
+            <option value="palti_lorry">Palti Lorry</option>
+          </select>
+        </div>
         <select
           value={companyId ? `${sourceType}:${companyId}` : ""}
           onChange={(e) => {
@@ -738,6 +764,7 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
             setSourceType(nextSourceType || "inward");
             setCompanyId(nextCompanyId || "");
             setSelectedInward(null);
+            setSelectedInwardIds([]);
             setAdjustQty("");
             if (nextCompanyId) loadInwardStock(nextCompanyId, nextSourceType || "inward");
             else setInwardList([]);
@@ -770,20 +797,21 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
         <table style={tableStyle}>
           <thead>
             <tr>
+              <th style={thStyle}></th>
               <th style={thStyle}>Voucher</th>
               <th style={thStyle}>Inward Date</th>
               <th style={thStyle}>Outward Date</th>
               <th style={thStyle}>Days Diff</th>
               <th style={thStyle}>Months</th>
-          <th style={thStyle}>Lorry No</th>
-          {isPaltiSource && <th style={thStyle}>Reg Lorry</th>}
-          {isPaltiSource && <th style={thStyle}>New Lorry</th>}
-          {isPaltiSource && <th style={thStyle}>New Weight</th>}
-          <th style={thStyle}>Company</th>
-          <th style={thStyle}>Location</th>
-          <th style={thStyle}>Gross Qty</th>
-          <th style={thStyle}>Shortage</th>
-          <th style={thStyle}>Net Opening</th>
+              <th style={thStyle}>Lorry No</th>
+              {isPaltiSource && <th style={thStyle}>Reg Lorry</th>}
+              {isPaltiSource && <th style={thStyle}>New Lorry</th>}
+              {isPaltiSource && <th style={thStyle}>New Weight</th>}
+              <th style={thStyle}>Company</th>
+              <th style={thStyle}>Location</th>
+              <th style={thStyle}>Gross Qty</th>
+              <th style={thStyle}>Shortage</th>
+              <th style={thStyle}>Net Opening</th>
               <th style={thStyle}>Already Adjusted</th>
               <th style={thStyle}>Available Balance</th>
             </tr>
@@ -834,7 +862,7 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
               ))
             ) : (
               <tr>
-                <td style={tdStyle} colSpan={isPaltiSource ? 16 : 13}>
+                <td style={tdStyle} colSpan={isPaltiSource ? 17 : 14}>
                   {isPaltiSource ? "No Palti Lorry found" : "No inward found"}
                 </td>
               </tr>
