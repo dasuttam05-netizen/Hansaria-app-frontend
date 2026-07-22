@@ -106,8 +106,17 @@ export default function CompanyManagementPage() {
               <Field label="Mobile">
                 <input name="mobile" value={formData.mobile} onChange={handleChange} placeholder="Mobile No. *" style={inp} />
               </Field>
-              <Field label="Shortage % (Optional)">
-                <input name="shortage_percent" value={formData.shortage_percent} onChange={handleChange} type="number" min="0" step="0.01" placeholder="e.g. 1, 50, 0.75" style={inp} />
+              <Field label="Shortage % (blank = Auto)">
+                <input
+                  name="shortage_percent"
+                  value={formData.shortage_percent}
+                  onChange={handleChange}
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  placeholder="e.g. 0.50, 0.75, 1.00"
+                  style={inp}
+                />
               </Field>
               <Field label="Opening Balance">
                 <input name="opening_balance" value={formData.opening_balance} onChange={handleChange} type="number" step="0.01" style={inp} />
@@ -163,7 +172,7 @@ export default function CompanyManagementPage() {
                       <td style={td}>{comp.name || "-"}</td>
                       <td style={td}>{comp.address || "-"}</td>
                       <td style={td}>{comp.mobile || "-"}</td>
-                      <td style={td}>{comp.shortage_percent == null ? "Auto" : `${Number(comp.shortage_percent).toFixed(2)}%`}</td>
+                      <td style={td}>{comp.shortage_percent == null || comp.shortage_percent === "" ? "Auto" : `${Number(comp.shortage_percent).toFixed(2)}%`}</td>
                       <td style={td}>{`${openingBalance.toFixed(2)} ${openingType}`}</td>
                       <td style={td}>
                         {canEdit && (
