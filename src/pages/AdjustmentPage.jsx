@@ -36,6 +36,10 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
 
   const num = (val) => Number(val || 0).toFixed(4);
   const pct = (val) => `${Number(val || 0).toFixed(2)}%`;
+  const getAdjustmentKey = (item) =>
+    item?.source_type === "palti_lorry"
+      ? `palti:${item?.palti_lorry_id || item?.id || ""}`
+      : `inward:${item?.inward_id || item?.id || ""}`;
   
   // Helper to round to 4 decimals to avoid floating point errors
   const roundTo4 = (val) => Math.round((val || 0) * 10000) / 10000;
@@ -364,9 +368,12 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
       return;
     }
 
-    const existingIndex = adjustments.findIndex(
-      (item) => item.inward_id === selectedInward.id
-    );
+    const selectedKey = getAdjustmentKey({
+      source_type: selectedInward.source_type || sourceType,
+      inward_id: selectedInward.id,
+      palti_lorry_id: selectedInward.id,
+    });
+    const existingIndex = adjustments.findIndex((item) => getAdjustmentKey(item) === selectedKey);
 
     if (existingIndex !== -1) {
       const updated = [...adjustments];
@@ -437,7 +444,12 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
       const qty = Number(row.available_qty || 0);
       if (!qty || qty <= 0) continue;
 
-      const existingIndex = nextAdjustments.findIndex((item) => item.inward_id === row.id);
+      const rowKey = getAdjustmentKey({
+        source_type: row.source_type || sourceType,
+        inward_id: row.id,
+        palti_lorry_id: row.id,
+      });
+      const existingIndex = nextAdjustments.findIndex((item) => getAdjustmentKey(item) === rowKey);
       if (existingIndex !== -1) {
         nextAdjustments[existingIndex].qty = qty;
       } else {
