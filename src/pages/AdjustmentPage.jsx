@@ -530,7 +530,20 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
       void loadBuyerAdjustmentDetails();
     } catch (err) {
       if (isMountedRef.current && err.name !== "CanceledError") {
-        const message = err?.response?.data?.error || err?.message || "Save failed";
+        const apiError = err?.response?.data || {};
+        const details = apiError?.details;
+        let message = apiError?.error || err?.message || "Save failed";
+        if (details) {
+          const parts = [];
+          if (details.voucher_no) parts.push(`Voucher: ${details.voucher_no}`);
+          if (details.lorry_no) parts.push(`Lorry: ${details.lorry_no}`);
+          if (details.requested_qty != null) parts.push(`Requested: ${Number(details.requested_qty).toFixed(4)}`);
+          if (details.available_qty != null) parts.push(`Available: ${Number(details.available_qty).toFixed(4)}`);
+          if (details.difference != null) parts.push(`Excess: ${Number(details.difference).toFixed(4)}`);
+          if (details.shortage_qty != null) parts.push(`Shortage: ${Number(details.shortage_qty).toFixed(4)}`);
+          if (details.net_opening_qty != null) parts.push(`Net: ${Number(details.net_opening_qty).toFixed(4)}`);
+          if (parts.length > 0) message = `${message} | ${parts.join(" | ")}`;
+        }
         toast.error(message, { theme: "colored", autoClose: 3000 });
       }
     } finally {
