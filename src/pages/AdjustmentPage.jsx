@@ -775,12 +775,15 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
               <th style={thStyle}>Outward Date</th>
               <th style={thStyle}>Days Diff</th>
               <th style={thStyle}>Months</th>
-              <th style={thStyle}>Lorry No</th>
-              <th style={thStyle}>Company</th>
-              <th style={thStyle}>Location</th>
-              <th style={thStyle}>Gross Qty</th>
-              <th style={thStyle}>Shortage</th>
-              <th style={thStyle}>Net Opening</th>
+          <th style={thStyle}>Lorry No</th>
+          {isPaltiSource && <th style={thStyle}>Reg Lorry</th>}
+          {isPaltiSource && <th style={thStyle}>New Lorry</th>}
+          {isPaltiSource && <th style={thStyle}>New Weight</th>}
+          <th style={thStyle}>Company</th>
+          <th style={thStyle}>Location</th>
+          <th style={thStyle}>Gross Qty</th>
+          <th style={thStyle}>Shortage</th>
+          <th style={thStyle}>Net Opening</th>
               <th style={thStyle}>Already Adjusted</th>
               <th style={thStyle}>Available Balance</th>
             </tr>
@@ -816,7 +819,10 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
                   <td style={tdStyle}>{formatDisplayDate(row.outward_date)}</td>
                   <td style={tdStyle}>{row.days_diff}</td>
                   <td style={tdStyle}>{row.months_diff}</td>
-                  <td style={tdStyle}>{row.lorry_no}</td>
+                  <td style={tdStyle}>{row.display_lorry_no || row.lorry_no}</td>
+                  {isPaltiSource && <td style={tdStyle}>{row.reg_lorry_no || "-"}</td>}
+                  {isPaltiSource && <td style={tdStyle}>{row.new_lorry_no || "-"}</td>}
+                  {isPaltiSource && <td style={tdStyle}>{row.new_weight != null ? num(row.new_weight) : "-"}</td>}
                   <td style={tdStyle}>{row.company_name}</td>
                   <td style={tdStyle}>{row.location_name || "-"}</td>
                   <td style={tdStyle}>{num(row.gross_qty)}</td>
@@ -828,7 +834,7 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
               ))
             ) : (
               <tr>
-                  <td style={tdStyle} colSpan="14">
+                <td style={tdStyle} colSpan={isPaltiSource ? 16 : 13}>
                   {isPaltiSource ? "No Palti Lorry found" : "No inward found"}
                 </td>
               </tr>
@@ -839,11 +845,16 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
         {selectedInward && (
           <div style={{ marginTop: 16, padding: 14, background: "#f8fafc", borderRadius: 10, border: "1px solid #e2e8f0" }}>
             <div style={{ fontWeight: 800, color: "#14532d", marginBottom: 8 }}>
-              Selected Lorry: {selectedInward.lorry_no || "-"} | Voucher: {selectedInward.voucher_no}
+              Selected Lorry: {selectedInward.display_lorry_no || selectedInward.lorry_no || "-"} | Voucher: {selectedInward.voucher_no}
             </div>
             <div style={{ marginBottom: 8, color: "#166534", fontWeight: 700 }}>
               Days: {selectedInward.days_diff} | Months: {selectedInward.months_diff} | Gross: {num(selectedInward.gross_qty)} | Shortage: {num(selectedInward.shortage_qty)} | Net Opening: {num(selectedInward.net_opening_qty)} | Already Adjusted: {num(selectedInward.already_adjusted)} | Available: {num(selectedInward.available_qty)}
             </div>
+            {isPaltiSource && (
+              <div style={{ marginBottom: 8, color: "#166534", fontWeight: 700 }}>
+                Reg Lorry: {selectedInward.reg_lorry_no || "-"} | New Lorry: {selectedInward.new_lorry_no || "-"} | New Weight: {selectedInward.new_weight != null ? num(selectedInward.new_weight) : "-"}
+              </div>
+            )}
             <input
               type="number"
               placeholder="Enter Qty"
