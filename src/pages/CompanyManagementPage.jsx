@@ -6,6 +6,7 @@ const emptyForm = () => ({
   name: "",
   address: "",
   mobile: "",
+  shortage_percent: "",
   opening_balance: "0",
   opening_balance_type: "dr",
 });
@@ -70,6 +71,7 @@ export default function CompanyManagementPage() {
       name: comp.name || "",
       address: comp.address || "",
       mobile: comp.mobile || "",
+      shortage_percent: comp.shortage_percent == null ? "" : String(comp.shortage_percent),
       opening_balance: String(comp.opening_balance ?? 0),
       opening_balance_type: String(comp.opening_balance_type || "dr"),
     });
@@ -103,6 +105,9 @@ export default function CompanyManagementPage() {
               </Field>
               <Field label="Mobile">
                 <input name="mobile" value={formData.mobile} onChange={handleChange} placeholder="Mobile No. *" style={inp} />
+              </Field>
+              <Field label="Shortage % (Optional)">
+                <input name="shortage_percent" value={formData.shortage_percent} onChange={handleChange} type="number" min="0" step="0.01" placeholder="e.g. 1, 50, 0.75" style={inp} />
               </Field>
               <Field label="Opening Balance">
                 <input name="opening_balance" value={formData.opening_balance} onChange={handleChange} type="number" step="0.01" style={inp} />
@@ -143,6 +148,7 @@ export default function CompanyManagementPage() {
                   <th style={th}>Company Name</th>
                   <th style={th}>Address</th>
                   <th style={th}>Mobile</th>
+                  <th style={th}>Shortage %</th>
                   <th style={th}>Opening Balance</th>
                   <th style={th}>Actions</th>
                 </tr>
@@ -157,6 +163,7 @@ export default function CompanyManagementPage() {
                       <td style={td}>{comp.name || "-"}</td>
                       <td style={td}>{comp.address || "-"}</td>
                       <td style={td}>{comp.mobile || "-"}</td>
+                      <td style={td}>{comp.shortage_percent == null ? "Auto" : `${Number(comp.shortage_percent).toFixed(2)}%`}</td>
                       <td style={td}>{`${openingBalance.toFixed(2)} ${openingType}`}</td>
                       <td style={td}>
                         {canEdit && (
@@ -174,7 +181,7 @@ export default function CompanyManagementPage() {
                   );
                 })}
                 {companies.length === 0 ? (
-                  <tr><td colSpan={6} style={{ ...td, textAlign: "center", padding: "20px" }}>No companies found.</td></tr>
+                  <tr><td colSpan={7} style={{ ...td, textAlign: "center", padding: "20px" }}>No companies found.</td></tr>
                 ) : null}
               </tbody>
             </table>
