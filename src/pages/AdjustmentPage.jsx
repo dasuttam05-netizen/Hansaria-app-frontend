@@ -463,6 +463,33 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
 
   const handleSave = async () => {
     if (isSaving) return;
+    if (!outward?.id) {
+      toast.warning("Adjustment ID missing", { theme: "colored", autoClose: 3000 });
+      return;
+    }
+    if (!companyId) {
+      toast.warning("Please select company first", { theme: "colored", autoClose: 3000 });
+      return;
+    }
+    if (!Array.isArray(adjustments) || adjustments.length === 0) {
+      toast.warning("Please add adjustment first", { theme: "colored", autoClose: 3000 });
+      return;
+    }
+
+    const invalidRow = adjustments.find((item) => {
+      const qty = Number(item?.qty || 0);
+      const hasVoucher = String(item?.voucher_no || "").trim();
+      const hasLorry = String(item?.lorry_no || "").trim();
+      const hasCompany = String(item?.company_id || "").trim();
+      const hasSource = String(item?.source_type || "").trim();
+      return !qty || qty <= 0 || !hasVoucher || !hasLorry || !hasCompany || !hasSource;
+    });
+
+    if (invalidRow) {
+      toast.warning("One or more draft rows are incomplete", { theme: "colored", autoClose: 3000 });
+      return;
+    }
+
     if (totalDraftAdjusted <= 0) {
       toast.warning("Please add adjustment first", { theme: "colored", autoClose: 3000 });
       return;
