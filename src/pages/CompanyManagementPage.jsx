@@ -58,12 +58,26 @@ export default function CompanyManagementPage() {
             ? null
             : Number(formData.shortage_percent),
       };
+      let savedCompany = null;
       if (editId) {
-        await axios.put(`${API_URL}/${editId}`, payload);
+        savedCompany = (await axios.put(`${API_URL}/${editId}`, payload))?.data || null;
         alert("Company updated successfully");
       } else {
-        await axios.post(API_URL, payload);
+        savedCompany = (await axios.post(API_URL, payload))?.data || null;
         alert("Company added successfully");
+      }
+      if (savedCompany) {
+        const normalizedSaved = {
+          ...savedCompany,
+          shortage_percent:
+            savedCompany.shortage_percent === "" || savedCompany.shortage_percent === null || savedCompany.shortage_percent === undefined
+              ? null
+              : Number(savedCompany.shortage_percent),
+        };
+        setCompanies((prev) => {
+          const others = prev.filter((item) => String(item._id) !== String(normalizedSaved._id));
+          return [normalizedSaved, ...others];
+        });
       }
       resetForm();
       fetchCompanies();
