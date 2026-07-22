@@ -366,6 +366,7 @@ export default function InwardPage() {
       company_account_id: "",
       lorry_no: "",
       weight: "",
+      shortage_percent: "",
     });
   };
 
@@ -392,6 +393,10 @@ export default function InwardPage() {
         company_id: formData.company_id || null,
         company_account_id: formData.company_account_id || null,
         weight: Number(formData.weight) || 0,
+        shortage_percent:
+          String(formData.shortage_percent || "").trim() === ""
+            ? null
+            : Number(formData.shortage_percent),
       };
 
       if (editData) {
@@ -432,6 +437,7 @@ export default function InwardPage() {
       company_account_id: row.company_account_id || getRecordId(rowCompanyAccount) || "",
       lorry_no: row.lorry_no || "",
       weight: row.weight || "",
+      shortage_percent: row.shortage_percent == null ? "" : String(row.shortage_percent),
     });
     setShowForm(true);
   };
@@ -952,6 +958,19 @@ Weight: ${row.weight}`;
                     placeholder="Weight"
                     value={formData.weight}
                     onChange={handleChange}
+                    style={inp}
+                  />
+                </Field>
+
+                <Field label="Shortage %">
+                  <input
+                    type="number"
+                    name="shortage_percent"
+                    placeholder="1 / 2 / 0.50"
+                    value={formData.shortage_percent}
+                    onChange={handleChange}
+                    step="0.01"
+                    min="0"
                     style={inp}
                   />
                 </Field>
