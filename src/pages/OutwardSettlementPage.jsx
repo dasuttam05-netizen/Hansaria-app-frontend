@@ -671,7 +671,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
             <div style={outwardDetailGridStyle}>
               <div style={plainInfoCellStyle}>
                 <div style={plainInfoLabelStyle}>Warehouse</div>
-                <div style={plainInfoValueStyle}>{meta?.warehouse_name || "-"}</div>
+                <div style={plainInfoValueStyle}>{meta?.warehouse_name || outward?.warehouse_name || "-"}</div>
               </div>
               <div style={plainInfoCellStyle}>
                 <div style={plainInfoLabelStyle}>Dispatch Date</div>
@@ -680,6 +680,10 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
               <div style={plainInfoCellStyle}>
                 <div style={plainInfoLabelStyle}>Location</div>
                 <div style={plainInfoValueStyle}>{meta?.location_name || outward?.location_name || "-"}</div>
+              </div>
+              <div style={plainInfoCellStyle}>
+                <div style={plainInfoLabelStyle}>Product</div>
+                <div style={plainInfoValueStyle}>{meta?.product_name || outward?.product_name || "-"}</div>
               </div>
               <div style={plainInfoCellStyle}>
                 <div style={plainInfoLabelStyle}>Voucher No.</div>
