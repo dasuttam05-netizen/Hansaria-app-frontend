@@ -799,10 +799,6 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
           <tr key={item.id} style={{ background: index % 2 === 0 ? "#ffffff" : PALETTE.rowAlt }}>
             <td style={tableCellStyle}>{index + 1}</td>
             <td style={tableCellStyle}>{item.company_name || "-"}</td>
-            <td style={tableCellStyle}>{item.company_account_name || meta?.account_name || "-"}</td>
-            <td style={tableCellStyle}>{item.warehouse_name || meta?.warehouse_name || "-"}</td>
-            <td style={tableCellStyle}>{item.location_name || meta?.location_name || "-"}</td>
-            <td style={tableCellStyle}>{item.product_name || meta?.product_name || "-"}</td>
             <td style={tableCellStyle}>{item.lorry_no || "-"}</td>
             <td style={tableCellStyle}>{item.inward_voucher_no || "-"}</td>
             <td style={tableCellStyle}>{getLoadingTypeLabel(item.source_type)}</td>
@@ -907,10 +903,10 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
             </td>
           </tr>
         );
-      })}
+      })} 
 
       <tr style={consignmentTotalRowStyle}>
-        <td style={consignmentTotalCellStyle} colSpan={5}>Totals</td>
+        <td style={consignmentTotalCellStyle} colSpan={6}>Totals</td>
         <td style={consignmentTotalCellStyle}>{adjustedTotals.settlementWeight.toFixed(2)}</td>
         <td style={consignmentTotalCellStyle}>{adjustedTotals.shortQty.toFixed(2)}</td>
         <td style={consignmentTotalCellStyle}>{adjustedTotals.shortAmt.toFixed(2)}</td>
