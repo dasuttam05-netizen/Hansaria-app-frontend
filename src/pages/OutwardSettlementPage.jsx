@@ -671,7 +671,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
             <div style={outwardDetailGridStyle}>
               <div style={plainInfoCellStyle}>
                 <div style={plainInfoLabelStyle}>Warehouse</div>
-                <div style={plainInfoValueStyle}>{meta?.warehouse_name || outward?.warehouse_name || "-"}</div>
+                <div style={plainInfoValueStyle}>{outward?.warehouse_name || meta?.warehouse_name || "-"}</div>
               </div>
               <div style={plainInfoCellStyle}>
                 <div style={plainInfoLabelStyle}>Dispatch Date</div>
@@ -679,7 +679,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
               </div>
               <div style={plainInfoCellStyle}>
                 <div style={plainInfoLabelStyle}>Location</div>
-                <div style={plainInfoValueStyle}>{meta?.location_name || outward?.location_name || "-"}</div>
+                <div style={plainInfoValueStyle}>{outward?.location_name || meta?.location_name || "-"}</div>
               </div>
               <div style={plainInfoCellStyle}>
                 <div style={plainInfoLabelStyle}>Voucher No.</div>
@@ -723,7 +723,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
                         <tr key={`${detail.id || detail.outward_id || "detail"}-${index}`}>
                           <td style={consignmentCellStyle}>{detail.buyer_name || meta?.buyer_name || "-"}</td>
                           <td style={consignmentCellStyle}>{detail.consignee_name || "-"}</td>
-                          <td style={consignmentCellStyle}>{detail.product_name || meta?.product_name || "-"}</td>
+                          <td style={consignmentCellStyle}>{detail.product_name || outward?.product_name || meta?.product_name || "-"}</td>
                           <td style={consignmentCellStyle}>{formatDisplayDate(detail.unloading_date || formData.unloading_date || meta?.outward_date) || "-"}</td>
                           <td style={consignmentCellStyle}>{num(detail.qty || detail.weight || 0).toFixed(2)}</td>
                           <td style={consignmentCellStyle}>{num(detail.rate).toFixed(2)}</td>
