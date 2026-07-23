@@ -472,7 +472,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
     const freight = num(rowState.freight ?? settlementWeight * freightPerMt);
     const labour = num(rowState.labour_chgs ?? settlementWeight * labourPerMt);
     const other = num(rowState.other_chgs ?? settlementWeight * otherPerMt);
-    const sAmount = num(rowState.s_amount ?? amount);
+    const sAmount = num(rowState.s_amount ?? (dispatchQty > 0 ? settlementWeight * (calculation.totalUnloadingClaimAmount / dispatchQty) : 0));
     const cDeduction = num(rowState.c_deduction ?? 0);
     const netPayable = sAmount - freight - labour - other - shortageAmount - claim - deduction - cDeduction;
 
@@ -776,7 +776,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
     <th style={tableHeaderStyle}>Settlement Weight</th>
     <th style={tableHeaderStyle}>Short Qnt</th>
     <th style={tableHeaderStyle}>Short Amt</th>
-    <th style={tableHeaderStyle}>S.Amount</th> {/* NEW */}
+    <th style={tableHeaderStyle}>Claim</th>
     <th style={tableHeaderStyle}>C.Deduction</th>
     <th style={tableHeaderStyle}>Company Rate</th>
     <th style={tableHeaderStyle}>Freight</th>
