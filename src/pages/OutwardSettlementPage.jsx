@@ -682,10 +682,6 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
                 <div style={plainInfoValueStyle}>{meta?.location_name || outward?.location_name || "-"}</div>
               </div>
               <div style={plainInfoCellStyle}>
-                <div style={plainInfoLabelStyle}>Product</div>
-                <div style={plainInfoValueStyle}>{meta?.product_name || outward?.product_name || "-"}</div>
-              </div>
-              <div style={plainInfoCellStyle}>
                 <div style={plainInfoLabelStyle}>Voucher No.</div>
                 <div style={plainInfoValueStyle}>{meta?.voucher_no || `OUT-${meta?.outward_id || outward?.id || "-"}`}</div>
               </div>
