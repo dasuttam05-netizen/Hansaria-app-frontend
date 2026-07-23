@@ -467,21 +467,21 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
     const amount = settlementWeight * rowCompanyRate;
     const shortQty = dispatchQty > 0 ? (settlementWeight / dispatchQty) * calculation.shortageQty : 0;
     const shortageAmount = num(rowState.short_amt ?? shortQty * rowCompanyRate);
-    const claim = dispatchQty > 0 ? settlementWeight * (calculation.totalUnloadingClaimAmount / dispatchQty) : 0;
+    const claim = num(rowState.s_amount ?? (dispatchQty > 0 ? settlementWeight * (calculation.totalUnloadingClaimAmount / dispatchQty) : 0));
     const deduction = dispatchQty > 0 ? settlementWeight * (calculation.totalUnloadingDeductionAmount / dispatchQty) : 0;
     const freight = num(rowState.freight ?? settlementWeight * freightPerMt);
     const labour = num(rowState.labour_chgs ?? settlementWeight * labourPerMt);
     const other = num(rowState.other_chgs ?? settlementWeight * otherPerMt);
-    const sAmount = num(rowState.s_amount ?? (dispatchQty > 0 ? settlementWeight * (calculation.totalUnloadingClaimAmount / dispatchQty) : 0));
     const cDeduction = num(rowState.c_deduction ?? 0);
-    const netPayable = sAmount - freight - labour - other - shortageAmount - claim - deduction - cDeduction;
+    const amountAfterDeductions = amount - shortageAmount - claim - cDeduction - freight - labour - other;
+    const netPayable = amountAfterDeductions;
 
     return {
       rowCompanyRate,
       settlementWeight,
       shortQty,
       shortageAmount,
-      sAmount,
+      sAmount: claim,
       cDeduction,
       claim,
       deduction,
