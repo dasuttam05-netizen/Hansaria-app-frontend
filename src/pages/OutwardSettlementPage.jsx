@@ -28,6 +28,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
   const API_BASE = "/api";
   const { user } = loadSession();
   const canEditCompanyRate = hasPermission(user, "settlement.companyRate");
+  const canEditSettlementRows = user?.role === "admin";
 
   const [loading, setLoading] = useState(true);
   const [meta, setMeta] = useState(null);
@@ -38,6 +39,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
   const [labourExpenseEntries, setLabourExpenseEntries] = useState([]);
   const [isSaving, setIsSaving] = useState(false);
   const [adjustmentRates, setAdjustmentRates] = useState({});
+  const [rowAdjustments, setRowAdjustments] = useState({});
   const [whatsappSentAt, setWhatsappSentAt] = useState({});
   const [unloadingDetails, setUnloadingDetails] = useState([]);
   const [claimRows, setClaimRows] = useState([{ id: "claim-1", description: "", amount: "" }]);
@@ -377,6 +379,17 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
     setAdjustmentRates((prev) => ({ ...prev, [adjustmentId]: value }));
   };
 
+  const handleRowAdjustmentChange = (adjustmentId, field, value) => {
+    if (!canEditSettlementRows) return;
+    setRowAdjustments((prev) => ({
+      ...prev,
+      [adjustmentId]: {
+        ...(prev[adjustmentId] || {}),
+        [field]: value,
+      },
+    }));
+  };
+
   const handleCompanyRateChange = (value) => {
     setFormData((prev) => ({ ...prev, company_rate: value }));
     setAdjustmentRates(
@@ -419,6 +432,10 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
           adjustment_id: item.id,
           company_rate: adjustmentRates[item.id] ?? item.company_rate ?? formData.company_rate,
         })),
+        row_adjustments: (meta?.adjustment_details || []).map((item) => ({
+          adjustment_id: item.id,
+          ...(rowAdjustments[item.id] || {}),
+        })),
       });
       toast.success(hasSavedSettlement ? "Settlement updated successfully" : "Settlement saved successfully", {
         theme: "colored",
@@ -443,24 +460,29 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
     const dispatchQty = num(formData.dispatch_qty);
     const rowCompanyRate = num(adjustmentRates[item.id] ?? item.company_rate ?? formData.company_rate);
     const settlementWeight = num(item.settlement_weight);
+    const rowState = rowAdjustments[item.id] || {};
     const freightPerMt = dispatchQty > 0 ? num(formData.freight) / dispatchQty : 0;
     const labourPerMt = dispatchQty > 0 ? num(formData.outward_labour_charges) / dispatchQty : 0;
     const otherPerMt = dispatchQty > 0 ? num(formData.other_charges) / dispatchQty : 0;
     const amount = settlementWeight * rowCompanyRate;
     const shortQty = dispatchQty > 0 ? (settlementWeight / dispatchQty) * calculation.shortageQty : 0;
-    const shortageAmount = shortQty * rowCompanyRate;
+    const shortageAmount = num(rowState.short_amt ?? shortQty * rowCompanyRate);
     const claim = dispatchQty > 0 ? settlementWeight * (calculation.totalUnloadingClaimAmount / dispatchQty) : 0;
     const deduction = dispatchQty > 0 ? settlementWeight * (calculation.totalUnloadingDeductionAmount / dispatchQty) : 0;
-    const freight = settlementWeight * freightPerMt;
-    const labour = settlementWeight * labourPerMt;
-    const other = settlementWeight * otherPerMt;
-    const netPayable = amount - freight - labour - other - shortageAmount - claim - deduction;
+    const freight = num(rowState.freight ?? settlementWeight * freightPerMt);
+    const labour = num(rowState.labour_chgs ?? settlementWeight * labourPerMt);
+    const other = num(rowState.other_chgs ?? settlementWeight * otherPerMt);
+    const sAmount = num(rowState.s_amount ?? amount);
+    const cDeduction = num(rowState.c_deduction ?? 0);
+    const netPayable = sAmount - freight - labour - other - shortageAmount - claim - deduction - cDeduction;
 
     return {
       rowCompanyRate,
       settlementWeight,
       shortQty,
       shortageAmount,
+      sAmount,
+      cDeduction,
       claim,
       deduction,
       freight,
@@ -482,6 +504,38 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
     const min = String(date.getMinutes()).padStart(2, "0");
     return `${dd}-${mm}-${yyyy} ${hh}:${min}`;
   };
+
+  const adjustedRows = (meta?.adjustment_details || []).map((item) => {
+    const row = getAdjustmentRowAmounts(item);
+    return { item, row };
+  });
+
+  const adjustedTotals = adjustedRows.reduce(
+    (acc, { row }) => ({
+      settlementWeight: acc.settlementWeight + row.settlementWeight,
+      shortQty: acc.shortQty + row.shortQty,
+      shortAmt: acc.shortAmt + row.shortageAmount,
+      sAmount: acc.sAmount + row.sAmount,
+      cDeduction: acc.cDeduction + row.cDeduction,
+      freight: acc.freight + row.freight,
+      labour: acc.labour + row.labour,
+      other: acc.other + row.other,
+      amount: acc.amount + row.amount,
+      netPayable: acc.netPayable + row.netPayable,
+    }),
+    {
+      settlementWeight: 0,
+      shortQty: 0,
+      shortAmt: 0,
+      sAmount: 0,
+      cDeduction: 0,
+      freight: 0,
+      labour: 0,
+      other: 0,
+      amount: 0,
+      netPayable: 0,
+    }
+  );
 
   const createAdjustmentPdf = (item, index) => {
     const row = getAdjustmentRowAmounts(item);
@@ -738,44 +792,49 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
 <tbody>
   {(meta?.adjustment_details || []).length > 0 ? (
     <>
-      {meta.adjustment_details.map((item, index) => {
-        const dispatchQty = num(formData.dispatch_qty);
-        const rowCompanyRate = num(adjustmentRates[item.id] ?? item.company_rate ?? formData.company_rate);
-        const freightPerMt = dispatchQty > 0 ? num(formData.freight) / dispatchQty : 0;
-        const labourPerMt = dispatchQty > 0 ? num(formData.outward_labour_charges) / dispatchQty : 0;
-        const otherPerMt = dispatchQty > 0 ? num(formData.other_charges) / dispatchQty : 0;
-
-        const amount = num(item.settlement_weight) * rowCompanyRate;
-
-        const shortQtyPerLine =
-          dispatchQty > 0
-            ? (num(item.settlement_weight) / dispatchQty) * calculation.shortageQty
-            : 0;
-
-        const shortageAmount = shortQtyPerLine * rowCompanyRate;
-        const claimPerLine = dispatchQty > 0 ? num(item.settlement_weight) * (calculation.totalUnloadingClaimAmount / dispatchQty) : 0;
-
-        const deductionPerLine = dispatchQty > 0 ? num(item.settlement_weight) * (calculation.totalUnloadingDeductionAmount / dispatchQty) : 0;
-
-        const freightPerLine = num(item.settlement_weight) * freightPerMt;
-        const labourPerLine = num(item.settlement_weight) * labourPerMt;
-        const otherPerLine = num(item.settlement_weight) * otherPerMt;
-
-        const netPayable =
-          amount - freightPerLine - labourPerLine - otherPerLine - shortageAmount - claimPerLine - deductionPerLine;
+      {adjustedRows.map(({ item, row }, index) => {
+        const rowState = rowAdjustments[item.id] || {};
 
         return (
           <tr key={item.id} style={{ background: index % 2 === 0 ? "#ffffff" : PALETTE.rowAlt }}>
             <td style={tableCellStyle}>{index + 1}</td>
             <td style={tableCellStyle}>{item.company_name || "-"}</td>
+            <td style={tableCellStyle}>{item.company_account_name || meta?.account_name || "-"}</td>
+            <td style={tableCellStyle}>{item.warehouse_name || meta?.warehouse_name || "-"}</td>
+            <td style={tableCellStyle}>{item.location_name || meta?.location_name || "-"}</td>
+            <td style={tableCellStyle}>{item.product_name || meta?.product_name || "-"}</td>
             <td style={tableCellStyle}>{item.lorry_no || "-"}</td>
             <td style={tableCellStyle}>{item.inward_voucher_no || "-"}</td>
             <td style={tableCellStyle}>{getLoadingTypeLabel(item.source_type)}</td>
-            <td style={tableCellStyle}>{num(item.settlement_weight).toFixed(2)}</td>
-            <td style={tableCellStyle}>{shortQtyPerLine.toFixed(2)}</td>
-            <td style={tableCellStyle}>{shortageAmount.toFixed(2)}</td>
-            <td style={tableCellStyle}>{claimPerLine.toFixed(2)}</td> {/* Claim amount allocated */}
-            <td style={tableCellStyle}>{deductionPerLine.toFixed(2)}</td>
+            <td style={tableCellStyle}>{num(row.settlementWeight).toFixed(2)}</td>
+            <td style={tableCellStyle}>{num(row.shortQty).toFixed(2)}</td>
+            <td style={tableCellStyle}>
+              <input
+                type="number"
+                value={rowState.short_amt ?? row.shortageAmount.toFixed(2)}
+                onChange={(e) => handleRowAdjustmentChange(item.id, "short_amt", e.target.value)}
+                disabled={!canEditSettlementRows}
+                style={tableRateInputStyle}
+              />
+            </td>
+            <td style={tableCellStyle}>
+              <input
+                type="number"
+                value={rowState.s_amount ?? row.sAmount.toFixed(2)}
+                onChange={(e) => handleRowAdjustmentChange(item.id, "s_amount", e.target.value)}
+                disabled={!canEditSettlementRows}
+                style={tableRateInputStyle}
+              />
+            </td>
+            <td style={tableCellStyle}>
+              <input
+                type="number"
+                value={rowState.c_deduction ?? row.cDeduction.toFixed(2)}
+                onChange={(e) => handleRowAdjustmentChange(item.id, "c_deduction", e.target.value)}
+                disabled={!canEditSettlementRows}
+                style={tableRateInputStyle}
+              />
+            </td>
             <td style={tableCellStyle}>
               {canEditCompanyRate ? (
                 <input
@@ -783,17 +842,42 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
                   type="number"
                   value={adjustmentRates[item.id] ?? item.company_rate ?? formData.company_rate}
                   onChange={(e) => handleAdjustmentRateChange(item.id, e.target.value)}
+                  disabled={!canEditSettlementRows}
                   style={tableRateInputStyle}
                 />
               ) : (
-                rowCompanyRate.toFixed(2)
+                row.rowCompanyRate.toFixed(2)
               )}
             </td>
-            <td style={tableCellStyle}>{freightPerLine.toFixed(2)}</td>
-            <td style={tableCellStyle}>{labourPerLine.toFixed(2)}</td>
-            <td style={tableCellStyle}>{otherPerLine.toFixed(2)}</td>
-            <td style={tableCellStyle}>{amount.toFixed(2)}</td>
-            <td style={tableCellStyle}>{netPayable.toFixed(2)}</td>
+            <td style={tableCellStyle}>
+              <input
+                type="number"
+                value={rowState.freight ?? row.freight.toFixed(2)}
+                onChange={(e) => handleRowAdjustmentChange(item.id, "freight", e.target.value)}
+                disabled={!canEditSettlementRows}
+                style={tableRateInputStyle}
+              />
+            </td>
+            <td style={tableCellStyle}>
+              <input
+                type="number"
+                value={rowState.labour_chgs ?? row.labour.toFixed(2)}
+                onChange={(e) => handleRowAdjustmentChange(item.id, "labour_chgs", e.target.value)}
+                disabled={!canEditSettlementRows}
+                style={tableRateInputStyle}
+              />
+            </td>
+            <td style={tableCellStyle}>
+              <input
+                type="number"
+                value={rowState.other_chgs ?? row.other.toFixed(2)}
+                onChange={(e) => handleRowAdjustmentChange(item.id, "other_chgs", e.target.value)}
+                disabled={!canEditSettlementRows}
+                style={tableRateInputStyle}
+              />
+            </td>
+            <td style={tableCellStyle}>{row.amount.toFixed(2)}</td>
+            <td style={tableCellStyle}>{row.netPayable.toFixed(2)}</td>
             <td style={tableCellStyle}>
               <div style={rowActionWrapStyle}>
                 <button
@@ -827,17 +911,17 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
 
       <tr style={consignmentTotalRowStyle}>
         <td style={consignmentTotalCellStyle} colSpan={5}>Totals</td>
-        <td style={consignmentTotalCellStyle}>{calculation.settlementWeight.toFixed(2)}</td>
-        <td style={consignmentTotalCellStyle}>{calculation.shortageQty.toFixed(2)}</td>
-        <td style={consignmentTotalCellStyle}>{calculation.totalSettlementShortageAmount.toFixed(2)}</td>
-        <td style={consignmentTotalCellStyle}>{calculation.totalUnloadingClaimAmount.toFixed(2)}</td>
-        <td style={consignmentTotalCellStyle}>{calculation.totalUnloadingDeductionAmount.toFixed(2)}</td>
+        <td style={consignmentTotalCellStyle}>{adjustedTotals.settlementWeight.toFixed(2)}</td>
+        <td style={consignmentTotalCellStyle}>{adjustedTotals.shortQty.toFixed(2)}</td>
+        <td style={consignmentTotalCellStyle}>{adjustedTotals.shortAmt.toFixed(2)}</td>
+        <td style={consignmentTotalCellStyle}>{adjustedTotals.sAmount.toFixed(2)}</td>
+        <td style={consignmentTotalCellStyle}>{adjustedTotals.cDeduction.toFixed(2)}</td>
         <td style={consignmentTotalCellStyle}></td>
-        <td style={consignmentTotalCellStyle}>{num(formData.freight).toFixed(2)}</td>
-        <td style={consignmentTotalCellStyle}>{num(formData.outward_labour_charges).toFixed(2)}</td>
-        <td style={consignmentTotalCellStyle}>{num(formData.other_charges).toFixed(2)}</td>
-        <td style={consignmentTotalCellStyle}>{calculation.averageAmount.toFixed(2)}</td>
-        <td style={consignmentTotalCellStyle}>{calculation.companyPayable.toFixed(2)}</td>
+        <td style={consignmentTotalCellStyle}>{adjustedTotals.freight.toFixed(2)}</td>
+        <td style={consignmentTotalCellStyle}>{adjustedTotals.labour.toFixed(2)}</td>
+        <td style={consignmentTotalCellStyle}>{adjustedTotals.other.toFixed(2)}</td>
+        <td style={consignmentTotalCellStyle}>{adjustedTotals.amount.toFixed(2)}</td>
+        <td style={consignmentTotalCellStyle}>{adjustedTotals.netPayable.toFixed(2)}</td>
         <td style={consignmentTotalCellStyle}></td>
         <td style={consignmentTotalCellStyle}></td>
       </tr>
