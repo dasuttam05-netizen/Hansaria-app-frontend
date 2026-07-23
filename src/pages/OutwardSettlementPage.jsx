@@ -63,25 +63,51 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
     return Number.isFinite(n) ? n : 0;
   };
 
-  const outwardWarehouseName =
-    outward?.warehouse_name ||
-    outward?.warehouse ||
-    outward?.warehouse?.name ||
-    outward?.warehouse?.warehouse_name ||
-    "-";
-  const outwardLocationName =
-    outward?.location_name ||
-    outward?.location ||
-    outward?.warehouse_location_name ||
-    outward?.warehouse?.location_name ||
-    "-";
-  const outwardProductName =
-    outward?.product_name ||
-    outward?.product ||
-    outward?.product?.name ||
-    outward?.sale_product_name ||
-    outward?.outward_product_name ||
-    "-";
+  const getDisplayValue = (...values) => {
+    for (const value of values) {
+      if (value && typeof value === "object") {
+        const nestedValue = getDisplayValue(
+          value.name,
+          value.label,
+          value.title,
+          value.warehouse_name,
+          value.location_name,
+          value.product_name
+        );
+        if (nestedValue !== "-") return nestedValue;
+      } else if (value !== null && value !== undefined && String(value).trim()) {
+        return String(value).trim();
+      }
+    }
+    return "-";
+  };
+
+  const outwardWarehouseName = getDisplayValue(
+    outward?.warehouse_name,
+    outward?.warehouse,
+    outward?.warehouse?.name,
+    outward?.warehouse?.warehouse_name,
+    meta?.warehouse_name,
+    meta?.warehouse
+  );
+  const outwardLocationName = getDisplayValue(
+    outward?.location_name,
+    outward?.location,
+    outward?.warehouse_location_name,
+    outward?.warehouse?.location_name,
+    meta?.location_name,
+    meta?.location,
+    meta?.warehouse_location_name
+  );
+  const outwardProductName = getDisplayValue(
+    outward?.product_name,
+    outward?.product,
+    outward?.product?.name,
+    outward?.sale_product_name,
+    outward?.outward_product_name,
+    meta?.product_name,
+    meta?.product
+  );
 
   const isRealUnloadingDetail = (detail = {}) =>
     String(detail.consignee_name || "").trim() && num(detail.rate) > 0;
@@ -691,7 +717,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
             <div style={outwardDetailGridStyle}>
               <div style={plainInfoCellStyle}>
                 <div style={plainInfoLabelStyle}>Warehouse</div>
-                <div style={plainInfoValueStyle}>{outwardWarehouseName || meta?.warehouse_name || "-"}</div>
+                <div style={plainInfoValueStyle}>{outwardWarehouseName}</div>
               </div>
               <div style={plainInfoCellStyle}>
                 <div style={plainInfoLabelStyle}>Dispatch Date</div>
@@ -699,7 +725,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
               </div>
               <div style={plainInfoCellStyle}>
                 <div style={plainInfoLabelStyle}>Location</div>
-                <div style={plainInfoValueStyle}>{outwardLocationName || meta?.location_name || "-"}</div>
+                <div style={plainInfoValueStyle}>{outwardLocationName}</div>
               </div>
               <div style={plainInfoCellStyle}>
                 <div style={plainInfoLabelStyle}>Voucher No.</div>
@@ -743,7 +769,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
                         <tr key={`${detail.id || detail.outward_id || "detail"}-${index}`}>
                           <td style={consignmentCellStyle}>{detail.buyer_name || meta?.buyer_name || "-"}</td>
                           <td style={consignmentCellStyle}>{detail.consignee_name || "-"}</td>
-                          <td style={consignmentCellStyle}>{detail.product_name || outwardProductName || meta?.product_name || "-"}</td>
+                          <td style={consignmentCellStyle}>{getDisplayValue(detail.product_name, detail.product, outwardProductName)}</td>
                           <td style={consignmentCellStyle}>{formatDisplayDate(detail.unloading_date || formData.unloading_date || meta?.outward_date) || "-"}</td>
                           <td style={consignmentCellStyle}>{num(detail.qty || detail.weight || 0).toFixed(2)}</td>
                           <td style={consignmentCellStyle}>{num(detail.rate).toFixed(2)}</td>
