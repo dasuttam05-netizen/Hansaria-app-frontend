@@ -71,8 +71,11 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
           value.label,
           value.title,
           value.warehouse_name,
+          value.warehouseName,
           value.location_name,
-          value.product_name
+          value.locationName,
+          value.product_name,
+          value.productName
         );
         if (nestedValue !== "-") return nestedValue;
       } else if (value !== null && value !== undefined && String(value).trim()) {
@@ -84,28 +87,46 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
 
   const outwardWarehouseName = getDisplayValue(
     outward?.warehouse_name,
+    outward?.warehouseName,
     outward?.warehouse,
     outward?.warehouse?.name,
     outward?.warehouse?.warehouse_name,
+    outward?.warehouse_details,
+    outward?.warehouseDetails,
     meta?.warehouse_name,
+    meta?.warehouseName,
     meta?.warehouse
   );
   const outwardLocationName = getDisplayValue(
     outward?.location_name,
+    outward?.locationName,
     outward?.location,
     outward?.warehouse_location_name,
+    outward?.warehouseLocationName,
     outward?.warehouse?.location_name,
+    outward?.warehouse?.locationName,
+    outward?.location_details,
+    outward?.locationDetails,
     meta?.location_name,
+    meta?.locationName,
     meta?.location,
     meta?.warehouse_location_name
   );
   const outwardProductName = getDisplayValue(
     outward?.product_name,
+    outward?.productName,
     outward?.product,
     outward?.product?.name,
+    outward?.product?.product_name,
+    outward?.product?.productName,
     outward?.sale_product_name,
+    outward?.saleProductName,
     outward?.outward_product_name,
+    outward?.outwardProductName,
+    outward?.product_details,
+    outward?.productDetails,
     meta?.product_name,
+    meta?.productName,
     meta?.product
   );
 
