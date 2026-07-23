@@ -906,7 +906,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
       })} 
 
       <tr style={consignmentTotalRowStyle}>
-        <td style={consignmentTotalCellStyle} colSpan={6}>Totals</td>
+        <td style={consignmentTotalCellStyle} colSpan={5}>Totals</td>
         <td style={consignmentTotalCellStyle}>{adjustedTotals.settlementWeight.toFixed(2)}</td>
         <td style={consignmentTotalCellStyle}>{adjustedTotals.shortQty.toFixed(2)}</td>
         <td style={consignmentTotalCellStyle}>{adjustedTotals.shortAmt.toFixed(2)}</td>
