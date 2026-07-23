@@ -38,6 +38,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
   const [labourExpenseEntries, setLabourExpenseEntries] = useState([]);
   const [isSaving, setIsSaving] = useState(false);
   const [adjustmentRates, setAdjustmentRates] = useState({});
+  const [rowAdjustments, setRowAdjustments] = useState({});
   const [whatsappSentAt, setWhatsappSentAt] = useState({});
   const [unloadingDetails, setUnloadingDetails] = useState([]);
   const [claimRows, setClaimRows] = useState([{ id: "claim-1", description: "", amount: "" }]);
@@ -180,6 +181,32 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
       setAdjustmentRates(
         (res.data?.adjustment_details || []).reduce((acc, item) => {
           acc[item.id] = item.company_rate ?? s.company_rate ?? "";
+          return acc;
+        }, {})
+      );
+      const defaultDispatch = num(s.dispatch_qty ?? totalUnloadingQty ?? 0);
+      const savedRowAdjustments = Array.isArray(s.row_adjustments) ? s.row_adjustments : [];
+      setRowAdjustments(
+        (res.data?.adjustment_details || []).reduce((acc, item) => {
+          const savedRow = savedRowAdjustments.find((row) => String(row.adjustment_id) === String(item.id)) || {};
+          const rowCompanyRate = num(item.company_rate ?? s.company_rate ?? 0);
+          const settlementWeight = num(item.settlement_weight ?? 0);
+          const dispatchQtyValue = defaultDispatch;
+          const shortQty = dispatchQtyValue > 0 ? (settlementWeight / dispatchQtyValue) * num(res.data?.settlement?.billable_qty ?? 0) : 0;
+          const shortAmount = num(savedRow.short_amt ?? item.short_amount ?? (shortQty * rowCompanyRate));
+          const sAmount = num(savedRow.s_amount ?? item.s_amount ?? (settlementWeight * rowCompanyRate));
+          const cDeduction = num(savedRow.c_deduction ?? item.c_deduction ?? 0);
+          const freight = num(savedRow.freight ?? item.freight ?? (dispatchQtyValue > 0 ? (settlementWeight / dispatchQtyValue) * num(s.freight ?? 0) : 0));
+          const labour = num(savedRow.labour_chgs ?? item.labour_chgs ?? (dispatchQtyValue > 0 ? (settlementWeight / dispatchQtyValue) * num(s.outward_labour_charges ?? 0) : 0));
+          const other = num(savedRow.other_chgs ?? item.other_chgs ?? (dispatchQtyValue > 0 ? (settlementWeight / dispatchQtyValue) * num(s.other_charges ?? 0) : 0));
+          acc[item.id] = {
+            short_amt: shortAmount,
+            s_amount: sAmount,
+            c_deduction: cDeduction,
+            freight,
+            labour_chgs: labour,
+            other_chgs: other,
+          };
           return acc;
         }, {})
       );
@@ -387,6 +414,16 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
     );
   };
 
+  const handleRowAdjustmentChange = (adjustmentId, field, value) => {
+    setRowAdjustments((prev) => ({
+      ...prev,
+      [adjustmentId]: {
+        ...(prev[adjustmentId] || {}),
+        [field]: value,
+      },
+    }));
+  };
+
   const useApprovedLabourExpense = () => {
     const entries = Array.isArray(meta?.labour_expense?.entries)
       ? meta.labour_expense.entries.filter((item) => num(item?.amount) > 0)
@@ -418,6 +455,10 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
         adjustment_rates: (meta?.adjustment_details || []).map((item) => ({
           adjustment_id: item.id,
           company_rate: adjustmentRates[item.id] ?? item.company_rate ?? formData.company_rate,
+        })),
+        row_adjustments: (meta?.adjustment_details || []).map((item) => ({
+          adjustment_id: item.id,
+          ...(rowAdjustments[item.id] || {}),
         })),
       });
       toast.success(hasSavedSettlement ? "Settlement updated successfully" : "Settlement saved successfully", {
@@ -616,6 +657,14 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
 
             <div style={outwardDetailGridStyle}>
               <div style={plainInfoCellStyle}>
+                <div style={plainInfoLabelStyle}>Company</div>
+                <div style={plainInfoValueStyle}>{meta?.company_name || outward?.company_name || "-"}</div>
+              </div>
+              <div style={plainInfoCellStyle}>
+                <div style={plainInfoLabelStyle}>Company Account</div>
+                <div style={plainInfoValueStyle}>{meta?.account_name || "-"}</div>
+              </div>
+              <div style={plainInfoCellStyle}>
                 <div style={plainInfoLabelStyle}>Warehouse</div>
                 <div style={plainInfoValueStyle}>{meta?.warehouse_name || "-"}</div>
               </div>
@@ -634,6 +683,10 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
               <div style={plainInfoCellStyle}>
                 <div style={plainInfoLabelStyle}>Lorry No.</div>
                 <div style={plainInfoValueStyle}>{meta?.lorry_no || "-"}</div>
+              </div>
+              <div style={plainInfoCellStyle}>
+                <div style={plainInfoLabelStyle}>Product</div>
+                <div style={plainInfoValueStyle}>{meta?.product_name || "-"}</div>
               </div>
               <div style={{ ...plainInfoCellStyle, borderRight: "none" }}>
                 <div style={plainInfoLabelStyle}>Rate</div>
@@ -712,33 +765,36 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
         <h3 style={{ marginTop: 0, marginBottom: 12, color: PALETTE.ink, fontWeight: 800 }}>Adjusted Company Details</h3>
         <div style={{ overflowX: "auto", border: `1px solid ${PALETTE.border}`, borderRadius: 10, background: "#fff" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                  <thead>
-  <tr>
-    <th style={tableHeaderStyle}>Sr</th>
-    <th style={tableHeaderStyle}>Company Name</th>
-    <th style={tableHeaderStyle}>Lorry No</th>
-    <th style={tableHeaderStyle}>Inward Voucher</th>
-    <th style={tableHeaderStyle}>Loading Type</th>
-    <th style={tableHeaderStyle}>Settlement Weight</th>
-    <th style={tableHeaderStyle}>Short Qnt</th>
-    <th style={tableHeaderStyle}>Short Amt</th>
-    <th style={tableHeaderStyle}>S.Amount</th> {/* NEW */}
-    <th style={tableHeaderStyle}>C.Deduction</th>
-    <th style={tableHeaderStyle}>Company Rate</th>
-    <th style={tableHeaderStyle}>Freight</th>
-    <th style={tableHeaderStyle}>Labour Chgs</th>
-    <th style={tableHeaderStyle}>Other Chgs</th>
-    <th style={tableHeaderStyle}>Amount</th>
-    <th style={tableHeaderStyle}>Net Payable</th>
-    <th style={tableHeaderStyle}>Action</th>
-    <th style={tableHeaderStyle}>WhatsApp Sent</th>
-  </tr>
-</thead>
-
-<tbody>
-  {(meta?.adjustment_details || []).length > 0 ? (
-    <>
-      {meta.adjustment_details.map((item, index) => {
+            <thead>
+              <tr>
+                <th style={tableHeaderStyle}>Sr</th>
+                <th style={tableHeaderStyle}>Company Name</th>
+                <th style={tableHeaderStyle}>Company Account</th>
+                <th style={tableHeaderStyle}>Warehouse</th>
+                <th style={tableHeaderStyle}>Location</th>
+                <th style={tableHeaderStyle}>Product</th>
+                <th style={tableHeaderStyle}>Lorry No</th>
+                <th style={tableHeaderStyle}>Inward Voucher</th>
+                <th style={tableHeaderStyle}>Loading Type</th>
+                <th style={tableHeaderStyle}>Settlement Weight</th>
+                <th style={tableHeaderStyle}>Short Qnt</th>
+                <th style={tableHeaderStyle}>Short Amt</th>
+                <th style={tableHeaderStyle}>S.Amount</th>
+                <th style={tableHeaderStyle}>C.Deduction</th>
+                <th style={tableHeaderStyle}>Company Rate</th>
+                <th style={tableHeaderStyle}>Freight</th>
+                <th style={tableHeaderStyle}>Labour Chgs</th>
+                <th style={tableHeaderStyle}>Other Chgs</th>
+                <th style={tableHeaderStyle}>Amount</th>
+                <th style={tableHeaderStyle}>Net Payable</th>
+                <th style={tableHeaderStyle}>Action</th>
+                <th style={tableHeaderStyle}>WhatsApp Sent</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(meta?.adjustment_details || []).length > 0 ? (
+                <>
+                  {meta.adjustment_details.map((item, index) => {
         const dispatchQty = num(formData.dispatch_qty);
         const rowCompanyRate = num(adjustmentRates[item.id] ?? item.company_rate ?? formData.company_rate);
         const freightPerMt = dispatchQty > 0 ? num(formData.freight) / dispatchQty : 0;
@@ -752,30 +808,57 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
             ? (num(item.settlement_weight) / dispatchQty) * calculation.shortageQty
             : 0;
 
-        const shortageAmount = shortQtyPerLine * rowCompanyRate;
+        const rowState = rowAdjustments[item.id] || {};
+        const shortageAmount = num(rowState.short_amt ?? (shortQtyPerLine * rowCompanyRate));
+        const sAmount = num(rowState.s_amount ?? amount);
         const claimPerLine = dispatchQty > 0 ? num(item.settlement_weight) * (calculation.totalUnloadingClaimAmount / dispatchQty) : 0;
 
-        const deductionPerLine = dispatchQty > 0 ? num(item.settlement_weight) * (calculation.totalUnloadingDeductionAmount / dispatchQty) : 0;
+        const deductionPerLine = num(rowState.c_deduction ?? (dispatchQty > 0 ? num(item.settlement_weight) * (calculation.totalUnloadingDeductionAmount / dispatchQty) : 0));
 
-        const freightPerLine = num(item.settlement_weight) * freightPerMt;
-        const labourPerLine = num(item.settlement_weight) * labourPerMt;
-        const otherPerLine = num(item.settlement_weight) * otherPerMt;
+        const freightPerLine = num(rowState.freight ?? (num(item.settlement_weight) * freightPerMt));
+        const labourPerLine = num(rowState.labour_chgs ?? (num(item.settlement_weight) * labourPerMt));
+        const otherPerLine = num(rowState.other_chgs ?? (num(item.settlement_weight) * otherPerMt));
 
         const netPayable =
-          amount - freightPerLine - labourPerLine - otherPerLine - shortageAmount - claimPerLine - deductionPerLine;
+          sAmount - freightPerLine - labourPerLine - otherPerLine - shortageAmount - claimPerLine - deductionPerLine;
 
         return (
           <tr key={item.id} style={{ background: index % 2 === 0 ? "#ffffff" : PALETTE.rowAlt }}>
             <td style={tableCellStyle}>{index + 1}</td>
             <td style={tableCellStyle}>{item.company_name || "-"}</td>
+            <td style={tableCellStyle}>{item.company_account_name || meta?.account_name || "-"}</td>
+            <td style={tableCellStyle}>{item.warehouse_name || meta?.warehouse_name || "-"}</td>
+            <td style={tableCellStyle}>{item.location_name || meta?.location_name || "-"}</td>
+            <td style={tableCellStyle}>{item.product_name || meta?.product_name || "-"}</td>
             <td style={tableCellStyle}>{item.lorry_no || "-"}</td>
             <td style={tableCellStyle}>{item.inward_voucher_no || "-"}</td>
             <td style={tableCellStyle}>{getLoadingTypeLabel(item.source_type)}</td>
             <td style={tableCellStyle}>{num(item.settlement_weight).toFixed(2)}</td>
             <td style={tableCellStyle}>{shortQtyPerLine.toFixed(2)}</td>
-            <td style={tableCellStyle}>{shortageAmount.toFixed(2)}</td>
-            <td style={tableCellStyle}>{claimPerLine.toFixed(2)}</td> {/* Claim amount allocated */}
-            <td style={tableCellStyle}>{deductionPerLine.toFixed(2)}</td>
+            <td style={tableCellStyle}>
+              <input
+                type="number"
+                value={rowState.short_amt ?? shortageAmount.toFixed(2)}
+                onChange={(e) => handleRowAdjustmentChange(item.id, "short_amt", e.target.value)}
+                style={tableRateInputStyle}
+              />
+            </td>
+            <td style={tableCellStyle}>
+              <input
+                type="number"
+                value={rowState.s_amount ?? sAmount.toFixed(2)}
+                onChange={(e) => handleRowAdjustmentChange(item.id, "s_amount", e.target.value)}
+                style={tableRateInputStyle}
+              />
+            </td>
+            <td style={tableCellStyle}>
+              <input
+                type="number"
+                value={rowState.c_deduction ?? deductionPerLine.toFixed(2)}
+                onChange={(e) => handleRowAdjustmentChange(item.id, "c_deduction", e.target.value)}
+                style={tableRateInputStyle}
+              />
+            </td>
             <td style={tableCellStyle}>
               {canEditCompanyRate ? (
                 <input
@@ -789,9 +872,30 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
                 rowCompanyRate.toFixed(2)
               )}
             </td>
-            <td style={tableCellStyle}>{freightPerLine.toFixed(2)}</td>
-            <td style={tableCellStyle}>{labourPerLine.toFixed(2)}</td>
-            <td style={tableCellStyle}>{otherPerLine.toFixed(2)}</td>
+            <td style={tableCellStyle}>
+              <input
+                type="number"
+                value={rowState.freight ?? freightPerLine.toFixed(2)}
+                onChange={(e) => handleRowAdjustmentChange(item.id, "freight", e.target.value)}
+                style={tableRateInputStyle}
+              />
+            </td>
+            <td style={tableCellStyle}>
+              <input
+                type="number"
+                value={rowState.labour_chgs ?? labourPerLine.toFixed(2)}
+                onChange={(e) => handleRowAdjustmentChange(item.id, "labour_chgs", e.target.value)}
+                style={tableRateInputStyle}
+              />
+            </td>
+            <td style={tableCellStyle}>
+              <input
+                type="number"
+                value={rowState.other_chgs ?? otherPerLine.toFixed(2)}
+                onChange={(e) => handleRowAdjustmentChange(item.id, "other_chgs", e.target.value)}
+                style={tableRateInputStyle}
+              />
+            </td>
             <td style={tableCellStyle}>{amount.toFixed(2)}</td>
             <td style={tableCellStyle}>{netPayable.toFixed(2)}</td>
             <td style={tableCellStyle}>
@@ -823,28 +927,27 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
             </td>
           </tr>
         );
-      })}
-
-      <tr style={consignmentTotalRowStyle}>
-        <td style={consignmentTotalCellStyle} colSpan={5}>Totals</td>
-        <td style={consignmentTotalCellStyle}>{calculation.settlementWeight.toFixed(2)}</td>
-        <td style={consignmentTotalCellStyle}>{calculation.shortageQty.toFixed(2)}</td>
-        <td style={consignmentTotalCellStyle}>{calculation.totalSettlementShortageAmount.toFixed(2)}</td>
-        <td style={consignmentTotalCellStyle}>{calculation.totalUnloadingClaimAmount.toFixed(2)}</td>
-        <td style={consignmentTotalCellStyle}>{calculation.totalUnloadingDeductionAmount.toFixed(2)}</td>
-        <td style={consignmentTotalCellStyle}></td>
-        <td style={consignmentTotalCellStyle}>{num(formData.freight).toFixed(2)}</td>
-        <td style={consignmentTotalCellStyle}>{num(formData.outward_labour_charges).toFixed(2)}</td>
-        <td style={consignmentTotalCellStyle}>{num(formData.other_charges).toFixed(2)}</td>
-        <td style={consignmentTotalCellStyle}>{calculation.averageAmount.toFixed(2)}</td>
-        <td style={consignmentTotalCellStyle}>{calculation.companyPayable.toFixed(2)}</td>
-        <td style={consignmentTotalCellStyle}></td>
-        <td style={consignmentTotalCellStyle}></td>
-      </tr>
-    </>
-  ) : (
+                  })}
+                  <tr style={consignmentTotalRowStyle}>
+                    <td style={consignmentTotalCellStyle} colSpan={9}>Totals</td>
+                    <td style={consignmentTotalCellStyle}>{calculation.settlementWeight.toFixed(2)}</td>
+                    <td style={consignmentTotalCellStyle}>{calculation.shortageQty.toFixed(2)}</td>
+                    <td style={consignmentTotalCellStyle}>{calculation.totalSettlementShortageAmount.toFixed(2)}</td>
+                    <td style={consignmentTotalCellStyle}>{calculation.averageAmount.toFixed(2)}</td>
+                    <td style={consignmentTotalCellStyle}></td>
+                    <td style={consignmentTotalCellStyle}></td>
+                    <td style={consignmentTotalCellStyle}>{num(formData.freight).toFixed(2)}</td>
+                    <td style={consignmentTotalCellStyle}>{num(formData.outward_labour_charges).toFixed(2)}</td>
+                    <td style={consignmentTotalCellStyle}>{num(formData.other_charges).toFixed(2)}</td>
+                    <td style={consignmentTotalCellStyle}>{calculation.companyPayable.toFixed(2)}</td>
+                    <td style={consignmentTotalCellStyle}></td>
+                    <td style={consignmentTotalCellStyle}></td>
+                    <td style={consignmentTotalCellStyle}></td>
+                  </tr>
+                </>
+              ) : (
                 <tr>
-                  <td style={tableCellStyle} colSpan="18">
+                  <td style={tableCellStyle} colSpan="22">
                     <div style={{ padding: "16px", textAlign: "center", color: PALETTE.muted, fontSize: 13, background: "#f9fafb", borderRadius: 8 }}>
                       <div style={{ fontWeight: 600, marginBottom: 4 }}>No adjustments linked to this outward</div>
                       <div style={{ fontSize: 12, marginTop: 6 }}>Create adjustments by mapping inward or palti lorry entries to this outward dispatch.</div>
