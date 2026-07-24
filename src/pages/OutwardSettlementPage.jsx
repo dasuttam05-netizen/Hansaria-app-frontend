@@ -322,6 +322,8 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
     (sum, d) => sum + num(d.other_deduction),
     0
   );
+  const effectiveClaimAmount = claimAmount || totalUnloadingClaimAmount;
+  const effectiveOtherDeduction = otherDeduction || totalUnloadingDeductionAmount;
 
   const totalSettlementShortageAmount = adjustmentDetails.reduce((sum, item) => {
     const rowCompanyRate = num(adjustmentRates[item.id] ?? item.company_rate ?? formData.company_rate);
@@ -380,7 +382,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
   }, 0);
 
   // âœ… Profit / Loss
-  const receivableAmount = grossAmount - companyPayable - claimAmount - otherDeduction;
+  const receivableAmount = grossAmount - companyPayable - effectiveClaimAmount - effectiveOtherDeduction;
 
   return {
     settlementWeight,
@@ -391,8 +393,8 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
     receivableAmount,
     averageRate,
     averageAmount,
-    claimAmount,
-    otherDeduction,
+    claimAmount: effectiveClaimAmount,
+    otherDeduction: effectiveOtherDeduction,
     totalUnloadingClaimAmount,
     totalUnloadingDeductionAmount,
     totalSettlementShortageAmount,
@@ -491,6 +493,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
       await axios.post(`${API_BASE}/outward-settlement/save`, {
         outward_id: outward.id,
         ...formData,
+        shortage_qty: calculation.shortageQty,
         claim_amount: calculation.claimAmount,
         other_deduction: calculation.otherDeduction,
         claim_details: claimRows,
