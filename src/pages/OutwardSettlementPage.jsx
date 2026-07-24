@@ -99,6 +99,14 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
     meta?.outward_warehouse_name,
     outward?.outward_warehouse_name
   );
+  const outwardAccountName = getDisplayValue(
+    outward?.account_name,
+    outward?.accountName,
+    outward?.company_account_name,
+    meta?.account_name,
+    meta?.accountName,
+    meta?.company_account_name
+  );
   const outwardLocationName = getDisplayValue(
     outward?.location_name,
     outward?.locationName,
@@ -751,6 +759,10 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
 
             <div style={outwardDetailGridStyle}>
               <div style={plainInfoCellStyle}>
+                <div style={plainInfoLabelStyle}>Account</div>
+                <div style={plainInfoValueStyle}>{outwardAccountName}</div>
+              </div>
+              <div style={plainInfoCellStyle}>
                 <div style={plainInfoLabelStyle}>Warehouse</div>
                 <div style={plainInfoValueStyle}>{outwardWarehouseName}</div>
               </div>
@@ -769,6 +781,10 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
               <div style={plainInfoCellStyle}>
                 <div style={plainInfoLabelStyle}>Lorry No.</div>
                 <div style={plainInfoValueStyle}>{meta?.lorry_no || "-"}</div>
+              </div>
+              <div style={plainInfoCellStyle}>
+                <div style={plainInfoLabelStyle}>Product</div>
+                <div style={plainInfoValueStyle}>{outwardProductName}</div>
               </div>
               <div style={{ ...plainInfoCellStyle, borderRight: "none" }}>
                 <div style={plainInfoLabelStyle}>Rate</div>
@@ -1480,7 +1496,7 @@ const sectionRuleStyle = {
 
 const outwardDetailGridStyle = {
   display: "grid",
-  gridTemplateColumns: "repeat(6, minmax(115px, 1fr))",
+  gridTemplateColumns: "repeat(8, minmax(115px, 1fr))",
   gap: 0,
   padding: "0 0 4px 16px",
 };
