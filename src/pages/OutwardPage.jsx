@@ -312,8 +312,19 @@ export default function OutwardPage() {
       return;
     }
 
+    const accountName = displayName(
+      row,
+      row.company_account_id,
+      accountLookup,
+      ["account_name", "name", "party_name"],
+      "Account"
+    );
+
     setSelectedSettlementOutward({
       ...row,
+      account_name: row.account_name || accountName,
+      company_account_name: row.company_account_name || accountName,
+      accountName: row.accountName || accountName,
       location_name: displayName(row, row.location_id, locationLookup, ["name", "location_name"], "Location"),
       warehouse_name: displayName(row, row.warehouse_id, warehouseLookup, ["name", "warehouse_name"], "Warehouse"),
       product_name: displayName(row, row.product_id, productLookup, ["name", "product_name"], "Product"),
