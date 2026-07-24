@@ -95,7 +95,9 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
     outward?.warehouseDetails,
     meta?.warehouse_name,
     meta?.warehouseName,
-    meta?.warehouse
+    meta?.warehouse,
+    meta?.outward_warehouse_name,
+    outward?.outward_warehouse_name
   );
   const outwardLocationName = getDisplayValue(
     outward?.location_name,
@@ -110,7 +112,9 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
     meta?.location_name,
     meta?.locationName,
     meta?.location,
-    meta?.warehouse_location_name
+    meta?.warehouse_location_name,
+    meta?.outward_location_name,
+    outward?.outward_location_name
   );
   const outwardProductName = getDisplayValue(
     outward?.product_name,
@@ -127,7 +131,9 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
     outward?.productDetails,
     meta?.product_name,
     meta?.productName,
-    meta?.product
+    meta?.product,
+    meta?.outward_product_name,
+    outward?.outward_product_name
   );
 
   const isRealUnloadingDetail = (detail = {}) =>
