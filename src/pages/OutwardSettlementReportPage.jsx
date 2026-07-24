@@ -216,14 +216,14 @@ export default function OutwardSettlementReportPage() {
   };
 
   useEffect(() => {
-    API.get("/companies").then((res) => setCompanies(res.data || []));
-    API.get("/warehouses").then((res) => setWarehouses(res.data || []));
+    API.get("/api/companies").then((res) => setCompanies(res.data || []));
+    API.get("/api/warehouses").then((res) => setWarehouses(res.data || []));
     fetchReport();
   }, []);
 
   const fetchReport = async () => {
     try {
-      const res = await API.get("/outward-settlement/report/list", {
+      const res = await API.get("/api/outward-settlement/report/list", {
         params: filters,
       });
       setRecords((Array.isArray(res.data) ? res.data : []).map(normalizeRow));
