@@ -167,21 +167,21 @@ export default function OutwardSettlementReportPage() {
     const totalSettlementShortageAmount = adjustmentDetails.reduce((sum, item) => {
       return sum + item.shortAmount;
     }, 0);
-
-    const totalSAmountPurchase = adjustmentDetails.reduce(
-      (sum, item) => sum + item.shortAmount + item.claim_per_line + item.deduction_per_line,
-      0
-    );
-    const totalSAmountSale = adjustmentDetails.reduce(
+    const totalSaleShortageAmount = adjustmentDetails.reduce(
       (sum, item) => sum + item.sale_short_amount,
       0
     );
+    const totalClaimAmount = totalUnloadingClaimAmount;
+    const totalOtherDeductionAmount = totalUnloadingDeductionAmount;
+
+    const totalSAmountPurchase = totalClaimAmount;
+    const totalSAmountSale = totalClaimAmount;
     const netReceivable =
-      saleAmount - freight - otherCharges - labourCharges - totalSAmountSale;
+      saleAmount - freight - otherCharges - labourCharges - totalSaleShortageAmount - totalClaimAmount - totalOtherDeductionAmount;
     const netPayable =
       adjustmentDetails.length > 0
         ? adjustmentDetails.reduce((sum, item) => sum + item.net_payable, 0)
-        : purchaseAmount - freight - otherCharges - labourCharges - totalSAmountPurchase;
+        : purchaseAmount - freight - otherCharges - labourCharges - totalSettlementShortageAmount - totalClaimAmount - totalOtherDeductionAmount;
 
     return {
       dispatchQty,
@@ -196,6 +196,9 @@ export default function OutwardSettlementReportPage() {
       totalUnloadingDeductionAmount,
       adjustmentDetails,
       totalSettlementShortageAmount,
+      totalSaleShortageAmount,
+      totalClaimAmount,
+      totalOtherDeductionAmount,
       totalSAmountPurchase,
       totalSAmountSale,
       netReceivable,
@@ -537,14 +540,14 @@ export default function OutwardSettlementReportPage() {
         "Settlement Weight",
         "Short Qnt",
         "Short Amt",
-        "S.Amount",
+        "S.Amount (Claim)",
         "C.Deduction",
         "Company Rate",
         "Freight",
         "Labour Chgs",
         "Other Chgs",
         "Amount",
-        "S.Amount",
+        "S.Amount (Claim)",
         "Net Payable",
       ]],
       body:
@@ -694,7 +697,8 @@ export default function OutwardSettlementReportPage() {
         ["Freight", num(freight)],
         ["Other Charges", num(otherCharges)],
         ["Labour Charges", num(labourCharges)],
-        ["S.Amount", num(totalSAmountSale)],
+        ["Shortage Amount", num(totalSaleShortageAmount)],
+        ["S.Amount (Claim)", num(totalSAmountSale)],
       ],
       totalLabel: "Net Receivable",
       totalValue: num(netReceivable),
@@ -714,7 +718,8 @@ export default function OutwardSettlementReportPage() {
         ["Freight", num(freight)],
         ["Other Charges", num(otherCharges)],
         ["Labour Charges", num(labourCharges)],
-        ["S.Amount", num(totalSAmountPurchase)],
+        ["Shortage Amount", num(totalSettlementShortageAmount)],
+        ["S.Amount (Claim)", num(totalSAmountPurchase)],
       ],
       totalLabel: "Net Payable",
       totalValue: num(netPayable),
@@ -869,7 +874,7 @@ export default function OutwardSettlementReportPage() {
           "Labour Chgs",
           "Other Chgs",
           "Amount",
-          "S.Amount",
+          "S.Amount (Claim)",
           "Net Payable",
         ]],
         body:
@@ -916,7 +921,7 @@ export default function OutwardSettlementReportPage() {
         headStyles: { fillColor: [14, 116, 144], textColor: 255 },
         styles: { fontSize: 8, halign: "right" },
         margin: { left: 14, right: 14 },
-        head: [["Sale Amount", "Freight", "Other Chgs", "Labour Chgs", "S.Amount", "Net Receivable"]],
+        head: [["Sale Amount", "Freight", "Other Chgs", "Labour Chgs", "S.Amount (Claim)", "Net Receivable"]],
       body: [[
         num(saleAmount),
         num(record.freight),
@@ -933,7 +938,7 @@ export default function OutwardSettlementReportPage() {
         headStyles: { fillColor: [14, 116, 144], textColor: 255 },
         styles: { fontSize: 8, halign: "right" },
         margin: { left: 14, right: 14 },
-        head: [["Purchase Amount (Sett.Wt×Co.Rate)", "Freight", "Other Chgs", "Labour Chgs", "S.Amount", "Net Payable"]],
+        head: [["Purchase Amount (Sett.Wt×Co.Rate)", "Freight", "Other Chgs", "Labour Chgs", "S.Amount (Claim)", "Net Payable"]],
       body: [[
         num(purchaseAmount),
         num(record.freight),
@@ -1119,7 +1124,7 @@ export default function OutwardSettlementReportPage() {
                       <th style={{ ...hardHeaderCell, width: "118px" }}>Settlement Weight</th>
                       <th style={{ ...hardHeaderCell, width: "92px" }}>Short Qnt</th>
                       <th style={{ ...hardHeaderCell, width: "96px" }}>Short Amt</th>
-                      <th style={{ ...hardHeaderCell, width: "96px" }}>S.Amount</th>
+                      <th style={{ ...hardHeaderCell, width: "96px" }}>S.Amount (Claim)</th>
                       <th style={{ ...hardHeaderCell, width: "96px" }}>C.Deduction</th>
                       <th style={{ ...hardHeaderCell, width: "110px" }}>Company Rate</th>
                       <th style={{ ...hardHeaderCell, width: "84px" }}>Freight</th>
@@ -1172,7 +1177,8 @@ export default function OutwardSettlementReportPage() {
                       <div style={compactMetricItemStyle}><span>Freight</span><strong>{num(freight)}</strong></div>
                       <div style={compactMetricItemStyle}><span>Other</span><strong>{num(otherCharges)}</strong></div>
                       <div style={compactMetricItemStyle}><span>Labour</span><strong>{num(labourCharges)}</strong></div>
-                      <div style={compactMetricItemStyle}><span>S.Amount</span><strong>{num(totalSAmountSale)}</strong></div>
+                      <div style={compactMetricItemStyle}><span>Shortage Amount</span><strong>{num(totalSaleShortageAmount)}</strong></div>
+                      <div style={compactMetricItemStyle}><span>S.Amount (Claim)</span><strong>{num(totalSAmountSale)}</strong></div>
                       <div style={{ ...compactMetricItemStyle, background: "#ecfdf5", borderColor: "#86efac" }}>
                         <span>Receivable</span><strong style={{ color: "#15803d" }}>{num(netReceivable)}</strong>
                       </div>
@@ -1189,7 +1195,8 @@ export default function OutwardSettlementReportPage() {
                       <div style={compactMetricItemStyle}><span>Freight</span><strong>{num(freight)}</strong></div>
                       <div style={compactMetricItemStyle}><span>Other</span><strong>{num(otherCharges)}</strong></div>
                       <div style={compactMetricItemStyle}><span>Labour</span><strong>{num(labourCharges)}</strong></div>
-                      <div style={compactMetricItemStyle}><span>S.Amount</span><strong>{num(totalSAmountPurchase)}</strong></div>
+                        <div style={compactMetricItemStyle}><span>Shortage Amount</span><strong>{num(totalSettlementShortageAmount)}</strong></div>
+                        <div style={compactMetricItemStyle}><span>S.Amount (Claim)</span><strong>{num(totalSAmountPurchase)}</strong></div>
                       <div style={{ ...compactMetricItemStyle, background: "#fff7ed", borderColor: "#fdba74" }}>
                         <span>Payable</span><strong style={{ color: "#c2410c" }}>{num(netPayable)}</strong>
                       </div>
