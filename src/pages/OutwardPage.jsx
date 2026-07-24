@@ -307,7 +307,17 @@ export default function OutwardPage() {
   const openSettlementModal = (row) => {
     setSelectedOutward(null);
     setShowForm(false);
-    setSelectedSettlementOutward(row || null);
+    if (!row) {
+      setSelectedSettlementOutward(null);
+      return;
+    }
+
+    setSelectedSettlementOutward({
+      ...row,
+      location_name: displayName(row, row.location_id, locationLookup, ["name", "location_name"], "Location"),
+      warehouse_name: displayName(row, row.warehouse_id, warehouseLookup, ["name", "warehouse_name"], "Warehouse"),
+      product_name: displayName(row, row.product_id, productLookup, ["name", "product_name"], "Product"),
+    });
   };
 
   const closeAdjustmentModal = () => {
