@@ -360,7 +360,7 @@ export default function OutwardSettlementReportPage() {
           "Labour Chgs",
           "Other Chgs",
           "Amount",
-          "S. Amount",
+          "S. Amount (Claim)",
           "Net Payable",
         ]],
         body:
@@ -379,7 +379,7 @@ export default function OutwardSettlementReportPage() {
                 num(item.labour_charges),
                 num(item.other_charges),
                 num(item.amount),
-                num(item.shortAmount),
+                num(item.claim_per_line),
                 num(item.net_payable),
               ])
             : [["", "No adjusted inward details found.", "", "", "", "", "", "", "", "", "", "", "", "", ""]],
@@ -425,7 +425,7 @@ export default function OutwardSettlementReportPage() {
           ["Freight", num(calc.freight)],
           ["Other Charges", num(calc.otherCharges)],
           ["Labour Charges", num(calc.labourCharges)],
-          ["S. Amount", num(calc.totalSAmountSale)],
+          ["S. Amount (Claim)", num(calc.totalSAmountSale)],
         ],
         "Net Receivable",
         num(calc.netReceivable)
@@ -439,7 +439,7 @@ export default function OutwardSettlementReportPage() {
           ["Freight", num(calc.freight)],
           ["Other Charges", num(calc.otherCharges)],
           ["Labour Charges", num(calc.labourCharges)],
-          ["S. Amount", num(calc.totalSAmountPurchase)],
+          ["S. Amount (Claim)", num(calc.totalSAmountPurchase)],
         ],
         "Net Payable",
         num(calc.netPayable)
@@ -561,14 +561,14 @@ export default function OutwardSettlementReportPage() {
               num(item.settlement_weight),
               num(item.shortQtyPerLine),
               num(item.shortAmount),
-              num(item.sale_short_amount),
-              num(item.claim_per_line + item.deduction_per_line),
+              num(item.claim_per_line),
+              num(item.deduction_per_line),
               num(item.company_rate),
               num(item.freight),
               num(item.labour_charges),
               num(item.other_charges),
               num(item.amount),
-              num((Number(record.dispatch_qty) || 0) > 0 ? ((Number(item.settlement_weight) || 0) / (Number(record.dispatch_qty) || 0)) * (Number(record.shortage_qty) || 0) * (Number(item.company_rate) || 0) : 0),
+              num(item.claim_per_line),
               num(
                 (Number(item.amount) || 0) -
                 (Number(item.freight) || 0) -
@@ -894,7 +894,7 @@ export default function OutwardSettlementReportPage() {
                 num(item.labour_charges),
                 num(item.other_charges),
                 num(item.amount),
-                num((Number(record.dispatch_qty) || 0) > 0 ? ((Number(item.settlement_weight) || 0) / (Number(record.dispatch_qty) || 0)) * (Number(record.shortage_qty) || 0) * (Number(item.company_rate) || 0) : 0),
+                num(item.claim_per_line),
                 num(
                   (Number(item.amount) || 0) -
                   (Number(item.freight) || 0) -
@@ -1150,8 +1150,8 @@ export default function OutwardSettlementReportPage() {
                           <td style={hardBodyCell}>{num(item.settlement_weight)}</td>
                           <td style={hardBodyCell}>{num(item.shortQtyPerLine)}</td>
                           <td style={hardBodyCell}>{num(item.shortAmount)}</td>
-                          <td style={hardBodyCell}>{num(item.sale_short_amount)}</td>
-                          <td style={hardBodyCell}>{num(item.claim_per_line + item.deduction_per_line)}</td>
+                          <td style={hardBodyCell}>{num(item.claim_per_line)}</td>
+                          <td style={hardBodyCell}>{num(item.deduction_per_line)}</td>
                           <td style={hardBodyCell}>{num(item.company_rate)}</td>
                           <td style={hardBodyCell}>{num(item.freight)}</td>
                           <td style={hardBodyCell}>{num(item.labour_charges)}</td>
