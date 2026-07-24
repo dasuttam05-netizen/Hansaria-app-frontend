@@ -95,9 +95,18 @@ export default function OutwardSettlementReportPage() {
     const grossAmount = toNumber(row.gross_amount ?? row.gross_profit ?? saleAmount - freight - otherCharges - labourCharges);
     const receivableAmount = toNumber(row.receivable_amount ?? row.net_profit);
     const companyPayable = toNumber(row.company_payable);
+    const accountName = row.account_name || row.company_account_name || row.accountName || row.party_name || row.company_name || row.company_account?.account_name || row.company_account?.name || "-";
+    const warehouseName = row.warehouse_name || row.warehouseName || row.outward_warehouse_name || row.warehouse?.name || row.warehouse?.warehouse_name || "-";
+    const locationName = row.location_name || row.locationName || row.outward_location_name || row.location?.name || row.location?.location_name || row.warehouse?.location_name || "-";
+    const productName = row.product_name || row.productName || row.outward_product_name || row.product?.name || row.product?.product_name || "-";
 
     return {
       ...row,
+      account_name: accountName,
+      company_account_name: row.company_account_name || accountName,
+      warehouse_name: warehouseName,
+      location_name: locationName,
+      product_name: productName,
       dispatch_qty: dispatchQty,
       unloading_qty: unloadingQty,
       shortage_qty: shortageQty,
@@ -258,7 +267,8 @@ export default function OutwardSettlementReportPage() {
     return inv || row.voucher_no || `OUT-${row.outward_id}`;
   };
 
-  const displayAccountName = (row) => row.account_name || row.company_name || "-";
+  const displayAccountName = (row) =>
+    row.account_name || row.company_account_name || row.accountName || row.party_name || row.company_name || "-";
   const getLoadingTypeLabel = (sourceType) => {
     const normalized = String(sourceType || "").trim().toLowerCase();
     return normalized === "palti_lorry" ? "Palti Lorry" : "Warehouse Loading";
@@ -306,6 +316,7 @@ export default function OutwardSettlementReportPage() {
         styles: { fontSize: 7.2, cellPadding: 1.8, textColor: [31, 41, 55] },
         body: [[
           `Date: ${formatDate(record.date)}`,
+          `Account: ${displayAccountName(record)}`,
           `Warehouse: ${record.warehouse_name || "-"}`,
           `Location: ${record.location_name || "-"}`,
           `Buyer: ${record.buyer_name || "-"}`,
@@ -476,7 +487,7 @@ export default function OutwardSettlementReportPage() {
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
     doc.text(
-      `Date: ${formatDate(record.date)} | Warehouse: ${record.warehouse_name || "-"} | Location: ${record.location_name || "-"} | Lorry: ${record.lorry_no || "-"}`,
+      `Date: ${formatDate(record.date)} | Account: ${displayAccountName(record)} | Warehouse: ${record.warehouse_name || "-"} | Location: ${record.location_name || "-"} | Lorry: ${record.lorry_no || "-"}`,
       14,
       34
     );
