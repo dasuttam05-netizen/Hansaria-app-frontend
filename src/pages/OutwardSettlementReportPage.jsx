@@ -1076,7 +1076,7 @@ export default function OutwardSettlementReportPage() {
                     {displayInvNo(record)} | {displayAccountName(record)}
                   </h3>
                   <div style={{ color: "#0f172a", marginTop: 6 }}>
-                    Date: {formatDate(record.date)} | Warehouse: {record.warehouse_name || "-"} | Location: {record.location_name || "-"} | Lorry: {record.lorry_no || "-"}
+                    Date: {formatDate(record.date)} | Account: {record.account_name || "-"} | Warehouse: {record.warehouse_name || "-"} | Location: {record.location_name || "-"} | Lorry: {record.lorry_no || "-"}
                   </div>
                   <div style={{ color: "#0f172a", marginTop: 4 }}>
                     Buyer: {record.buyer_name || "-"} | Consignee: {record.consignee_name || "-"} | Product: {record.product_name || "-"}
