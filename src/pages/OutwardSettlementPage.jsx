@@ -342,10 +342,12 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
 
     return sum + shortQtyPerLine * saleRate;
   }, 0);
+  const saleSAmount = effectiveClaimAmount;
+  const purchaseSAmount = effectiveClaimAmount;
 
   // âœ… Net Receivable (ALL LESS)
   const grossAmount = Math.max(
-    saleAmount - freight - labour - other - totalShortageAmountSale,
+    saleAmount - freight - labour - other - totalShortageAmountSale - effectiveClaimAmount - effectiveOtherDeduction,
     0
   );
 
@@ -398,6 +400,9 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
     totalUnloadingClaimAmount,
     totalUnloadingDeductionAmount,
     totalSettlementShortageAmount,
+    totalShortageAmountSale,
+    saleSAmount,
+    purchaseSAmount,
   };
 }, [formData, meta, adjustmentRates, claimRows, deductionRows, unloadingDetails]);
 
