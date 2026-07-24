@@ -1,14 +1,13 @@
 import React, { useEffect, useMemo, useState } from "react";
-import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import jsPDF from "jspdf";
+import API from "./axiosInstance";
 import autoTable from "jspdf-autotable";
 import { FaEdit, FaFilePdf } from "react-icons/fa";
 import OutwardSettlementPage from "./OutwardSettlementPage";
 
 export default function OutwardSettlementReportPage() {
   const navigate = useNavigate();
-  const API_BASE = "/api";
 
   const [records, setRecords] = useState([]);
   const [companies, setCompanies] = useState([]);
@@ -217,14 +216,14 @@ export default function OutwardSettlementReportPage() {
   };
 
   useEffect(() => {
-    axios.get(`${API_BASE}/companies`).then((res) => setCompanies(res.data || []));
-    axios.get(`${API_BASE}/warehouses`).then((res) => setWarehouses(res.data || []));
+    API.get("/companies").then((res) => setCompanies(res.data || []));
+    API.get("/warehouses").then((res) => setWarehouses(res.data || []));
     fetchReport();
   }, []);
 
   const fetchReport = async () => {
     try {
-      const res = await axios.get(`${API_BASE}/outward-settlement/report/list`, {
+      const res = await API.get("/outward-settlement/report/list", {
         params: filters,
       });
       setRecords((Array.isArray(res.data) ? res.data : []).map(normalizeRow));
