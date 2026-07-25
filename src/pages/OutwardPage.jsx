@@ -9,6 +9,8 @@ import BuyerAdjustmentListModal from "./BuyerAdjustmentListModal";
 import BuyerAdjustmentSavedListModal from "./BuyerAdjustmentSavedListModal";
 import BuyerAdjustmentForm from "./BuyerAdjustmentForm";
 import { hasAnyPermission, hasPermission, loadSession } from "../utils/auth";
+import { consigneeHasBuyer } from "../utils/consigneeBuyers";
+import MultiSelectDropdown from "../components/MultiSelectDropdown";
 
 const lbl = {
   display: "block",
@@ -171,7 +173,7 @@ export default function OutwardPage() {
   const [companyForm, setCompanyForm] = useState({ name: "", mobile: "", address: "" });
   const [accountForm, setAccountForm] = useState({ company_id: "", account_name: "", pan_no: "", mobile: "", address: "" });
   const [buyerForm, setBuyerForm] = useState({ name: "", mobile: "", email: "", address: "", gst_no: "", pan_no: "", state: "", location: "" });
-  const [consigneeForm, setConsigneeForm] = useState({ buyer_id: "", name: "", mobile: "", email: "", address: "", gst_no: "", pan_no: "", state: "", location: "" });
+  const [consigneeForm, setConsigneeForm] = useState({ buyer_ids: [], name: "", mobile: "", email: "", address: "", gst_no: "", pan_no: "", state: "", location: "" });
   const selectedRowDetailRef = useRef(null);
   const rowRefs = useRef({});
   const submitLockRef = useRef(false);
@@ -215,7 +217,7 @@ export default function OutwardPage() {
 
   const consigneesForBuyer = useMemo(() => {
     if (!formData.buyer_id) return [];
-    return consigneeNames.filter((c) => sameId(getRecordId(c.buyer_id), formData.buyer_id));
+    return consigneeNames.filter((c) => consigneeHasBuyer(c, formData.buyer_id));
   }, [formData.buyer_id, consigneeNames]);
   const canCreate = hasPermission(user, "outward.create");
   const canEdit = hasPermission(user, "outward.edit");
@@ -814,14 +816,17 @@ export default function OutwardPage() {
 
   const handleConsigneeQuickCreate = async (e) => {
     e.preventDefault();
-    if (!String(consigneeForm.buyer_id || "").trim()) return toast.error("Select buyer", { theme: "colored" });
+    const buyer_ids = (consigneeForm.buyer_ids || [])
+      .map((id) => Number(id))
+      .filter((n) => Number.isFinite(n) && n > 0);
+    if (!buyer_ids.length) return toast.error("Select at least one buyer", { theme: "colored" });
     if (!String(consigneeForm.name || "").trim()) return toast.error("Consignee name is required", { theme: "colored" });
     try {
-      const payload = { ...consigneeForm, buyer_id: Number(consigneeForm.buyer_id) };
+      const payload = { ...consigneeForm, buyer_ids, buyer_id: buyer_ids[0] };
       const res = await axios.post(`${API_BASE}/consignee-names`, payload);
       const createdId = String(res.data?.id || res.data?._id || "");
-      const selectedBuyerId = String(consigneeForm.buyer_id || "");
-      setConsigneeForm({ buyer_id: "", name: "", mobile: "", email: "", address: "", gst_no: "", pan_no: "", state: "", location: "" });
+      const selectedBuyerId = String(formData.buyer_id || buyer_ids[0] || "");
+      setConsigneeForm({ buyer_ids: [], name: "", mobile: "", email: "", address: "", gst_no: "", pan_no: "", state: "", location: "" });
       setShowConsigneeModal(false);
       await refreshMasters();
       if (createdId) setFormData((prev) => ({ ...prev, buyer_id: selectedBuyerId, consignee_id: createdId }));
@@ -944,15 +949,25 @@ export default function OutwardPage() {
       const consigneeRow = consigneeNames.find((c) => (c.name || "").trim() === cName);
     let buyer_id = "";
     let consignee_id = "";
-    if (consigneeRow && consigneeRow.buyer_id) {
-      buyer_id = getRecordId(consigneeRow.buyer_id);
+    if (consigneeRow) {
+      const ids = Array.isArray(consigneeRow.buyer_ids) && consigneeRow.buyer_ids.length
+        ? consigneeRow.buyer_ids
+        : consigneeRow.buyer_id
+          ? [consigneeRow.buyer_id]
+          : [];
+      const matchFromName = buyerNames.find((b) => (b.name || "").trim() === bName);
+      if (matchFromName && ids.some((id) => sameId(getRecordId(id), getRecordId(matchFromName)))) {
+        buyer_id = getRecordId(matchFromName);
+      } else if (ids.length) {
+        buyer_id = getRecordId(ids[0]);
+      }
       consignee_id = getRecordId(consigneeRow);
     } else {
       const buyerRow = buyerNames.find((b) => (b.name || "").trim() === bName);
       if (buyerRow) {
         buyer_id = getRecordId(buyerRow);
         const cg = consigneeNames.find(
-          (c) => (c.name || "").trim() === cName && sameId(getRecordId(c.buyer_id), buyer_id)
+          (c) => (c.name || "").trim() === cName && consigneeHasBuyer(c, buyer_id)
         );
         if (cg) consignee_id = getRecordId(cg);
       }
@@ -1704,7 +1719,8 @@ Consignee: ${row.consignee_name}`;
                     <button
                       type="button"
                       onClick={() => {
-                        setConsigneeForm((prev) => ({ ...prev, buyer_id: formData.buyer_id || prev.buyer_id }));
+                        const prefill = formData.buyer_id ? [String(formData.buyer_id)] : [];
+                        setConsigneeForm((prev) => ({ ...prev, buyer_ids: prefill.length ? prefill : prev.buyer_ids || [] }));
                         setShowConsigneeModal(true);
                       }}
                       style={{ ...btnStyle, background: "#7c3aed", color: "#fff", whiteSpace: "nowrap" }}
@@ -2585,12 +2601,14 @@ Consignee: ${row.consignee_name}`;
           <div style={modalCard}>
             <h3 style={{ marginTop: 0 }}>Create Consignee</h3>
             <form onSubmit={handleConsigneeQuickCreate} style={{ display: "grid", gap: 12 }}>
-              <select value={consigneeForm.buyer_id} onChange={(e) => setConsigneeForm((p) => ({ ...p, buyer_id: e.target.value }))} style={inp}>
-                <option value="">Select Buyer</option>
-                {buyerNames.map((b) => (
-                  <option key={getRecordId(b)} value={getRecordId(b)}>{b.name}</option>
-                ))}
-              </select>
+              <MultiSelectDropdown
+                label="Buyers"
+                options={buyerNames.map((b) => ({ value: getRecordId(b), label: b.name }))}
+                value={consigneeForm.buyer_ids || []}
+                onChange={(next) => setConsigneeForm((p) => ({ ...p, buyer_ids: next }))}
+                placeholder="Select buyer name(s)"
+                accent="#7c3aed"
+              />
               <input placeholder="Consignee name" value={consigneeForm.name} onChange={(e) => setConsigneeForm((p) => ({ ...p, name: e.target.value }))} style={inp} />
               <input placeholder="Mobile" value={consigneeForm.mobile} onChange={(e) => setConsigneeForm((p) => ({ ...p, mobile: e.target.value }))} style={inp} />
               <input placeholder="Email" value={consigneeForm.email} onChange={(e) => setConsigneeForm((p) => ({ ...p, email: e.target.value }))} style={inp} />
