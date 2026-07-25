@@ -178,6 +178,45 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
   const sumDetailRows = (rows) =>
     (Array.isArray(rows) ? rows : []).reduce((sum, row) => sum + num(row?.amount), 0);
 
+  const ROW_ADJUSTMENT_FIELDS = [
+    "short_amt",
+    "s_amount",
+    "c_deduction",
+    "freight",
+    "labour_chgs",
+    "other_chgs",
+  ];
+
+  const toRowAdjustmentsMap = (list) => {
+    const rows = Array.isArray(list) ? list : [];
+    return rows.reduce((acc, item) => {
+      const id = item?.adjustment_id ?? item?.id;
+      if (id == null || id === "") return acc;
+      const overrides = {};
+      ROW_ADJUSTMENT_FIELDS.forEach((field) => {
+        if (!Object.prototype.hasOwnProperty.call(item || {}, field)) return;
+        if (item[field] === null || item[field] === undefined || item[field] === "") return;
+        overrides[field] = item[field];
+      });
+      // Legacy saves wrote all 6 fields (missing ones forced to 0). Keep only non-zero
+      // overrides in that case so auto-calc still works for untouched columns.
+      const keys = Object.keys(overrides);
+      if (keys.length === ROW_ADJUSTMENT_FIELDS.length) {
+        const nonZero = keys.filter((field) => num(overrides[field]) !== 0);
+        if (nonZero.length > 0 && nonZero.length < keys.length) {
+          const cleaned = {};
+          nonZero.forEach((field) => {
+            cleaned[field] = overrides[field];
+          });
+          acc[id] = cleaned;
+          return acc;
+        }
+      }
+      if (keys.length) acc[id] = overrides;
+      return acc;
+    }, {});
+  };
+
   const getLoadingTypeLabel = (sourceType) => {
     const normalized = String(sourceType || "").trim().toLowerCase();
     return normalized === "palti_lorry" ? "Palti Lorry" : "Warehouse Loading";
@@ -268,6 +307,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
       );
       setClaimRows(normalizeDetailRows(s.claim_details, s.claim_amount, "Claim"));
       setDeductionRows(normalizeDetailRows(s.other_deduction_details, s.other_deduction, "Deduction"));
+      setRowAdjustments(toRowAdjustmentsMap(s.row_adjustments));
       setWhatsappSentAt(
         (res.data?.adjustment_details || []).reduce((acc, item) => {
           if (item.whatsapp_sent_at) acc[item.id] = item.whatsapp_sent_at;
@@ -285,6 +325,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
       setUnloadingDetails([]);
       setLabourVoucherNos([]);
       setLabourExpenseEntries([]);
+      setRowAdjustments({});
       alert("Settlement load failed");
     } finally {
       setLoading(false);
@@ -478,6 +519,17 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
     }));
   };
 
+  const handleResetRowAdjustments = () => {
+    if (!window.confirm("Reset Adjusted Company Details? Manual Short Amt, Claim, C.Deduction, Freight, Labour Chgs and Other Chgs will clear and auto-calculate again.")) {
+      return;
+    }
+    setRowAdjustments({});
+    toast.info("Adjusted Company Details reset to auto calculation", {
+      theme: "colored",
+      autoClose: 2500,
+    });
+  };
+
   const handleCompanyRateChange = (value) => {
     setFormData((prev) => ({ ...prev, company_rate: value }));
     setAdjustmentRates(
@@ -521,10 +573,21 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
           adjustment_id: item.id,
           company_rate: adjustmentRates[item.id] ?? item.company_rate ?? formData.company_rate,
         })),
-        row_adjustments: (meta?.adjustment_details || []).map((item) => ({
-          adjustment_id: item.id,
-          ...(rowAdjustments[item.id] || {}),
-        })),
+        row_adjustments: (meta?.adjustment_details || [])
+          .filter((item) => {
+            const row = rowAdjustments[item.id];
+            return row && Object.keys(row).some((key) => ROW_ADJUSTMENT_FIELDS.includes(key));
+          })
+          .map((item) => {
+            const row = rowAdjustments[item.id] || {};
+            const payload = { adjustment_id: item.id };
+            ROW_ADJUSTMENT_FIELDS.forEach((field) => {
+              if (!Object.prototype.hasOwnProperty.call(row, field)) return;
+              if (row[field] === null || row[field] === undefined || row[field] === "") return;
+              payload[field] = row[field];
+            });
+            return payload;
+          }),
       });
       toast.success(hasSavedSettlement ? "Settlement updated successfully" : "Settlement saved successfully", {
         theme: "colored",
@@ -1184,7 +1247,26 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
       </div>
       </div>
 
-      <div style={{ display: "flex", justifyContent: "flex-end" }}>
+      <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, flexWrap: "wrap" }}>
+        {canEditSettlementRows && (
+          <button
+            type="button"
+            onClick={handleResetRowAdjustments}
+            disabled={isSaving}
+            style={{
+              padding: "11px 20px",
+              border: `1px solid ${PALETTE.borderStrong}`,
+              borderRadius: 10,
+              background: "#fff",
+              color: PALETTE.ink,
+              fontWeight: 800,
+              letterSpacing: "0.2px",
+              cursor: isSaving ? "not-allowed" : "pointer",
+            }}
+          >
+            Reset
+          </button>
+        )}
         <button
           onClick={handleSave}
           disabled={isSaving}
