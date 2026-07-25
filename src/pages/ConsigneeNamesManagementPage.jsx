@@ -4,7 +4,7 @@ import { loadSession, hasPermission } from "../utils/auth";
 import MasterPartyDetailForm from "../components/MasterPartyDetailForm";
 
 const emptyForm = () => ({
-  buyer_id: "",
+  buyer_ids: [],
   name: "",
   mobile: "",
   email: "",
@@ -52,6 +52,13 @@ export default function ConsigneeNamesManagementPage() {
     setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
+  const handleBuyerIdsChange = (nextIds) => {
+    setFormData((prev) => ({
+      ...prev,
+      buyer_ids: (nextIds || []).map(String),
+    }));
+  };
+
   const goList = () => {
     setView("list");
     setEditId(null);
@@ -66,8 +73,13 @@ export default function ConsigneeNamesManagementPage() {
 
   const handleEdit = (row) => {
     setEditId(row.id);
+    const buyerIds = Array.isArray(row.buyer_ids) && row.buyer_ids.length
+      ? row.buyer_ids.map(String)
+      : row.buyer_id
+        ? [String(row.buyer_id)]
+        : [];
     setFormData({
-      buyer_id: row.buyer_id ? String(row.buyer_id) : "",
+      buyer_ids: buyerIds,
       name: row.name || "",
       mobile: row.mobile || "",
       email: row.email || "",
@@ -86,9 +98,13 @@ export default function ConsigneeNamesManagementPage() {
       alert("Name is required");
       return;
     }
+    const buyer_ids = (formData.buyer_ids || [])
+      .map((id) => Number(id))
+      .filter((n) => Number.isFinite(n) && n > 0);
     const payload = {
       ...formData,
-      buyer_id: formData.buyer_id ? Number(formData.buyer_id) : null,
+      buyer_ids,
+      buyer_id: buyer_ids[0] || null,
     };
     try {
       if (editId) {
@@ -119,7 +135,7 @@ export default function ConsigneeNamesManagementPage() {
 
   const downloadImportFormat = () => {
     const header = "buyer_name,name,mobile,email,address,gst_no,pan_no,state,location";
-    const sample = "Demo Buyer,Demo Consignee,9876543210,consignee@example.com,Main Road,GST123,PAN123,West Bengal,Kolkata";
+    const sample = "\"Demo Buyer;Another Buyer\",Demo Consignee,9876543210,consignee@example.com,Main Road,GST123,PAN123,West Bengal,Kolkata";
     const csv = `${header}\n${sample}\n`;
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = window.URL.createObjectURL(blob);
@@ -254,7 +270,13 @@ export default function ConsigneeNamesManagementPage() {
             </button>
           </div>
           <form onSubmit={handleSubmit}>
-            <MasterPartyDetailForm mode="consignee" formData={formData} onChange={handleChange} buyers={buyers} />
+            <MasterPartyDetailForm
+              mode="consignee"
+              formData={formData}
+              onChange={handleChange}
+              onBuyerIdsChange={handleBuyerIdsChange}
+              buyers={buyers}
+            />
             <div style={{ display: "flex", gap: "12px", marginTop: "22px", flexWrap: "wrap" }}>
               <button type="submit" style={btnPrimary}>
                 Save
@@ -355,5 +377,3 @@ export default function ConsigneeNamesManagementPage() {
 const th = { padding: "10px 8px", textAlign: "left", borderBottom: "1px solid #0d5c56" };
 const td = { padding: "8px", borderBottom: "1px solid #e2e8f0" };
 const mini = { border: "none", color: "#fff", padding: "5px 10px", borderRadius: "6px", cursor: "pointer", fontSize: "12px", fontWeight: 600 };
-
-
