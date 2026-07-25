@@ -620,7 +620,7 @@ export default function OutwardSettlementReportPage() {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(9);
     doc.setTextColor(green[0], green[1], green[2]);
-    doc.text("ADJUSTED COMPANY DETAILS (UNIQUE)", left + 3, sectionY);
+    doc.text("ADJUSTED COMPANY DETAILS", left + 3, sectionY);
     doc.setDrawColor(210, 224, 230);
     doc.line(left + 3, sectionY + 3, right - 3, sectionY + 3);
 
@@ -629,6 +629,75 @@ export default function OutwardSettlementReportPage() {
       theme: "grid",
       margin: { left: left + 3, right: left + 3 },
       headStyles: { fillColor: green, textColor: 255, fontStyle: "bold", halign: "center" },
+      styles: { fontSize: 6.2, cellPadding: 1.7, lineColor: [220, 230, 236], lineWidth: 0.18, textColor: [15, 23, 42] },
+      alternateRowStyles: { fillColor: [250, 252, 252] },
+      showHead: "everyPage",
+      pageBreak: "auto",
+      rowPageBreak: "avoid",
+      head: [[
+        "Sr",
+        "Adjusted Company",
+        "Date",
+        "Lorry No",
+        "Inward Voucher",
+        "Loading Type",
+        "Settlement Weight",
+        "Short Qnt",
+        "Company Rate",
+        "Freight",
+        "Labour Chgs",
+        "Other Chgs",
+        "Amount",
+        "S. Amount (Claim)",
+        "Net Payable",
+      ]],
+      body:
+        calc.adjustmentDetails.length > 0
+          ? calc.adjustmentDetails.map((item, index) => [
+              item.sr_no || index + 1,
+              item.company_name || "-",
+              formatDate(item.inward_date),
+              item.lorry_no || "-",
+              item.inward_voucher_no || "-",
+              getLoadingTypeLabel(item.source_type),
+              num(item.settlement_weight),
+              num(item.shortQtyPerLine),
+              num(item.company_rate),
+              num(item.freight),
+              num(item.labour_charges),
+              num(item.other_charges),
+              num(item.amount),
+              num(item.claim_per_line),
+              num(item.net_payable),
+            ])
+          : [["", "No adjusted inward details found.", "", "", "", "", "", "", "", "", "", "", "", "", ""]],
+      didDrawPage: (data) => {
+        if (data.pageNumber > 1) {
+          drawPageHeader(data.pageNumber);
+        }
+      },
+    });
+
+    let uniqueStartY = doc.lastAutoTable.finalY + 8;
+    if (uniqueStartY > pageBottom - 40) {
+      drawFooter();
+      doc.addPage();
+      drawPageHeader(doc.internal.getNumberOfPages());
+      uniqueStartY = 30;
+    }
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.setTextColor(green[0], green[1], green[2]);
+    doc.text("UNIQUE COMPANY REPORT", left + 3, uniqueStartY);
+    doc.setDrawColor(210, 224, 230);
+    doc.line(left + 3, uniqueStartY + 3, right - 3, uniqueStartY + 3);
+
+    autoTable(doc, {
+      startY: uniqueStartY + 6,
+      theme: "grid",
+      margin: { left: left + 3, right: left + 3 },
+      headStyles: { fillColor: [15, 118, 110], textColor: 255, fontStyle: "bold", halign: "center" },
       styles: { fontSize: 6.5, cellPadding: 1.8, lineColor: [220, 230, 236], lineWidth: 0.18, textColor: [15, 23, 42] },
       alternateRowStyles: { fillColor: [250, 252, 252] },
       showHead: "everyPage",
@@ -666,7 +735,7 @@ export default function OutwardSettlementReportPage() {
               num(item.other),
               num(item.netPayable),
             ])
-          : [["", "No adjusted company details found.", "", "", "", "", "", "", "", "", "", "", ""]],
+          : [["", "No unique company details found.", "", "", "", "", "", "", "", "", "", "", ""]],
       foot:
         uniqueCompanies.length > 0
           ? [[
@@ -1094,7 +1163,86 @@ export default function OutwardSettlementReportPage() {
                     color: "#1d4ed8",
                   }}
                 >
-                  Adjusted Company Details (Unique)
+                  Adjusted Company Details
+                </div>
+                <table
+                  style={{
+                    width: "100%",
+                    borderCollapse: "collapse",
+                    fontSize: 12,
+                    tableLayout: "auto",
+                    background: "#ffffff",
+                  }}
+                >
+                  <thead>
+                    <tr>
+                      <th style={{ ...hardHeaderCell, width: "40px" }}>Sr</th>
+                      <th style={{ ...hardHeaderCell, width: "138px" }}>Company Name</th>
+                      <th style={{ ...hardHeaderCell, width: "118px" }}>Lorry No</th>
+                      <th style={{ ...hardHeaderCell, width: "118px" }}>Inward Voucher</th>
+                      <th style={{ ...hardHeaderCell, width: "128px" }}>Loading Type</th>
+                      <th style={{ ...hardHeaderCell, width: "118px" }}>Settlement Weight</th>
+                      <th style={{ ...hardHeaderCell, width: "92px" }}>Short Qnt</th>
+                      <th style={{ ...hardHeaderCell, width: "96px" }}>Short Amt</th>
+                      <th style={{ ...hardHeaderCell, width: "96px" }}>S.Amount (Claim)</th>
+                      <th style={{ ...hardHeaderCell, width: "96px" }}>C.Deduction</th>
+                      <th style={{ ...hardHeaderCell, width: "110px" }}>Company Rate</th>
+                      <th style={{ ...hardHeaderCell, width: "84px" }}>Freight</th>
+                      <th style={{ ...hardHeaderCell, width: "92px" }}>Labour Chgs</th>
+                      <th style={{ ...hardHeaderCell, width: "88px" }}>Other Chgs</th>
+                      <th style={{ ...hardHeaderCell, width: "96px" }}>Amount</th>
+                      <th style={{ ...hardHeaderCell, width: "102px" }}>Net Payable</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {adjustmentDetails.length > 0 ? (
+                      adjustmentDetails.map((item, index) => (
+                        <tr key={item.id || `${item.company_name}-${index}`} style={{ background: index % 2 === 0 ? "#ffffff" : "#f4f7fa" }}>
+                          <td style={hardBodyCell}>{item.sr_no || index + 1}</td>
+                          <td style={hardBodyCell}>{item.company_name || "-"}</td>
+                          <td style={hardBodyCell}>{item.lorry_no || "-"}</td>
+                          <td style={hardBodyCell}>{item.inward_voucher_no || "-"}</td>
+                          <td style={hardBodyCell}>{getLoadingTypeLabel(item.source_type)}</td>
+                          <td style={hardBodyCell}>{num(item.settlement_weight)}</td>
+                          <td style={hardBodyCell}>{num(item.shortQtyPerLine)}</td>
+                          <td style={hardBodyCell}>{num(item.shortAmount)}</td>
+                          <td style={hardBodyCell}>{num(item.claim_per_line)}</td>
+                          <td style={hardBodyCell}>{num(item.deduction_per_line)}</td>
+                          <td style={hardBodyCell}>{num(item.company_rate)}</td>
+                          <td style={hardBodyCell}>{num(item.freight)}</td>
+                          <td style={hardBodyCell}>{num(item.labour_charges)}</td>
+                          <td style={hardBodyCell}>{num(item.other_charges)}</td>
+                          <td style={hardBodyCell}>{num(item.amount)}</td>
+                          <td style={hardBodyCell}>{num(item.net_payable)}</td>
+                        </tr>
+                      ))
+                    ) : (
+                      <tr>
+                        <td style={hardBodyCell} colSpan="16">No adjusted inward details found.</td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              <div
+                style={{
+                  overflowX: "auto",
+                  marginBottom: 14,
+                  border: "1px solid #d1d5db",
+                  borderRadius: 0,
+                  background: "#ffffff",
+                }}
+              >
+                <div
+                  style={{
+                    padding: "0 0 10px 0",
+                    fontSize: 14,
+                    fontWeight: 800,
+                    color: "#0f766e",
+                  }}
+                >
+                  Unique Company Report
                 </div>
                 <table
                   style={{
@@ -1163,7 +1311,7 @@ export default function OutwardSettlementReportPage() {
                       </>
                     ) : (
                       <tr>
-                        <td style={hardBodyCell} colSpan="13">No adjusted company details found.</td>
+                        <td style={hardBodyCell} colSpan="13">No unique company details found.</td>
                       </tr>
                     )}
                   </tbody>
