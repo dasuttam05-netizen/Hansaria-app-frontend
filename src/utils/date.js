@@ -20,6 +20,20 @@ export function formatDisplayDate(value) {
   return `${day}-${month}-${year}`;
 }
 
+/** Local calendar YYYY-MM-DD (avoids UTC day shift from toISOString). */
+export function formatLocalDateInput(date = new Date()) {
+  const d = date instanceof Date ? date : new Date(date);
+  if (Number.isNaN(d.getTime())) return "";
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+export function formatLocalMonthInput(date = new Date()) {
+  return formatLocalDateInput(date).slice(0, 7);
+}
+
 export function formatDisplayMonthLabel(value) {
   if (!value) return "";
 
