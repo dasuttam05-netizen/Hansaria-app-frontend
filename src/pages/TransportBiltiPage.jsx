@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import { consigneeHasBuyer } from "../utils/consigneeBuyers";
 
 export default function TransportBiltiPage() {
   const API_BASE = "/api";
@@ -318,7 +319,7 @@ export default function TransportBiltiPage() {
 
   const filteredConsignees = useMemo(() => {
     if (!selectedBuyer?.id) return consignees;
-    return consignees.filter((c) => Number(c.buyer_id) === Number(selectedBuyer.id));
+    return consignees.filter((c) => consigneeHasBuyer(c, selectedBuyer.id));
   }, [consignees, selectedBuyer]);
 
   const pendingOutwardList = useMemo(() => {
