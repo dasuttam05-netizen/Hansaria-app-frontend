@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import axios from "axios";
 import { toast } from "react-toastify";
+import { consigneeHasBuyer } from "../utils/consigneeBuyers";
 
 const formatDate = (dateStr) => {
   if (!dateStr) return "";
@@ -406,7 +407,7 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
               {(consigneeNames || [])
                 .filter((item) => {
                   if (!newAdjustment.buyer_id) return true;
-                  return String(item.buyer_id || "") === String(newAdjustment.buyer_id);
+                  return consigneeHasBuyer(item, newAdjustment.buyer_id);
                 })
                 .map((item) => (
                   <option key={item.id} value={item.name}>
