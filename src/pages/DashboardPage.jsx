@@ -3,6 +3,7 @@ import API from "./axiosInstance";
 import { useNavigate } from "react-router-dom";
 import logo from "./logo.png";
 import { clearSession, hasAnyPermission, hasPermission, loadSession } from "../utils/auth";
+import { formatLocalMonthInput } from "../utils/date";
 import "./Dashboard.css";
 
 import LocationManagementPage from "./LocationManagementPage";
@@ -90,7 +91,7 @@ export default function DashboardPage() {
   const [searchText, setSearchText] = useState("");
 
   const API_BASE = "/api";
-  const currentMonth = new Date().toISOString().slice(0, 7);
+  const currentMonth = formatLocalMonthInput();
 
   const fetchData = async (currentUser) => {
     try {
