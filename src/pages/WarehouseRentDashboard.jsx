@@ -1,13 +1,13 @@
 import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { useLocation } from "react-router-dom";
-import { formatDisplayDate, formatDisplayMonthLabel } from "../utils/date";
+import { formatDisplayDate, formatDisplayMonthLabel, formatLocalMonthInput } from "../utils/date";
 
 export default function WarehouseRentDashboard() {
   const API_BASE = "/api";
   const location = useLocation();
 
-  const [month, setMonth] = useState(new Date().toISOString().slice(0, 7));
+  const [month, setMonth] = useState(() => formatLocalMonthInput());
   const [companies, setCompanies] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
   const [companyId, setCompanyId] = useState("");
