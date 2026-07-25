@@ -79,6 +79,18 @@ export default function OutwardSettlementReportPage() {
     return `${dd}-${mm}-${date.getFullYear()}`;
   };
 
+  const firstNonEmpty = (...values) => {
+    for (const value of values) {
+      if (value === null || value === undefined) continue;
+      if (typeof value === "object") continue;
+      const text = String(value).trim();
+      if (text && text !== "-" && text.toLowerCase() !== "null" && text.toLowerCase() !== "undefined") {
+        return text;
+      }
+    }
+    return "";
+  };
+
   const normalizeRow = (row) => {
     const dispatchQty = toNumber(row.dispatch_qty);
     const unloadingQty = toNumber(row.unloading_qty);
@@ -94,15 +106,49 @@ export default function OutwardSettlementReportPage() {
     const grossAmount = toNumber(row.gross_amount ?? row.gross_profit ?? saleAmount - freight - otherCharges - labourCharges);
     const receivableAmount = toNumber(row.receivable_amount ?? row.net_profit);
     const companyPayable = toNumber(row.company_payable);
-    const accountName = row.account_name || row.company_account_name || row.accountName || row.party_name || row.company_name || row.company_account?.account_name || row.company_account?.name || "-";
-    const warehouseName = row.warehouse_name || row.warehouseName || row.outward_warehouse_name || row.warehouse?.name || row.warehouse?.warehouse_name || "-";
-    const locationName = row.location_name || row.locationName || row.outward_location_name || row.location?.name || row.location?.location_name || row.warehouse?.location_name || "-";
-    const productName = row.product_name || row.productName || row.outward_product_name || row.product?.name || row.product?.product_name || "-";
+    const firstAdj = Array.isArray(row.adjustment_details) && row.adjustment_details.length
+      ? row.adjustment_details[0]
+      : {};
+    const accountName = firstNonEmpty(
+      row.account_name,
+      row.company_account_name,
+      row.accountName,
+      row.party_name,
+      firstAdj.company_account_name,
+      row.company_name,
+      row.company_account?.account_name,
+      row.company_account?.name
+    ) || "-";
+    const warehouseName = firstNonEmpty(
+      row.warehouse_name,
+      row.warehouseName,
+      row.outward_warehouse_name,
+      firstAdj.warehouse_name,
+      row.warehouse?.name,
+      row.warehouse?.warehouse_name
+    ) || "-";
+    const locationName = firstNonEmpty(
+      row.location_name,
+      row.locationName,
+      row.outward_location_name,
+      firstAdj.location_name,
+      row.location?.name,
+      row.location?.location_name,
+      row.warehouse?.location_name
+    ) || "-";
+    const productName = firstNonEmpty(
+      row.product_name,
+      row.productName,
+      row.outward_product_name,
+      firstAdj.product_name,
+      row.product?.name,
+      row.product?.product_name
+    ) || "-";
 
     return {
       ...row,
       account_name: accountName,
-      company_account_name: row.company_account_name || accountName,
+      company_account_name: firstNonEmpty(row.company_account_name, accountName) || accountName,
       warehouse_name: warehouseName,
       location_name: locationName,
       product_name: productName,
@@ -303,7 +349,38 @@ export default function OutwardSettlementReportPage() {
   };
 
   const displayAccountName = (row) =>
-    row.account_name || row.company_account_name || row.accountName || row.party_name || row.company_name || "-";
+    firstNonEmpty(
+      row.account_name,
+      row.company_account_name,
+      row.accountName,
+      row.party_name,
+      Array.isArray(row.adjustment_details) ? row.adjustment_details[0]?.company_account_name : "",
+      row.company_name
+    ) || "-";
+
+  const displayWarehouseName = (row) =>
+    firstNonEmpty(
+      row.warehouse_name,
+      row.warehouseName,
+      row.outward_warehouse_name,
+      Array.isArray(row.adjustment_details) ? row.adjustment_details[0]?.warehouse_name : ""
+    ) || "-";
+
+  const displayLocationName = (row) =>
+    firstNonEmpty(
+      row.location_name,
+      row.locationName,
+      row.outward_location_name,
+      Array.isArray(row.adjustment_details) ? row.adjustment_details[0]?.location_name : ""
+    ) || "-";
+
+  const displayProductName = (row) =>
+    firstNonEmpty(
+      row.product_name,
+      row.productName,
+      row.outward_product_name,
+      Array.isArray(row.adjustment_details) ? row.adjustment_details[0]?.product_name : ""
+    ) || "-";
   const getLoadingTypeLabel = (sourceType) => {
     const normalized = String(sourceType || "").trim().toLowerCase();
     return normalized === "palti_lorry" ? "Palti Lorry" : "Warehouse Loading";
@@ -352,11 +429,11 @@ export default function OutwardSettlementReportPage() {
         body: [[
           `Date: ${formatDate(record.date)}`,
           `Account: ${displayAccountName(record)}`,
-          `Warehouse: ${record.warehouse_name || "-"}`,
-          `Location: ${record.location_name || "-"}`,
+          `Warehouse: ${displayWarehouseName(record)}`,
+          `Location: ${displayLocationName(record)}`,
           `Buyer: ${record.buyer_name || "-"}`,
           `Consignee: ${record.consignee_name || "-"}`,
-          `Product: ${record.product_name || "-"}`,
+          `Product: ${displayProductName(record)}`,
         ]],
       });
 
@@ -542,12 +619,12 @@ export default function OutwardSettlementReportPage() {
     doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
     doc.text(
-      `Date: ${formatDate(record.date)} | Account: ${displayAccountName(record)} | Warehouse: ${record.warehouse_name || "-"} | Location: ${record.location_name || "-"} | Lorry: ${record.lorry_no || "-"}`,
+      `Date: ${formatDate(record.date)} | Account: ${displayAccountName(record)} | Warehouse: ${displayWarehouseName(record)} | Location: ${displayLocationName(record)} | Lorry: ${record.lorry_no || "-"}`,
       14,
       34
     );
     doc.text(
-      `Buyer: ${record.buyer_name || "-"} | Consignee: ${record.consignee_name || "-"} | Product: ${record.product_name || "-"}`,
+      `Buyer: ${record.buyer_name || "-"} | Consignee: ${record.consignee_name || "-"} | Product: ${displayProductName(record)}`,
       14,
       39
     );
@@ -572,12 +649,12 @@ export default function OutwardSettlementReportPage() {
       ]],
       body: [[
         formatDate(record.date),
-        record.warehouse_name || "-",
-        record.location_name || "-",
+        displayWarehouseName(record),
+        displayLocationName(record),
         record.lorry_no || "-",
         record.buyer_name || "-",
         record.consignee_name || "-",
-        record.product_name || "-",
+        displayProductName(record),
         num(record.dispatch_qty),
         num(record.unloading_qty),
         num(record.shortage_qty),
@@ -1148,10 +1225,10 @@ export default function OutwardSettlementReportPage() {
                     {displayInvNo(record)} | {displayAccountName(record)}
                   </h3>
                   <div style={{ color: "#0f172a", marginTop: 6 }}>
-                    Date: {formatDate(record.date)} | Account: {record.account_name || "-"} | Warehouse: {record.warehouse_name || "-"} | Location: {record.location_name || "-"} | Lorry: {record.lorry_no || "-"}
+                    Date: {formatDate(record.date)} | Account: {displayAccountName(record)} | Warehouse: {displayWarehouseName(record)} | Location: {displayLocationName(record)} | Lorry: {record.lorry_no || "-"}
                   </div>
                   <div style={{ color: "#0f172a", marginTop: 4 }}>
-                    Buyer: {record.buyer_name || "-"} | Consignee: {record.consignee_name || "-"} | Product: {record.product_name || "-"}
+                    Buyer: {record.buyer_name || "-"} | Consignee: {record.consignee_name || "-"} | Product: {displayProductName(record)}
                   </div>
                 </div>
                 <div style={{ minWidth: 280, color: "#0f172a", fontSize: 14 }}>
