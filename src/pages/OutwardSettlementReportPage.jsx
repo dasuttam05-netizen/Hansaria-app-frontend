@@ -123,46 +123,60 @@ export default function OutwardSettlementReportPage() {
     };
   };
 
+  const hasOwn = (obj, key) => Object.prototype.hasOwnProperty.call(obj || {}, key);
+
   const getRowCalculations = (row) => {
     const normalized = normalizeRow(row);
     const dispatchQty = normalized.dispatch_qty;
     const shortageQty = normalized.shortage_qty;
-    const saleAmount = normalized.sale_amount;
-    const settlementWeight = normalized.settlement_weight;
     const saleRate = normalized.sale_rate;
-    const purchaseAmount = normalized.company_amount;
+    const saleAmount = dispatchQty * saleRate || normalized.sale_amount;
     const freight = normalized.freight;
     const otherCharges = normalized.other_charges;
     const labourCharges = normalized.outward_labour_charges;
-    const totalUnloadingClaimAmount = toNumber(normalized.claim_amount);
-    const totalUnloadingDeductionAmount = toNumber(normalized.other_deduction);
+    const claimAmount = toNumber(normalized.claim_amount);
+    const otherDeduction = toNumber(normalized.other_deduction);
 
-    const adjustmentDetails = (normalized.adjustment_details || []).map((item) => {
-      const itemSettlementWeight = Number(item.settlement_weight) || 0;
-      const companyRate = Number(item.company_rate ?? normalized.company_rate) || 0;
-      const shortQtyPerLine =
-        dispatchQty > 0 ? (itemSettlementWeight / dispatchQty) * shortageQty : 0;
-      const shortAmount = shortQtyPerLine * companyRate;
+    const rowAdjById = (Array.isArray(normalized.row_adjustments) ? normalized.row_adjustments : []).reduce(
+      (acc, item) => {
+        const id = item?.adjustment_id ?? item?.id;
+        if (id == null || id === "") return acc;
+        acc[String(id)] = item;
+        return acc;
+      },
+      {}
+    );
+
+    const adjustmentDetails = (normalized.adjustment_details || []).map((item, index) => {
+      const weight = toNumber(item.settlement_weight);
+      const companyRate = toNumber(item.company_rate ?? normalized.company_rate);
+      const amount = weight * companyRate;
+      const shortQtyPerLine = dispatchQty > 0 ? (weight / dispatchQty) * shortageQty : 0;
+      const autoShortAmount = shortQtyPerLine * companyRate;
+      const autoClaim = dispatchQty > 0 ? weight * (claimAmount / dispatchQty) : 0;
+      const autoFreight = dispatchQty > 0 ? weight * (freight / dispatchQty) : 0;
+      const autoLabour = dispatchQty > 0 ? weight * (labourCharges / dispatchQty) : 0;
+      const autoOther = dispatchQty > 0 ? weight * (otherCharges / dispatchQty) : 0;
+      const manual = rowAdjById[String(item.id)] || {};
+
+      const shortAmount = hasOwn(manual, "short_amt") ? toNumber(manual.short_amt) : autoShortAmount;
+      const claimPerLine = hasOwn(manual, "s_amount") ? toNumber(manual.s_amount) : autoClaim;
+      const cDeduction = hasOwn(manual, "c_deduction") ? toNumber(manual.c_deduction) : 0;
+      const freightPerLine = hasOwn(manual, "freight") ? toNumber(manual.freight) : autoFreight;
+      const labourPerLine = hasOwn(manual, "labour_chgs") ? toNumber(manual.labour_chgs) : autoLabour;
+      const otherPerLine = hasOwn(manual, "other_chgs") ? toNumber(manual.other_chgs) : autoOther;
       const saleShortAmount = shortQtyPerLine * saleRate;
-      const claimPerLine = dispatchQty > 0 ? itemSettlementWeight * (totalUnloadingClaimAmount / dispatchQty) : 0;
-      const deductionPerLine = dispatchQty > 0 ? itemSettlementWeight * (totalUnloadingDeductionAmount / dispatchQty) : 0;
-      const freightPerLine = dispatchQty > 0 ? itemSettlementWeight * (freight / dispatchQty) : 0;
-      const labourPerLine = dispatchQty > 0 ? itemSettlementWeight * (labourCharges / dispatchQty) : 0;
-      const otherPerLine = dispatchQty > 0 ? itemSettlementWeight * (otherCharges / dispatchQty) : 0;
-      const amount =
-        item.amount != null
-          ? Number(item.amount) || 0
-          : itemSettlementWeight * companyRate;
       const netPayableValue =
-        amount - freightPerLine - labourPerLine - otherPerLine - shortAmount - claimPerLine - deductionPerLine;
+        amount - shortAmount - claimPerLine - cDeduction - freightPerLine - labourPerLine - otherPerLine;
 
       return {
         ...item,
+        sr_no: item.sr_no || index + 1,
         shortQtyPerLine,
         shortAmount,
-        sale_short_amount: toNumber(item.sale_short_amount ?? saleShortAmount),
-        claim_per_line: toNumber(item.claim_per_line ?? claimPerLine),
-        deduction_per_line: deductionPerLine,
+        sale_short_amount: saleShortAmount,
+        claim_per_line: claimPerLine,
+        deduction_per_line: cDeduction,
         amount,
         freight: freightPerLine,
         labour_charges: labourPerLine,
@@ -172,46 +186,67 @@ export default function OutwardSettlementReportPage() {
       };
     });
 
-    const totalSettlementShortageAmount = adjustmentDetails.reduce((sum, item) => {
-      return sum + item.shortAmount;
-    }, 0);
-    const totalSaleShortageAmount = adjustmentDetails.reduce(
-      (sum, item) => sum + item.sale_short_amount,
+    const purchaseAmount = adjustmentDetails.reduce((sum, item) => sum + toNumber(item.amount), 0);
+    const totalSettlementShortageAmount = adjustmentDetails.reduce(
+      (sum, item) => sum + toNumber(item.shortAmount),
       0
     );
-    const totalClaimAmount = totalUnloadingClaimAmount;
-    const totalOtherDeductionAmount = totalUnloadingDeductionAmount;
+    const totalSaleShortageAmount = adjustmentDetails.reduce(
+      (sum, item) => sum + toNumber(item.sale_short_amount),
+      0
+    );
+    const purchaseClaim = adjustmentDetails.reduce((sum, item) => sum + toNumber(item.claim_per_line), 0);
+    const purchaseCDeduction = adjustmentDetails.reduce(
+      (sum, item) => sum + toNumber(item.deduction_per_line),
+      0
+    );
+    const purchaseFreight = adjustmentDetails.reduce((sum, item) => sum + toNumber(item.freight), 0);
+    const purchaseLabour = adjustmentDetails.reduce((sum, item) => sum + toNumber(item.labour_charges), 0);
+    const purchaseOther = adjustmentDetails.reduce((sum, item) => sum + toNumber(item.other_charges), 0);
+    const purchaseDeduction =
+      totalSettlementShortageAmount +
+      purchaseClaim +
+      purchaseCDeduction +
+      purchaseFreight +
+      purchaseLabour +
+      purchaseOther;
+    const netPayable = purchaseAmount - purchaseDeduction;
 
-    const totalSAmountPurchase = totalClaimAmount;
-    const totalSAmountSale = totalClaimAmount;
-    const netReceivable =
-      saleAmount - freight - otherCharges - labourCharges - totalSaleShortageAmount - totalClaimAmount - totalOtherDeductionAmount;
-    const netPayable =
-      adjustmentDetails.length > 0
-        ? adjustmentDetails.reduce((sum, item) => sum + item.net_payable, 0)
-        : purchaseAmount - freight - otherCharges - labourCharges - totalSettlementShortageAmount - totalClaimAmount - totalOtherDeductionAmount;
+    const saleDeduction =
+      totalSaleShortageAmount + claimAmount + labourCharges + freight + otherDeduction + otherCharges;
+    const netReceivable = saleAmount - saleDeduction;
+    const netProfitLoss = netReceivable - netPayable;
 
     return {
       dispatchQty,
       saleAmount,
-      settlementWeight,
+      settlementWeight: adjustmentDetails.reduce((sum, item) => sum + toNumber(item.settlement_weight), 0),
       saleRate,
       purchaseAmount,
       freight,
       otherCharges,
       labourCharges,
-      totalUnloadingClaimAmount,
-      totalUnloadingDeductionAmount,
+      claimAmount,
+      otherDeduction,
+      totalUnloadingClaimAmount: claimAmount,
+      totalUnloadingDeductionAmount: otherDeduction,
       adjustmentDetails,
       totalSettlementShortageAmount,
       totalSaleShortageAmount,
-      totalClaimAmount,
-      totalOtherDeductionAmount,
-      totalSAmountPurchase,
-      totalSAmountSale,
+      totalClaimAmount: claimAmount,
+      totalOtherDeductionAmount: otherDeduction,
+      totalSAmountPurchase: purchaseClaim,
+      totalSAmountSale: claimAmount,
+      purchaseClaim,
+      purchaseCDeduction,
+      purchaseFreight,
+      purchaseLabour,
+      purchaseOther,
+      purchaseDeduction,
+      saleDeduction,
       netReceivable,
       netPayable,
-      netProfitLoss: netReceivable - netPayable,
+      netProfitLoss,
     };
   };
 
@@ -237,14 +272,15 @@ export default function OutwardSettlementReportPage() {
     () =>
       records.reduce(
         (acc, row) => {
+          const calc = getRowCalculations(row);
           acc.dispatch += toNumber(row.dispatch_qty);
           acc.unloading += toNumber(row.unloading_qty);
           acc.shortage += toNumber(row.shortage_qty);
-          acc.settlement += toNumber(row.settlement_weight);
-          acc.sale += toNumber(row.sale_amount);
-          acc.gross += toNumber(row.gross_amount);
-          acc.payable += toNumber(row.company_payable);
-          acc.net += toNumber(row.receivable_amount);
+          acc.settlement += toNumber(calc.settlementWeight);
+          acc.sale += toNumber(calc.saleAmount);
+          acc.gross += toNumber(calc.netReceivable);
+          acc.payable += toNumber(calc.netPayable);
+          acc.net += toNumber(calc.netProfitLoss);
           return acc;
         },
         {
@@ -397,7 +433,7 @@ export default function OutwardSettlementReportPage() {
 
       const summaryY = doc.lastAutoTable.finalY + 8;
       const cardW = 135;
-      const cardH = 48;
+      const cardH = 68;
       const drawSummary = (x, title, color, rows, totalLabel, totalValue) => {
         doc.setFillColor(255, 255, 255);
         doc.setDrawColor(220, 229, 235);
@@ -409,19 +445,19 @@ export default function OutwardSettlementReportPage() {
         let y = summaryY + 16;
         rows.forEach(([label, value]) => {
           doc.setFont("helvetica", "normal");
-          doc.setFontSize(7.3);
+          doc.setFontSize(6.8);
           doc.setTextColor(31, 41, 55);
           doc.text(label, x + 8, y);
           doc.text(value, x + cardW - 8, y, { align: "right" });
           doc.setDrawColor(235, 240, 244);
-          doc.line(x + 8, y + 2, x + cardW - 8, y + 2);
-          y += 6.2;
+          doc.line(x + 8, y + 1.6, x + cardW - 8, y + 1.6);
+          y += 5.4;
         });
         doc.setFillColor(color[0], color[1], color[2]);
         doc.roundedRect(x, summaryY + cardH - 11, cardW, 11, 0, 0, "F");
         doc.setTextColor(255, 255, 255);
         doc.setFont("helvetica", "bold");
-        doc.setFontSize(8.6);
+        doc.setFontSize(8.2);
         doc.text(totalLabel, x + 8, summaryY + cardH - 4);
         doc.text(totalValue, x + cardW - 8, summaryY + cardH - 4, { align: "right" });
       };
@@ -432,12 +468,15 @@ export default function OutwardSettlementReportPage() {
         green,
         [
           ["Sale Amount", num(calc.saleAmount)],
+          ["Shortage Amount", num(calc.totalSaleShortageAmount)],
+          ["Claim", num(calc.claimAmount)],
+          ["Labour", num(calc.labourCharges)],
           ["Freight", num(calc.freight)],
+          ["Other Deduction", num(calc.otherDeduction)],
           ["Other Charges", num(calc.otherCharges)],
-          ["Labour Charges", num(calc.labourCharges)],
-          ["S. Amount (Claim)", num(calc.totalSAmountSale)],
+          ["Total Deduction", num(calc.saleDeduction)],
         ],
-        "Net Receivable",
+        "Less Sale Amount",
         num(calc.netReceivable)
       );
       drawSummary(
@@ -446,16 +485,33 @@ export default function OutwardSettlementReportPage() {
         orange,
         [
           ["Purchase Amount", num(calc.purchaseAmount)],
-          ["Freight", num(calc.freight)],
-          ["Other Charges", num(calc.otherCharges)],
-          ["Labour Charges", num(calc.labourCharges)],
-          ["S. Amount (Claim)", num(calc.totalSAmountPurchase)],
+          ["Shortage Amount", num(calc.totalSettlementShortageAmount)],
+          ["Claim", num(calc.totalSAmountPurchase)],
+          ["C.Deduction", num(calc.purchaseCDeduction)],
+          ["Freight", num(calc.purchaseFreight)],
+          ["Labour", num(calc.purchaseLabour)],
+          ["Other Charges", num(calc.purchaseOther)],
+          ["Total Deduction", num(calc.purchaseDeduction)],
         ],
-        "Net Payable",
+        "Less Purchase / Net Payable",
         num(calc.netPayable)
       );
 
-      const footerY = 198;
+      const plY = summaryY + cardH + 6;
+      const plColor =
+        calc.netProfitLoss < 0 ? [220, 38, 38] : calc.netProfitLoss > 0 ? [21, 128, 61] : [30, 41, 59];
+      doc.setFillColor(241, 245, 249);
+      doc.setDrawColor(203, 213, 225);
+      doc.roundedRect(11, plY, 275, 14, 3, 3, "FD");
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      doc.setTextColor(15, 23, 42);
+      doc.text("NET PROFIT / LOSS", 18, plY + 9);
+      doc.setTextColor(plColor[0], plColor[1], plColor[2]);
+      doc.setFontSize(12);
+      doc.text(num(calc.netProfitLoss), 278, plY + 9, { align: "right" });
+
+      const footerY = Math.min(plY + 22, 198);
       doc.setDrawColor(190, 204, 214);
       doc.line(85, footerY, 120, footerY);
       doc.line(177, footerY, 212, footerY);
@@ -598,17 +654,24 @@ export default function OutwardSettlementReportPage() {
       freight,
       otherCharges,
       labourCharges,
+      claimAmount,
+      otherDeduction,
       totalSAmountPurchase,
-      totalSAmountSale,
       totalSettlementShortageAmount,
       totalSaleShortageAmount,
+      purchaseCDeduction,
+      purchaseFreight,
+      purchaseLabour,
+      purchaseOther,
+      purchaseDeduction,
+      saleDeduction,
       netReceivable,
       netPayable,
       netProfitLoss,
     } = getRowCalculations(record);
 
     const summaryStartY = doc.lastAutoTable.finalY + 8;
-    const summarySectionHeight = 62;
+    const summarySectionHeight = 78;
     if (summaryStartY + summarySectionHeight > doc.internal.pageSize.getHeight() - 18) {
       doc.addPage();
     }
@@ -706,13 +769,15 @@ export default function OutwardSettlementReportPage() {
       width: cardWidth,
       rows: [
         ["Sale Amount", num(saleAmount)],
-        ["Freight", num(freight)],
-        ["Other Charges", num(otherCharges)],
-        ["Labour Charges", num(labourCharges)],
         ["Shortage Amount", num(totalSaleShortageAmount)],
-        ["S.Amount (Claim)", num(totalSAmountSale)],
+        ["Claim", num(claimAmount)],
+        ["Labour", num(labourCharges)],
+        ["Freight", num(freight)],
+        ["Other Deduction", num(otherDeduction)],
+        ["Other Charges", num(otherCharges)],
+        ["Total Deduction", num(saleDeduction)],
       ],
-      totalLabel: "Net Receivable",
+      totalLabel: "Less Sale Amount",
       totalValue: num(netReceivable),
       totalColor: [21, 128, 61],
     });
@@ -727,13 +792,15 @@ export default function OutwardSettlementReportPage() {
       width: cardWidth,
       rows: [
         ["Purchase Amount", num(purchaseAmount)],
-        ["Freight", num(freight)],
-        ["Other Charges", num(otherCharges)],
-        ["Labour Charges", num(labourCharges)],
         ["Shortage Amount", num(totalSettlementShortageAmount)],
-        ["S.Amount (Claim)", num(totalSAmountPurchase)],
+        ["Claim", num(totalSAmountPurchase)],
+        ["C.Deduction", num(purchaseCDeduction)],
+        ["Freight", num(purchaseFreight)],
+        ["Labour", num(purchaseLabour)],
+        ["Other Charges", num(purchaseOther)],
+        ["Total Deduction", num(purchaseDeduction)],
       ],
-      totalLabel: "Net Payable",
+      totalLabel: "Less Purchase / Net Payable",
       totalValue: num(netPayable),
       totalColor: [194, 65, 12],
     });
@@ -855,6 +922,7 @@ export default function OutwardSettlementReportPage() {
 
     records.forEach((row, index) => {
       const record = normalizeRow(row);
+      const calc = getRowCalculations(record);
       if (startY > 178) {
         doc.addPage("a4", "landscape");
         startY = 14;
@@ -880,8 +948,8 @@ export default function OutwardSettlementReportPage() {
           "Inward Voucher",
           "Loading Type",
           "Settlement Weight",
-        "Short Qnt",
-        "Company Rate",
+          "Short Qnt",
+          "Company Rate",
           "Freight",
           "Labour Chgs",
           "Other Chgs",
@@ -890,78 +958,65 @@ export default function OutwardSettlementReportPage() {
           "Net Payable",
         ]],
         body:
-          (record.adjustment_details || []).length > 0
-            ? record.adjustment_details.map((item) => [
+          calc.adjustmentDetails.length > 0
+            ? calc.adjustmentDetails.map((item) => [
                 item.sr_no,
                 item.company_name || "-",
                 item.lorry_no || "-",
                 item.inward_voucher_no || "-",
                 getLoadingTypeLabel(item.source_type),
                 num(item.settlement_weight),
-                num((Number(record.dispatch_qty) || 0) > 0 ? ((Number(item.settlement_weight) || 0) / (Number(record.dispatch_qty) || 0)) * (Number(record.shortage_qty) || 0) : 0),
+                num(item.shortQtyPerLine),
                 num(item.company_rate),
                 num(item.freight),
                 num(item.labour_charges),
                 num(item.other_charges),
                 num(item.amount),
                 num(item.claim_per_line),
-                num(
-                  (Number(item.amount) || 0) -
-                  (Number(item.freight) || 0) -
-                  (Number(item.labour_charges) || 0) -
-                  (Number(item.other_charges) || 0) -
-                  ((Number(record.dispatch_qty) || 0) > 0
-                    ? ((Number(item.settlement_weight) || 0) / (Number(record.dispatch_qty) || 0)) * (Number(record.shortage_qty) || 0) * (Number(item.company_rate) || 0)
-                    : 0)
-                ),
+                num(item.net_payable),
               ])
             : [["", "No adjusted inward details found.", "", "", "", "", "", "", "", "", "", "", "", ""]],
       });
 
-      const {
-        saleAmount,
-        purchaseAmount,
-        totalSAmountPurchase,
-        totalSAmountSale,
-        netReceivable,
-        netPayable,
-      } = getRowCalculations(record);
-
       autoTable(doc, {
         startY: doc.lastAutoTable.finalY + 4,
         theme: "grid",
         headStyles: { fillColor: [14, 116, 144], textColor: 255 },
         styles: { fontSize: 8, halign: "right" },
         margin: { left: 14, right: 14 },
-        head: [["Sale Amount", "Freight", "Other Chgs", "Labour Chgs", "S.Amount (Claim)", "Net Receivable"]],
-      body: [[
-        num(saleAmount),
-        num(record.freight),
-        num(record.other_charges),
-        num(record.outward_labour_charges),
-        num(totalSAmountSale),
-        num(netReceivable),
-      ]],
-    });
-
-      autoTable(doc, {
-        startY: doc.lastAutoTable.finalY + 4,
-        theme: "grid",
-        headStyles: { fillColor: [14, 116, 144], textColor: 255 },
-        styles: { fontSize: 8, halign: "right" },
-        margin: { left: 14, right: 14 },
-        head: [["Purchase Amount (Sett.Wt×Co.Rate)", "Freight", "Other Chgs", "Labour Chgs", "S.Amount (Claim)", "Net Payable"]],
-      body: [[
-        num(purchaseAmount),
-        num(record.freight),
-        num(record.other_charges),
-        num(record.outward_labour_charges),
-        num(totalSAmountPurchase),
-        num(netPayable),
-      ]],
+        head: [["Sale Amount", "Shortage", "Claim", "Labour", "Freight", "Other Ded.", "Other Chgs", "Less Sale"]],
+        body: [[
+          num(calc.saleAmount),
+          num(calc.totalSaleShortageAmount),
+          num(calc.claimAmount),
+          num(calc.labourCharges),
+          num(calc.freight),
+          num(calc.otherDeduction),
+          num(calc.otherCharges),
+          num(calc.netReceivable),
+        ]],
       });
 
-      const plVal = Number(record.receivable_amount);
+      autoTable(doc, {
+        startY: doc.lastAutoTable.finalY + 4,
+        theme: "grid",
+        headStyles: { fillColor: [14, 116, 144], textColor: 255 },
+        styles: { fontSize: 8, halign: "right" },
+        margin: { left: 14, right: 14 },
+        head: [["Purchase Amount", "Shortage", "Claim", "C.Deduction", "Freight", "Labour", "Other Chgs", "Net Payable"]],
+        body: [[
+          num(calc.purchaseAmount),
+          num(calc.totalSettlementShortageAmount),
+          num(calc.totalSAmountPurchase),
+          num(calc.purchaseCDeduction),
+          num(calc.purchaseFreight),
+          num(calc.purchaseLabour),
+          num(calc.purchaseOther),
+          num(calc.netPayable),
+        ]],
+      });
+
+      const plVal = Number(calc.netProfitLoss);
       const plColor = plVal < 0 ? [220, 38, 38] : plVal > 0 ? [21, 128, 61] : [30, 41, 59];
       const skyFill = [224, 242, 254];
 
@@ -986,7 +1041,7 @@ export default function OutwardSettlementReportPage() {
 
       doc.setTextColor(plColor[0], plColor[1], plColor[2]);
       doc.setFontSize(14);
-      doc.text(num(record.receivable_amount), xPl + wPl - 6, yPl + 8.6, { align: "right" });
+      doc.text(num(calc.netProfitLoss), xPl + wPl - 6, yPl + 8.6, { align: "right" });
 
       startY = yPl + hPl + (index === records.length - 1 ? 0 : 8);
     });
@@ -1054,7 +1109,8 @@ export default function OutwardSettlementReportPage() {
         <div style={card}><div>Total Unloading</div><div style={statValue}>{num(totals.unloading)}</div></div>
         <div style={card}><div>Total Shortage</div><div style={statValue}>{num(totals.shortage)}</div></div>
         <div style={card}><div>Total Settlement Wt</div><div style={statValue}>{num(totals.settlement)}</div></div>
-        <div style={card}><div>Total Net Receivable</div><div style={statValue}>{num(totals.gross)}</div></div>
+        <div style={card}><div>Total Net Receivable (Less Sale)</div><div style={statValue}>{num(totals.gross)}</div></div>
+        <div style={card}><div>Total Net Payable</div><div style={statValue}>{num(totals.payable)}</div></div>
         <div style={card}><div>Total Net Profit / Loss</div><div style={statValue}>{num(totals.net)}</div></div>
       </div>
 
@@ -1063,17 +1119,23 @@ export default function OutwardSettlementReportPage() {
           records.map((row) => {
             const record = normalizeRow(row);
             const {
-              dispatchQty,
               saleAmount,
               purchaseAmount,
               freight,
               otherCharges,
               labourCharges,
+              claimAmount,
+              otherDeduction,
               adjustmentDetails,
               totalSAmountPurchase,
-              totalSAmountSale,
               totalSettlementShortageAmount,
               totalSaleShortageAmount,
+              purchaseCDeduction,
+              purchaseFreight,
+              purchaseLabour,
+              purchaseOther,
+              purchaseDeduction,
+              saleDeduction,
               netReceivable,
               netPayable,
               netProfitLoss,
@@ -1180,21 +1242,23 @@ export default function OutwardSettlementReportPage() {
               </div>
 
               <div style={summaryBoxStyle}>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(240px, 1fr))", gap: 12, padding: 12 }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(260px, 1fr))", gap: 12, padding: 12 }}>
                   <div style={compactSummaryCardStyle}>
                     <div style={compactSummaryHeaderStyle}>
                       <span>Sale Summary</span>
-                      <strong>{num(netReceivable)}</strong>
+                      <strong style={{ color: "#15803d" }}>{num(netReceivable)}</strong>
                     </div>
                     <div style={compactMetricGridStyle}>
-                      <div style={compactMetricItemStyle}><span>Sale</span><strong>{num(saleAmount)}</strong></div>
-                      <div style={compactMetricItemStyle}><span>Freight</span><strong>{num(freight)}</strong></div>
-                      <div style={compactMetricItemStyle}><span>Other</span><strong>{num(otherCharges)}</strong></div>
-                      <div style={compactMetricItemStyle}><span>Labour</span><strong>{num(labourCharges)}</strong></div>
+                      <div style={compactMetricItemStyle}><span>Sale Amount</span><strong>{num(saleAmount)}</strong></div>
                       <div style={compactMetricItemStyle}><span>Shortage Amount</span><strong>{num(totalSaleShortageAmount)}</strong></div>
-                      <div style={compactMetricItemStyle}><span>S.Amount (Claim)</span><strong>{num(totalSAmountSale)}</strong></div>
+                      <div style={compactMetricItemStyle}><span>Claim</span><strong>{num(claimAmount)}</strong></div>
+                      <div style={compactMetricItemStyle}><span>Labour</span><strong>{num(labourCharges)}</strong></div>
+                      <div style={compactMetricItemStyle}><span>Freight</span><strong>{num(freight)}</strong></div>
+                      <div style={compactMetricItemStyle}><span>Other Deduction</span><strong>{num(otherDeduction)}</strong></div>
+                      <div style={compactMetricItemStyle}><span>Other Charges</span><strong>{num(otherCharges)}</strong></div>
+                      <div style={compactMetricItemStyle}><span>Total Deduction</span><strong>{num(saleDeduction)}</strong></div>
                       <div style={{ ...compactMetricItemStyle, background: "#ecfdf5", borderColor: "#86efac" }}>
-                        <span>Receivable</span><strong style={{ color: "#15803d" }}>{num(netReceivable)}</strong>
+                        <span>Less Sale Amount</span><strong style={{ color: "#15803d" }}>{num(netReceivable)}</strong>
                       </div>
                     </div>
                   </div>
@@ -1202,17 +1266,19 @@ export default function OutwardSettlementReportPage() {
                   <div style={compactSummaryCardStyle}>
                     <div style={compactSummaryHeaderStyle}>
                       <span>Purchase Summary</span>
-                      <strong>{num(netPayable)}</strong>
+                      <strong style={{ color: "#c2410c" }}>{num(netPayable)}</strong>
                     </div>
                     <div style={compactMetricGridStyle}>
-                      <div style={compactMetricItemStyle}><span>Purchase</span><strong>{num(purchaseAmount)}</strong></div>
-                      <div style={compactMetricItemStyle}><span>Freight</span><strong>{num(freight)}</strong></div>
-                      <div style={compactMetricItemStyle}><span>Other</span><strong>{num(otherCharges)}</strong></div>
-                      <div style={compactMetricItemStyle}><span>Labour</span><strong>{num(labourCharges)}</strong></div>
-                        <div style={compactMetricItemStyle}><span>Shortage Amount</span><strong>{num(totalSettlementShortageAmount)}</strong></div>
-                        <div style={compactMetricItemStyle}><span>S.Amount (Claim)</span><strong>{num(totalSAmountPurchase)}</strong></div>
+                      <div style={compactMetricItemStyle}><span>Purchase Amount</span><strong>{num(purchaseAmount)}</strong></div>
+                      <div style={compactMetricItemStyle}><span>Shortage Amount</span><strong>{num(totalSettlementShortageAmount)}</strong></div>
+                      <div style={compactMetricItemStyle}><span>Claim</span><strong>{num(totalSAmountPurchase)}</strong></div>
+                      <div style={compactMetricItemStyle}><span>C.Deduction</span><strong>{num(purchaseCDeduction)}</strong></div>
+                      <div style={compactMetricItemStyle}><span>Freight</span><strong>{num(purchaseFreight)}</strong></div>
+                      <div style={compactMetricItemStyle}><span>Labour</span><strong>{num(purchaseLabour)}</strong></div>
+                      <div style={compactMetricItemStyle}><span>Other Charges</span><strong>{num(purchaseOther)}</strong></div>
+                      <div style={compactMetricItemStyle}><span>Total Deduction</span><strong>{num(purchaseDeduction)}</strong></div>
                       <div style={{ ...compactMetricItemStyle, background: "#fff7ed", borderColor: "#fdba74" }}>
-                        <span>Payable</span><strong style={{ color: "#c2410c" }}>{num(netPayable)}</strong>
+                        <span>Less Purchase / Net Payable</span><strong style={{ color: "#c2410c" }}>{num(netPayable)}</strong>
                       </div>
                     </div>
                   </div>
@@ -1221,27 +1287,27 @@ export default function OutwardSettlementReportPage() {
                 <div style={{ padding: "0 12px 12px" }}>
                   <div
                     style={{
-                      maxWidth: 320,
-                      padding: "10px 14px",
+                      maxWidth: 420,
+                      padding: "12px 14px",
                       borderRadius: 12,
-                      background: "#eff6ff",
-                      border: "1px solid #93c5fd",
+                      background:
+                        netProfitLoss >= 0
+                          ? "linear-gradient(135deg, #14532d 0%, #16a34a 100%)"
+                          : "linear-gradient(135deg, #7f1d1d 0%, #dc2626 100%)",
+                      color: "#fff",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "space-between",
                       gap: 12,
                     }}
                   >
-                    <span style={{ fontSize: 14, fontWeight: 800, color: "#0f172a" }}>Net Profit / Loss</span>
-                    <span
-                      style={{
-                        fontSize: 18,
-                        fontWeight: 900,
-                        color: netProfitLoss < 0 ? "#dc2626" : netProfitLoss > 0 ? "#15803d" : "#1e293b",
-                      }}
-                    >
-                      {num(netProfitLoss)}
-                    </span>
+                    <div>
+                      <div style={{ fontSize: 12, fontWeight: 800, letterSpacing: "0.5px" }}>NET PROFIT / LOSS</div>
+                      <div style={{ fontSize: 12, opacity: 0.92, marginTop: 3 }}>
+                        Less Sale ({num(netReceivable)}) − Less Purchase ({num(netPayable)})
+                      </div>
+                    </div>
+                    <span style={{ fontSize: 20, fontWeight: 900 }}>{num(netProfitLoss)}</span>
                   </div>
                 </div>
               </div>
