@@ -386,6 +386,45 @@ export default function OutwardSettlementReportPage() {
     return normalized === "palti_lorry" ? "Palti Lorry" : "Warehouse Loading";
   };
 
+  const buildUniqueCompanyRows = (adjustmentDetails = []) => {
+    const map = new Map();
+    (adjustmentDetails || []).forEach((item) => {
+      const companyName = String(item.company_name || "Unknown Company").trim() || "Unknown Company";
+      const key = companyName.toLowerCase();
+      const current = map.get(key) || {
+        companyName,
+        settlementWeight: 0,
+        gAmount: 0,
+        shortQty: 0,
+        shortAmt: 0,
+        claim: 0,
+        cDeduction: 0,
+        freight: 0,
+        labour: 0,
+        other: 0,
+        netPayable: 0,
+      };
+      current.settlementWeight += toNumber(item.settlement_weight);
+      current.gAmount += toNumber(item.amount);
+      current.shortQty += toNumber(item.shortQtyPerLine);
+      current.shortAmt += toNumber(item.shortAmount);
+      current.claim += toNumber(item.claim_per_line);
+      current.cDeduction += toNumber(item.deduction_per_line);
+      current.freight += toNumber(item.freight);
+      current.labour += toNumber(item.labour_charges);
+      current.other += toNumber(item.other_charges);
+      current.netPayable += toNumber(item.net_payable);
+      map.set(key, current);
+    });
+
+    return [...map.values()]
+      .map((row) => ({
+        ...row,
+        companyRate: row.settlementWeight > 0 ? row.gAmount / row.settlementWeight : 0,
+      }))
+      .sort((a, b) => a.companyName.localeCompare(b.companyName));
+  };
+
   const createSinglePdf = (row) => {
     createSettlementReportPdf(row);
   };
@@ -394,16 +433,44 @@ export default function OutwardSettlementReportPage() {
     const record = normalizeRow(row);
     const doc = new jsPDF("l", "mm", "a4");
     const invNo = displayInvNo(record);
-    const acct = displayAccountName(record);
+    const outwardCompanyName = displayAccountName(record);
+    const calc = getRowCalculations(record);
+    const uniqueCompanies = buildUniqueCompanyRows(calc.adjustmentDetails);
+    const uniqueTotals = uniqueCompanies.reduce(
+      (acc, item) => ({
+        settlementWeight: acc.settlementWeight + item.settlementWeight,
+        gAmount: acc.gAmount + item.gAmount,
+        shortQty: acc.shortQty + item.shortQty,
+        shortAmt: acc.shortAmt + item.shortAmt,
+        claim: acc.claim + item.claim,
+        cDeduction: acc.cDeduction + item.cDeduction,
+        freight: acc.freight + item.freight,
+        labour: acc.labour + item.labour,
+        other: acc.other + item.other,
+        netPayable: acc.netPayable + item.netPayable,
+      }),
+      {
+        settlementWeight: 0,
+        gAmount: 0,
+        shortQty: 0,
+        shortAmt: 0,
+        claim: 0,
+        cDeduction: 0,
+        freight: 0,
+        labour: 0,
+        other: 0,
+        netPayable: 0,
+      }
+    );
 
-    {
-      const calc = getRowCalculations(record);
-      const generatedAt = new Date().toLocaleString();
-      const left = 8;
-      const right = 289;
-      const green = [5, 86, 68];
-      const orange = [229, 96, 12];
+    const generatedAt = new Date().toLocaleString();
+    const left = 8;
+    const right = 289;
+    const green = [5, 86, 68];
+    const orange = [229, 96, 12];
+    const pageBottom = 198;
 
+    const drawPageHeader = (pageNo) => {
       doc.setFillColor(248, 251, 250);
       doc.rect(0, 0, 297, 210, "F");
       doc.setFillColor(green[0], green[1], green[2]);
@@ -414,112 +481,32 @@ export default function OutwardSettlementReportPage() {
       doc.text("OUTWARD SETTLEMENT REPORT", left + 3, 18);
       doc.setFont("helvetica", "normal");
       doc.setFontSize(6.5);
-      doc.text(`Generated: ${generatedAt}`, right - 5, 17, { align: "right" });
+      doc.text(`Generated: ${generatedAt}   |   Page ${pageNo}`, right - 5, 17, { align: "right" });
+    };
 
+    const drawFooter = () => {
+      const footerY = 202;
+      doc.setDrawColor(190, 204, 214);
+      doc.line(85, footerY, 120, footerY);
+      doc.line(177, footerY, 212, footerY);
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(12.5);
-      doc.setTextColor(15, 23, 42);
-      doc.text(`${invNo} | ${acct}`, left + 3, 32);
-
-      autoTable(doc, {
-        startY: 36,
-        theme: "plain",
-        margin: { left: left + 3, right: left + 3 },
-        styles: { fontSize: 7.2, cellPadding: 1.8, textColor: [31, 41, 55] },
-        body: [[
-          `Date: ${formatDate(record.date)}`,
-          `Account: ${displayAccountName(record)}`,
-          `Warehouse: ${displayWarehouseName(record)}`,
-          `Location: ${displayLocationName(record)}`,
-          `Buyer: ${record.buyer_name || "-"}`,
-          `Consignee: ${record.consignee_name || "-"}`,
-          `Product: ${displayProductName(record)}`,
-        ]],
-      });
-
-      autoTable(doc, {
-        startY: doc.lastAutoTable.finalY + 2,
-        theme: "grid",
-        margin: { left: left + 3, right: left + 3 },
-        headStyles: { fillColor: [238, 246, 243], textColor: green, fontStyle: "bold", halign: "center" },
-        styles: { fontSize: 7.4, cellPadding: 2, lineColor: [222, 232, 238], lineWidth: 0.2, textColor: [15, 23, 42] },
-        bodyStyles: { fontStyle: "bold", halign: "center" },
-        head: [["Outward Company", "Qty", "Rate", "Amount", "Lorry No"]],
-        body: [[
-          acct,
-          num(record.dispatch_qty),
-          num(record.sale_rate),
-          num(record.sale_amount),
-          record.lorry_no || "-",
-        ]],
-      });
-
-      const sectionY = doc.lastAutoTable.finalY + 8;
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(9);
+      doc.setFontSize(7.2);
       doc.setTextColor(green[0], green[1], green[2]);
-      doc.text("ADJUSTED COMPANY DETAILS", left + 3, sectionY);
-      doc.setDrawColor(210, 224, 230);
-      doc.line(left + 3, sectionY + 3, right - 3, sectionY + 3);
+      doc.text("Thank you for your business!", 148.5, footerY + 1.5, { align: "center" });
+    };
 
-      autoTable(doc, {
-        startY: sectionY + 6,
-        theme: "grid",
-        margin: { left: left + 3, right: left + 3 },
-        headStyles: { fillColor: green, textColor: 255, fontStyle: "bold", halign: "center" },
-        styles: { fontSize: 6.3, cellPadding: 1.9, lineColor: [220, 230, 236], lineWidth: 0.18, textColor: [15, 23, 42] },
-        alternateRowStyles: { fillColor: [250, 252, 252] },
-        head: [[
-          "Sr",
-          "Adjusted Company",
-          "Date",
-          "Lorry No",
-          "Inward Voucher",
-          "Loading Type",
-          "Settlement Weight",
-          "Short Qnt",
-          "Company Rate",
-          "Freight",
-          "Labour Chgs",
-          "Other Chgs",
-          "Amount",
-          "S. Amount (Claim)",
-          "Net Payable",
-        ]],
-        body:
-          calc.adjustmentDetails.length > 0
-            ? calc.adjustmentDetails.map((item, index) => [
-                item.sr_no || index + 1,
-                item.company_name || "-",
-                formatDate(item.inward_date),
-                item.lorry_no || "-",
-                item.inward_voucher_no || "-",
-                getLoadingTypeLabel(item.source_type),
-                num(item.settlement_weight),
-                num(item.shortQtyPerLine),
-                num(item.company_rate),
-                num(item.freight),
-                num(item.labour_charges),
-                num(item.other_charges),
-                num(item.amount),
-                num(item.claim_per_line),
-                num(item.net_payable),
-              ])
-            : [["", "No adjusted inward details found.", "", "", "", "", "", "", "", "", "", "", "", "", ""]],
-      });
-
-      const summaryY = doc.lastAutoTable.finalY + 8;
+    const drawSummaries = (startY) => {
       const cardW = 135;
       const cardH = 68;
       const drawSummary = (x, title, color, rows, totalLabel, totalValue) => {
         doc.setFillColor(255, 255, 255);
         doc.setDrawColor(220, 229, 235);
-        doc.roundedRect(x, summaryY, cardW, cardH, 3, 3, "FD");
+        doc.roundedRect(x, startY, cardW, cardH, 3, 3, "FD");
         doc.setFont("helvetica", "bold");
         doc.setFontSize(9.2);
         doc.setTextColor(color[0], color[1], color[2]);
-        doc.text(title, x + 8, summaryY + 9);
-        let y = summaryY + 16;
+        doc.text(title, x + 8, startY + 9);
+        let y = startY + 16;
         rows.forEach(([label, value]) => {
           doc.setFont("helvetica", "normal");
           doc.setFontSize(6.8);
@@ -531,12 +518,12 @@ export default function OutwardSettlementReportPage() {
           y += 5.4;
         });
         doc.setFillColor(color[0], color[1], color[2]);
-        doc.roundedRect(x, summaryY + cardH - 11, cardW, 11, 0, 0, "F");
+        doc.roundedRect(x, startY + cardH - 11, cardW, 11, 0, 0, "F");
         doc.setTextColor(255, 255, 255);
         doc.setFont("helvetica", "bold");
         doc.setFontSize(8.2);
-        doc.text(totalLabel, x + 8, summaryY + cardH - 4);
-        doc.text(totalValue, x + cardW - 8, summaryY + cardH - 4, { align: "right" });
+        doc.text(totalLabel, x + 8, startY + cardH - 4);
+        doc.text(totalValue, x + cardW - 8, startY + cardH - 4, { align: "right" });
       };
 
       drawSummary(
@@ -574,7 +561,7 @@ export default function OutwardSettlementReportPage() {
         num(calc.netPayable)
       );
 
-      const plY = summaryY + cardH + 6;
+      const plY = startY + cardH + 6;
       const plColor =
         calc.netProfitLoss < 0 ? [220, 38, 38] : calc.netProfitLoss > 0 ? [21, 128, 61] : [30, 41, 59];
       doc.setFillColor(241, 245, 249);
@@ -587,351 +574,152 @@ export default function OutwardSettlementReportPage() {
       doc.setTextColor(plColor[0], plColor[1], plColor[2]);
       doc.setFontSize(12);
       doc.text(num(calc.netProfitLoss), 278, plY + 9, { align: "right" });
+      return plY + 16;
+    };
 
-      const footerY = Math.min(plY + 22, 198);
-      doc.setDrawColor(190, 204, 214);
-      doc.line(85, footerY, 120, footerY);
-      doc.line(177, footerY, 212, footerY);
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(7.2);
-      doc.setTextColor(green[0], green[1], green[2]);
-      doc.text("Thank you for your business!", 148.5, footerY + 1.5, { align: "center" });
-
-      doc.save(`${invNo.replace(/[/\\?%*:|"<>]/g, "-")}_Settlement_Report.pdf`);
-      return;
-    }
-
-    doc.setFillColor(14, 116, 144);
-    doc.rect(0, 0, 297, 18, "F");
+    // -------- PAGE 1 --------
+    drawPageHeader(1);
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(12);
-    doc.setTextColor(255, 255, 255);
-    doc.text("Outward Settlement Report", 14, 12);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8);
-    doc.text(`Generated: ${new Date().toLocaleString()}`, 230, 12);
-
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(16);
+    doc.setFontSize(12.5);
     doc.setTextColor(15, 23, 42);
-    doc.text(`${invNo} | ${acct}`, 14, 28);
-
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
-    doc.text(
-      `Date: ${formatDate(record.date)} | Account: ${displayAccountName(record)} | Warehouse: ${displayWarehouseName(record)} | Location: ${displayLocationName(record)} | Lorry: ${record.lorry_no || "-"}`,
-      14,
-      34
-    );
-    doc.text(
-      `Buyer: ${record.buyer_name || "-"} | Consignee: ${record.consignee_name || "-"} | Product: ${displayProductName(record)}`,
-      14,
-      39
-    );
+    doc.text(`${invNo} | ${outwardCompanyName}`, left + 3, 32);
 
     autoTable(doc, {
-      startY: 44,
-      theme: "grid",
-      headStyles: { fillColor: [14, 116, 144], textColor: 255 },
-      styles: { fontSize: 8, textColor: 0 },
-      head: [[
-        "Date",
-        "Warehouse",
-        "Location",
-        "Lorry No",
-        "Buyer",
-        "Consignee",
-        "Product",
-        "Dispatch Qty",
-        "Unloading Qty",
-        "Shortage Qty",
-        "Settlement Wt",
-      ]],
+      startY: 36,
+      theme: "plain",
+      margin: { left: left + 3, right: left + 3 },
+      styles: { fontSize: 7.2, cellPadding: 1.8, textColor: [31, 41, 55] },
       body: [[
-        formatDate(record.date),
-        displayWarehouseName(record),
-        displayLocationName(record),
-        record.lorry_no || "-",
-        record.buyer_name || "-",
-        record.consignee_name || "-",
-        displayProductName(record),
-        num(record.dispatch_qty),
-        num(record.unloading_qty),
-        num(record.shortage_qty),
-        num(record.settlement_weight),
+        `Date: ${formatDate(record.date)}`,
+        `Warehouse: ${displayWarehouseName(record)}`,
+        `Location: ${displayLocationName(record)}`,
+        `Buyer: ${record.buyer_name || "-"}`,
+        `Consignee: ${record.consignee_name || "-"}`,
+        `Product: ${displayProductName(record)}`,
       ]],
     });
 
-    const yAdjTitle = doc.lastAutoTable.finalY + 8;
-    doc.setFontSize(10);
+    autoTable(doc, {
+      startY: doc.lastAutoTable.finalY + 2,
+      theme: "grid",
+      margin: { left: left + 3, right: left + 3 },
+      headStyles: { fillColor: [238, 246, 243], textColor: green, fontStyle: "bold", halign: "center" },
+      styles: { fontSize: 7.4, cellPadding: 2, lineColor: [222, 232, 238], lineWidth: 0.2, textColor: [15, 23, 42] },
+      bodyStyles: { fontStyle: "bold", halign: "center" },
+      head: [["Outward Company", "Qty", "Rate", "Amount", "Lorry No"]],
+      body: [[
+        outwardCompanyName,
+        num(record.dispatch_qty),
+        num(record.sale_rate),
+        num(calc.saleAmount),
+        record.lorry_no || "-",
+      ]],
+    });
+
+    const sectionY = doc.lastAutoTable.finalY + 8;
     doc.setFont("helvetica", "bold");
-    doc.text("Adjusted Company Details", 14, yAdjTitle);
-    doc.setFont("helvetica", "normal");
     doc.setFontSize(9);
+    doc.setTextColor(green[0], green[1], green[2]);
+    doc.text("ADJUSTED COMPANY DETAILS (UNIQUE)", left + 3, sectionY);
+    doc.setDrawColor(210, 224, 230);
+    doc.line(left + 3, sectionY + 3, right - 3, sectionY + 3);
 
     autoTable(doc, {
-      startY: yAdjTitle + 4,
+      startY: sectionY + 6,
       theme: "grid",
-      headStyles: { fillColor: [14, 116, 144], textColor: 255 },
-      styles: { fontSize: 7, textColor: 0 },
+      margin: { left: left + 3, right: left + 3 },
+      headStyles: { fillColor: green, textColor: 255, fontStyle: "bold", halign: "center" },
+      styles: { fontSize: 6.5, cellPadding: 1.8, lineColor: [220, 230, 236], lineWidth: 0.18, textColor: [15, 23, 42] },
+      alternateRowStyles: { fillColor: [250, 252, 252] },
+      showHead: "everyPage",
+      pageBreak: "auto",
+      rowPageBreak: "avoid",
       head: [[
         "Sr",
-        "Adjusted Company",
-        "Lorry No",
-        "Inward Voucher",
-        "Loading Type",
+        "Company Name",
         "Settlement Weight",
+        "Company Rate",
+        "G.Amount",
         "Short Qnt",
         "Short Amt",
-        "S.Amount (Claim)",
+        "Claim",
         "C.Deduction",
-        "Company Rate",
         "Freight",
         "Labour Chgs",
         "Other Chgs",
-        "Amount",
-        "S.Amount (Claim)",
         "Net Payable",
       ]],
       body:
-        (record.adjustment_details || []).length > 0
-          ? record.adjustment_details.map((item) => [
-              item.sr_no,
-              item.company_name || "-",
-              item.lorry_no || "-",
-              item.inward_voucher_no || "-",
-              getLoadingTypeLabel(item.source_type),
-              num(item.settlement_weight),
-              num(item.shortQtyPerLine),
-              num(item.shortAmount),
-              num(item.claim_per_line),
-              num(item.deduction_per_line),
-              num(item.company_rate),
+        uniqueCompanies.length > 0
+          ? uniqueCompanies.map((item, index) => [
+              index + 1,
+              item.companyName,
+              num(item.settlementWeight),
+              num(item.companyRate),
+              num(item.gAmount),
+              num(item.shortQty),
+              num(item.shortAmt),
+              num(item.claim),
+              num(item.cDeduction),
               num(item.freight),
-              num(item.labour_charges),
-              num(item.other_charges),
-              num(item.amount),
-              num(item.claim_per_line),
-              num(
-                (Number(item.amount) || 0) -
-                (Number(item.freight) || 0) -
-                (Number(item.labour_charges) || 0) -
-                (Number(item.other_charges) || 0) -
-                ((Number(record.dispatch_qty) || 0) > 0
-                  ? ((Number(item.settlement_weight) || 0) / (Number(record.dispatch_qty) || 0)) * (Number(record.shortage_qty) || 0) * (Number(item.company_rate) || 0)
-                  : 0)
-              ),
+              num(item.labour),
+              num(item.other),
+              num(item.netPayable),
             ])
-            : [["", "No adjusted inward details found.", "", "", "", "", "", "", "", "", "", "", "", "", "", ""]],
+          : [["", "No adjusted company details found.", "", "", "", "", "", "", "", "", "", "", ""]],
+      foot:
+        uniqueCompanies.length > 0
+          ? [[
+              "",
+              "Totals",
+              num(uniqueTotals.settlementWeight),
+              uniqueTotals.settlementWeight > 0
+                ? num(uniqueTotals.gAmount / uniqueTotals.settlementWeight)
+                : "0.00",
+              num(uniqueTotals.gAmount),
+              num(uniqueTotals.shortQty),
+              num(uniqueTotals.shortAmt),
+              num(uniqueTotals.claim),
+              num(uniqueTotals.cDeduction),
+              num(uniqueTotals.freight),
+              num(uniqueTotals.labour),
+              num(uniqueTotals.other),
+              num(uniqueTotals.netPayable),
+            ]]
+          : undefined,
+      footStyles: {
+        fillColor: [236, 253, 245],
+        textColor: [15, 23, 42],
+        fontStyle: "bold",
+        fontSize: 6.5,
+      },
+      didDrawPage: (data) => {
+        if (data.pageNumber > 1) {
+          drawPageHeader(data.pageNumber);
+        }
+      },
     });
 
-    const {
-      saleAmount,
-      purchaseAmount,
-      freight,
-      otherCharges,
-      labourCharges,
-      claimAmount,
-      otherDeduction,
-      totalSAmountPurchase,
-      totalSettlementShortageAmount,
-      totalSaleShortageAmount,
-      purchaseCDeduction,
-      purchaseFreight,
-      purchaseLabour,
-      purchaseOther,
-      purchaseDeduction,
-      saleDeduction,
-      netReceivable,
-      netPayable,
-      netProfitLoss,
-    } = getRowCalculations(record);
-
-    const summaryStartY = doc.lastAutoTable.finalY + 8;
-    const summarySectionHeight = 78;
-    if (summaryStartY + summarySectionHeight > doc.internal.pageSize.getHeight() - 18) {
+    // Summaries: same page if space, otherwise new page
+    let summaryStartY = doc.lastAutoTable.finalY + 8;
+    const summaryBlockHeight = 92;
+    if (summaryStartY + summaryBlockHeight > pageBottom) {
+      drawFooter();
       doc.addPage();
+      drawPageHeader(doc.internal.getNumberOfPages());
+      summaryStartY = 30;
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      doc.setTextColor(green[0], green[1], green[2]);
+      doc.text("SALE / PURCHASE SUMMARY", left + 3, 28);
     }
 
-    const drawSummaryCard = ({
-      title,
-      accentFill,
-      bodyFill,
-      borderColor,
-      x,
-      y,
-      width,
-      rows,
-      totalLabel,
-      totalValue,
-      totalColor,
-    }) => {
-      const headerHeight = 11;
-      const rowHeight = 6.3;
-      const totalHeight = 10.5;
-      const innerPad = 2.5;
-      const height = headerHeight + rows.length * rowHeight + totalHeight + 8;
+    drawSummaries(summaryStartY);
+    drawFooter();
 
-      doc.setDrawColor(borderColor[0], borderColor[1], borderColor[2]);
-      doc.setLineWidth(0.22);
-      doc.setFillColor(236, 241, 247);
-      doc.roundedRect(x + 1.2, y + 1.4, width, height, 4, 4, "F");
-
-      doc.setFillColor(255, 255, 255);
-      doc.roundedRect(x, y, width, height, 4, 4, "FD");
-
-      doc.setFillColor(bodyFill[0], bodyFill[1], bodyFill[2]);
-      doc.roundedRect(x + 1.8, y + headerHeight + 1.5, width - 3.6, height - headerHeight - 3.6, 3, 3, "F");
-
-      doc.setFillColor(accentFill[0], accentFill[1], accentFill[2]);
-      doc.roundedRect(x, y, width, headerHeight, 4, 4, "F");
-      doc.rect(x, y + 4, width, headerHeight - 4, "F");
-      doc.setFillColor(
-        Math.min(accentFill[0] + 22, 255),
-        Math.min(accentFill[1] + 22, 255),
-        Math.min(accentFill[2] + 22, 255)
-      );
-      doc.circle(x + 18, y + 5.5, 7, "F");
-      doc.circle(x + width - 16, y + 4.2, 5.5, "F");
-
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(9.5);
-      doc.setTextColor(255, 255, 255);
-      doc.text(title, x + 6, y + 7.2);
-
-      let rowY = y + headerHeight + 2;
-      rows.forEach(([label, value], index) => {
-        doc.setFillColor(index % 2 === 0 ? 255 : 250, index % 2 === 0 ? 255 : 252, index % 2 === 0 ? 255 : 254);
-        doc.roundedRect(x + innerPad, rowY, width - innerPad * 2, rowHeight - 0.6, 1.8, 1.8, "F");
-
-        doc.setDrawColor(232, 237, 243);
-        doc.line(x + 5, rowY + rowHeight - 0.2, x + width - 5, rowY + rowHeight - 0.2);
-
-        doc.setFont("helvetica", "bold");
-        doc.setFontSize(7.7);
-        doc.setTextColor(44, 62, 80);
-        doc.text(label, x + 7, rowY + 4.2);
-
-        doc.setFont("helvetica", "bold");
-        doc.setTextColor(30, 41, 59);
-        doc.text(String(value), x + width - 7, rowY + 4.2, { align: "right" });
-        rowY += rowHeight;
-      });
-
-      doc.setFillColor(246, 250, 253);
-      doc.roundedRect(x + innerPad, rowY + 2.2, width - innerPad * 2, totalHeight, 3, 3, "F");
-      doc.setDrawColor(borderColor[0], borderColor[1], borderColor[2]);
-      doc.roundedRect(x + innerPad, rowY + 2.2, width - innerPad * 2, totalHeight, 3, 3, "S");
-
-      doc.setFillColor(255, 255, 255);
-      doc.roundedRect(x + width - 42, rowY + 3.6, 33, totalHeight - 2.8, 2.5, 2.5, "F");
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(8);
-      doc.setTextColor(15, 23, 42);
-      doc.text(totalLabel, x + 7, rowY + 8.2);
-      doc.setTextColor(totalColor[0], totalColor[1], totalColor[2]);
-      doc.text(String(totalValue), x + width - 11, rowY + 8.2, { align: "right" });
-
-      return y + height;
-    };
-
-    const cardWidth = 124;
-    const saleBottomY = drawSummaryCard({
-      title: "Sale Summary",
-      accentFill: [14, 116, 144],
-      bodyFill: [241, 248, 255],
-      borderColor: [125, 181, 201],
-      x: 14,
-      y: summaryStartY,
-      width: cardWidth,
-      rows: [
-        ["Sale Amount", num(saleAmount)],
-        ["Shortage Amount", num(totalSaleShortageAmount)],
-        ["Claim", num(claimAmount)],
-        ["Labour", num(labourCharges)],
-        ["Freight", num(freight)],
-        ["Other Deduction", num(otherDeduction)],
-        ["Other Charges", num(otherCharges)],
-        ["Total Deduction", num(saleDeduction)],
-      ],
-      totalLabel: "Less Sale Amount",
-      totalValue: num(netReceivable),
-      totalColor: [21, 128, 61],
-    });
-
-    const purchaseBottomY = drawSummaryCard({
-      title: "Purchase Summary",
-      accentFill: [180, 83, 9],
-      bodyFill: [255, 247, 237],
-      borderColor: [224, 164, 108],
-      x: 157,
-      y: summaryStartY,
-      width: cardWidth,
-      rows: [
-        ["Purchase Amount", num(purchaseAmount)],
-        ["Shortage Amount", num(totalSettlementShortageAmount)],
-        ["Claim", num(totalSAmountPurchase)],
-        ["C.Deduction", num(purchaseCDeduction)],
-        ["Freight", num(purchaseFreight)],
-        ["Labour", num(purchaseLabour)],
-        ["Other Charges", num(purchaseOther)],
-        ["Total Deduction", num(purchaseDeduction)],
-      ],
-      totalLabel: "Less Purchase / Net Payable",
-      totalValue: num(netPayable),
-      totalColor: [194, 65, 12],
-    });
-
-    const plVal = netProfitLoss;
-    const plColor = plVal < 0 ? [220, 38, 38] : plVal > 0 ? [21, 128, 61] : [30, 41, 59];
-    const skyFill = [241, 245, 249];
-
-    const yPl = Math.max(saleBottomY, purchaseBottomY) + 10;
-    const xPl = 14;
-    const wPl = 128;
-    const hPl = 18;
-
-    doc.setFillColor(skyFill[0], skyFill[1], skyFill[2]);
-    doc.setDrawColor(203, 213, 225);
-    doc.setLineWidth(0.25);
-    if (typeof doc.roundedRect === "function") {
-      doc.roundedRect(xPl, yPl, wPl, hPl, 5, 5, "FD");
-    } else {
-      doc.rect(xPl, yPl, wPl, hPl, "FD");
-    }
-
-    doc.setFillColor(255, 255, 255);
-    doc.roundedRect(xPl + 3, yPl + 3, 24, 12, 3, 3, "F");
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(8);
-    doc.setTextColor(100, 116, 139);
-    doc.text("P/L", xPl + 15, yPl + 10.3, { align: "center" });
-
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(10.2);
-    doc.setTextColor(15, 23, 42);
-    doc.text("Net Profit / Loss", xPl + 32, yPl + 7.2);
-
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(7.2);
-    doc.setTextColor(100, 116, 139);
-    doc.text("Final settlement margin", xPl + 32, yPl + 12.3);
-
-    doc.setFontSize(13.5);
-    doc.setTextColor(plColor[0], plColor[1], plColor[2]);
-    doc.text(num(netProfitLoss), xPl + wPl - 7, yPl + 11, { align: "right" });
-
-    const footerY = doc.internal.pageSize.getHeight() - 10;
-    doc.setDrawColor(180);
-    doc.line(14, footerY - 4, 283, footerY - 4);
-    doc.setFontSize(9);
-    doc.setFont("helvetica", "normal");
-    doc.setTextColor(100, 116, 139);
-    doc.text("Warehouse ERP Settlement Report", 14, footerY);
-    doc.text("Confidential", 250, footerY);
-
-    doc.save(`${invNo.replace(/[/\\?%*:|"<>]/g, "-")}_Settlement.pdf`);
+    doc.save(`${invNo.replace(/[/\\?%*:|"<>]/g, "-")}_Settlement_Report.pdf`);
   };
+
 
   const downloadPDF = () => {
     const doc = new jsPDF("l", "mm", "a4");
@@ -964,7 +752,7 @@ export default function OutwardSettlementReportPage() {
       body: records.map((row) => [
         formatDate(row.date),
         row.voucher_no || `OUT-${row.outward_id}`,
-        row.company_name || "-",
+        displayAccountName(row),
         row.warehouse_name || "-",
         row.location_name || "-",
         row.lorry_no || "-",
@@ -1217,6 +1005,33 @@ export default function OutwardSettlementReportPage() {
               netPayable,
               netProfitLoss,
             } = getRowCalculations(record);
+            const uniqueCompanies = buildUniqueCompanyRows(adjustmentDetails);
+            const uniqueTotals = uniqueCompanies.reduce(
+              (acc, item) => ({
+                settlementWeight: acc.settlementWeight + item.settlementWeight,
+                gAmount: acc.gAmount + item.gAmount,
+                shortQty: acc.shortQty + item.shortQty,
+                shortAmt: acc.shortAmt + item.shortAmt,
+                claim: acc.claim + item.claim,
+                cDeduction: acc.cDeduction + item.cDeduction,
+                freight: acc.freight + item.freight,
+                labour: acc.labour + item.labour,
+                other: acc.other + item.other,
+                netPayable: acc.netPayable + item.netPayable,
+              }),
+              {
+                settlementWeight: 0,
+                gAmount: 0,
+                shortQty: 0,
+                shortAmt: 0,
+                claim: 0,
+                cDeduction: 0,
+                freight: 0,
+                labour: 0,
+                other: 0,
+                netPayable: 0,
+              }
+            );
             return (
               <div key={record.id} style={card}>
               <div style={{ display: "flex", justifyContent: "space-between", gap: 16, flexWrap: "wrap", marginBottom: 14 }}>
@@ -1225,7 +1040,7 @@ export default function OutwardSettlementReportPage() {
                     {displayInvNo(record)} | {displayAccountName(record)}
                   </h3>
                   <div style={{ color: "#0f172a", marginTop: 6 }}>
-                    Date: {formatDate(record.date)} | Account: {displayAccountName(record)} | Warehouse: {displayWarehouseName(record)} | Location: {displayLocationName(record)} | Lorry: {record.lorry_no || "-"}
+                    Date: {formatDate(record.date)} | Warehouse: {displayWarehouseName(record)} | Location: {displayLocationName(record)} | Lorry: {record.lorry_no || "-"}
                   </div>
                   <div style={{ color: "#0f172a", marginTop: 4 }}>
                     Buyer: {record.buyer_name || "-"} | Consignee: {record.consignee_name || "-"} | Product: {displayProductName(record)}
@@ -1237,6 +1052,29 @@ export default function OutwardSettlementReportPage() {
                   <div>Shortage Qty: {num(record.shortage_qty)}</div>
                   <div>Settlement Weight: {num(record.settlement_weight)}</div>
                 </div>
+              </div>
+
+              <div style={{ overflowX: "auto", marginBottom: 14, border: "1px solid #d1d5db", background: "#fff" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                  <thead>
+                    <tr>
+                      <th style={hardHeaderCell}>Outward Company</th>
+                      <th style={hardHeaderCell}>Qty</th>
+                      <th style={hardHeaderCell}>Rate</th>
+                      <th style={hardHeaderCell}>Amount</th>
+                      <th style={hardHeaderCell}>Lorry No</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td style={hardBodyCell}>{displayAccountName(record)}</td>
+                      <td style={hardBodyCell}>{num(record.dispatch_qty)}</td>
+                      <td style={hardBodyCell}>{num(record.sale_rate)}</td>
+                      <td style={hardBodyCell}>{num(saleAmount)}</td>
+                      <td style={hardBodyCell}>{record.lorry_no || "-"}</td>
+                    </tr>
+                  </tbody>
+                </table>
               </div>
 
               <div
@@ -1256,7 +1094,7 @@ export default function OutwardSettlementReportPage() {
                     color: "#1d4ed8",
                   }}
                 >
-                  Adjusted Company Details
+                  Adjusted Company Details (Unique)
                 </div>
                 <table
                   style={{
@@ -1270,48 +1108,62 @@ export default function OutwardSettlementReportPage() {
                   <thead>
                     <tr>
                       <th style={{ ...hardHeaderCell, width: "40px" }}>Sr</th>
-                      <th style={{ ...hardHeaderCell, width: "138px" }}>Company Name</th>
-                      <th style={{ ...hardHeaderCell, width: "118px" }}>Lorry No</th>
-                      <th style={{ ...hardHeaderCell, width: "118px" }}>Inward Voucher</th>
-                      <th style={{ ...hardHeaderCell, width: "128px" }}>Loading Type</th>
-                      <th style={{ ...hardHeaderCell, width: "118px" }}>Settlement Weight</th>
-                      <th style={{ ...hardHeaderCell, width: "92px" }}>Short Qnt</th>
-                      <th style={{ ...hardHeaderCell, width: "96px" }}>Short Amt</th>
-                      <th style={{ ...hardHeaderCell, width: "96px" }}>S.Amount (Claim)</th>
-                      <th style={{ ...hardHeaderCell, width: "96px" }}>C.Deduction</th>
-                      <th style={{ ...hardHeaderCell, width: "110px" }}>Company Rate</th>
-                      <th style={{ ...hardHeaderCell, width: "84px" }}>Freight</th>
-                      <th style={{ ...hardHeaderCell, width: "92px" }}>Labour Chgs</th>
-                      <th style={{ ...hardHeaderCell, width: "88px" }}>Other Chgs</th>
-                      <th style={{ ...hardHeaderCell, width: "96px" }}>Amount</th>
-                      <th style={{ ...hardHeaderCell, width: "102px" }}>Net Payable</th>
+                      <th style={{ ...hardHeaderCell, width: "160px" }}>Company Name</th>
+                      <th style={hardHeaderCell}>Settlement Weight</th>
+                      <th style={hardHeaderCell}>Company Rate</th>
+                      <th style={hardHeaderCell}>G.Amount</th>
+                      <th style={hardHeaderCell}>Short Qnt</th>
+                      <th style={hardHeaderCell}>Short Amt</th>
+                      <th style={hardHeaderCell}>Claim</th>
+                      <th style={hardHeaderCell}>C.Deduction</th>
+                      <th style={hardHeaderCell}>Freight</th>
+                      <th style={hardHeaderCell}>Labour Chgs</th>
+                      <th style={hardHeaderCell}>Other Chgs</th>
+                      <th style={hardHeaderCell}>Net Payable</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {adjustmentDetails.length > 0 ? (
-                      adjustmentDetails.map((item, index) => (
-                        <tr key={item.id} style={{ background: index % 2 === 0 ? "#ffffff" : "#f4f7fa" }}>
-                          <td style={hardBodyCell}>{item.sr_no}</td>
-                          <td style={hardBodyCell}>{item.company_name || "-"}</td>
-                          <td style={hardBodyCell}>{item.lorry_no || "-"}</td>
-                          <td style={hardBodyCell}>{item.inward_voucher_no || "-"}</td>
-                          <td style={hardBodyCell}>{getLoadingTypeLabel(item.source_type)}</td>
-                          <td style={hardBodyCell}>{num(item.settlement_weight)}</td>
-                          <td style={hardBodyCell}>{num(item.shortQtyPerLine)}</td>
-                          <td style={hardBodyCell}>{num(item.shortAmount)}</td>
-                          <td style={hardBodyCell}>{num(item.claim_per_line)}</td>
-                          <td style={hardBodyCell}>{num(item.deduction_per_line)}</td>
-                          <td style={hardBodyCell}>{num(item.company_rate)}</td>
-                          <td style={hardBodyCell}>{num(item.freight)}</td>
-                          <td style={hardBodyCell}>{num(item.labour_charges)}</td>
-                          <td style={hardBodyCell}>{num(item.other_charges)}</td>
-                          <td style={hardBodyCell}>{num(item.amount)}</td>
-                          <td style={hardBodyCell}>{num(item.net_payable)}</td>
+                    {uniqueCompanies.length > 0 ? (
+                      <>
+                        {uniqueCompanies.map((item, index) => (
+                          <tr key={item.companyName} style={{ background: index % 2 === 0 ? "#ffffff" : "#f4f7fa" }}>
+                            <td style={hardBodyCell}>{index + 1}</td>
+                            <td style={hardBodyCell}>{item.companyName}</td>
+                            <td style={hardBodyCell}>{num(item.settlementWeight)}</td>
+                            <td style={hardBodyCell}>{num(item.companyRate)}</td>
+                            <td style={hardBodyCell}>{num(item.gAmount)}</td>
+                            <td style={hardBodyCell}>{num(item.shortQty)}</td>
+                            <td style={hardBodyCell}>{num(item.shortAmt)}</td>
+                            <td style={hardBodyCell}>{num(item.claim)}</td>
+                            <td style={hardBodyCell}>{num(item.cDeduction)}</td>
+                            <td style={hardBodyCell}>{num(item.freight)}</td>
+                            <td style={hardBodyCell}>{num(item.labour)}</td>
+                            <td style={hardBodyCell}>{num(item.other)}</td>
+                            <td style={{ ...hardBodyCell, fontWeight: 800, color: "#1d4ed8" }}>{num(item.netPayable)}</td>
+                          </tr>
+                        ))}
+                        <tr style={{ background: "#ecfdf5", fontWeight: 800 }}>
+                          <td style={hardBodyCell} colSpan={2}>Totals</td>
+                          <td style={hardBodyCell}>{num(uniqueTotals.settlementWeight)}</td>
+                          <td style={hardBodyCell}>
+                            {uniqueTotals.settlementWeight > 0
+                              ? num(uniqueTotals.gAmount / uniqueTotals.settlementWeight)
+                              : "0.00"}
+                          </td>
+                          <td style={hardBodyCell}>{num(uniqueTotals.gAmount)}</td>
+                          <td style={hardBodyCell}>{num(uniqueTotals.shortQty)}</td>
+                          <td style={hardBodyCell}>{num(uniqueTotals.shortAmt)}</td>
+                          <td style={hardBodyCell}>{num(uniqueTotals.claim)}</td>
+                          <td style={hardBodyCell}>{num(uniqueTotals.cDeduction)}</td>
+                          <td style={hardBodyCell}>{num(uniqueTotals.freight)}</td>
+                          <td style={hardBodyCell}>{num(uniqueTotals.labour)}</td>
+                          <td style={hardBodyCell}>{num(uniqueTotals.other)}</td>
+                          <td style={{ ...hardBodyCell, color: "#1d4ed8" }}>{num(uniqueTotals.netPayable)}</td>
                         </tr>
-                      ))
+                      </>
                     ) : (
                       <tr>
-                        <td style={hardBodyCell} colSpan="16">No adjusted inward details found.</td>
+                        <td style={hardBodyCell} colSpan="13">No adjusted company details found.</td>
                       </tr>
                     )}
                   </tbody>
