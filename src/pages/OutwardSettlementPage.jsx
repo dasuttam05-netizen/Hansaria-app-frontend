@@ -44,6 +44,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
   const [unloadingDetails, setUnloadingDetails] = useState([]);
   const [claimRows, setClaimRows] = useState([{ id: "claim-1", description: "", amount: "" }]);
   const [deductionRows, setDeductionRows] = useState([{ id: "deduction-1", description: "", amount: "" }]);
+  const [showNetPayableReport, setShowNetPayableReport] = useState(false);
   const [formData, setFormData] = useState({
     dispatch_qty: "",
     unloading_qty: "",
@@ -781,6 +782,72 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
 
   const netProfit = saleSummary.netSale - purchaseSummary.netPurchase;
 
+  const uniqueCompanyNetPayableReport = (() => {
+    const map = new Map();
+    adjustedRows.forEach(({ item, row }) => {
+      const companyName = String(item.company_name || "Unknown Company").trim() || "Unknown Company";
+      const key = companyName.toLowerCase();
+      const current = map.get(key) || {
+        companyName,
+        settlementWeight: 0,
+        gAmount: 0,
+        shortQty: 0,
+        shortAmt: 0,
+        claim: 0,
+        cDeduction: 0,
+        freight: 0,
+        labour: 0,
+        other: 0,
+        netPayable: 0,
+      };
+      current.settlementWeight += num(row.settlementWeight);
+      current.gAmount += num(row.amount);
+      current.shortQty += num(row.shortQty);
+      current.shortAmt += num(row.shortageAmount);
+      current.claim += num(row.claim);
+      current.cDeduction += num(row.cDeduction);
+      current.freight += num(row.freight);
+      current.labour += num(row.labour);
+      current.other += num(row.other);
+      current.netPayable += num(row.netPayable);
+      map.set(key, current);
+    });
+
+    return [...map.values()]
+      .map((row) => ({
+        ...row,
+        companyRate: row.settlementWeight > 0 ? row.gAmount / row.settlementWeight : 0,
+      }))
+      .sort((a, b) => a.companyName.localeCompare(b.companyName));
+  })();
+
+  const uniqueCompanyReportTotals = uniqueCompanyNetPayableReport.reduce(
+    (acc, row) => ({
+      settlementWeight: acc.settlementWeight + row.settlementWeight,
+      gAmount: acc.gAmount + row.gAmount,
+      shortQty: acc.shortQty + row.shortQty,
+      shortAmt: acc.shortAmt + row.shortAmt,
+      claim: acc.claim + row.claim,
+      cDeduction: acc.cDeduction + row.cDeduction,
+      freight: acc.freight + row.freight,
+      labour: acc.labour + row.labour,
+      other: acc.other + row.other,
+      netPayable: acc.netPayable + row.netPayable,
+    }),
+    {
+      settlementWeight: 0,
+      gAmount: 0,
+      shortQty: 0,
+      shortAmt: 0,
+      claim: 0,
+      cDeduction: 0,
+      freight: 0,
+      labour: 0,
+      other: 0,
+      netPayable: 0,
+    }
+  );
+
   const createAdjustmentPdf = (item, index) => {
     const row = getAdjustmentRowAmounts(item);
     return buildAdjustedCompanyCopyPdf({
@@ -1169,7 +1236,19 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
         <td style={consignmentTotalCellStyle}>{adjustedTotals.labour.toFixed(2)}</td>
         <td style={consignmentTotalCellStyle}>{adjustedTotals.other.toFixed(2)}</td>
         <td style={consignmentTotalCellStyle}>{adjustedTotals.amount.toFixed(2)}</td>
-        <td style={consignmentTotalCellStyle}>{adjustedTotals.netPayable.toFixed(2)}</td>
+        <td
+          style={{
+            ...consignmentTotalCellStyle,
+            color: "#1d4ed8",
+            cursor: "pointer",
+            textDecoration: "underline",
+            fontWeight: 900,
+          }}
+          title="Open Net Payable company report"
+          onClick={() => setShowNetPayableReport(true)}
+        >
+          {adjustedTotals.netPayable.toFixed(2)}
+        </td>
         <td style={consignmentTotalCellStyle}></td>
         <td style={consignmentTotalCellStyle}></td>
       </tr>
@@ -1419,9 +1498,16 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
                   <strong>{money(purchaseSummary.deduction)}</strong>
                 </div>
               </div>
-              <div style={summaryNetLineStyle("#1e40af", "#dbeafe")}>
-                <span>Less Purchase Amount</span>
-                <strong>{money(purchaseSummary.netPurchase)}</strong>
+              <div
+                style={{
+                  ...summaryNetLineStyle("#1e40af", "#dbeafe"),
+                  cursor: "pointer",
+                }}
+                title="Open Net Payable company report"
+                onClick={() => setShowNetPayableReport(true)}
+              >
+                <span>Less Purchase Amount / Net Payable</span>
+                <strong style={{ textDecoration: "underline" }}>{money(purchaseSummary.netPurchase)}</strong>
               </div>
             </div>
           </div>
@@ -1490,6 +1576,118 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
           {isSaving ? "Saving..." : hasSavedSettlement ? "Update Settlement" : "Save Settlement"}
         </button>
       </div>
+
+      {showNetPayableReport ? (
+        <div
+          style={netPayableModalOverlayStyle}
+          onClick={() => setShowNetPayableReport(false)}
+        >
+          <div
+            style={netPayableModalCardStyle}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start", marginBottom: 14 }}>
+              <div>
+                <div style={{ fontSize: 18, fontWeight: 900, color: PALETTE.ink }}>Net Payable Report</div>
+                <div style={{ marginTop: 4, fontSize: 13, color: PALETTE.muted, fontWeight: 600 }}>
+                  Adjusted Company Details · Unique company names
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowNetPayableReport(false)}
+                style={{
+                  border: "none",
+                  background: "#fee2e2",
+                  color: "#b91c1c",
+                  borderRadius: 8,
+                  padding: "8px 12px",
+                  fontWeight: 800,
+                  cursor: "pointer",
+                }}
+              >
+                Close
+              </button>
+            </div>
+
+            <div style={{ overflowX: "auto", border: `1px solid ${PALETTE.border}`, borderRadius: 12, background: "#fff" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                <thead>
+                  <tr>
+                    <th style={tableHeaderStyle}>Sr</th>
+                    <th style={tableHeaderStyle}>Company Name</th>
+                    <th style={tableHeaderStyle}>Settlement Weight</th>
+                    <th style={tableHeaderStyle}>Company Rate</th>
+                    <th style={tableHeaderStyle}>G.Amount</th>
+                    <th style={tableHeaderStyle}>Short Qnt</th>
+                    <th style={tableHeaderStyle}>Short Amt</th>
+                    <th style={tableHeaderStyle}>Claim</th>
+                    <th style={tableHeaderStyle}>C.Deduction</th>
+                    <th style={tableHeaderStyle}>Freight</th>
+                    <th style={tableHeaderStyle}>Labour Chgs</th>
+                    <th style={tableHeaderStyle}>Other Chgs</th>
+                    <th style={tableHeaderStyle}>Net Payable</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {uniqueCompanyNetPayableReport.length > 0 ? (
+                    <>
+                      {uniqueCompanyNetPayableReport.map((row, index) => (
+                        <tr key={row.companyName} style={{ background: index % 2 === 0 ? "#ffffff" : PALETTE.rowAlt }}>
+                          <td style={tableCellStyle}>{index + 1}</td>
+                          <td style={tableCellStyle}>{row.companyName}</td>
+                          <td style={tableCellStyle}>{row.settlementWeight.toFixed(2)}</td>
+                          <td style={tableCellStyle}>{row.companyRate.toFixed(2)}</td>
+                          <td style={tableCellStyle}>{row.gAmount.toFixed(2)}</td>
+                          <td style={tableCellStyle}>{row.shortQty.toFixed(2)}</td>
+                          <td style={tableCellStyle}>{row.shortAmt.toFixed(2)}</td>
+                          <td style={tableCellStyle}>{row.claim.toFixed(2)}</td>
+                          <td style={tableCellStyle}>{row.cDeduction.toFixed(2)}</td>
+                          <td style={tableCellStyle}>{row.freight.toFixed(2)}</td>
+                          <td style={tableCellStyle}>{row.labour.toFixed(2)}</td>
+                          <td style={tableCellStyle}>{row.other.toFixed(2)}</td>
+                          <td style={{ ...tableCellStyle, fontWeight: 800, color: "#1d4ed8" }}>
+                            {row.netPayable.toFixed(2)}
+                          </td>
+                        </tr>
+                      ))}
+                      <tr style={consignmentTotalRowStyle}>
+                        <td style={consignmentTotalCellStyle} colSpan={2}>Totals</td>
+                        <td style={consignmentTotalCellStyle}>{uniqueCompanyReportTotals.settlementWeight.toFixed(2)}</td>
+                        <td style={consignmentTotalCellStyle}>
+                          {uniqueCompanyReportTotals.settlementWeight > 0
+                            ? (uniqueCompanyReportTotals.gAmount / uniqueCompanyReportTotals.settlementWeight).toFixed(2)
+                            : "0.00"}
+                        </td>
+                        <td style={consignmentTotalCellStyle}>{uniqueCompanyReportTotals.gAmount.toFixed(2)}</td>
+                        <td style={consignmentTotalCellStyle}>{uniqueCompanyReportTotals.shortQty.toFixed(2)}</td>
+                        <td style={consignmentTotalCellStyle}>{uniqueCompanyReportTotals.shortAmt.toFixed(2)}</td>
+                        <td style={consignmentTotalCellStyle}>{uniqueCompanyReportTotals.claim.toFixed(2)}</td>
+                        <td style={consignmentTotalCellStyle}>{uniqueCompanyReportTotals.cDeduction.toFixed(2)}</td>
+                        <td style={consignmentTotalCellStyle}>{uniqueCompanyReportTotals.freight.toFixed(2)}</td>
+                        <td style={consignmentTotalCellStyle}>{uniqueCompanyReportTotals.labour.toFixed(2)}</td>
+                        <td style={consignmentTotalCellStyle}>{uniqueCompanyReportTotals.other.toFixed(2)}</td>
+                        <td style={{ ...consignmentTotalCellStyle, color: "#1d4ed8", fontWeight: 900 }}>
+                          {uniqueCompanyReportTotals.netPayable.toFixed(2)}
+                        </td>
+                      </tr>
+                    </>
+                  ) : (
+                    <tr>
+                      <td style={tableCellStyle} colSpan={13}>
+                        No adjusted company details found.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+            <div style={{ marginTop: 10, fontSize: 12, color: PALETTE.muted, fontWeight: 600 }}>
+              G.Amount = Company Rate × Settlement Weight (weighted rate shown when same company has multiple rows)
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -2053,6 +2251,29 @@ const netProfitBannerStyle = {
   padding: "16px 18px",
   color: "#ffffff",
   boxShadow: "0 12px 24px rgba(15, 23, 42, 0.18)",
+};
+
+const netPayableModalOverlayStyle = {
+  position: "fixed",
+  inset: 0,
+  background: "rgba(15, 23, 42, 0.55)",
+  zIndex: 1200,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: 16,
+};
+
+const netPayableModalCardStyle = {
+  width: "min(1200px, 96vw)",
+  maxHeight: "90vh",
+  overflow: "auto",
+  background: "#ffffff",
+  borderRadius: 16,
+  border: `1px solid ${PALETTE.border}`,
+  boxShadow: "0 24px 48px rgba(15, 23, 42, 0.28)",
+  padding: 16,
+  fontFamily: BASE_FONT,
 };
 
 const statsGridStyle = {
