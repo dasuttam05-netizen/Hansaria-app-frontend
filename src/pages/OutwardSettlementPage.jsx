@@ -727,6 +727,60 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
     }
   );
 
+  const money = (value) =>
+    Number(value || 0).toLocaleString("en-IN", {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    });
+
+  const saleSummary = (() => {
+    const saleAmount = num(calculation.saleAmount);
+    const shortageAmount = num(calculation.totalShortageAmountSale);
+    const claim = num(calculation.claimAmount);
+    const labour = num(formData.outward_labour_charges);
+    const freight = num(formData.freight);
+    const otherDeduction = num(calculation.otherDeduction);
+    const otherCharges = num(formData.other_charges);
+    const deduction =
+      shortageAmount + claim + labour + freight + otherDeduction + otherCharges;
+    return {
+      saleAmount,
+      shortageAmount,
+      claim,
+      labour,
+      freight,
+      otherDeduction,
+      otherCharges,
+      deduction,
+      netSale: saleAmount - deduction,
+    };
+  })();
+
+  const purchaseSummary = (() => {
+    const purchaseAmount = num(adjustedTotals.amount);
+    const shortageAmount = num(adjustedTotals.shortAmt);
+    const claim = num(adjustedTotals.sAmount);
+    const cDeduction = num(adjustedTotals.cDeduction);
+    const freight = num(adjustedTotals.freight);
+    const labour = num(adjustedTotals.labour);
+    const otherCharges = num(adjustedTotals.other);
+    const deduction =
+      shortageAmount + claim + cDeduction + freight + labour + otherCharges;
+    return {
+      purchaseAmount,
+      shortageAmount,
+      claim,
+      cDeduction,
+      freight,
+      labour,
+      otherCharges,
+      deduction,
+      netPurchase: purchaseAmount - deduction,
+    };
+  })();
+
+  const netProfit = saleSummary.netSale - purchaseSummary.netPurchase;
+
   const createAdjustmentPdf = (item, index) => {
     const row = getAdjustmentRowAmounts(item);
     return buildAdjustedCompanyCopyPdf({
@@ -1282,6 +1336,116 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
             <input name="narration" type="text" value={formData.narration} onChange={handleChange} style={input} />
           </div>
         </div>
+
+        <div style={summaryBoardStyle}>
+          <div style={summaryColumnsStyle}>
+            <div style={summaryPanelStyle("#ecfdf5", "#86efac")}>
+              <div style={summaryPanelTitleStyle("#166534")}>Sale Summary</div>
+              <div style={summaryLineStyle}>
+                <span>Sale Amount</span>
+                <strong>{money(saleSummary.saleAmount)}</strong>
+              </div>
+              <div style={summarySubBlockStyle}>
+                <div style={summarySubTitleStyle}>(-) Deduction</div>
+                <div style={summaryMiniLineStyle}>
+                  <span>Shortage Amount</span>
+                  <span>{money(saleSummary.shortageAmount)}</span>
+                </div>
+                <div style={summaryMiniLineStyle}>
+                  <span>Claim</span>
+                  <span>{money(saleSummary.claim)}</span>
+                </div>
+                <div style={summaryMiniLineStyle}>
+                  <span>Labour</span>
+                  <span>{money(saleSummary.labour)}</span>
+                </div>
+                <div style={summaryMiniLineStyle}>
+                  <span>Freight</span>
+                  <span>{money(saleSummary.freight)}</span>
+                </div>
+                <div style={summaryMiniLineStyle}>
+                  <span>Other Deduction</span>
+                  <span>{money(saleSummary.otherDeduction)}</span>
+                </div>
+                <div style={summaryMiniLineStyle}>
+                  <span>Other Charges</span>
+                  <span>{money(saleSummary.otherCharges)}</span>
+                </div>
+                <div style={{ ...summaryLineStyle, marginTop: 8, borderTop: "1px dashed #86efac", paddingTop: 8 }}>
+                  <span>Total Deduction</span>
+                  <strong>{money(saleSummary.deduction)}</strong>
+                </div>
+              </div>
+              <div style={summaryNetLineStyle("#166534", "#dcfce7")}>
+                <span>Less Sale Amount</span>
+                <strong>{money(saleSummary.netSale)}</strong>
+              </div>
+            </div>
+
+            <div style={summaryPanelStyle("#eff6ff", "#93c5fd")}>
+              <div style={summaryPanelTitleStyle("#1e40af")}>Purchase Summary</div>
+              <div style={summaryLineStyle}>
+                <span>Purchase Amount</span>
+                <strong>{money(purchaseSummary.purchaseAmount)}</strong>
+              </div>
+              <div style={summarySubBlockStyle}>
+                <div style={summarySubTitleStyle}>(-) Deduction</div>
+                <div style={summaryMiniLineStyle}>
+                  <span>Shortage Amount</span>
+                  <span>{money(purchaseSummary.shortageAmount)}</span>
+                </div>
+                <div style={summaryMiniLineStyle}>
+                  <span>Claim</span>
+                  <span>{money(purchaseSummary.claim)}</span>
+                </div>
+                <div style={summaryMiniLineStyle}>
+                  <span>C.Deduction</span>
+                  <span>{money(purchaseSummary.cDeduction)}</span>
+                </div>
+                <div style={summaryMiniLineStyle}>
+                  <span>Freight</span>
+                  <span>{money(purchaseSummary.freight)}</span>
+                </div>
+                <div style={summaryMiniLineStyle}>
+                  <span>Labour</span>
+                  <span>{money(purchaseSummary.labour)}</span>
+                </div>
+                <div style={summaryMiniLineStyle}>
+                  <span>Other Charges</span>
+                  <span>{money(purchaseSummary.otherCharges)}</span>
+                </div>
+                <div style={{ ...summaryLineStyle, marginTop: 8, borderTop: "1px dashed #93c5fd", paddingTop: 8 }}>
+                  <span>Total Deduction</span>
+                  <strong>{money(purchaseSummary.deduction)}</strong>
+                </div>
+              </div>
+              <div style={summaryNetLineStyle("#1e40af", "#dbeafe")}>
+                <span>Less Purchase Amount</span>
+                <strong>{money(purchaseSummary.netPurchase)}</strong>
+              </div>
+            </div>
+          </div>
+
+          <div
+            style={{
+              ...netProfitBannerStyle,
+              background:
+                netProfit >= 0
+                  ? "linear-gradient(135deg, #14532d 0%, #16a34a 100%)"
+                  : "linear-gradient(135deg, #7f1d1d 0%, #dc2626 100%)",
+            }}
+          >
+            <div>
+              <div style={{ fontSize: 12, opacity: 0.9, fontWeight: 700, letterSpacing: "0.6px" }}>NET PROFIT</div>
+              <div style={{ fontSize: 13, opacity: 0.92, marginTop: 4 }}>
+                Less Sale ({money(saleSummary.netSale)}) − Less Purchase ({money(purchaseSummary.netPurchase)})
+              </div>
+            </div>
+            <div style={{ fontSize: 28, fontWeight: 900, letterSpacing: "0.4px" }}>
+              {money(netProfit)}
+            </div>
+          </div>
+        </div>
       </div>
       </div>
 
@@ -1800,6 +1964,95 @@ const summaryDividerStyle = {
   height: 1,
   background: PALETTE.divider,
   opacity: 1,
+};
+
+const summaryBoardStyle = {
+  marginTop: 18,
+  display: "grid",
+  gap: 12,
+};
+
+const summaryColumnsStyle = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))",
+  gap: 12,
+};
+
+const summaryPanelStyle = (bg, border) => ({
+  background: bg,
+  border: `1px solid ${border}`,
+  borderRadius: 14,
+  padding: 14,
+  boxShadow: "0 6px 16px rgba(15, 23, 42, 0.05)",
+});
+
+const summaryPanelTitleStyle = (color) => ({
+  color,
+  fontSize: 14,
+  fontWeight: 900,
+  letterSpacing: "0.4px",
+  textTransform: "uppercase",
+  marginBottom: 10,
+});
+
+const summaryLineStyle = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: 12,
+  alignItems: "center",
+  fontSize: 13,
+  color: PALETTE.ink,
+  fontWeight: 700,
+};
+
+const summarySubBlockStyle = {
+  marginTop: 10,
+  padding: 10,
+  borderRadius: 10,
+  background: "rgba(255,255,255,0.72)",
+};
+
+const summarySubTitleStyle = {
+  fontSize: 12,
+  fontWeight: 800,
+  color: PALETTE.muted,
+  marginBottom: 6,
+  letterSpacing: "0.3px",
+};
+
+const summaryMiniLineStyle = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: 10,
+  fontSize: 12.5,
+  color: PALETTE.ink,
+  padding: "3px 0",
+};
+
+const summaryNetLineStyle = (color, bg) => ({
+  marginTop: 12,
+  display: "flex",
+  justifyContent: "space-between",
+  gap: 12,
+  alignItems: "center",
+  padding: "10px 12px",
+  borderRadius: 10,
+  background: bg,
+  color,
+  fontSize: 14,
+  fontWeight: 900,
+});
+
+const netProfitBannerStyle = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: 16,
+  flexWrap: "wrap",
+  borderRadius: 14,
+  padding: "16px 18px",
+  color: "#ffffff",
+  boxShadow: "0 12px 24px rgba(15, 23, 42, 0.18)",
 };
 
 const statsGridStyle = {
