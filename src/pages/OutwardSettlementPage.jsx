@@ -187,6 +187,8 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
     "other_chgs",
   ];
 
+  const hasOwn = (obj, key) => Object.prototype.hasOwnProperty.call(obj || {}, key);
+
   const toRowAdjustmentsMap = (list) => {
     const rows = Array.isArray(list) ? list : [];
     return rows.reduce((acc, item) => {
@@ -194,28 +196,21 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
       if (id == null || id === "") return acc;
       const overrides = {};
       ROW_ADJUSTMENT_FIELDS.forEach((field) => {
-        if (!Object.prototype.hasOwnProperty.call(item || {}, field)) return;
-        if (item[field] === null || item[field] === undefined || item[field] === "") return;
-        overrides[field] = item[field];
+        if (!hasOwn(item, field)) return;
+        if (item[field] === null || item[field] === undefined) return;
+        // Keep manual 0 / "00" / blank (as 0)
+        overrides[field] = num(item[field]);
       });
-      // Legacy saves wrote all 6 fields (missing ones forced to 0). Keep only non-zero
-      // overrides in that case so auto-calc still works for untouched columns.
-      const keys = Object.keys(overrides);
-      if (keys.length === ROW_ADJUSTMENT_FIELDS.length) {
-        const nonZero = keys.filter((field) => num(overrides[field]) !== 0);
-        if (nonZero.length > 0 && nonZero.length < keys.length) {
-          const cleaned = {};
-          nonZero.forEach((field) => {
-            cleaned[field] = overrides[field];
-          });
-          acc[id] = cleaned;
-          return acc;
-        }
-      }
-      if (keys.length) acc[id] = overrides;
+      if (Object.keys(overrides).length) acc[id] = overrides;
       return acc;
     }, {});
   };
+
+  const getManualRowValue = (rowState, field, autoValue) =>
+    hasOwn(rowState, field) ? rowState[field] : autoValue;
+
+  const getManualRowAmount = (rowState, field, autoValue) =>
+    hasOwn(rowState, field) ? num(rowState[field]) : num(autoValue);
 
   const getLoadingTypeLabel = (sourceType) => {
     const normalized = String(sourceType || "").trim().toLowerCase();
@@ -514,20 +509,73 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
       ...prev,
       [adjustmentId]: {
         ...(prev[adjustmentId] || {}),
+        // Keep raw input so 0 / 00 / blank all count as manual edits
         [field]: value,
       },
     }));
   };
 
-  const handleResetRowAdjustments = () => {
-    if (!window.confirm("Reset Adjusted Company Details? Manual Short Amt, Claim, C.Deduction, Freight, Labour Chgs and Other Chgs will clear and auto-calculate again.")) {
+  const buildRowAdjustmentsPayload = (source = rowAdjustments) =>
+    (meta?.adjustment_details || [])
+      .filter((item) => {
+        const row = source[item.id];
+        return row && ROW_ADJUSTMENT_FIELDS.some((field) => hasOwn(row, field));
+      })
+      .map((item) => {
+        const row = source[item.id] || {};
+        const payload = { adjustment_id: item.id };
+        ROW_ADJUSTMENT_FIELDS.forEach((field) => {
+          if (!hasOwn(row, field)) return;
+          // Deleted / blank / "00" all persist as 0
+          payload[field] = num(row[field]);
+        });
+        return payload;
+      });
+
+  const handleResetRowAdjustments = async () => {
+    if (
+      !window.confirm(
+        "Reset Adjusted Company Details? Manual Short Amt, Claim, C.Deduction, Freight, Labour Chgs and Other Chgs will clear and auto-calculate again."
+      )
+    ) {
       return;
     }
+
     setRowAdjustments({});
     toast.info("Adjusted Company Details reset to auto calculation", {
       theme: "colored",
       autoClose: 2500,
     });
+
+    // Persist empty overrides so reopen also stays on auto values
+    if (!hasSavedSettlement || isSaving) return;
+    try {
+      setIsSaving(true);
+      await axios.post(`${API_BASE}/outward-settlement/save`, {
+        outward_id: outward.id,
+        ...formData,
+        shortage_qty: calculation.shortageQty,
+        claim_amount: calculation.claimAmount,
+        other_deduction: calculation.otherDeduction,
+        claim_details: claimRows,
+        other_deduction_details: deductionRows,
+        adjustment_rates: (meta?.adjustment_details || []).map((item) => ({
+          adjustment_id: item.id,
+          company_rate: adjustmentRates[item.id] ?? item.company_rate ?? formData.company_rate,
+        })),
+        row_adjustments: [],
+      });
+      await fetchSettlement();
+      if (onSaved) onSaved();
+    } catch (err) {
+      console.error(err);
+      toast.error(err?.response?.data?.error || "Reset save failed", {
+        theme: "colored",
+        autoClose: 3000,
+      });
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   const handleCompanyRateChange = (value) => {
@@ -573,21 +621,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
           adjustment_id: item.id,
           company_rate: adjustmentRates[item.id] ?? item.company_rate ?? formData.company_rate,
         })),
-        row_adjustments: (meta?.adjustment_details || [])
-          .filter((item) => {
-            const row = rowAdjustments[item.id];
-            return row && Object.keys(row).some((key) => ROW_ADJUSTMENT_FIELDS.includes(key));
-          })
-          .map((item) => {
-            const row = rowAdjustments[item.id] || {};
-            const payload = { adjustment_id: item.id };
-            ROW_ADJUSTMENT_FIELDS.forEach((field) => {
-              if (!Object.prototype.hasOwnProperty.call(row, field)) return;
-              if (row[field] === null || row[field] === undefined || row[field] === "") return;
-              payload[field] = row[field];
-            });
-            return payload;
-          }),
+        row_adjustments: buildRowAdjustmentsPayload(),
       });
       toast.success(hasSavedSettlement ? "Settlement updated successfully" : "Settlement saved successfully", {
         theme: "colored",
@@ -618,13 +652,17 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
     const otherPerMt = dispatchQty > 0 ? num(formData.other_charges) / dispatchQty : 0;
     const amount = settlementWeight * rowCompanyRate;
     const shortQty = dispatchQty > 0 ? (settlementWeight / dispatchQty) * calculation.shortageQty : 0;
-    const shortageAmount = num(rowState.short_amt ?? shortQty * rowCompanyRate);
-    const claim = num(rowState.s_amount ?? (dispatchQty > 0 ? settlementWeight * (calculation.totalUnloadingClaimAmount / dispatchQty) : 0));
+    const shortageAmount = getManualRowAmount(rowState, "short_amt", shortQty * rowCompanyRate);
+    const claim = getManualRowAmount(
+      rowState,
+      "s_amount",
+      dispatchQty > 0 ? settlementWeight * (calculation.totalUnloadingClaimAmount / dispatchQty) : 0
+    );
     const deduction = dispatchQty > 0 ? settlementWeight * (calculation.totalUnloadingDeductionAmount / dispatchQty) : 0;
-    const freight = num(rowState.freight ?? settlementWeight * freightPerMt);
-    const labour = num(rowState.labour_chgs ?? settlementWeight * labourPerMt);
-    const other = num(rowState.other_chgs ?? settlementWeight * otherPerMt);
-    const cDeduction = num(rowState.c_deduction ?? 0);
+    const freight = getManualRowAmount(rowState, "freight", settlementWeight * freightPerMt);
+    const labour = getManualRowAmount(rowState, "labour_chgs", settlementWeight * labourPerMt);
+    const other = getManualRowAmount(rowState, "other_chgs", settlementWeight * otherPerMt);
+    const cDeduction = getManualRowAmount(rowState, "c_deduction", 0);
     const amountAfterDeductions = amount - shortageAmount - claim - cDeduction - freight - labour - other;
     const netPayable = amountAfterDeductions;
 
@@ -967,7 +1005,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
             <td style={tableCellStyle}>
               <input
                 type="number"
-                value={rowState.short_amt ?? row.shortageAmount.toFixed(2)}
+                value={getManualRowValue(rowState, "short_amt", row.shortageAmount.toFixed(2))}
                 onChange={(e) => handleRowAdjustmentChange(item.id, "short_amt", e.target.value)}
                 disabled={!canEditSettlementRows}
                 style={tableRateInputStyle}
@@ -976,7 +1014,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
             <td style={tableCellStyle}>
               <input
                 type="number"
-                value={rowState.s_amount ?? row.sAmount.toFixed(2)}
+                value={getManualRowValue(rowState, "s_amount", row.sAmount.toFixed(2))}
                 onChange={(e) => handleRowAdjustmentChange(item.id, "s_amount", e.target.value)}
                 disabled={!canEditSettlementRows}
                 style={tableRateInputStyle}
@@ -985,7 +1023,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
             <td style={tableCellStyle}>
               <input
                 type="number"
-                value={rowState.c_deduction ?? row.cDeduction.toFixed(2)}
+                value={getManualRowValue(rowState, "c_deduction", row.cDeduction.toFixed(2))}
                 onChange={(e) => handleRowAdjustmentChange(item.id, "c_deduction", e.target.value)}
                 disabled={!canEditSettlementRows}
                 style={tableRateInputStyle}
@@ -1008,7 +1046,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
             <td style={tableCellStyle}>
               <input
                 type="number"
-                value={rowState.freight ?? row.freight.toFixed(2)}
+                value={getManualRowValue(rowState, "freight", row.freight.toFixed(2))}
                 onChange={(e) => handleRowAdjustmentChange(item.id, "freight", e.target.value)}
                 disabled={!canEditSettlementRows}
                 style={tableRateInputStyle}
@@ -1017,7 +1055,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
             <td style={tableCellStyle}>
               <input
                 type="number"
-                value={rowState.labour_chgs ?? row.labour.toFixed(2)}
+                value={getManualRowValue(rowState, "labour_chgs", row.labour.toFixed(2))}
                 onChange={(e) => handleRowAdjustmentChange(item.id, "labour_chgs", e.target.value)}
                 disabled={!canEditSettlementRows}
                 style={tableRateInputStyle}
@@ -1026,7 +1064,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
             <td style={tableCellStyle}>
               <input
                 type="number"
-                value={rowState.other_chgs ?? row.other.toFixed(2)}
+                value={getManualRowValue(rowState, "other_chgs", row.other.toFixed(2))}
                 onChange={(e) => handleRowAdjustmentChange(item.id, "other_chgs", e.target.value)}
                 disabled={!canEditSettlementRows}
                 style={tableRateInputStyle}
