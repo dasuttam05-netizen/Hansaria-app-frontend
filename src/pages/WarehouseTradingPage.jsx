@@ -5,6 +5,7 @@ import { FaFilePdf, FaWhatsapp } from "react-icons/fa";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { hasPermission, loadSession } from "../utils/auth";
+import { consigneeHasBuyer, getConsigneeBuyerIds } from "../utils/consigneeBuyers";
 
 const defaultForm = () => ({
   voucher_no: "",
@@ -246,7 +247,7 @@ export default function WarehouseTradingPage() {
   const filteredConsignees = useMemo(() => {
     const buyerId = String(formData.buyer_id || formData.company_id || "");
     if (!buyerId) return consignees;
-    return consignees.filter((c) => String(c.buyer_id || "") === buyerId);
+    return consignees.filter((c) => consigneeHasBuyer(c, buyerId));
   }, [consignees, formData.buyer_id, formData.company_id]);
   const openStockDrilldown = (item, mode) => {
     setStockDrilldownFromDate("");
@@ -814,9 +815,12 @@ export default function WarehouseTradingPage() {
       }
       if (activeVoucherType === "sale" && name === "consignee_id") {
         const consignee = consignees.find((c) => String(c.id || c._id) === String(value));
-        if (consignee?.buyer_id) {
-          next.buyer_id = String(consignee.buyer_id);
-          next.company_id = String(consignee.buyer_id);
+        const linkedBuyerIds = getConsigneeBuyerIds(consignee);
+        if (linkedBuyerIds.length) {
+          const currentBuyer = String(prev.buyer_id || prev.company_id || "");
+          const nextBuyer = linkedBuyerIds.includes(currentBuyer) ? currentBuyer : linkedBuyerIds[0];
+          next.buyer_id = nextBuyer;
+          next.company_id = nextBuyer;
         }
       }
       if (name === "voucher_no") {
