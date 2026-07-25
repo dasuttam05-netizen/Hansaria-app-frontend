@@ -95,9 +95,9 @@ export default function WarehouseRentLedgerPage() {
 
   const exportCSV = () => {
     let csv =
-      "Inward Date,Reference Date,Party,Warehouse,Voucher,Lorry,Weight,Days,Month Slab,Rent Rate,Rent Amount,Adjusted Qty,Balance Qty\n";
+      "Inward Date,Dispatch Date,Party,Warehouse,Voucher,Lorry,Weight,Shortage Qty,Days,Month Slab,Rent Rate,Rent Amount,Adjusted Qty,Balance Qty\n";
     records.forEach((r) => {
-      csv += `${formatDisplayDate(r.inward_date)},${formatDisplayDate(r.reference_date)},${r.party_name},${r.warehouse_name},${r.voucher_no},${r.lorry_no},${r.original_weight},${r.days_diff},${r.month_slab},${r.rent_rate},${r.rent_amount},${r.adjusted_qty},${r.balance_qty}\n`;
+      csv += `${formatDisplayDate(r.inward_date)},${formatDisplayDate(r.reference_date)},${r.party_name},${r.warehouse_name},${r.voucher_no},${r.lorry_no},${r.original_weight},${r.shortage_qty},${r.days_diff},${r.month_slab},${r.rent_rate},${r.rent_amount},${r.adjusted_qty},${r.balance_qty}\n`;
     });
     const blob = new Blob([csv], { type: "text/csv" });
     const url = window.URL.createObjectURL(blob);
@@ -112,12 +112,13 @@ export default function WarehouseRentLedgerPage() {
       records.reduce(
         (acc, r) => {
           acc.weight += Number(r.original_weight) || 0;
+          acc.shortage += Number(r.shortage_qty) || 0;
           acc.adjusted += Number(r.adjusted_qty) || 0;
           acc.balance += Number(r.balance_qty) || 0;
           acc.rent += Number(r.rent_amount) || 0;
           return acc;
         },
-        { weight: 0, adjusted: 0, balance: 0, rent: 0 }
+        { weight: 0, shortage: 0, adjusted: 0, balance: 0, rent: 0 }
       ),
     [records]
   );
@@ -183,6 +184,7 @@ export default function WarehouseRentLedgerPage() {
       {visibleSections.includes("totals") ? (
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 16, marginBottom: 16 }}>
         <div style={card}><div>Total Weight</div><div style={{ fontSize: 24, fontWeight: 700 }}>{num(totals.weight)}</div></div>
+        <div style={card}><div>Shortage Qty</div><div style={{ fontSize: 24, fontWeight: 700 }}>{num(totals.shortage)}</div></div>
         <div style={card}><div>Adjusted Qty</div><div style={{ fontSize: 24, fontWeight: 700 }}>{num(totals.adjusted)}</div></div>
         <div style={card}><div>Balance Qty</div><div style={{ fontSize: 24, fontWeight: 700 }}>{num(totals.balance)}</div></div>
         <div style={card}><div>Total Rent</div><div style={{ fontSize: 24, fontWeight: 700 }}>{num(totals.rent)}</div></div>
@@ -196,12 +198,13 @@ export default function WarehouseRentLedgerPage() {
             <thead>
               <tr>
                 <th style={th}>Inward Date</th>
-                <th style={th}>Reference Date</th>
+                <th style={th}>Dispatch Date</th>
                 <th style={th}>Party</th>
                 <th style={th}>Warehouse</th>
                 <th style={th}>Voucher</th>
                 <th style={th}>Lorry</th>
                 <th style={th}>Weight</th>
+                <th style={th}>Shortage Qty</th>
                 <th style={th}>Days</th>
                 <th style={th}>Month Slab</th>
                 <th style={th}>Rent Rate</th>
@@ -221,6 +224,7 @@ export default function WarehouseRentLedgerPage() {
                     <td style={td}>{row.voucher_no}</td>
                     <td style={td}>{row.lorry_no}</td>
                     <td style={td}>{num(row.original_weight)}</td>
+                    <td style={td}>{num(row.shortage_qty)}</td>
                     <td style={td}>{row.days_diff}</td>
                     <td style={td}>{row.month_slab}</td>
                     <td style={td}>{num(row.rent_rate)}</td>
@@ -231,7 +235,7 @@ export default function WarehouseRentLedgerPage() {
                 ))
               ) : (
                 <tr>
-                  <td style={td} colSpan="13">No records found</td>
+                  <td style={td} colSpan="14">No records found</td>
                 </tr>
               )}
             </tbody>
