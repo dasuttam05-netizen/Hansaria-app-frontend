@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import MultiSelectDropdown from "../components/MultiSelectDropdown";
 import ReportSectionToggles from "../components/ReportSectionToggles";
-import { formatDisplayDate } from "../utils/date";
+import { formatDisplayDate, formatLocalDateInput } from "../utils/date";
 
 export default function WarehouseRentLedgerPage() {
   const API_BASE = "/api";
@@ -13,14 +13,17 @@ export default function WarehouseRentLedgerPage() {
   const [warehouses, setWarehouses] = useState([]);
   const [visibleSections, setVisibleSections] = useState(["totals", "details"]);
 
-  const [filters, setFilters] = useState({
-    from_date: new Date(new Date().setDate(new Date().getDate() - 30))
-      .toISOString()
-      .split("T")[0],
-    to_date: new Date().toISOString().split("T")[0],
-    company_id: "",
-    location_ids: [],
-    warehouse_ids: [],
+  const [filters, setFilters] = useState(() => {
+    const today = new Date();
+    const from = new Date(today);
+    from.setDate(today.getDate() - 30);
+    return {
+      from_date: formatLocalDateInput(from),
+      to_date: formatLocalDateInput(today),
+      company_id: "",
+      location_ids: [],
+      warehouse_ids: [],
+    };
   });
 
   const card = {
