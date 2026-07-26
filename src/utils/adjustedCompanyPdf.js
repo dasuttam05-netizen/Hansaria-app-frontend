@@ -89,10 +89,10 @@ function drawKeyValueCard(doc, rows, startY) {
   return startY + cardHeight;
 }
 
-function drawAmountTable(doc, title, rows, startY, { highlightLast = false } = {}) {
+function drawTwoColumnTable(doc, title, rows, startY, { highlightLast = false } = {}) {
   drawSectionTitle(doc, title, 14, startY);
 
-  const body = rows.map(([particular, details, amount], index) => {
+  const body = rows.map(([particular, amount], index) => {
     const isLast = highlightLast && index === rows.length - 1;
     return [
       {
@@ -100,10 +100,6 @@ function drawAmountTable(doc, title, rows, startY, { highlightLast = false } = {
         styles: isLast
           ? { fontStyle: "bold", fillColor: HEADER_SOFT, textColor: HEADER_DARK }
           : { fontStyle: "bold" },
-      },
-      {
-        content: details,
-        styles: isLast ? { fillColor: HEADER_SOFT } : {},
       },
       {
         content: amount,
@@ -135,12 +131,78 @@ function drawAmountTable(doc, title, rows, startY, { highlightLast = false } = {
       lineWidth: 0.25,
     },
     alternateRowStyles: { fillColor: ROW_ALT },
-    head: [["Particular", "Details", "Amount (Rs.)"]],
+    head: [["Particular", "Amount (Rs.)"]],
     body,
     columnStyles: {
-      0: { cellWidth: 52 },
-      1: { cellWidth: 88 },
-      2: { cellWidth: 42, halign: "right" },
+      0: { cellWidth: 120 },
+      1: { cellWidth: 62, halign: "right" },
+    },
+  });
+
+  return doc.lastAutoTable.finalY;
+}
+
+function drawDeductionTable(doc, row, startY) {
+  const shortageAmount = toNumber(row.shortageAmount);
+  const claim = toNumber(row.claim);
+  const cDeduction = toNumber(row.cDeduction);
+  const freight = toNumber(row.freight);
+  const labour = toNumber(row.labour);
+  const otherCharges = toNumber(row.other);
+  const totalDeduction =
+    shortageAmount + claim + cDeduction + freight + labour + otherCharges;
+
+  drawSectionTitle(doc, "Deductions & Charges", 14, startY);
+
+  const body = [
+    ["Shortage Amount", money(shortageAmount)],
+    ["Claim", money(claim)],
+    ["C.Deduction", money(cDeduction)],
+    ["Freight", money(freight)],
+    ["Labour", money(labour)],
+    ["Other Charges", money(otherCharges)],
+    [
+      {
+        content: "Total Deduction",
+        styles: { fontStyle: "bold", fillColor: HEADER_SOFT, textColor: HEADER_DARK },
+      },
+      {
+        content: money(totalDeduction),
+        styles: {
+          halign: "right",
+          fontStyle: "bold",
+          fillColor: HEADER_SOFT,
+          textColor: HEADER_DARK,
+          fontSize: 9,
+        },
+      },
+    ],
+  ];
+
+  autoTable(doc, {
+    startY: startY + 4,
+    theme: "grid",
+    margin: { left: 14, right: 14 },
+    headStyles: {
+      fillColor: HEADER,
+      textColor: 255,
+      fontStyle: "bold",
+      halign: "center",
+      fontSize: 7.5,
+    },
+    styles: {
+      fontSize: 7.8,
+      cellPadding: 2.8,
+      textColor: INK,
+      lineColor: BORDER,
+      lineWidth: 0.25,
+    },
+    alternateRowStyles: { fillColor: ROW_ALT },
+    head: [["Particular", "Amount (Rs.)"]],
+    body,
+    columnStyles: {
+      0: { cellWidth: 120, fontStyle: "bold" },
+      1: { cellWidth: 62, halign: "right", fontStyle: "bold" },
     },
   });
 
@@ -162,7 +224,7 @@ export function buildAdjustedCompanyCopyPdf({ settlement, adjustmentItems }) {
       shortQty: toNumber(item.shortQty ?? item.shortQtyPerLine),
       shortageAmount: toNumber(item.shortageAmount ?? item.shortAmount),
       claim: toNumber(item.claim),
-      deduction: toNumber(item.deduction),
+      cDeduction: toNumber(item.cDeduction ?? item.c_deduction),
       companyRate: toNumber(item.companyRate ?? item.company_rate),
       freight: toNumber(item.freight),
       labour: toNumber(item.labour ?? item.labour_charges),
@@ -192,37 +254,24 @@ export function buildAdjustedCompanyCopyPdf({ settlement, adjustmentItems }) {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(8.5);
     doc.setTextColor(HEADER_DARK[0], HEADER_DARK[1], HEADER_DARK[2]);
-    doc.text(String(settlement.accountName || "HANSARIA APP").toUpperCase(), 144, 19, { maxWidth: 52 });
+    doc.text(String(settlement.companyName || settlement.accountName || "HANSARIA APP").toUpperCase(), 144, 21, { maxWidth: 52 });
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(5.5);
-    doc.text("GRAIN MERCHANT & COMMISSION AGENT", 144, 24.5, { maxWidth: 52 });
+    doc.setFontSize(5.8);
     doc.setTextColor(MUTED[0], MUTED[1], MUTED[2]);
-    doc.text(String(settlement.accountAddress || "-"), 144, 30, { maxWidth: 52 });
+    doc.text(String(settlement.accountAddress || "-"), 144, 29, { maxWidth: 52 });
 
     // Metadata tiles
     const tileY = 48;
-    drawInfoTile(doc, 14, tileY, 34, "Date", formatDisplayDate(settlement.date) || "-");
-    drawInfoTile(doc, 50, tileY, 38, "Voucher No.", settlement.voucherNo || "-");
-    drawInfoTile(doc, 90, tileY, 38, "Company Account", settlement.accountName || "-");
-    drawInfoTile(doc, 130, tileY, 30, "Location", settlement.locationName || "-");
-    drawInfoTile(doc, 162, tileY, 34, "Outward Lorry No.", settlement.outwardLorryNo || "-");
+    drawInfoTile(doc, 14, tileY, 30, "Date", formatDisplayDate(settlement.date) || "-");
+    drawInfoTile(doc, 46, tileY, 34, "Voucher No.", settlement.voucherNo || "-");
+    drawInfoTile(doc, 82, tileY, 36, "Company Account", settlement.companyAccount || "-");
+    drawInfoTile(doc, 120, tileY, 28, "Location", settlement.locationName || "-");
+    drawInfoTile(doc, 150, tileY, 24, "Product", settlement.productName || "-");
+    drawInfoTile(doc, 176, tileY, 20, "Lorry No.", settlement.outwardLorryNo || "-");
 
-    // Gross amount at top
     let cursorY = 72;
-    cursorY =
-      drawAmountTable(
-        doc,
-        "Gross Amount Details",
-        [
-          ["Weight", "Settlement weight (MT)", row.settlementWeight.toFixed(2)],
-          ["Company Rate", "Rate applied on settlement", money(row.companyRate)],
-          ["Gross Amount", "Weight × company rate", money(row.amount)],
-        ],
-        cursorY,
-        { highlightLast: true }
-      ) + 10;
 
-    // Adjusted company details – single-column card for WhatsApp readability
+    // 1. Adjusted Company Details
     drawSectionTitle(doc, "Adjusted Company Details", 14, cursorY);
     cursorY = drawKeyValueCard(
       doc,
@@ -239,21 +288,22 @@ export function buildAdjustedCompanyCopyPdf({ settlement, adjustmentItems }) {
     );
     cursorY += 10;
 
-    // Deductions & charges – separate section at bottom
+    // 2. Gross Amount Details
     cursorY =
-      drawAmountTable(
+      drawTwoColumnTable(
         doc,
-        "Deductions & Charges",
+        "Gross Amount Details",
         [
-          ["S. Amount", "Shortage deduction", money(row.shortageAmount)],
-          ["Claim", "Claim amount", money(row.claim)],
-          ["C. Deduction", "Claim + other deduction", money(row.claim + row.deduction)],
-          ["Freight", "Transportation charges", money(row.freight)],
-          ["Labour Chgs", "Labour charges", money(row.labour)],
-          ["Other Chgs", "Other miscellaneous charges", money(row.other)],
+          ["Weight", row.settlementWeight.toFixed(2)],
+          ["Company Rate", money(row.companyRate)],
+          ["Gross Amount", money(row.amount)],
         ],
-        cursorY
+        cursorY,
+        { highlightLast: true }
       ) + 10;
+
+    // 3. Deductions & Charges (same fields as settlement page purchase summary)
+    cursorY = drawDeductionTable(doc, row, cursorY) + 10;
 
     // Net payable highlight
     doc.setFillColor(255, 255, 255);
@@ -285,7 +335,8 @@ export function buildAdjustedCompanyCopyPdf({ settlement, adjustmentItems }) {
     "Outward Settlement - Adjusted Company Copy",
     `Voucher: ${settlement.voucherNo || "-"}`,
     `Date: ${formatDisplayDate(settlement.date) || "-"}`,
-    `Company Account: ${settlement.accountName || "-"}`,
+    `Company Account: ${settlement.companyAccount || "-"}`,
+    `Product: ${settlement.productName || "-"}`,
     `Adjusted Company: ${firstItem.companyName || firstItem.company_name || "-"}`,
     `Gross Amount: Rs. ${money(toNumber(firstItem.amount))}`,
     `Net Payable: Rs. ${money(toNumber(firstItem.netPayable ?? firstItem.net_payable))}`,
