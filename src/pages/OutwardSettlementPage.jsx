@@ -5,7 +5,7 @@ import "react-toastify/dist/ReactToastify.css";
 import { FaFilePdf, FaWhatsapp } from "react-icons/fa";
 import { formatDisplayDate } from "../utils/date";
 import { hasPermission, loadSession } from "../utils/auth";
-import { buildAdjustedCompanyCopyPdf } from "../utils/adjustedCompanyPdf";
+import { buildAdjustedCompanyCopyPdf, buildUniqueCompanyCopyPdf } from "../utils/adjustedCompanyPdf";
 
 const BASE_FONT = "'Trebuchet MS', 'Segoe UI', Tahoma, sans-serif";
 const PALETTE = {
@@ -45,6 +45,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
   const [claimRows, setClaimRows] = useState([{ id: "claim-1", description: "", amount: "" }]);
   const [deductionRows, setDeductionRows] = useState([{ id: "deduction-1", description: "", amount: "" }]);
   const [showNetPayableReport, setShowNetPayableReport] = useState(false);
+  const [selectedUniqueCompany, setSelectedUniqueCompany] = useState(null);
   const [formData, setFormData] = useState({
     dispatch_qty: "",
     unloading_qty: "",
@@ -851,18 +852,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
   const createAdjustmentPdf = (item, index) => {
     const row = getAdjustmentRowAmounts(item);
     return buildAdjustedCompanyCopyPdf({
-      settlement: {
-        date: meta?.outward_date,
-        voucherNo: meta?.voucher_no || `OUT-${meta?.outward_id || outward?.id || "-"}`,
-        companyAccount: outwardAccountName,
-        accountName: meta?.account_name || "-",
-        accountAddress: meta?.account_address || "-",
-        companyName: meta?.company_name || meta?.account_name || "-",
-        locationName: outwardLocationName,
-        outwardLorryNo: meta?.lorry_no || "-",
-        consigneeName: meta?.consignee_name || "-",
-        productName: outwardProductName,
-      },
+      settlement: getSettlementContext(),
       adjustmentItems: [{
         ...item,
         companyName: item.company_name || `Row ${index + 1}`,
@@ -883,6 +873,106 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
       }],
     });
   };
+
+  const getSettlementContext = () => ({
+    date: meta?.outward_date,
+    voucherNo: meta?.voucher_no || `OUT-${meta?.outward_id || outward?.id || "-"}`,
+    companyAccount: outwardAccountName,
+    accountName: meta?.account_name || "-",
+    accountAddress: meta?.account_address || "-",
+    companyName: meta?.company_name || meta?.account_name || "-",
+    locationName: outwardLocationName,
+    outwardLorryNo: meta?.lorry_no || "-",
+    consigneeName: meta?.consignee_name || "-",
+    productName: outwardProductName,
+  });
+
+  const getUniqueCompanyLineItems = (companyName) =>
+    adjustedRows.filter(({ item }) => {
+      const name = String(item.company_name || "Unknown Company").trim() || "Unknown Company";
+      return name.toLowerCase() === String(companyName || "").trim().toLowerCase();
+    });
+
+  const getUniqueCompanySummary = (companyName) =>
+    uniqueCompanyNetPayableReport.find(
+      (row) => row.companyName.toLowerCase() === String(companyName || "").trim().toLowerCase()
+    );
+
+  const createUniqueCompanyPdf = (summary, lineItems) =>
+    buildUniqueCompanyCopyPdf({
+      settlement: getSettlementContext(),
+      uniqueSummary: summary,
+      lineItems: lineItems.map(({ item, row }) => ({
+        item: {
+          ...item,
+          companyName: item.company_name,
+          lorryNo: item.lorry_no,
+          inwardVoucherNo: item.inward_voucher_no,
+          sourceType: item.source_type,
+        },
+        row: {
+          ...row,
+          companyRate: row.rowCompanyRate,
+        },
+      })),
+    });
+
+  const downloadUniqueCompanyPdf = (companyName) => {
+    const summary = getUniqueCompanySummary(companyName);
+    const lineItems = getUniqueCompanyLineItems(companyName);
+    if (!summary) return;
+    const { doc, fileName } = createUniqueCompanyPdf(summary, lineItems);
+    doc.save(fileName);
+  };
+
+  const shareUniqueCompanyPdf = async (companyName) => {
+    const summary = getUniqueCompanySummary(companyName);
+    const lineItems = getUniqueCompanyLineItems(companyName);
+    if (!summary) return;
+
+    const { doc, fileName, shareText } = createUniqueCompanyPdf(summary, lineItems);
+    const blob = doc.output("blob");
+    const file = new File([blob], fileName, { type: "application/pdf" });
+
+    try {
+      if (navigator.canShare && navigator.canShare({ files: [file] }) && navigator.share) {
+        await navigator.share({
+          title: "Outward Settlement",
+          text: shareText,
+          files: [file],
+        });
+      } else {
+        doc.save(fileName);
+        window.open(`https://wa.me/?text=${encodeURIComponent(shareText)}`, "_blank", "noopener,noreferrer");
+      }
+    } catch (err) {
+      console.error(err);
+      alert("WhatsApp share failed");
+    }
+  };
+
+  const openUniqueCompanyDetail = (companyName) => {
+    setSelectedUniqueCompany(companyName);
+  };
+
+  const closeUniqueCompanyDetail = () => {
+    setSelectedUniqueCompany(null);
+  };
+
+  const selectedUniqueCompanySummary = selectedUniqueCompany
+    ? getUniqueCompanySummary(selectedUniqueCompany)
+    : null;
+  const selectedUniqueCompanyLines = selectedUniqueCompany
+    ? getUniqueCompanyLineItems(selectedUniqueCompany)
+    : [];
+  const selectedUniqueTotalDeduction = selectedUniqueCompanySummary
+    ? num(selectedUniqueCompanySummary.shortAmt) +
+      num(selectedUniqueCompanySummary.claim) +
+      num(selectedUniqueCompanySummary.cDeduction) +
+      num(selectedUniqueCompanySummary.freight) +
+      num(selectedUniqueCompanySummary.labour) +
+      num(selectedUniqueCompanySummary.other)
+    : 0;
 
   const downloadAdjustmentPdf = (item, index) => {
     const { doc, fileName } = createAdjustmentPdf(item, index);
@@ -1647,7 +1737,17 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
                           <td style={tableCellStyle}>{row.freight.toFixed(2)}</td>
                           <td style={tableCellStyle}>{row.labour.toFixed(2)}</td>
                           <td style={tableCellStyle}>{row.other.toFixed(2)}</td>
-                          <td style={{ ...tableCellStyle, fontWeight: 800, color: "#1d4ed8" }}>
+                          <td
+                            style={{
+                              ...tableCellStyle,
+                              fontWeight: 800,
+                              color: "#1d4ed8",
+                              cursor: "pointer",
+                              textDecoration: "underline",
+                            }}
+                            title="Open unique company detail view"
+                            onClick={() => openUniqueCompanyDetail(row.companyName)}
+                          >
                             {row.netPayable.toFixed(2)}
                           </td>
                         </tr>
@@ -1684,7 +1784,227 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
               </table>
             </div>
             <div style={{ marginTop: 10, fontSize: 12, color: PALETTE.muted, fontWeight: 600 }}>
-              G.Amount = Company Rate × Settlement Weight (weighted rate shown when same company has multiple rows)
+              G.Amount = Company Rate × Settlement Weight (weighted rate shown when same company has multiple rows). Click Net Payable to open company detail, PDF and WhatsApp share.
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {selectedUniqueCompany && selectedUniqueCompanySummary ? (
+        <div
+          style={{ ...netPayableModalOverlayStyle, zIndex: 1300 }}
+          onClick={closeUniqueCompanyDetail}
+        >
+          <div
+            style={{ ...netPayableModalCardStyle, width: "min(1280px, 98vw)" }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start", marginBottom: 14 }}>
+              <div>
+                <div style={{ fontSize: 18, fontWeight: 900, color: PALETTE.ink }}>
+                  {selectedUniqueCompanySummary.companyName}
+                </div>
+                <div style={{ marginTop: 4, fontSize: 13, color: PALETTE.muted, fontWeight: 600 }}>
+                  Unique company settlement copy · {selectedUniqueCompanyLines.length} adjustment row(s)
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    closeUniqueCompanyDetail();
+                    setShowNetPayableReport(true);
+                  }}
+                  style={{
+                    border: `1px solid ${PALETTE.border}`,
+                    background: "#ffffff",
+                    color: PALETTE.ink,
+                    borderRadius: 8,
+                    padding: "8px 12px",
+                    fontWeight: 700,
+                    cursor: "pointer",
+                  }}
+                >
+                  Back
+                </button>
+                <button
+                  type="button"
+                  onClick={closeUniqueCompanyDetail}
+                  style={{
+                    border: "none",
+                    background: "#fee2e2",
+                    color: "#b91c1c",
+                    borderRadius: 8,
+                    padding: "8px 12px",
+                    fontWeight: 800,
+                    cursor: "pointer",
+                  }}
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+
+            <div style={statsGridStyle}>
+              {[
+                ["Date", formatDisplayDate(meta?.outward_date) || "-"],
+                ["Voucher No.", meta?.voucher_no || `OUT-${meta?.outward_id || outward?.id || "-"}`],
+                ["Company Account", outwardAccountName],
+                ["Location", outwardLocationName],
+                ["Product", outwardProductName],
+                ["Lorry No.", meta?.lorry_no || "-"],
+              ].map(([label, value]) => (
+                <div key={label} style={statTileStyle()}>
+                  <div style={statHeadStyle}>{label}</div>
+                  <div style={statBodyStyle}>{value}</div>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ marginTop: 14, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 12 }}>
+              <div style={uniqueDetailPanelStyle}>
+                <div style={uniqueDetailPanelTitleStyle}>Adjusted Company Details</div>
+                <div style={uniqueDetailLineStyle}><span>Adjusted Company</span><strong>{selectedUniqueCompanySummary.companyName}</strong></div>
+                <div style={uniqueDetailLineStyle}><span>Settlement Weight</span><strong>{selectedUniqueCompanySummary.settlementWeight.toFixed(2)}</strong></div>
+                <div style={uniqueDetailLineStyle}><span>Consignee</span><strong>{meta?.consignee_name || "-"}</strong></div>
+                <div style={uniqueDetailLineStyle}><span>Product</span><strong>{outwardProductName}</strong></div>
+                <div style={uniqueDetailLineStyle}><span>Total Rows</span><strong>{selectedUniqueCompanyLines.length}</strong></div>
+              </div>
+
+              <div style={uniqueDetailPanelStyle}>
+                <div style={uniqueDetailPanelTitleStyle}>Gross Amount Details</div>
+                <div style={uniqueDetailLineStyle}><span>Weight</span><strong>{selectedUniqueCompanySummary.settlementWeight.toFixed(2)}</strong></div>
+                <div style={uniqueDetailLineStyle}><span>Company Rate</span><strong>{selectedUniqueCompanySummary.companyRate.toFixed(2)}</strong></div>
+                <div style={{ ...uniqueDetailLineStyle, borderTop: `1px dashed ${PALETTE.border}`, paddingTop: 8, marginTop: 4 }}>
+                  <span>Gross Amount</span>
+                  <strong style={{ color: PALETTE.headerDark }}>{money(selectedUniqueCompanySummary.gAmount)}</strong>
+                </div>
+              </div>
+
+              <div style={uniqueDetailPanelStyle}>
+                <div style={uniqueDetailPanelTitleStyle}>Deductions & Charges</div>
+                {[
+                  ["Shortage Amount", selectedUniqueCompanySummary.shortAmt],
+                  ["Claim", selectedUniqueCompanySummary.claim],
+                  ["C.Deduction", selectedUniqueCompanySummary.cDeduction],
+                  ["Freight", selectedUniqueCompanySummary.freight],
+                  ["Labour", selectedUniqueCompanySummary.labour],
+                  ["Other Charges", selectedUniqueCompanySummary.other],
+                ].map(([label, value]) => (
+                  <div key={label} style={uniqueDetailMiniLineStyle}>
+                    <span>{label}</span>
+                    <span>{money(value)}</span>
+                  </div>
+                ))}
+                <div style={{ ...uniqueDetailLineStyle, borderTop: `1px dashed ${PALETTE.border}`, paddingTop: 8, marginTop: 6 }}>
+                  <span>Total Deduction</span>
+                  <strong>{money(selectedUniqueTotalDeduction)}</strong>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ marginTop: 14 }}>
+              <div style={{ ...sectionTitleStyle, marginBottom: 8 }}>
+                <div style={smallSectionIconStyle}>D</div>
+                <div style={sectionLabelStyle}>Full Adjustment Details</div>
+                <div style={sectionRuleStyle} />
+              </div>
+              <div style={{ overflowX: "auto", border: `1px solid ${PALETTE.border}`, borderRadius: 12, background: "#fff" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12.5 }}>
+                  <thead>
+                    <tr>
+                      <th style={tableHeaderStyle}>Sr</th>
+                      <th style={tableHeaderStyle}>Lorry No</th>
+                      <th style={tableHeaderStyle}>Inward Voucher</th>
+                      <th style={tableHeaderStyle}>Loading Type</th>
+                      <th style={tableHeaderStyle}>Settlement Weight</th>
+                      <th style={tableHeaderStyle}>Short Qnt</th>
+                      <th style={tableHeaderStyle}>Short Amt</th>
+                      <th style={tableHeaderStyle}>Claim</th>
+                      <th style={tableHeaderStyle}>C.Deduction</th>
+                      <th style={tableHeaderStyle}>Company Rate</th>
+                      <th style={tableHeaderStyle}>Freight</th>
+                      <th style={tableHeaderStyle}>Labour Chgs</th>
+                      <th style={tableHeaderStyle}>Other Chgs</th>
+                      <th style={tableHeaderStyle}>Amount</th>
+                      <th style={tableHeaderStyle}>Net Payable</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {selectedUniqueCompanyLines.map(({ item, row }, index) => (
+                      <tr key={item.id || `${item.inward_voucher_no}-${index}`} style={{ background: index % 2 === 0 ? "#ffffff" : PALETTE.rowAlt }}>
+                        <td style={tableCellStyle}>{index + 1}</td>
+                        <td style={tableCellStyle}>{item.lorry_no || "-"}</td>
+                        <td style={tableCellStyle}>{item.inward_voucher_no || "-"}</td>
+                        <td style={tableCellStyle}>{getLoadingTypeLabel(item.source_type)}</td>
+                        <td style={tableCellStyle}>{row.settlementWeight.toFixed(2)}</td>
+                        <td style={tableCellStyle}>{row.shortQty.toFixed(2)}</td>
+                        <td style={tableCellStyle}>{row.shortageAmount.toFixed(2)}</td>
+                        <td style={tableCellStyle}>{row.claim.toFixed(2)}</td>
+                        <td style={tableCellStyle}>{row.cDeduction.toFixed(2)}</td>
+                        <td style={tableCellStyle}>{row.rowCompanyRate.toFixed(2)}</td>
+                        <td style={tableCellStyle}>{row.freight.toFixed(2)}</td>
+                        <td style={tableCellStyle}>{row.labour.toFixed(2)}</td>
+                        <td style={tableCellStyle}>{row.other.toFixed(2)}</td>
+                        <td style={tableCellStyle}>{row.amount.toFixed(2)}</td>
+                        <td style={{ ...tableCellStyle, fontWeight: 800, color: "#1d4ed8" }}>{row.netPayable.toFixed(2)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+
+            <div style={{
+              marginTop: 16,
+              padding: 14,
+              borderRadius: 12,
+              border: `1px solid ${PALETTE.borderStrong}`,
+              background: PALETTE.headerSoft,
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center",
+              gap: 12,
+              flexWrap: "wrap",
+            }}>
+              <div>
+                <div style={{ fontSize: 12, color: PALETTE.muted, fontWeight: 700 }}>NET PAYABLE</div>
+                <div style={{ fontSize: 24, fontWeight: 900, color: PALETTE.headerDark }}>
+                  Rs. {money(selectedUniqueCompanySummary.netPayable)}
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 10 }}>
+                <button
+                  type="button"
+                  onClick={() => downloadUniqueCompanyPdf(selectedUniqueCompany)}
+                  style={{
+                    ...rowActionButtonStyle,
+                    width: "auto",
+                    padding: "0 16px",
+                    gap: 8,
+                    background: "#dc2626",
+                    fontWeight: 800,
+                    fontSize: 13,
+                  }}
+                >
+                  <FaFilePdf /> PDF
+                </button>
+                <button
+                  type="button"
+                  onClick={() => shareUniqueCompanyPdf(selectedUniqueCompany)}
+                  style={{
+                    ...rowActionButtonStyle,
+                    width: "auto",
+                    padding: "0 16px",
+                    gap: 8,
+                    background: "#16a34a",
+                    fontWeight: 800,
+                    fontSize: 13,
+                  }}
+                >
+                  <FaWhatsapp /> WhatsApp
+                </button>
+              </div>
             </div>
           </div>
         </div>
@@ -2275,6 +2595,40 @@ const netPayableModalCardStyle = {
   boxShadow: "0 24px 48px rgba(15, 23, 42, 0.28)",
   padding: 16,
   fontFamily: BASE_FONT,
+};
+
+const uniqueDetailPanelStyle = {
+  border: `1px solid ${PALETTE.border}`,
+  borderRadius: 12,
+  background: "#ffffff",
+  padding: 12,
+};
+
+const uniqueDetailPanelTitleStyle = {
+  fontSize: 13,
+  fontWeight: 800,
+  color: PALETTE.headerDark,
+  marginBottom: 10,
+  textTransform: "uppercase",
+  letterSpacing: "0.3px",
+};
+
+const uniqueDetailLineStyle = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: 10,
+  fontSize: 12.5,
+  color: PALETTE.ink,
+  marginBottom: 6,
+};
+
+const uniqueDetailMiniLineStyle = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: 10,
+  fontSize: 12,
+  color: PALETTE.muted,
+  marginBottom: 4,
 };
 
 const statsGridStyle = {
