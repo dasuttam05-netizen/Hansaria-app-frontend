@@ -1680,9 +1680,6 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
             <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start", marginBottom: 14 }}>
               <div>
                 <div style={{ fontSize: 18, fontWeight: 900, color: PALETTE.ink }}>Net Payable Report</div>
-                <div style={{ marginTop: 4, fontSize: 13, color: PALETTE.muted, fontWeight: 600 }}>
-                  Adjusted Company Details · Unique company names
-                </div>
               </div>
               <button
                 type="button"
@@ -1782,9 +1779,6 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
                   )}
                 </tbody>
               </table>
-            </div>
-            <div style={{ marginTop: 10, fontSize: 12, color: PALETTE.muted, fontWeight: 600 }}>
-              G.Amount = Company Rate × Settlement Weight (weighted rate shown when same company has multiple rows). Click Net Payable to open company detail, PDF and WhatsApp share.
             </div>
           </div>
         </div>
