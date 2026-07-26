@@ -2,7 +2,6 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { formatDisplayDate } from "./date";
 
-// App palette (matches OutwardSettlementPage)
 const HEADER = [15, 118, 110];
 const HEADER_DARK = [17, 94, 89];
 const HEADER_SOFT = [232, 246, 243];
@@ -11,6 +10,8 @@ const MUTED = [71, 85, 105];
 const BORDER = [213, 224, 234];
 const ROW_ALT = [248, 251, 255];
 const PAGE_BG = [248, 251, 250];
+const MARGIN = 12;
+const CONTENT_WIDTH = 210 - MARGIN * 2;
 
 const toNumber = (value) => {
   const n = Number(value);
@@ -33,180 +34,159 @@ const loadingTypeLabel = (sourceType) =>
     ? "Palti Lorry"
     : "Warehouse Loading";
 
-function drawSectionTitle(doc, label, x, y) {
+const tableBaseStyles = {
+  fontSize: 8,
+  cellPadding: { top: 2.2, right: 3, bottom: 2.2, left: 3 },
+  textColor: INK,
+  lineColor: BORDER,
+  lineWidth: 0.2,
+  overflow: "linebreak",
+  valign: "middle",
+};
+
+function drawSectionTitle(doc, label, y) {
   const title = String(label || "").toUpperCase();
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(9.5);
+  doc.setFontSize(8.5);
   doc.setTextColor(HEADER_DARK[0], HEADER_DARK[1], HEADER_DARK[2]);
-  doc.text(title, x, y);
+  doc.text(title, MARGIN, y);
   doc.setDrawColor(HEADER[0], HEADER[1], HEADER[2]);
-  doc.setLineWidth(0.35);
-  doc.line(x + doc.getTextWidth(title) + 4, y - 1.5, 196, y - 1.5);
+  doc.setLineWidth(0.3);
+  doc.line(MARGIN + doc.getTextWidth(title) + 3, y - 1.2, MARGIN + CONTENT_WIDTH, y - 1.2);
 }
 
-function drawInfoTile(doc, x, y, w, title, value) {
-  doc.setFillColor(255, 255, 255);
-  doc.setDrawColor(BORDER[0], BORDER[1], BORDER[2]);
-  doc.roundedRect(x, y, w, 16, 2, 2, "FD");
-  doc.setFillColor(HEADER[0], HEADER[1], HEADER[2]);
-  doc.circle(x + 6.5, y + 8, 3.8, "F");
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(5.8);
-  doc.setTextColor(MUTED[0], MUTED[1], MUTED[2]);
-  doc.text(String(title || "").toUpperCase(), x + 13, y + 6.2);
-  doc.setFontSize(6.8);
-  doc.setTextColor(INK[0], INK[1], INK[2]);
-  doc.text(String(value || "-"), x + 13, y + 11.2, { maxWidth: w - 15 });
-}
-
-function drawKeyValueCard(doc, rows, startY) {
-  const left = 14;
-  const right = 196;
-  const cardWidth = right - left;
-  const rowHeight = 8.2;
-  const cardHeight = rows.length * rowHeight + 6;
-
-  doc.setFillColor(255, 255, 255);
-  doc.setDrawColor(BORDER[0], BORDER[1], BORDER[2]);
-  doc.roundedRect(left, startY, cardWidth, cardHeight, 2.5, 2.5, "FD");
-
-  rows.forEach(([label, value], index) => {
-    const rowY = startY + 5 + index * rowHeight;
-    if (index % 2 === 1) {
-      doc.setFillColor(ROW_ALT[0], ROW_ALT[1], ROW_ALT[2]);
-      doc.rect(left + 0.5, rowY - 5.5, cardWidth - 1, rowHeight, "F");
-    }
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(7.2);
-    doc.setTextColor(MUTED[0], MUTED[1], MUTED[2]);
-    doc.text(String(label || ""), left + 4, rowY);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(7.4);
-    doc.setTextColor(INK[0], INK[1], INK[2]);
-    doc.text(String(value || "-"), right - 4, rowY, { align: "right", maxWidth: cardWidth - 52 });
+function drawMetadataTable(doc, settlement, startY) {
+  autoTable(doc, {
+    startY,
+    theme: "plain",
+    margin: { left: MARGIN, right: MARGIN },
+    styles: {
+      ...tableBaseStyles,
+      fontSize: 7.2,
+      cellPadding: { top: 2, right: 2.5, bottom: 2, left: 2.5 },
+    },
+    body: [
+      [
+        { content: "Date", styles: { fontStyle: "bold", textColor: MUTED } },
+        formatDisplayDate(settlement.date) || "-",
+        { content: "Voucher No.", styles: { fontStyle: "bold", textColor: MUTED } },
+        settlement.voucherNo || "-",
+        { content: "Company Account", styles: { fontStyle: "bold", textColor: MUTED } },
+        settlement.companyAccount || "-",
+      ],
+      [
+        { content: "Location", styles: { fontStyle: "bold", textColor: MUTED } },
+        settlement.locationName || "-",
+        { content: "Product", styles: { fontStyle: "bold", textColor: MUTED } },
+        settlement.productName || "-",
+        { content: "Lorry No.", styles: { fontStyle: "bold", textColor: MUTED } },
+        settlement.outwardLorryNo || "-",
+      ],
+    ],
+    columnStyles: {
+      0: { cellWidth: 24 },
+      1: { cellWidth: 34, fontStyle: "bold" },
+      2: { cellWidth: 28 },
+      3: { cellWidth: 30, fontStyle: "bold" },
+      4: { cellWidth: 30 },
+      5: { cellWidth: 34, fontStyle: "bold" },
+    },
+    didParseCell: (data) => {
+      if (data.section === "body") {
+        data.cell.styles.fillColor = data.row.index % 2 === 0 ? [255, 255, 255] : ROW_ALT;
+      }
+    },
   });
 
-  return startY + cardHeight;
+  doc.setDrawColor(BORDER[0], BORDER[1], BORDER[2]);
+  doc.setLineWidth(0.25);
+  doc.roundedRect(MARGIN, startY - 1, CONTENT_WIDTH, doc.lastAutoTable.finalY - startY + 2, 2, 2, "S");
+
+  return doc.lastAutoTable.finalY + 4;
 }
 
-function drawTwoColumnTable(doc, title, rows, startY, { highlightLast = false } = {}) {
-  drawSectionTitle(doc, title, 14, startY);
+function drawDetailTable(doc, title, rows, startY) {
+  drawSectionTitle(doc, title, startY);
 
-  const body = rows.map(([particular, amount], index) => {
-    const isLast = highlightLast && index === rows.length - 1;
+  autoTable(doc, {
+    startY: startY + 3,
+    theme: "plain",
+    margin: { left: MARGIN, right: MARGIN },
+    styles: tableBaseStyles,
+    body: rows.map(([label, value]) => [
+      { content: label, styles: { fontStyle: "normal", textColor: MUTED } },
+      { content: String(value || "-"), styles: { fontStyle: "bold", halign: "right" } },
+    ]),
+    columnStyles: {
+      0: { cellWidth: 58 },
+      1: { cellWidth: CONTENT_WIDTH - 58 },
+    },
+    didParseCell: (data) => {
+      if (data.section === "body") {
+        data.cell.styles.fillColor = data.row.index % 2 === 0 ? [255, 255, 255] : ROW_ALT;
+      }
+    },
+  });
+
+  doc.setDrawColor(BORDER[0], BORDER[1], BORDER[2]);
+  doc.setLineWidth(0.25);
+  doc.roundedRect(MARGIN, startY + 2, CONTENT_WIDTH, doc.lastAutoTable.finalY - startY - 1, 2, 2, "S");
+
+  return doc.lastAutoTable.finalY + 5;
+}
+
+function drawAmountSummaryTable(doc, title, rows, startY, { totalLabel = null } = {}) {
+  drawSectionTitle(doc, title, startY);
+
+  const body = rows.map(([label, value], index) => {
+    const isTotal = totalLabel && label === totalLabel;
     return [
       {
-        content: particular,
-        styles: isLast
-          ? { fontStyle: "bold", fillColor: HEADER_SOFT, textColor: HEADER_DARK }
-          : { fontStyle: "bold" },
+        content: label,
+        styles: {
+          fontStyle: isTotal ? "bold" : "normal",
+          textColor: isTotal ? HEADER_DARK : MUTED,
+          fillColor: isTotal ? HEADER_SOFT : index % 2 === 0 ? [255, 255, 255] : ROW_ALT,
+        },
       },
       {
-        content: amount,
+        content: value,
         styles: {
           halign: "right",
           fontStyle: "bold",
-          ...(isLast ? { fillColor: HEADER_SOFT, textColor: HEADER_DARK, fontSize: 9 } : {}),
+          textColor: isTotal ? HEADER_DARK : INK,
+          fillColor: isTotal ? HEADER_SOFT : index % 2 === 0 ? [255, 255, 255] : ROW_ALT,
+          fontSize: isTotal ? 8.8 : 8,
         },
       },
     ];
   });
 
   autoTable(doc, {
-    startY: startY + 4,
-    theme: "grid",
-    margin: { left: 14, right: 14 },
+    startY: startY + 3,
+    theme: "plain",
+    margin: { left: MARGIN, right: MARGIN },
+    styles: tableBaseStyles,
     headStyles: {
       fillColor: HEADER,
-      textColor: 255,
+      textColor: [255, 255, 255],
       fontStyle: "bold",
-      halign: "center",
+      halign: "left",
       fontSize: 7.5,
     },
-    styles: {
-      fontSize: 7.8,
-      cellPadding: 2.8,
-      textColor: INK,
-      lineColor: BORDER,
-      lineWidth: 0.25,
-    },
-    alternateRowStyles: { fillColor: ROW_ALT },
-    head: [["Particular", "Amount (Rs.)"]],
+    head: [["Description", "Amount (Rs.)"]],
     body,
     columnStyles: {
-      0: { cellWidth: 120 },
-      1: { cellWidth: 62, halign: "right" },
+      0: { cellWidth: 98 },
+      1: { cellWidth: CONTENT_WIDTH - 98, halign: "right" },
     },
   });
 
-  return doc.lastAutoTable.finalY;
-}
+  doc.setDrawColor(BORDER[0], BORDER[1], BORDER[2]);
+  doc.setLineWidth(0.25);
+  doc.roundedRect(MARGIN, startY + 2, CONTENT_WIDTH, doc.lastAutoTable.finalY - startY - 1, 2, 2, "S");
 
-function drawDeductionTable(doc, row, startY) {
-  const shortageAmount = toNumber(row.shortageAmount);
-  const claim = toNumber(row.claim);
-  const cDeduction = toNumber(row.cDeduction);
-  const freight = toNumber(row.freight);
-  const labour = toNumber(row.labour);
-  const otherCharges = toNumber(row.other);
-  const totalDeduction =
-    shortageAmount + claim + cDeduction + freight + labour + otherCharges;
-
-  drawSectionTitle(doc, "Deductions & Charges", 14, startY);
-
-  const body = [
-    ["Shortage Amount", money(shortageAmount)],
-    ["Claim", money(claim)],
-    ["C.Deduction", money(cDeduction)],
-    ["Freight", money(freight)],
-    ["Labour", money(labour)],
-    ["Other Charges", money(otherCharges)],
-    [
-      {
-        content: "Total Deduction",
-        styles: { fontStyle: "bold", fillColor: HEADER_SOFT, textColor: HEADER_DARK },
-      },
-      {
-        content: money(totalDeduction),
-        styles: {
-          halign: "right",
-          fontStyle: "bold",
-          fillColor: HEADER_SOFT,
-          textColor: HEADER_DARK,
-          fontSize: 9,
-        },
-      },
-    ],
-  ];
-
-  autoTable(doc, {
-    startY: startY + 4,
-    theme: "grid",
-    margin: { left: 14, right: 14 },
-    headStyles: {
-      fillColor: HEADER,
-      textColor: 255,
-      fontStyle: "bold",
-      halign: "center",
-      fontSize: 7.5,
-    },
-    styles: {
-      fontSize: 7.8,
-      cellPadding: 2.8,
-      textColor: INK,
-      lineColor: BORDER,
-      lineWidth: 0.25,
-    },
-    alternateRowStyles: { fillColor: ROW_ALT },
-    head: [["Particular", "Amount (Rs.)"]],
-    body,
-    columnStyles: {
-      0: { cellWidth: 120, fontStyle: "bold" },
-      1: { cellWidth: 62, halign: "right", fontStyle: "bold" },
-    },
-  });
-
-  return doc.lastAutoTable.finalY;
+  return doc.lastAutoTable.finalY + 5;
 }
 
 export function buildAdjustedCompanyCopyPdf({ settlement, adjustmentItems }) {
@@ -221,7 +201,6 @@ export function buildAdjustedCompanyCopyPdf({ settlement, adjustmentItems }) {
 
     const row = {
       settlementWeight: toNumber(item.settlementWeight ?? item.settlement_weight),
-      shortQty: toNumber(item.shortQty ?? item.shortQtyPerLine),
       shortageAmount: toNumber(item.shortageAmount ?? item.shortAmount),
       claim: toNumber(item.claim),
       cDeduction: toNumber(item.cDeduction ?? item.c_deduction),
@@ -233,99 +212,104 @@ export function buildAdjustedCompanyCopyPdf({ settlement, adjustmentItems }) {
       netPayable: toNumber(item.netPayable ?? item.net_payable),
     };
 
+    const totalDeduction =
+      row.shortageAmount + row.claim + row.cDeduction + row.freight + row.labour + row.other;
+
     doc.setFillColor(PAGE_BG[0], PAGE_BG[1], PAGE_BG[2]);
     doc.rect(0, 0, 210, 297, "F");
 
-    // Header banner
+    // Compact header
+    const headerH = 18;
     doc.setFillColor(HEADER[0], HEADER[1], HEADER[2]);
-    doc.rect(0, 10, 138, 28, "F");
+    doc.rect(0, 8, 128, headerH, "F");
     doc.setFillColor(PAGE_BG[0], PAGE_BG[1], PAGE_BG[2]);
-    doc.triangle(138, 10, 126, 38, 138, 38, "F");
+    doc.triangle(128, 8, 118, 8 + headerH, 128, 8 + headerH, "F");
+
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(17);
+    doc.setFontSize(12.5);
     doc.setTextColor(255, 255, 255);
-    doc.text("OUTWARD SETTLEMENT", 8, 22);
-    doc.setFontSize(8.5);
-    doc.text("ADJUSTED COMPANY COPY", 8, 30);
+    doc.text("OUTWARD SETTLEMENT", MARGIN, 16.5);
+    doc.setFontSize(6.8);
+    doc.text("ADJUSTED COMPANY COPY", MARGIN, 21.5);
 
-    // Account block
     doc.setFillColor(255, 255, 255);
-    doc.rect(138, 10, 64, 28, "F");
+    doc.rect(128, 8, 210 - 128, headerH, "F");
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(8.5);
+    doc.setFontSize(7.5);
     doc.setTextColor(HEADER_DARK[0], HEADER_DARK[1], HEADER_DARK[2]);
-    doc.text(String(settlement.companyName || settlement.accountName || "HANSARIA APP").toUpperCase(), 144, 21, { maxWidth: 52 });
+    const companyTitle = String(settlement.companyName || settlement.accountName || "HANSARIA APP").toUpperCase();
+    doc.text(companyTitle, 133, 15, { maxWidth: 68 });
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(5.8);
+    doc.setFontSize(5.5);
     doc.setTextColor(MUTED[0], MUTED[1], MUTED[2]);
-    doc.text(String(settlement.accountAddress || "-"), 144, 29, { maxWidth: 52 });
+    doc.text(String(settlement.accountAddress || "-"), 133, 21, { maxWidth: 68 });
 
-    // Metadata tiles
-    const tileY = 48;
-    drawInfoTile(doc, 14, tileY, 30, "Date", formatDisplayDate(settlement.date) || "-");
-    drawInfoTile(doc, 46, tileY, 34, "Voucher No.", settlement.voucherNo || "-");
-    drawInfoTile(doc, 82, tileY, 36, "Company Account", settlement.companyAccount || "-");
-    drawInfoTile(doc, 120, tileY, 28, "Location", settlement.locationName || "-");
-    drawInfoTile(doc, 150, tileY, 24, "Product", settlement.productName || "-");
-    drawInfoTile(doc, 176, tileY, 20, "Lorry No.", settlement.outwardLorryNo || "-");
-
-    let cursorY = 72;
+    let cursorY = 30;
+    cursorY = drawMetadataTable(doc, settlement, cursorY);
 
     // 1. Adjusted Company Details
-    drawSectionTitle(doc, "Adjusted Company Details", 14, cursorY);
-    cursorY = drawKeyValueCard(
-      doc,
-      [
-        ["Adjusted Company", item.companyName || item.company_name || "-"],
-        ["Adjusted Lorry No.", item.lorryNo || item.lorry_no || "-"],
-        ["Inward Voucher", item.inwardVoucherNo || item.inward_voucher_no || "-"],
-        ["Loading Type", loadingTypeLabel(item.sourceType ?? item.source_type)],
-        ["Consignee", settlement.consigneeName || "-"],
-        ["Product", settlement.productName || "-"],
-        ["Settlement Weight", row.settlementWeight.toFixed(2)],
-      ],
-      cursorY + 5
-    );
-    cursorY += 10;
+    cursorY = drawDetailTable(doc, "Adjusted Company Details", [
+      ["Adjusted Company", item.companyName || item.company_name || "-"],
+      ["Adjusted Lorry No.", item.lorryNo || item.lorry_no || "-"],
+      ["Inward Voucher", item.inwardVoucherNo || item.inward_voucher_no || "-"],
+      ["Loading Type", loadingTypeLabel(item.sourceType ?? item.source_type)],
+      ["Consignee", settlement.consigneeName || "-"],
+      ["Product", settlement.productName || "-"],
+      ["Settlement Weight", row.settlementWeight.toFixed(2)],
+    ], cursorY);
 
     // 2. Gross Amount Details
-    cursorY =
-      drawTwoColumnTable(
-        doc,
-        "Gross Amount Details",
-        [
-          ["Weight", row.settlementWeight.toFixed(2)],
-          ["Company Rate", money(row.companyRate)],
-          ["Gross Amount", money(row.amount)],
-        ],
-        cursorY,
-        { highlightLast: true }
-      ) + 10;
+    cursorY = drawAmountSummaryTable(
+      doc,
+      "Gross Amount Details",
+      [
+        ["Weight", row.settlementWeight.toFixed(2)],
+        ["Company Rate", money(row.companyRate)],
+        ["Gross Amount", money(row.amount)],
+      ],
+      cursorY,
+      { totalLabel: "Gross Amount" }
+    );
 
-    // 3. Deductions & Charges (same fields as settlement page purchase summary)
-    cursorY = drawDeductionTable(doc, row, cursorY) + 10;
+    // 3. Deductions & Charges
+    cursorY = drawAmountSummaryTable(
+      doc,
+      "Deductions & Charges",
+      [
+        ["Shortage Amount", money(row.shortageAmount)],
+        ["Claim", money(row.claim)],
+        ["C.Deduction", money(row.cDeduction)],
+        ["Freight", money(row.freight)],
+        ["Labour", money(row.labour)],
+        ["Other Charges", money(row.other)],
+        ["Total Deduction", money(totalDeduction)],
+      ],
+      cursorY,
+      { totalLabel: "Total Deduction" }
+    );
 
-    // Net payable highlight
+    // Net payable
+    const netBoxH = 14;
     doc.setFillColor(255, 255, 255);
     doc.setDrawColor(BORDER[0], BORDER[1], BORDER[2]);
-    doc.roundedRect(14, cursorY, 182, 18, 2.5, 2.5, "FD");
+    doc.roundedRect(MARGIN, cursorY, CONTENT_WIDTH, netBoxH, 2, 2, "FD");
     doc.setFillColor(HEADER[0], HEADER[1], HEADER[2]);
-    doc.roundedRect(18, cursorY + 2.5, 14, 13, 2, 2, "F");
+    doc.roundedRect(MARGIN + 3, cursorY + 2.5, 10, 9, 1.5, 1.5, "F");
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(9.5);
+    doc.setFontSize(8.5);
     doc.setTextColor(HEADER_DARK[0], HEADER_DARK[1], HEADER_DARK[2]);
-    doc.text("NET PAYABLE", 38, cursorY + 11);
-    doc.setFontSize(15);
-    doc.text(`Rs. ${money(row.netPayable)}`, 192, cursorY + 11.5, { align: "right" });
+    doc.text("NET PAYABLE", MARGIN + 16, cursorY + 8.5);
+    doc.setFontSize(12);
+    doc.text(`Rs. ${money(row.netPayable)}`, MARGIN + CONTENT_WIDTH - 3, cursorY + 9, { align: "right" });
 
-    const footerY = Math.max(cursorY + 28, 276);
+    cursorY += netBoxH + 4;
     doc.setDrawColor(HEADER[0], HEADER[1], HEADER[2]);
-    doc.line(72, footerY, 88, footerY);
-    doc.line(122, footerY, 138, footerY);
+    doc.line(MARGIN + 50, cursorY, MARGIN + 62, cursorY);
+    doc.line(MARGIN + CONTENT_WIDTH - 62, cursorY, MARGIN + CONTENT_WIDTH - 50, cursorY);
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(7.8);
+    doc.setFontSize(7);
     doc.setTextColor(HEADER_DARK[0], HEADER_DARK[1], HEADER_DARK[2]);
-    doc.text("Thank you for your business!", 105, footerY + 1.5, { align: "center" });
+    doc.text("Thank you for your business!", MARGIN + CONTENT_WIDTH / 2, cursorY + 1.2, { align: "center" });
   });
 
   const firstItem = items[0] || {};
