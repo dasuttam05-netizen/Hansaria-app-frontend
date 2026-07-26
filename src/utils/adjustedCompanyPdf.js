@@ -2,12 +2,15 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { formatDisplayDate } from "./date";
 
-const GREEN = [10, 82, 65];
-const GREEN_DARK = [5, 64, 50];
-const GREEN_SOFT = [237, 246, 243];
-const TEXT = [31, 41, 55];
-const MUTED = [91, 108, 128];
-const BORDER = [223, 231, 238];
+// App palette (matches OutwardSettlementPage)
+const HEADER = [15, 118, 110];
+const HEADER_DARK = [17, 94, 89];
+const HEADER_SOFT = [232, 246, 243];
+const INK = [15, 23, 42];
+const MUTED = [71, 85, 105];
+const BORDER = [213, 224, 234];
+const ROW_ALT = [248, 251, 255];
+const PAGE_BG = [248, 251, 250];
 
 const toNumber = (value) => {
   const n = Number(value);
@@ -33,64 +36,115 @@ const loadingTypeLabel = (sourceType) =>
 function drawSectionTitle(doc, label, x, y) {
   const title = String(label || "").toUpperCase();
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(10.2);
-  doc.setTextColor(GREEN_DARK[0], GREEN_DARK[1], GREEN_DARK[2]);
+  doc.setFontSize(9.5);
+  doc.setTextColor(HEADER_DARK[0], HEADER_DARK[1], HEADER_DARK[2]);
   doc.text(title, x, y);
-  doc.setDrawColor(GREEN[0], GREEN[1], GREEN[2]);
+  doc.setDrawColor(HEADER[0], HEADER[1], HEADER[2]);
   doc.setLineWidth(0.35);
-  doc.line(x + doc.getTextWidth(title) + 5, y - 1.5, 190, y - 1.5);
+  doc.line(x + doc.getTextWidth(title) + 4, y - 1.5, 196, y - 1.5);
 }
 
 function drawInfoTile(doc, x, y, w, title, value) {
   doc.setFillColor(255, 255, 255);
   doc.setDrawColor(BORDER[0], BORDER[1], BORDER[2]);
-  doc.roundedRect(x, y, w, 17, 2.5, 2.5, "FD");
-  doc.setFillColor(GREEN[0], GREEN[1], GREEN[2]);
-  doc.circle(x + 7, y + 8.5, 4.1, "F");
+  doc.roundedRect(x, y, w, 16, 2, 2, "FD");
+  doc.setFillColor(HEADER[0], HEADER[1], HEADER[2]);
+  doc.circle(x + 6.5, y + 8, 3.8, "F");
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(6.2);
+  doc.setFontSize(5.8);
   doc.setTextColor(MUTED[0], MUTED[1], MUTED[2]);
-  doc.text(String(title || "").toUpperCase(), x + 14, y + 6.6);
-  doc.setFontSize(7);
-  doc.setTextColor(TEXT[0], TEXT[1], TEXT[2]);
-  doc.text(String(value || "-"), x + 14, y + 11.7, { maxWidth: w - 16 });
+  doc.text(String(title || "").toUpperCase(), x + 13, y + 6.2);
+  doc.setFontSize(6.8);
+  doc.setTextColor(INK[0], INK[1], INK[2]);
+  doc.text(String(value || "-"), x + 13, y + 11.2, { maxWidth: w - 15 });
 }
 
-function drawDetailGrid(doc, leftRows, rightRows, y) {
-  const rowCount = Math.max(leftRows.length, rightRows.length);
-  const body = Array.from({ length: rowCount }, (_, index) => {
-    const left = leftRows[index] || ["", ""];
-    const right = rightRows[index] || ["", ""];
+function drawKeyValueCard(doc, rows, startY) {
+  const left = 14;
+  const right = 196;
+  const cardWidth = right - left;
+  const rowHeight = 8.2;
+  const cardHeight = rows.length * rowHeight + 6;
+
+  doc.setFillColor(255, 255, 255);
+  doc.setDrawColor(BORDER[0], BORDER[1], BORDER[2]);
+  doc.roundedRect(left, startY, cardWidth, cardHeight, 2.5, 2.5, "FD");
+
+  rows.forEach(([label, value], index) => {
+    const rowY = startY + 5 + index * rowHeight;
+    if (index % 2 === 1) {
+      doc.setFillColor(ROW_ALT[0], ROW_ALT[1], ROW_ALT[2]);
+      doc.rect(left + 0.5, rowY - 5.5, cardWidth - 1, rowHeight, "F");
+    }
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.2);
+    doc.setTextColor(MUTED[0], MUTED[1], MUTED[2]);
+    doc.text(String(label || ""), left + 4, rowY);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7.4);
+    doc.setTextColor(INK[0], INK[1], INK[2]);
+    doc.text(String(value || "-"), right - 4, rowY, { align: "right", maxWidth: cardWidth - 52 });
+  });
+
+  return startY + cardHeight;
+}
+
+function drawAmountTable(doc, title, rows, startY, { highlightLast = false } = {}) {
+  drawSectionTitle(doc, title, 14, startY);
+
+  const body = rows.map(([particular, details, amount], index) => {
+    const isLast = highlightLast && index === rows.length - 1;
     return [
-      left[0] ? `- ${left[0]}` : "",
-      left[0] ? ":" : "",
-      left[0] ? left[1] || "-" : "",
-      right[0] ? `- ${right[0]}` : "",
-      right[0] ? ":" : "",
-      right[0] ? right[1] || "-" : "",
+      {
+        content: particular,
+        styles: isLast
+          ? { fontStyle: "bold", fillColor: HEADER_SOFT, textColor: HEADER_DARK }
+          : { fontStyle: "bold" },
+      },
+      {
+        content: details,
+        styles: isLast ? { fillColor: HEADER_SOFT } : {},
+      },
+      {
+        content: amount,
+        styles: {
+          halign: "right",
+          fontStyle: "bold",
+          ...(isLast ? { fillColor: HEADER_SOFT, textColor: HEADER_DARK, fontSize: 9 } : {}),
+        },
+      },
     ];
   });
 
   autoTable(doc, {
-    startY: y,
-    theme: "plain",
+    startY: startY + 4,
+    theme: "grid",
     margin: { left: 14, right: 14 },
-    styles: {
-      fontSize: 8,
-      cellPadding: { top: 2.1, right: 2, bottom: 2.1, left: 2 },
-      textColor: TEXT,
+    headStyles: {
+      fillColor: HEADER,
+      textColor: 255,
+      fontStyle: "bold",
+      halign: "center",
+      fontSize: 7.5,
     },
-    alternateRowStyles: { fillColor: [250, 252, 252] },
+    styles: {
+      fontSize: 7.8,
+      cellPadding: 2.8,
+      textColor: INK,
+      lineColor: BORDER,
+      lineWidth: 0.25,
+    },
+    alternateRowStyles: { fillColor: ROW_ALT },
+    head: [["Particular", "Details", "Amount (Rs.)"]],
     body,
     columnStyles: {
-      0: { cellWidth: 38, fontStyle: "bold" },
-      1: { cellWidth: 5, halign: "center" },
-      2: { cellWidth: 47, fontStyle: "bold" },
-      3: { cellWidth: 38, fontStyle: "bold" },
-      4: { cellWidth: 5, halign: "center" },
-      5: { cellWidth: 47, fontStyle: "bold" },
+      0: { cellWidth: 52 },
+      1: { cellWidth: 88 },
+      2: { cellWidth: 42, halign: "right" },
     },
   });
+
+  return doc.lastAutoTable.finalY;
 }
 
 export function buildAdjustedCompanyCopyPdf({ settlement, adjustmentItems }) {
@@ -117,41 +171,60 @@ export function buildAdjustedCompanyCopyPdf({ settlement, adjustmentItems }) {
       netPayable: toNumber(item.netPayable ?? item.net_payable),
     };
 
-    doc.setFillColor(248, 251, 250);
+    doc.setFillColor(PAGE_BG[0], PAGE_BG[1], PAGE_BG[2]);
     doc.rect(0, 0, 210, 297, "F");
 
-    doc.setFillColor(GREEN[0], GREEN[1], GREEN[2]);
-    doc.rect(0, 10, 140, 31, "F");
-    doc.setFillColor(248, 251, 250);
-    doc.triangle(140, 10, 128, 41, 140, 41, "F");
+    // Header banner
+    doc.setFillColor(HEADER[0], HEADER[1], HEADER[2]);
+    doc.rect(0, 10, 138, 28, "F");
+    doc.setFillColor(PAGE_BG[0], PAGE_BG[1], PAGE_BG[2]);
+    doc.triangle(138, 10, 126, 38, 138, 38, "F");
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(19.5);
+    doc.setFontSize(17);
     doc.setTextColor(255, 255, 255);
-    doc.text("OUTWARD SETTLEMENT", 8, 24);
-    doc.setFontSize(9.5);
-    doc.text("ADJUSTED COMPANY COPY", 8, 34);
+    doc.text("OUTWARD SETTLEMENT", 8, 22);
+    doc.setFontSize(8.5);
+    doc.text("ADJUSTED COMPANY COPY", 8, 30);
 
+    // Account block
     doc.setFillColor(255, 255, 255);
-    doc.rect(140, 10, 62, 31, "F");
+    doc.rect(138, 10, 64, 28, "F");
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(9.4);
-    doc.setTextColor(GREEN_DARK[0], GREEN_DARK[1], GREEN_DARK[2]);
-    doc.text(String(settlement.accountName || "HANSARIA APP").toUpperCase(), 147, 21.5, { maxWidth: 48 });
+    doc.setFontSize(8.5);
+    doc.setTextColor(HEADER_DARK[0], HEADER_DARK[1], HEADER_DARK[2]);
+    doc.text(String(settlement.accountName || "HANSARIA APP").toUpperCase(), 144, 19, { maxWidth: 52 });
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(5.8);
-    doc.text("GRAIN MERCHANT & COMMISSION AGENT", 147, 27.2, { maxWidth: 48 });
+    doc.setFontSize(5.5);
+    doc.text("GRAIN MERCHANT & COMMISSION AGENT", 144, 24.5, { maxWidth: 52 });
     doc.setTextColor(MUTED[0], MUTED[1], MUTED[2]);
-    doc.text(String(settlement.accountAddress || "-"), 147, 33.2, { maxWidth: 48 });
+    doc.text(String(settlement.accountAddress || "-"), 144, 30, { maxWidth: 52 });
 
-    const tileY = 51;
+    // Metadata tiles
+    const tileY = 48;
     drawInfoTile(doc, 14, tileY, 34, "Date", formatDisplayDate(settlement.date) || "-");
-    drawInfoTile(doc, 50, tileY, 39, "Voucher No.", settlement.voucherNo || "-");
-    drawInfoTile(doc, 91, tileY, 39, "Company Account", settlement.accountName || "-");
-    drawInfoTile(doc, 132, tileY, 30, "Location", settlement.locationName || "-");
-    drawInfoTile(doc, 164, tileY, 32, "Outward Lorry No.", settlement.outwardLorryNo || "-");
+    drawInfoTile(doc, 50, tileY, 38, "Voucher No.", settlement.voucherNo || "-");
+    drawInfoTile(doc, 90, tileY, 38, "Company Account", settlement.accountName || "-");
+    drawInfoTile(doc, 130, tileY, 30, "Location", settlement.locationName || "-");
+    drawInfoTile(doc, 162, tileY, 34, "Outward Lorry No.", settlement.outwardLorryNo || "-");
 
-    drawSectionTitle(doc, "Adjusted Company Details", 14, 83);
-    drawDetailGrid(
+    // Gross amount at top
+    let cursorY = 72;
+    cursorY =
+      drawAmountTable(
+        doc,
+        "Gross Amount Details",
+        [
+          ["Weight", "Settlement weight (MT)", row.settlementWeight.toFixed(2)],
+          ["Company Rate", "Rate applied on settlement", money(row.companyRate)],
+          ["Gross Amount", "Weight × company rate", money(row.amount)],
+        ],
+        cursorY,
+        { highlightLast: true }
+      ) + 10;
+
+    // Adjusted company details – single-column card for WhatsApp readability
+    drawSectionTitle(doc, "Adjusted Company Details", 14, cursorY);
+    cursorY = drawKeyValueCard(
       doc,
       [
         ["Adjusted Company", item.companyName || item.company_name || "-"],
@@ -159,65 +232,49 @@ export function buildAdjustedCompanyCopyPdf({ settlement, adjustmentItems }) {
         ["Inward Voucher", item.inwardVoucherNo || item.inward_voucher_no || "-"],
         ["Loading Type", loadingTypeLabel(item.sourceType ?? item.source_type)],
         ["Consignee", settlement.consigneeName || "-"],
-      ],
-      [
         ["Product", settlement.productName || "-"],
-        ["Name", item.companyName || item.company_name || settlement.accountName || "-"],
         ["Settlement Weight", row.settlementWeight.toFixed(2)],
       ],
-      88
+      cursorY + 5
     );
+    cursorY += 10;
 
-    const detailsY = doc.lastAutoTable.finalY + 8;
-    drawSectionTitle(doc, "Settlement Details", 14, detailsY);
-    autoTable(doc, {
-      startY: detailsY + 5,
-      theme: "grid",
-      margin: { left: 14, right: 14 },
-      headStyles: { fillColor: GREEN, textColor: 255, fontStyle: "bold", halign: "center" },
-      styles: { fontSize: 8, cellPadding: 2.7, textColor: TEXT, lineColor: BORDER, lineWidth: 0.25 },
-      alternateRowStyles: { fillColor: [250, 252, 252] },
-      head: [["#", "Particular", "Details", "Amount (Rs.)"]],
-      body: [
-        ["1", "Weight", "Settlement weight", row.settlementWeight.toFixed(2)],
-        ["2", "Company Rate", "Rate applied on settlement", money(row.companyRate)],
-        [{ content: "Amount", colSpan: 2, styles: { fontStyle: "bold", fillColor: GREEN_SOFT } }, "Weight x company rate", money(row.amount)],
-        ["3", "S. Amount", "Shortage deduction", money(row.shortageAmount)],
-        ["4", "Claim", "Claim amount", money(row.claim)],
-        ["5", "C.Deduction", "Claim + deduction", money(row.claim + row.deduction)],
-        ["6", "Freight", "Transportation charges", money(row.freight)],
-        ["7", "Labour Chgs", "Labour charges", money(row.labour)],
-        ["8", "Other Chgs", "Other miscellaneous charges", money(row.other)],
-        [{ content: "Net Payable", colSpan: 2, styles: { fontStyle: "bold", fillColor: GREEN_SOFT } }, "Total payable after all adjustments", money(row.netPayable)],
-      ],
-      columnStyles: {
-        0: { cellWidth: 12, halign: "center" },
-        1: { cellWidth: 48, fontStyle: "bold" },
-        2: { cellWidth: 82 },
-        3: { cellWidth: 40, halign: "right", fontStyle: "bold" },
-      },
-    });
+    // Deductions & charges – separate section at bottom
+    cursorY =
+      drawAmountTable(
+        doc,
+        "Deductions & Charges",
+        [
+          ["S. Amount", "Shortage deduction", money(row.shortageAmount)],
+          ["Claim", "Claim amount", money(row.claim)],
+          ["C. Deduction", "Claim + other deduction", money(row.claim + row.deduction)],
+          ["Freight", "Transportation charges", money(row.freight)],
+          ["Labour Chgs", "Labour charges", money(row.labour)],
+          ["Other Chgs", "Other miscellaneous charges", money(row.other)],
+        ],
+        cursorY
+      ) + 10;
 
-    const netY = doc.lastAutoTable.finalY + 9;
+    // Net payable highlight
     doc.setFillColor(255, 255, 255);
     doc.setDrawColor(BORDER[0], BORDER[1], BORDER[2]);
-    doc.roundedRect(14, netY, 182, 20, 2.5, 2.5, "FD");
-    doc.setFillColor(GREEN[0], GREEN[1], GREEN[2]);
-    doc.roundedRect(18, netY + 3, 16, 14, 2.5, 2.5, "F");
+    doc.roundedRect(14, cursorY, 182, 18, 2.5, 2.5, "FD");
+    doc.setFillColor(HEADER[0], HEADER[1], HEADER[2]);
+    doc.roundedRect(18, cursorY + 2.5, 14, 13, 2, 2, "F");
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(10);
-    doc.setTextColor(GREEN_DARK[0], GREEN_DARK[1], GREEN_DARK[2]);
-    doc.text("NET PAYABLE", 42, netY + 12);
-    doc.setFontSize(16);
-    doc.text(`Rs. ${money(row.netPayable)}`, 190, netY + 12.5, { align: "right" });
+    doc.setFontSize(9.5);
+    doc.setTextColor(HEADER_DARK[0], HEADER_DARK[1], HEADER_DARK[2]);
+    doc.text("NET PAYABLE", 38, cursorY + 11);
+    doc.setFontSize(15);
+    doc.text(`Rs. ${money(row.netPayable)}`, 192, cursorY + 11.5, { align: "right" });
 
-    const footerY = Math.max(netY + 31, 276);
-    doc.setDrawColor(GREEN[0], GREEN[1], GREEN[2]);
-    doc.line(70, footerY, 91, footerY);
-    doc.line(119, footerY, 140, footerY);
+    const footerY = Math.max(cursorY + 28, 276);
+    doc.setDrawColor(HEADER[0], HEADER[1], HEADER[2]);
+    doc.line(72, footerY, 88, footerY);
+    doc.line(122, footerY, 138, footerY);
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(8.2);
-    doc.setTextColor(GREEN_DARK[0], GREEN_DARK[1], GREEN_DARK[2]);
+    doc.setFontSize(7.8);
+    doc.setTextColor(HEADER_DARK[0], HEADER_DARK[1], HEADER_DARK[2]);
     doc.text("Thank you for your business!", 105, footerY + 1.5, { align: "center" });
   });
 
@@ -230,6 +287,7 @@ export function buildAdjustedCompanyCopyPdf({ settlement, adjustmentItems }) {
     `Date: ${formatDisplayDate(settlement.date) || "-"}`,
     `Company Account: ${settlement.accountName || "-"}`,
     `Adjusted Company: ${firstItem.companyName || firstItem.company_name || "-"}`,
+    `Gross Amount: Rs. ${money(toNumber(firstItem.amount))}`,
     `Net Payable: Rs. ${money(toNumber(firstItem.netPayable ?? firstItem.net_payable))}`,
   ].join("\n");
 
