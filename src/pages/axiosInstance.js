@@ -1,5 +1,6 @@
 import axios from "axios";
 import { getApiOrigin } from "../utils/api";
+import { clearSession, touchSessionActivity } from "../utils/auth";
 
 const API = axios.create({
   baseURL: getApiOrigin(),
@@ -10,6 +11,7 @@ API.interceptors.request.use(config => {
   config.headers = config.headers || {};
   if (token) {
     config.headers["Authorization"] = `Bearer ${token}`;
+    touchSessionActivity();
   }
   return config;
 });
@@ -33,7 +35,7 @@ API.interceptors.response.use(
         { url: error.config?.url, timestamp: new Date().toISOString() }
       );
       // Optionally redirect to login on 401
-      localStorage.removeItem("token");
+      clearSession();
     } else if (statusCode === 503) {
       console.info(
         `[INFO] Service Unavailable (503): Database or service temporarily down`,
