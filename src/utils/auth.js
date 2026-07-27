@@ -540,6 +540,35 @@ function parsePermissionInput(permissions) {
 
 const TOKEN_KEY = "token";
 const USER_KEY = "authUser";
+const LAST_ACTIVITY_KEY = "lastActivityAt";
+
+export const SESSION_IDLE_TIMEOUT_MS = 60 * 60 * 1000;
+
+export function touchSessionActivity() {
+  if (!localStorage.getItem(TOKEN_KEY)) {
+    return;
+  }
+  localStorage.setItem(LAST_ACTIVITY_KEY, String(Date.now()));
+}
+
+export function getSessionIdleRemainingMs() {
+  const token = localStorage.getItem(TOKEN_KEY);
+  if (!token) {
+    return null;
+  }
+
+  const lastActivity = Number(localStorage.getItem(LAST_ACTIVITY_KEY) || 0);
+  if (!lastActivity) {
+    return SESSION_IDLE_TIMEOUT_MS;
+  }
+
+  return Math.max(0, SESSION_IDLE_TIMEOUT_MS - (Date.now() - lastActivity));
+}
+
+export function isSessionIdleExpired() {
+  const remaining = getSessionIdleRemainingMs();
+  return remaining !== null && remaining <= 0;
+}
 
 export function normalizePermissions(role = "staff", permissions = []) {
   const normalizedRole = normalizeRole(role);
@@ -577,6 +606,7 @@ export function saveSession(token, user) {
 
   localStorage.setItem(TOKEN_KEY, token);
   localStorage.setItem(USER_KEY, JSON.stringify(normalizedUser));
+  touchSessionActivity();
   applyAuthToken(token);
 
   return normalizedUser;
@@ -588,6 +618,13 @@ export function loadSession() {
 
   if (!token || !rawUser) {
     applyAuthToken(null);
+    return { token: null, user: null };
+  }
+
+  if (!localStorage.getItem(LAST_ACTIVITY_KEY)) {
+    touchSessionActivity();
+  } else if (isSessionIdleExpired()) {
+    clearSession();
     return { token: null, user: null };
   }
 
@@ -610,6 +647,7 @@ export function loadSession() {
 export function clearSession() {
   localStorage.removeItem(TOKEN_KEY);
   localStorage.removeItem(USER_KEY);
+  localStorage.removeItem(LAST_ACTIVITY_KEY);
   applyAuthToken(null);
 }
 
