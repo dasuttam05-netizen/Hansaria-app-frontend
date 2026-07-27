@@ -1,7 +1,8 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { hasAnyPermission, hasPermission, saveSession } from "../utils/auth";
+import { getApiUrl } from "../utils/api";
 import logo from "./logo.png";
 import heroBg from "../assets/login-corn-jute-warehouse.png";
 
@@ -54,6 +55,13 @@ export default function LoginPage() {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("idle") === "1") {
+      setError("1 hour inactive thakar karone auto logout hoyeche. Abar login korun.");
+    }
+  }, []);
+
   const handleLogin = async (e) => {
     e.preventDefault();
     if (loading) return;
@@ -62,7 +70,7 @@ export default function LoginPage() {
     setLoading(true);
 
     try {
-      const res = await axios.post("https://hansaria-app-backend.onrender.com/auth/login", {
+      const res = await axios.post(getApiUrl("/auth/login"), {
         username,
         password,
       });
