@@ -8,6 +8,7 @@ import {
 } from "react-router-dom";
 
 import { loadSession } from "./utils/auth";
+import SessionIdleGuard from "./components/SessionIdleGuard";
 
 import LoginPage from "./pages/LoginPage";
 import { DashboardPageSafe } from "./pages/DashboardPage";
@@ -64,6 +65,7 @@ function App() {
 
   return (
     <Router>
+      <SessionIdleGuard />
       <Routes>
 
         <Route
