@@ -44,6 +44,7 @@ import CashActivityLogPage from "./pages/CashActivityLogPage";
 import "./mobile.css";
 
 import ProtectedRoute from "./components/ProtectedRoute";
+import SessionIdleGuard from "./components/SessionIdleGuard";
 import { loadSession } from "./utils/auth";
 import { getApiOrigin } from "./utils/api";
 
@@ -433,6 +434,7 @@ function AppRoutes() {
 function App() {
   return (
     <Router>
+      <SessionIdleGuard />
       <AppRoutes />
     </Router>
   );
