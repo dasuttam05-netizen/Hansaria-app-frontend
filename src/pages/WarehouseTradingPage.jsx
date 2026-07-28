@@ -406,6 +406,7 @@ export default function WarehouseTradingPage() {
     toNumber(formData.fungus) +
     toNumber(formData.discolour) +
     toNumber(formData.others);
+  const saleTransportCharge = toNumber(formData.transport_charge);
   const saleCashDiscountAmount = Number((saleBillAmountFromData(formData) * toNumber(formData.cd_percent) / 100).toFixed(2));
   const partySaleTotal = list
     .filter((item) => {
@@ -416,7 +417,7 @@ export default function WarehouseTradingPage() {
     .reduce((sum, item) => sum + toNumber(item.total_amount || item.net_receivable_amount || item.net_amount || item.amount), 0);
   const tdsEligible = partySaleTotal > 5000000;
   const autoTdsAmount = tdsEligible
-    ? Math.max(saleBillAmountFromData(formData) - saleShortageAmount - saleQualityDeduction - saleCashDiscountAmount - toNumber(formData.adjustment_amount), 0) * 0.001
+    ? Math.max(saleBillAmountFromData(formData) - saleShortageAmount - saleQualityDeduction - saleTransportCharge - saleCashDiscountAmount - toNumber(formData.adjustment_amount), 0) * 0.001
     : 0;
   const selectedBuyerSaleRows = list.filter((item) => {
     const sameBuyer = String(getBuyerId(item) || "") === String(formData.buyer_id || formData.company_id || "");
@@ -453,6 +454,7 @@ export default function WarehouseTradingPage() {
     saleGrossAmountFromData(formData) -
     toNumber(formData.claim_amount) -
     toNumber(formData.other_deduction) -
+    saleTransportCharge -
     saleCashDiscountAmount -
     toNumber(formData.adjustment_amount) -
     (tdsEligible ? autoTdsAmount : toNumber(formData.tds_amount)) +
@@ -645,6 +647,30 @@ export default function WarehouseTradingPage() {
     window.addEventListener("keydown", handleF2Key);
     return () => window.removeEventListener("keydown", handleF2Key);
   }, [activeTab, activeVoucherType]);
+
+  useEffect(() => {
+    const loadSaleTransportCharge = async () => {
+      if (!showSaleDeductionModal) return;
+      const biltiId = selectedSalePassBill?.bilti_id;
+      if (!biltiId) {
+        if (!formData.transport_charge) {
+          setFormData((prev) => ({ ...prev, transport_charge: "" }));
+        }
+        return;
+      }
+      try {
+        const response = await axios.get(`/api/transport-bilti/${biltiId}`);
+        const amount = toNumber(response.data?.transport_charge || response.data?.net_amount || response.data?.payable_amount || response.data?.gross_freight || 0);
+        setFormData((prev) => ({
+          ...prev,
+          transport_charge: amount > 0 ? amount.toFixed(2) : prev.transport_charge,
+        }));
+      } catch (err) {
+        // Keep manual value if transport lookup fails.
+      }
+    };
+    loadSaleTransportCharge();
+  }, [showSaleDeductionModal, selectedSalePassBill?.bilti_id]);
 
   useEffect(() => {
     const handleF5SaleKey = (event) => {
@@ -1558,6 +1584,13 @@ export default function WarehouseTradingPage() {
     };
   };
 
+  const salePreviewTransportCharge = toNumber(
+    salePreviewSummary?.transport_charge ||
+      salePreviewSummary?.summary?.transport_charge ||
+      salePreviewRow?.transport_charge ||
+      0
+  );
+
   useEffect(() => {
     const loadSalePreviewSummary = async () => {
       if (!showSalePreview || !salePreviewRow) return;
@@ -1765,8 +1798,9 @@ export default function WarehouseTradingPage() {
       shortage_amount: saleShortageAmount,
       claim_amount: saleShortageAmount,
       other_deduction: saleQualityDeduction,
+      transport_charge: saleTransportCharge,
       cd_amount: finalCdAmount,
-      total_deduction: saleQualityDeduction + finalCdAmount,
+      total_deduction: saleQualityDeduction + saleTransportCharge + finalCdAmount,
       tds_amount: finalTdsAmount,
       reject_qty: toNumber(formData.reject_qty),
       amount: saleBillAmountFromData(formData),
@@ -1858,8 +1892,9 @@ export default function WarehouseTradingPage() {
       shortage_amount: saleShortageAmount,
       claim_amount: saleShortageAmount,
       other_deduction: saleQualityDeduction,
+      transport_charge: saleTransportCharge,
       cd_amount: finalCdAmount,
-      total_deduction: saleQualityDeduction + finalCdAmount,
+      total_deduction: saleQualityDeduction + saleTransportCharge + finalCdAmount,
       tds_amount: finalTdsAmount,
       reject_qty: toNumber(formData.reject_qty),
       amount: saleBillAmountFromData(formData),
@@ -5240,6 +5275,17 @@ export default function WarehouseTradingPage() {
                   onChange={(e) => setFormData(prev => ({ ...prev, others: e.target.value }))}
                   style={inp}
                   placeholder="Others %"
+                />
+              </div>
+              <div>
+                <label style={lbl}>Freight / Transport</label>
+                <input 
+                  type="number"
+                  step="0.0001"
+                  value={formData.transport_charge}
+                  onChange={(e) => setFormData(prev => ({ ...prev, transport_charge: e.target.value }))}
+                  style={inp}
+                  placeholder="Auto from transport bill"
                 />
               </div>
               <div>
