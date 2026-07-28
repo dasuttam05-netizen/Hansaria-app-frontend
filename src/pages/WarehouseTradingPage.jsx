@@ -59,6 +59,7 @@ const defaultForm = () => ({
   fungus: "",
   discolour: "",
   others: "",
+  transport_charge: "",
   net_weight: "",
   bags_claim: "",
   labour: "",
@@ -119,6 +120,7 @@ const purchaseDeductionFields = [
   { key: "fungus", label: "Fungas" },
   { key: "discolour", label: "Disclour" },
   { key: "others", label: "Others" },
+  { key: "transport_charge", label: "Transport Charge" },
 ];
 
 const purchaseParticulars = [
@@ -290,7 +292,10 @@ export default function WarehouseTradingPage() {
     purchaseDeductionTotal;
   const safePurchaseNetWeight = Math.max(purchaseNetWeight, 0);
   const purchaseGrossAmount = safePurchaseNetWeight * toNumber(formData.rate);
-  const purchaseTotalDeduction = toNumber(formData.bags_claim) + toNumber(formData.labour);
+  const purchaseTotalDeduction =
+    toNumber(formData.bags_claim) +
+    toNumber(formData.labour) +
+    toNumber(formData.transport_charge);
   const purchaseRoundOff = toNumber(formData.round_off);
   const purchaseNetPayable = Math.max(purchaseGrossAmount - purchaseTotalDeduction + purchaseRoundOff, 0);
   const purchaseDeductionDefaults = purchaseBaseline || {
@@ -302,7 +307,15 @@ export default function WarehouseTradingPage() {
     others: "",
     bags_claim: "",
     labour: "",
+    transport_charge: "",
     round_off: "",
+  };
+  const purchaseAutoFillDefaults = {
+    ...purchaseDeductionDefaults,
+    bags_claim: purchaseDeductionDefaults.bags_claim || "",
+    labour: purchaseDeductionDefaults.labour || "",
+    transport_charge: purchaseDeductionDefaults.transport_charge || "",
+    round_off: purchaseDeductionDefaults.round_off || "",
   };
   const paymentAdjustmentTotal = paymentAdjustments.reduce(
     (sum, item) => sum + toNumber(item.adjusted_amount),
@@ -1115,6 +1128,7 @@ export default function WarehouseTradingPage() {
         "fungus",
         "discolour",
         "others",
+        "transport_charge",
         "net_weight",
         "bags_claim",
         "labour",
@@ -1348,6 +1362,7 @@ export default function WarehouseTradingPage() {
       others: nextForm.others || "",
       bags_claim: nextForm.bags_claim || "",
       labour: nextForm.labour || "",
+      transport_charge: nextForm.transport_charge || "",
       round_off: nextForm.round_off || "",
     });
     setEditId(voucherId);
@@ -1401,21 +1416,25 @@ export default function WarehouseTradingPage() {
   };
 
   const resetPurchaseDeductions = () => {
-    const defaults = purchaseBaseline || {
-      less_bags_weight: "",
-      moisture: "",
-      dunki: "",
-      fungus: "",
-      discolour: "",
-      others: "",
-      bags_claim: "",
-      labour: "",
-      round_off: "",
-    };
     setFormData((prev) => ({
       ...prev,
-      ...defaults,
+      ...purchaseAutoFillDefaults,
     }));
+  };
+
+  const capturePurchaseDeductionsAsDefault = () => {
+    setPurchaseBaseline({
+      less_bags_weight: formData.less_bags_weight || "",
+      moisture: formData.moisture || "",
+      dunki: formData.dunki || "",
+      fungus: formData.fungus || "",
+      discolour: formData.discolour || "",
+      others: formData.others || "",
+      bags_claim: formData.bags_claim || "",
+      labour: formData.labour || "",
+      transport_charge: formData.transport_charge || "",
+      round_off: formData.round_off || "",
+    });
   };
 
   const getPurchasePreviewData = () => ({
@@ -1473,6 +1492,7 @@ export default function WarehouseTradingPage() {
       fungus: formatMoney(row?.fungus),
       discolour: formatMoney(row?.discolour),
       others: formatMoney(row?.others),
+      transportCharge: formatMoney(row?.transport_charge),
       bagsClaim: formatMoney(row?.bags_claim),
       labour: formatMoney(row?.labour),
     };
@@ -2993,36 +3013,52 @@ export default function WarehouseTradingPage() {
                   </div>
 
                   <div className="purchase-voucher-bottom-grid" style={erpBottomGrid}>
-                    <div className="purchase-voucher-bottom-panel">
-                      <table style={erpMiniTable}>
-                        <thead>
-                          <tr><th style={erpTh}>Particulars</th><th style={erpTh}>Amount</th></tr>
-                        </thead>
-                        <tbody>
-                          <tr><td style={erpTd}>Bags Claim</td><td style={erpTd}><input name="bags_claim" type="number" step="0.0001" value={formData.bags_claim} onChange={handleChange} style={erpCellInput} /></td></tr>
-                          <tr><td style={erpTd}>Labour</td><td style={erpTd}><input name="labour" type="number" step="0.0001" value={formData.labour} onChange={handleChange} style={erpCellInput} /></td></tr>
-                          <tr><td style={{ ...erpTd, fontWeight: 700 }}>Total Deduction</td><td style={{ ...erpTd, fontWeight: 700 }}>{formatMoney(purchaseTotalDeduction)}</td></tr>
-                          <tr><td style={erpTd}>Round Off</td><td style={erpTd}><input name="round_off" type="number" step="0.0001" value={formData.round_off} onChange={handleChange} style={erpCellInput} /></td></tr>
-                        </tbody>
-                      </table>
-                      <div style={{ display: "flex", gap: 10, marginTop: 10, flexWrap: "wrap" }}>
+                    <div className="purchase-voucher-bottom-panel" style={{ display: "grid", gap: 12 }}>
+                      <div style={{ border: "1px solid #dbe4ef", borderRadius: 10, background: "#fff", overflow: "hidden" }}>
+                        <div style={{ padding: "10px 12px", background: "#0b2a5b", color: "#fff", fontWeight: 800 }}>Deduction Details</div>
+                        <div style={{ padding: 12, display: "grid", gap: 10 }}>
+                          <div style={erpRow}>
+                            <label style={erpLabel}>Bags Claim</label>
+                            <input name="bags_claim" type="number" step="0.0001" value={formData.bags_claim} onChange={handleChange} style={erpInput} />
+                          </div>
+                          <div style={erpRow}>
+                            <label style={erpLabel}>Labour</label>
+                            <input name="labour" type="number" step="0.0001" value={formData.labour} onChange={handleChange} style={erpInput} />
+                          </div>
+                          <div style={erpRow}>
+                            <label style={erpLabel}>Transport Charge</label>
+                            <input name="transport_charge" type="number" step="0.0001" value={formData.transport_charge} onChange={handleChange} style={erpInput} />
+                          </div>
+                          <div style={erpRow}>
+                            <label style={erpLabel}>Round Off</label>
+                            <input name="round_off" type="number" step="0.0001" value={formData.round_off} onChange={handleChange} style={erpInput} />
+                          </div>
+                          <div style={{ ...erpRow, marginBottom: 0 }}>
+                            <label style={erpLabel}>Total Deduction</label>
+                            <input value={formatMoney(purchaseTotalDeduction)} readOnly style={{ ...erpInput, background: "#f8fafc", fontWeight: 800 }} />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div style={{ border: "1px solid #dbe4ef", borderRadius: 10, background: "#fff", overflow: "hidden" }}>
+                        <div style={{ padding: "10px 12px", background: "#f3f4f6", borderBottom: "1px solid #dbe4ef", fontWeight: 800 }}>ERP Summary</div>
+                        <div style={{ padding: 12, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10 }}>
+                          <div style={smartInfoBoxStyle}><span>Gross Amount</span><strong>{formatMoney(purchaseGrossAmount)}</strong></div>
+                          <div style={smartInfoBoxStyle}><span>Total Deduction</span><strong>{formatMoney(purchaseTotalDeduction)}</strong></div>
+                          <div style={smartInfoBoxStyle}><span>Round Off</span><strong>{formatMoney(purchaseRoundOff)}</strong></div>
+                          <div style={{ ...smartInfoBoxStyle, background: "#0b2a5b", color: "#fff", borderColor: "#0b2a5b" }}><span>Net Amount Payable</span><strong>{formatMoney(purchaseNetPayable)}</strong></div>
+                        </div>
+                      </div>
+
+                      <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
                         <button type="button" onClick={resetPurchaseDeductions} style={{ ...btnAction, background: "#64748b" }}>
-                          Reset
+                          Auto Fill / Reset
                         </button>
-                        <button type="button" onClick={() => setPurchaseBaseline({
-                          less_bags_weight: formData.less_bags_weight || "",
-                          moisture: formData.moisture || "",
-                          dunki: formData.dunki || "",
-                          fungus: formData.fungus || "",
-                          discolour: formData.discolour || "",
-                          others: formData.others || "",
-                          bags_claim: formData.bags_claim || "",
-                          labour: formData.labour || "",
-                          round_off: formData.round_off || "",
-                        })} style={{ ...btnAction, background: "#0f766e" }}>
-                          Save As Default
+                        <button type="button" onClick={capturePurchaseDeductionsAsDefault} style={{ ...btnAction, background: "#0f766e" }}>
+                          Save as Current
                         </button>
                       </div>
+
                       <div className="purchase-voucher-remarks" style={erpRemarksRow}>
                         <label style={erpLabel}>Narration</label>
                         <textarea name="description" value={formData.description} onChange={handleChange} rows={2} style={erpTextarea} />
