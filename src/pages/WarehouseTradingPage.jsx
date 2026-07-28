@@ -673,6 +673,24 @@ export default function WarehouseTradingPage() {
   }, [showSaleDeductionModal, selectedSalePassBill?.bilti_id]);
 
   useEffect(() => {
+    const loadSaleTransportFromSummary = async () => {
+      if (!showSalePreview || !salePreviewRow) return;
+      const saleId = salePreviewRow.id || salePreviewRow._id;
+      if (!saleId) return;
+      try {
+        const response = await axios.get(`/api/wh-vouchers/sale/${saleId}/summary`);
+        const transportValue = toNumber(response.data?.transport_charge || response.data?.summary?.transport_charge || 0);
+        if (transportValue > 0) {
+          setSalePreviewSummary(response.data);
+        }
+      } catch (err) {
+        // keep current preview data
+      }
+    };
+    loadSaleTransportFromSummary();
+  }, [showSalePreview, salePreviewRow]);
+
+  useEffect(() => {
     const handleF5SaleKey = (event) => {
       if (event.key !== "F5" || activeTab !== "vouchers" || activeVoucherType !== "sale") return;
       event.preventDefault();
