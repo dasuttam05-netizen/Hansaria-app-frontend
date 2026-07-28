@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { loadSession, hasPermission } from "../utils/auth";
 
@@ -6,6 +6,8 @@ const emptyForm = () => ({ name: "", address: "", abbr: "" });
 
 export default function LocationManagementPage() {
   const [locations, setLocations] = useState([]);
+  const [unmappedLocations, setUnmappedLocations] = useState([]);
+  const [unmappedMeta, setUnmappedMeta] = useState({ total_locations: 0, unmapped_count: 0 });
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState(emptyForm);
   const [editId, setEditId] = useState(null);
@@ -19,8 +21,16 @@ export default function LocationManagementPage() {
   
   const fetchLocations = async () => {
     try {
-      const res = await axios.get(API_URL);
-      setLocations(Array.isArray(res.data) ? res.data : []);
+      const [locationsRes, unmappedRes] = await Promise.all([
+        axios.get(API_URL),
+        axios.get(`${API_URL}/unmapped`).catch(() => ({ data: { unmapped_locations: [], total_locations: 0, unmapped_count: 0 } })),
+      ]);
+      setLocations(Array.isArray(locationsRes.data) ? locationsRes.data : []);
+      setUnmappedLocations(Array.isArray(unmappedRes.data?.unmapped_locations) ? unmappedRes.data.unmapped_locations : []);
+      setUnmappedMeta({
+        total_locations: Number(unmappedRes.data?.total_locations) || 0,
+        unmapped_count: Number(unmappedRes.data?.unmapped_count) || 0,
+      });
     } catch (err) {
       console.error(err);
       alert("Failed to fetch locations");
@@ -78,6 +88,13 @@ export default function LocationManagementPage() {
     }
   };
 
+  const unmappedSummary = useMemo(() => {
+    if (unmappedMeta.unmapped_count === 0) {
+      return "All locations have a warehouse mapping.";
+    }
+    return `${unmappedMeta.unmapped_count} location${unmappedMeta.unmapped_count === 1 ? "" : "s"} have no warehouse mapped.`;
+  }, [unmappedMeta.unmapped_count]);
+
   return (
     <div style={{ fontFamily: "Segoe UI, Arial, sans-serif", padding: "8px" }}>
       {showForm ? (
@@ -106,6 +123,32 @@ export default function LocationManagementPage() {
         </div>
       ) : (
         <>
+          <div style={noticeCard}>
+            <div style={{ fontWeight: 700, color: "#0f172a", marginBottom: 6 }}>Warehouse mapping status</div>
+            <div style={{ color: "#334155", marginBottom: 10 }}>{unmappedSummary}</div>
+            {unmappedLocations.length > 0 ? (
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
+                  <thead>
+                    <tr style={{ background: "#f8fafc", color: "#0f172a" }}>
+                      <th style={th2}>Location</th>
+                      <th style={th2}>Abbr</th>
+                      <th style={th2}>Address</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {unmappedLocations.map((loc) => (
+                      <tr key={getId(loc)}>
+                        <td style={td2}>{loc.name || "-"}</td>
+                        <td style={td2}>{loc.abbr || "-"}</td>
+                        <td style={td2}>{loc.address || "-"}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            ) : null}
+          </div>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px", gap: 10, flexWrap: "wrap" }}>
             <h2 style={titleStyle}>Location Management</h2>
             {canCreate && (
@@ -174,3 +217,6 @@ const btnPrimary = { background: "#2563eb", color: "#fff", border: "none", paddi
 const th = { padding: "10px 8px", textAlign: "left", borderBottom: "1px solid #0d5c56" };
 const td = { padding: "8px", borderBottom: "1px solid #e2e8f0" };
 const mini = { border: "none", color: "#fff", padding: "5px 10px", borderRadius: "6px", cursor: "pointer", fontSize: "12px", fontWeight: 600 };
+const noticeCard = { background: "#fff7ed", border: "1px solid #fdba74", borderRadius: "12px", padding: "14px", marginBottom: "14px" };
+const th2 = { padding: "8px", textAlign: "left", borderBottom: "1px solid #fed7aa", fontWeight: 700 };
+const td2 = { padding: "8px", borderBottom: "1px solid #ffedd5" };
