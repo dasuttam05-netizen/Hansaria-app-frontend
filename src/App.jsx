@@ -153,15 +153,28 @@ function App() {
           element={<SelfLoadingPage />}
         />
 
-        <Route
-          path="/local-sale"
-          element={<LocalSalePage />}
-        />
+      <Route
+        path="/local-sale"
+        element={<LocalSalePage />}
+      />
 
-        <Route
-          path="/expense-edit/:id"
-          element={<ExpenseManagementPage />}
-        />
+      <Route
+        path="/expenses"
+        element={
+          <ProtectedRoute permission={["expense.entry", "expense.view", "expense.create", "expense.edit", "expense.delete"]}>
+            <ExpenseManagementPage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/expense-edit/:id"
+        element={
+          <ProtectedRoute permission={["expense.entry", "expense.view", "expense.create", "expense.edit", "expense.delete"]}>
+            <ExpenseManagementPage />
+          </ProtectedRoute>
+        }
+      />
 
       </Routes>
     </Router>
