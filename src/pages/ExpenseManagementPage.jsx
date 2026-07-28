@@ -164,6 +164,13 @@ const getRecordId = (record) => {
 const sameId = (left, right) =>
   String(left || "") !== "" && String(left || "") === String(right || "");
 
+const warningTextStyle = {
+  marginTop: "6px",
+  color: "#b45309",
+  fontSize: "12px",
+  fontWeight: 700,
+};
+
 const withSelectedRecord = (records, selectedId, selectedLabel, labelField = "name") => {
   const value = String(selectedId || "");
   if (!value || records.some((record) => sameId(getRecordId(record), value))) {
