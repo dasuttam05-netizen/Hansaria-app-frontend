@@ -1584,13 +1584,6 @@ export default function WarehouseTradingPage() {
     };
   };
 
-  const salePreviewTransportCharge = toNumber(
-    salePreviewSummary?.transport_charge ||
-      salePreviewSummary?.summary?.transport_charge ||
-      salePreviewRow?.transport_charge ||
-      0
-  );
-
   useEffect(() => {
     const loadSalePreviewSummary = async () => {
       if (!showSalePreview || !salePreviewRow) return;
@@ -5278,17 +5271,6 @@ export default function WarehouseTradingPage() {
                 />
               </div>
               <div>
-                <label style={lbl}>Freight / Transport</label>
-                <input 
-                  type="number"
-                  step="0.0001"
-                  value={formData.transport_charge}
-                  onChange={(e) => setFormData(prev => ({ ...prev, transport_charge: e.target.value }))}
-                  style={inp}
-                  placeholder="Auto from transport bill"
-                />
-              </div>
-              <div>
                 <label style={lbl}>Total Deduction (Auto)</label>
                 <input 
                   type="text"
@@ -5784,7 +5766,12 @@ export default function WarehouseTradingPage() {
               const preview = getSalePreviewDataForRow(previewSource);
               const summary = salePreviewSummary?.summary || null;
               const purchaseLinks = Array.isArray(salePreviewSummary?.purchase_links) ? salePreviewSummary.purchase_links : preview.purchaseLinks;
-              const transportCharge = toNumber(previewSource?.transport_charge || 0);
+              const transportCharge = toNumber(
+                salePreviewSummary?.transport_charge ||
+                salePreviewSummary?.summary?.transport_charge ||
+                previewSource?.transport_charge ||
+                0
+              );
               const summaryCards = [
                 { label: "Voucher No", value: preview.voucherNo },
                 { label: "Sale Type", value: preview.saleType },
@@ -5954,6 +5941,10 @@ export default function WarehouseTradingPage() {
                       <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 0.7, color: "#d1d5db", marginBottom: 4 }}>{preview.profitLossLabel}</div>
                       <div style={{ fontSize: 18, fontWeight: 900, color: "#fff" }}>{preview.profitLoss}</div>
                     </div>
+                    <div style={{ border: "1px solid #d1d5db", borderRadius: 10, padding: 12, background: "#fff" }}>
+                      <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 0.7, color: "#6b7280", marginBottom: 4 }}>Transport Amount</div>
+                      <div style={{ fontSize: 18, fontWeight: 900, color: "#111827" }}>{formatMoney(transportCharge)}</div>
+                    </div>
                   </div>
 
                   <div style={{ marginTop: 14, border: "1px solid #d1d5db", borderRadius: 10, overflow: "hidden", background: "#fff" }}>
@@ -6049,7 +6040,7 @@ export default function WarehouseTradingPage() {
                   )}
 
                   <div style={{ marginTop: 12, color: "#64748b", fontSize: 12 }}>
-                    Reset/Save buttons are available in the Purchase voucher edit form, not in this read-only bill report.
+                    Transport amount comes from linked transport bilti payable amount and can be edited on the bill form after opening the sale voucher.
                   </div>
 
                   <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 16, flexWrap: "wrap" }}>
