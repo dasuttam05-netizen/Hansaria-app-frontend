@@ -1010,7 +1010,7 @@ export default function ExpenseManagementPage() {
                     ))}
                   </select>
                   {!selectedLocationHasWarehouse && formData.location_id ? (
-                    <div style={warningTextStyle}>এই location-এর জন্য warehouse mapped নেই</div>
+                    <div style={warningTextStyle}>No warehouse is mapped for the selected location.</div>
                   ) : null}
                 </Field>
 
