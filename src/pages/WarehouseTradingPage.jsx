@@ -5794,6 +5794,11 @@ export default function WarehouseTradingPage() {
               const purchaseLinks = Array.isArray(salePreviewSummary?.purchase_links) ? salePreviewSummary.purchase_links : preview.purchaseLinks;
               const transportChargeAuto = toNumber(salePreviewSummary?.transport_charge || salePreviewSummary?.summary?.transport_charge || 0);
               const transportCharge = saleTransportMode === "manual" ? toNumber(saleTransportManualAmount) : transportChargeAuto;
+              const grossAmount = toNumber(summary?.gross_amount ?? preview.grossAmount);
+              const baseTotalDeduction = toNumber(summary?.total_deduction ?? preview.totalDeduction);
+              const adjustedTotalDeduction = baseTotalDeduction + transportCharge;
+              const netPayable = Math.max(grossAmount - adjustedTotalDeduction, 0);
+              const profitLoss = netPayable - toNumber(summary?.direct_purchase_amount ?? preview.directPurchaseAmount);
               const summaryCards = [
                 { label: "Voucher No", value: preview.voucherNo },
                 { label: "Sale Type", value: preview.saleType },
@@ -6001,7 +6006,7 @@ export default function WarehouseTradingPage() {
                             <td style={td}>TDS</td>
                             <td style={td}>{preview.tdsAmount}</td>
                             <td style={td}>Total Deduction</td>
-                            <td style={td}>{summary ? formatMoney(summary.total_deduction || 0) : preview.totalDeduction}</td>
+                            <td style={td}>{formatMoney(adjustedTotalDeduction)}</td>
                           </tr>
                         </tbody>
                       </table>
@@ -6011,11 +6016,11 @@ export default function WarehouseTradingPage() {
                   <div style={{ marginTop: 14, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 10 }}>
                     <div style={{ border: "1px solid #d1d5db", borderRadius: 10, padding: 12, background: "#fff" }}>
                       <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 0.7, color: "#6b7280", marginBottom: 4 }}>Net Payable</div>
-                      <div style={{ fontSize: 18, fontWeight: 900, color: "#111827" }}>{preview.netPayable}</div>
+                      <div style={{ fontSize: 18, fontWeight: 900, color: "#111827" }}>{formatMoney(netPayable)}</div>
                     </div>
                     <div style={{ border: "1px solid #111827", borderRadius: 10, padding: 12, background: "#111827" }}>
-                      <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 0.7, color: "#d1d5db", marginBottom: 4 }}>{preview.profitLossLabel}</div>
-                      <div style={{ fontSize: 18, fontWeight: 900, color: "#fff" }}>{preview.profitLoss}</div>
+                      <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 0.7, color: "#d1d5db", marginBottom: 4 }}>{profitLoss >= 0 ? "Net Profit" : "Net Loss"}</div>
+                      <div style={{ fontSize: 18, fontWeight: 900, color: "#fff" }}>{formatMoney(profitLoss)}</div>
                     </div>
                   </div>
 
