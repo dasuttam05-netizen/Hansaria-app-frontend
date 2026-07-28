@@ -190,6 +190,7 @@ export default function WarehouseTradingPage() {
   const [salePurchaseLinks, setSalePurchaseLinks] = useState([]);
   const [showPurchasePreview, setShowPurchasePreview] = useState(false);
   const [purchasePreviewRow, setPurchasePreviewRow] = useState(null);
+  const [purchaseBaseline, setPurchaseBaseline] = useState(null);
   const [showSalePreview, setShowSalePreview] = useState(false);
   const [salePreviewRow, setSalePreviewRow] = useState(null);
   const [showMobileVoucherHeader, setShowMobileVoucherHeader] = useState(true);
@@ -292,6 +293,17 @@ export default function WarehouseTradingPage() {
   const purchaseTotalDeduction = toNumber(formData.bags_claim) + toNumber(formData.labour);
   const purchaseRoundOff = toNumber(formData.round_off);
   const purchaseNetPayable = Math.max(purchaseGrossAmount - purchaseTotalDeduction + purchaseRoundOff, 0);
+  const purchaseDeductionDefaults = purchaseBaseline || {
+    less_bags_weight: "",
+    moisture: "",
+    dunki: "",
+    fungus: "",
+    discolour: "",
+    others: "",
+    bags_claim: "",
+    labour: "",
+    round_off: "",
+  };
   const paymentAdjustmentTotal = paymentAdjustments.reduce(
     (sum, item) => sum + toNumber(item.adjusted_amount),
     0
@@ -1325,7 +1337,19 @@ export default function WarehouseTradingPage() {
     if (!voucherId) return;
     setActiveTab("vouchers");
     setActiveVoucherType("purchase");
-    setFormData({ ...defaultForm(), ...voucher });
+    const nextForm = { ...defaultForm(), ...voucher };
+    setFormData(nextForm);
+    setPurchaseBaseline({
+      less_bags_weight: nextForm.less_bags_weight || "",
+      moisture: nextForm.moisture || "",
+      dunki: nextForm.dunki || "",
+      fungus: nextForm.fungus || "",
+      discolour: nextForm.discolour || "",
+      others: nextForm.others || "",
+      bags_claim: nextForm.bags_claim || "",
+      labour: nextForm.labour || "",
+      round_off: nextForm.round_off || "",
+    });
     setEditId(voucherId);
     window.scrollTo({ top: 0, behavior: "smooth" });
   };
@@ -1374,6 +1398,24 @@ export default function WarehouseTradingPage() {
   const showSaleReportPreview = (voucher) => {
     setSalePreviewRow(voucher);
     setShowSalePreview(true);
+  };
+
+  const resetPurchaseDeductions = () => {
+    const defaults = purchaseBaseline || {
+      less_bags_weight: "",
+      moisture: "",
+      dunki: "",
+      fungus: "",
+      discolour: "",
+      others: "",
+      bags_claim: "",
+      labour: "",
+      round_off: "",
+    };
+    setFormData((prev) => ({
+      ...prev,
+      ...defaults,
+    }));
   };
 
   const getPurchasePreviewData = () => ({
@@ -2963,6 +3005,24 @@ export default function WarehouseTradingPage() {
                           <tr><td style={erpTd}>Round Off</td><td style={erpTd}><input name="round_off" type="number" step="0.0001" value={formData.round_off} onChange={handleChange} style={erpCellInput} /></td></tr>
                         </tbody>
                       </table>
+                      <div style={{ display: "flex", gap: 10, marginTop: 10, flexWrap: "wrap" }}>
+                        <button type="button" onClick={resetPurchaseDeductions} style={{ ...btnAction, background: "#64748b" }}>
+                          Reset
+                        </button>
+                        <button type="button" onClick={() => setPurchaseBaseline({
+                          less_bags_weight: formData.less_bags_weight || "",
+                          moisture: formData.moisture || "",
+                          dunki: formData.dunki || "",
+                          fungus: formData.fungus || "",
+                          discolour: formData.discolour || "",
+                          others: formData.others || "",
+                          bags_claim: formData.bags_claim || "",
+                          labour: formData.labour || "",
+                          round_off: formData.round_off || "",
+                        })} style={{ ...btnAction, background: "#0f766e" }}>
+                          Save As Default
+                        </button>
+                      </div>
                       <div className="purchase-voucher-remarks" style={erpRemarksRow}>
                         <label style={erpLabel}>Narration</label>
                         <textarea name="description" value={formData.description} onChange={handleChange} rows={2} style={erpTextarea} />
