@@ -785,6 +785,7 @@ export default function ExpenseManagementPage() {
       location_name:
         row.location_name ||
         row.effective_location_name ||
+        row.expense_location_name ||
         row.warehouse_location_name ||
         row.warehouse_name ||
         "",
@@ -800,6 +801,8 @@ export default function ExpenseManagementPage() {
         ? String(row.effective_location_id)
         : row.location_id
         ? String(row.location_id)
+        : row.expense_location_id
+        ? String(row.expense_location_id)
         : row.warehouse_location_id
         ? String(row.warehouse_location_id)
         : "",
