@@ -197,6 +197,8 @@ export default function WarehouseTradingPage() {
   const [salePreviewRow, setSalePreviewRow] = useState(null);
   const [salePreviewSummary, setSalePreviewSummary] = useState(null);
   const [salePreviewLoading, setSalePreviewLoading] = useState(false);
+  const [saleTransportMode, setSaleTransportMode] = useState("auto");
+  const [saleTransportManualAmount, setSaleTransportManualAmount] = useState("0.00");
   const [showMobileVoucherHeader, setShowMobileVoucherHeader] = useState(true);
   const [showMobileReportHeader, setShowMobileReportHeader] = useState(true);
   const [showMobileTradingTabs, setShowMobileTradingTabs] = useState(false);
@@ -688,6 +690,12 @@ export default function WarehouseTradingPage() {
       }
     };
     loadSaleTransportFromSummary();
+  }, [showSalePreview, salePreviewRow]);
+
+  useEffect(() => {
+    if (!showSalePreview) return;
+    setSaleTransportMode("auto");
+    setSaleTransportManualAmount("0.00");
   }, [showSalePreview, salePreviewRow]);
 
   useEffect(() => {
@@ -5784,9 +5792,8 @@ export default function WarehouseTradingPage() {
               const preview = getSalePreviewDataForRow(previewSource);
               const summary = salePreviewSummary?.summary || null;
               const purchaseLinks = Array.isArray(salePreviewSummary?.purchase_links) ? salePreviewSummary.purchase_links : preview.purchaseLinks;
-              const transportCharge = toNumber(salePreviewSummary?.transport_charge || salePreviewSummary?.summary?.transport_charge || 0);
-              const transportBillNo = String(salePreviewSummary?.transport_bilti_no || "").trim() || "-";
-              const transportDebug = salePreviewSummary?.transport_debug || null;
+              const transportChargeAuto = toNumber(salePreviewSummary?.transport_charge || salePreviewSummary?.summary?.transport_charge || 0);
+              const transportCharge = saleTransportMode === "manual" ? toNumber(saleTransportManualAmount) : transportChargeAuto;
               const summaryCards = [
                 { label: "Voucher No", value: preview.voucherNo },
                 { label: "Sale Type", value: preview.saleType },
@@ -5813,30 +5820,6 @@ export default function WarehouseTradingPage() {
                         <div style={{ fontSize: 15, fontWeight: 800, color: "#111827" }}>{item.value}</div>
                       </div>
                     ))}
-                  </div>
-
-                  <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 }}>
-                    <div style={{ border: "1px solid #d1d5db", borderRadius: 10, padding: 14, background: "#fff" }}>
-                      <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 0.7, color: "#6b7280", marginBottom: 4 }}>Transport Bill Tag</div>
-                      <div style={{ fontSize: 15, fontWeight: 800, color: "#111827" }}>{transportBillNo}</div>
-                    </div>
-                    <div style={{ border: "1px solid #d1d5db", borderRadius: 10, padding: 14, background: "#fff" }}>
-                      <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 0.7, color: "#6b7280", marginBottom: 4 }}>Transport Amount</div>
-                      <div style={{ fontSize: 15, fontWeight: 800, color: "#111827" }}>{formatMoney(transportCharge)}</div>
-                    </div>
-                  </div>
-
-                  <div style={{ marginTop: 12, border: "1px solid #cbd5e1", borderRadius: 10, background: "#f8fafc", padding: 12 }}>
-                    <div style={{ fontSize: 12, fontWeight: 800, color: "#0f172a", marginBottom: 8 }}>Transport Debug</div>
-                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10, fontSize: 12 }}>
-                      <div><strong>Sale ID:</strong> {transportDebug?.sale_id || String(previewSource?.id || previewSource?._id || "-")}</div>
-                      <div><strong>Matched Source:</strong> {transportDebug?.matched_source || "unknown"}</div>
-                      <div><strong>Transport Sale ID:</strong> {transportDebug?.matched_sale_id || "-"}</div>
-                      <div><strong>Bilti No:</strong> {transportDebug?.matched_bilti_no || transportBillNo}</div>
-                      <div><strong>Payable Amount:</strong> {formatMoney(transportDebug?.matched_payable_amount || transportCharge)}</div>
-                      <div><strong>Voucher No:</strong> {transportDebug?.matched_voucher_no || preview.voucherNo}</div>
-                      <div><strong>Lorry No:</strong> {transportDebug?.matched_lorry_no || preview.lorryNo}</div>
-                    </div>
                   </div>
 
                   {!salePreviewLoading && purchaseLinks.length === 0 && (
@@ -5956,7 +5939,61 @@ export default function WarehouseTradingPage() {
                           </tr>
                           <tr>
                             <td style={td}>Transport Charge</td>
-                            <td style={td}>{formatMoney(transportCharge)}</td>
+                            <td style={td}>
+                              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                                <button
+                                  type="button"
+                                  onClick={() => setSaleTransportMode("auto")}
+                                  style={{
+                                    border: "none",
+                                    borderRadius: 999,
+                                    padding: "5px 10px",
+                                    fontSize: 12,
+                                    fontWeight: 700,
+                                    cursor: "pointer",
+                                    background: saleTransportMode === "auto" ? "#0f766e" : "#e2e8f0",
+                                    color: saleTransportMode === "auto" ? "#fff" : "#334155",
+                                  }}
+                                >
+                                  Auto
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setSaleTransportMode("manual");
+                                    setSaleTransportManualAmount(String(transportChargeAuto || 0));
+                                  }}
+                                  style={{
+                                    border: "none",
+                                    borderRadius: 999,
+                                    padding: "5px 10px",
+                                    fontSize: 12,
+                                    fontWeight: 700,
+                                    cursor: "pointer",
+                                    background: saleTransportMode === "manual" ? "#0f766e" : "#e2e8f0",
+                                    color: saleTransportMode === "manual" ? "#fff" : "#334155",
+                                  }}
+                                >
+                                  Manual
+                                </button>
+                                {saleTransportMode === "manual" ? (
+                                  <input
+                                    type="number"
+                                    step="0.0001"
+                                    value={saleTransportManualAmount}
+                                    onChange={(e) => setSaleTransportManualAmount(e.target.value)}
+                                    style={{
+                                      ...erpInput,
+                                      maxWidth: 140,
+                                      padding: "6px 10px",
+                                      height: 34,
+                                    }}
+                                  />
+                                ) : (
+                                  <strong>{formatMoney(transportCharge)}</strong>
+                                )}
+                              </div>
+                            </td>
                             <td style={td}>Adjustment</td>
                             <td style={td}>{preview.adjustmentAmount}</td>
                           </tr>
