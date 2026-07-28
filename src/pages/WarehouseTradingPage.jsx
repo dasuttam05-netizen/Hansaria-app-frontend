@@ -5964,16 +5964,16 @@ export default function WarehouseTradingPage() {
                             <td style={td}>{preview.otherDeduction}</td>
                           </tr>
                           <tr>
-                            <td style={td}>Transport Charge</td>
-                            <td style={td}>{formatMoney(transportCharge)}</td>
                             <td style={td}>Adjustment</td>
                             <td style={td}>{preview.adjustmentAmount}</td>
-                          </tr>
-                          <tr>
                             <td style={td}>TDS</td>
                             <td style={td}>{preview.tdsAmount}</td>
+                          </tr>
+                          <tr>
                             <td style={td}>Total Deduction</td>
                             <td style={td}>{formatMoney(adjustedTotalDeduction)}</td>
+                            <td style={td}></td>
+                            <td style={td}></td>
                           </tr>
                         </tbody>
                       </table>
