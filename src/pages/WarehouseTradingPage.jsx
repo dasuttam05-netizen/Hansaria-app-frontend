@@ -115,12 +115,12 @@ const diffDays = (start, end) => {
 
 const purchaseDeductionFields = [
   { key: "less_bags_weight", label: "Less Bags Weight" },
-  { key: "moisture", label: "Moistur" },
+  { key: "moisture", label: "Moisture" },
   { key: "dunki", label: "Dunki" },
-  { key: "fungus", label: "Fungas" },
-  { key: "discolour", label: "Disclour" },
+  { key: "fungus", label: "Fungus" },
+  { key: "discolour", label: "Discolour" },
   { key: "others", label: "Others" },
-  { key: "transport_charge", label: "Transport Charge" },
+  { key: "transport_charge", label: "Freight" },
 ];
 
 const purchaseParticulars = [
@@ -3039,10 +3039,10 @@ export default function WarehouseTradingPage() {
                   <div className="purchase-voucher-bottom-grid" style={erpBottomGrid}>
                     <div className="purchase-voucher-bottom-panel" style={{ display: "grid", gap: 12 }}>
                       <div style={{ border: "1px solid #dbe4ef", borderRadius: 10, background: "#fff", overflow: "hidden" }}>
-                        <div style={{ padding: "10px 12px", background: "#0b2a5b", color: "#fff", fontWeight: 800 }}>Deduction Details</div>
+                        <div style={{ padding: "10px 12px", background: "#0b2a5b", color: "#fff", fontWeight: 800 }}>Journal / Deduction Details</div>
                         <div style={{ padding: 12, display: "grid", gap: 10 }}>
                           <div style={erpRow}>
-                            <label style={erpLabel}>Bags Claim</label>
+                            <label style={erpLabel}>Claim</label>
                             <input name="bags_claim" type="number" step="0.0001" value={formData.bags_claim} onChange={handleChange} style={erpInput} />
                           </div>
                           <div style={erpRow}>
@@ -3050,7 +3050,7 @@ export default function WarehouseTradingPage() {
                             <input name="labour" type="number" step="0.0001" value={formData.labour} onChange={handleChange} style={erpInput} />
                           </div>
                           <div style={erpRow}>
-                            <label style={erpLabel}>Transport Charge</label>
+                            <label style={erpLabel}>Freight</label>
                             <input name="transport_charge" type="number" step="0.0001" value={formData.transport_charge} onChange={handleChange} style={erpInput} />
                           </div>
                           <div style={erpRow}>
@@ -3060,6 +3060,18 @@ export default function WarehouseTradingPage() {
                           <div style={{ ...erpRow, marginBottom: 0 }}>
                             <label style={erpLabel}>Total Deduction</label>
                             <input value={formatMoney(purchaseTotalDeduction)} readOnly style={{ ...erpInput, background: "#f8fafc", fontWeight: 800 }} />
+                          </div>
+                        </div>
+                      </div>
+
+                      <div style={{ border: "1px solid #dbe4ef", borderRadius: 10, background: "#fff", overflow: "hidden" }}>
+                        <div style={{ padding: "10px 12px", background: "#f3f4f6", borderBottom: "1px solid #dbe4ef", fontWeight: 800 }}>Payment / Receipt Details</div>
+                        <div style={{ padding: 12, display: "grid", gap: 10, color: "#64748b", fontSize: 13 }}>
+                          <div>Purchase payment / receipt adjustment can be posted from voucher actions after save.</div>
+                          <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10 }}>
+                            <div style={smartInfoBoxStyle}><span>Gross Amount</span><strong>{formatMoney(purchaseGrossAmount)}</strong></div>
+                            <div style={smartInfoBoxStyle}><span>Total Deduction</span><strong>{formatMoney(purchaseTotalDeduction)}</strong></div>
+                            <div style={smartInfoBoxStyle}><span>Net Payable</span><strong>{formatMoney(purchaseNetPayable)}</strong></div>
                           </div>
                         </div>
                       </div>
@@ -5805,6 +5817,38 @@ export default function WarehouseTradingPage() {
                             <td style={td}>{preview.grossAmount}</td>
                             <td style={td}>Net Receivable</td>
                             <td style={td}>{preview.netReceivable}</td>
+                          </tr>
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  <div style={{ marginTop: 14, border: "1px solid #d1d5db", borderRadius: 10, overflow: "hidden", background: "#fff" }}>
+                    <div style={{ padding: "10px 12px", background: "#f3f4f6", borderBottom: "1px solid #d1d5db", fontWeight: 800, color: "#111827" }}>
+                      Purchase Details
+                    </div>
+                    <div style={{ overflowX: "auto" }}>
+                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                        <thead>
+                          <tr style={reportHeaderRowStyle}>
+                            <th style={th}>Particulars</th>
+                            <th style={th}>Value</th>
+                            <th style={th}>Particulars</th>
+                            <th style={th}>Value</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr>
+                            <td style={td}>Purchase Qty</td>
+                            <td style={td}>{preview.directPurchaseQty}</td>
+                            <td style={td}>Purchase Rate</td>
+                            <td style={td}>{preview.directPurchaseRate}</td>
+                          </tr>
+                          <tr>
+                            <td style={td}>Purchase Amount</td>
+                            <td style={td}>{summary ? formatMoney(summary.direct_purchase_amount || 0) : preview.directPurchaseAmount}</td>
+                            <td style={td}>Linked Purchase Rows</td>
+                            <td style={td}>{purchaseLinks.length}</td>
                           </tr>
                         </tbody>
                       </table>
