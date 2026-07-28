@@ -195,6 +195,8 @@ export default function WarehouseTradingPage() {
   const [purchaseBaseline, setPurchaseBaseline] = useState(null);
   const [showSalePreview, setShowSalePreview] = useState(false);
   const [salePreviewRow, setSalePreviewRow] = useState(null);
+  const [salePreviewSummary, setSalePreviewSummary] = useState(null);
+  const [salePreviewLoading, setSalePreviewLoading] = useState(false);
   const [showMobileVoucherHeader, setShowMobileVoucherHeader] = useState(true);
   const [showMobileReportHeader, setShowMobileReportHeader] = useState(true);
   const [showMobileTradingTabs, setShowMobileTradingTabs] = useState(false);
@@ -1412,6 +1414,7 @@ export default function WarehouseTradingPage() {
 
   const showSaleReportPreview = (voucher) => {
     setSalePreviewRow(voucher);
+    setSalePreviewSummary(null);
     setShowSalePreview(true);
   };
 
@@ -1554,6 +1557,27 @@ export default function WarehouseTradingPage() {
       profitLossLabel: netPayable - directPurchaseAmount >= 0 ? "Net Profit" : "Net Loss",
     };
   };
+
+  useEffect(() => {
+    const loadSalePreviewSummary = async () => {
+      if (!showSalePreview || !salePreviewRow) return;
+      const saleId = salePreviewRow.id || salePreviewRow._id;
+      if (!saleId) {
+        setSalePreviewSummary(salePreviewRow);
+        return;
+      }
+      setSalePreviewLoading(true);
+      try {
+        const response = await axios.get(`/api/wh-vouchers/sale/${saleId}/summary`);
+        setSalePreviewSummary(response.data || salePreviewRow);
+      } catch (err) {
+        setSalePreviewSummary(salePreviewRow);
+      } finally {
+        setSalePreviewLoading(false);
+      }
+    };
+    loadSalePreviewSummary();
+  }, [showSalePreview, salePreviewRow]);
 
   const downloadPurchaseImportTemplate = async () => {
     try {
@@ -5698,7 +5722,11 @@ export default function WarehouseTradingPage() {
         <div className="purchase-preview-overlay" style={modalOverlayStyle}>
           <div className="purchase-preview-modal" style={{ ...paymentAdjustModalStyle, width: "min(1220px, 98vw)", background: "#f8fafc" }}>
             {(() => {
-              const preview = getSalePreviewDataForRow(salePreviewRow);
+              const previewSource = salePreviewSummary?.sale || salePreviewRow;
+              const preview = getSalePreviewDataForRow(previewSource);
+              const summary = salePreviewSummary?.summary || null;
+              const purchaseLinks = Array.isArray(salePreviewSummary?.purchase_links) ? salePreviewSummary.purchase_links : preview.purchaseLinks;
+              const transportCharge = toNumber(previewSource?.transport_charge || 0);
               const summaryCards = [
                 { label: "Voucher No", value: preview.voucherNo },
                 { label: "Sale Type", value: preview.saleType },
@@ -5726,6 +5754,12 @@ export default function WarehouseTradingPage() {
                       </div>
                     ))}
                   </div>
+
+                  {!salePreviewLoading && purchaseLinks.length === 0 && (
+                    <div style={{ marginTop: 12, padding: 12, border: "1px solid #dbe4ef", borderRadius: 10, background: "#fff", color: "#64748b" }}>
+                      Purchase details were not linked on this bill.
+                    </div>
+                  )}
 
                   <div style={{ marginTop: 14, border: "1px solid #d1d5db", borderRadius: 10, overflow: "hidden", background: "#fff" }}>
                     <div style={{ padding: "10px 12px", background: "#f3f4f6", borderBottom: "1px solid #d1d5db", fontWeight: 800, color: "#111827" }}>
@@ -5805,16 +5839,16 @@ export default function WarehouseTradingPage() {
                             <td style={td}>{preview.otherDeduction}</td>
                           </tr>
                           <tr>
+                            <td style={td}>Transport Charge</td>
+                            <td style={td}>{formatMoney(transportCharge)}</td>
                             <td style={td}>Adjustment</td>
                             <td style={td}>{preview.adjustmentAmount}</td>
-                            <td style={td}>TDS</td>
-                            <td style={td}>{preview.tdsAmount}</td>
                           </tr>
                           <tr>
-                            <td style={td}>Round Off</td>
-                            <td style={td}>{preview.roundOff}</td>
+                            <td style={td}>TDS</td>
+                            <td style={td}>{preview.tdsAmount}</td>
                             <td style={td}>Total Deduction</td>
-                            <td style={td}>{preview.totalDeduction}</td>
+                            <td style={td}>{summary ? formatMoney(summary.total_deduction || 0) : preview.totalDeduction}</td>
                           </tr>
                         </tbody>
                       </table>
@@ -5885,13 +5919,47 @@ export default function WarehouseTradingPage() {
                           </tr>
                           <tr>
                             <td style={td}>Purchase Amount</td>
-                            <td style={td}>{preview.directPurchaseAmount}</td>
+                            <td style={td}>{summary ? formatMoney(summary.direct_purchase_amount || 0) : preview.directPurchaseAmount}</td>
                             <td style={td}>Linked Purchase Rows</td>
-                            <td style={td}>{preview.purchaseLinks.length}</td>
+                            <td style={td}>{purchaseLinks.length}</td>
                           </tr>
                         </tbody>
                       </table>
                     </div>
+                  </div>
+
+                  {purchaseLinks.length > 0 && (
+                    <div style={{ marginTop: 14, border: "1px solid #d1d5db", borderRadius: 10, overflow: "hidden", background: "#fff" }}>
+                      <div style={{ padding: "10px 12px", background: "#f3f4f6", borderBottom: "1px solid #d1d5db", fontWeight: 800, color: "#111827" }}>
+                        Purchase Details
+                      </div>
+                      <div style={{ overflowX: "auto" }}>
+                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                          <thead>
+                            <tr style={reportHeaderRowStyle}>
+                              <th style={th}>Voucher No</th>
+                              <th style={th}>Qty</th>
+                              <th style={th}>Rate</th>
+                              <th style={th}>Amount</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {purchaseLinks.map((item, index) => (
+                              <tr key={`${item.voucher_no || item.purchase_id || index}-${index}`} style={{ background: index % 2 ? "#f8fafc" : "#fff" }}>
+                                <td style={td}>{item.voucher_no || "-"}</td>
+                                <td style={td}>{formatDecimal4(item.quantity || 0)}</td>
+                                <td style={td}>{formatMoney(item.rate || 0)}</td>
+                                <td style={td}>{formatMoney(item.amount || 0)}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+
+                  <div style={{ marginTop: 12, color: "#64748b", fontSize: 12 }}>
+                    Reset/Save buttons are available in the Purchase voucher edit form, not in this read-only bill report.
                   </div>
 
                   <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 16, flexWrap: "wrap" }}>
