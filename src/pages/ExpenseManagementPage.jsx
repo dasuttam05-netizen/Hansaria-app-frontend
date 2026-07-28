@@ -287,6 +287,13 @@ export default function ExpenseManagementPage() {
     );
   }, [warehouses, formData.location_id]);
 
+  const selectedLocationHasWarehouse = useMemo(() => {
+    if (!formData.location_id) return true;
+    return warehouses.some((warehouse) =>
+      sameId(getRecordId(warehouse.location_id), formData.location_id)
+    );
+  }, [warehouses, formData.location_id]);
+
   const filteredEmployees = useMemo(() => {
     if (!formData.location_id) {
       return employees;
@@ -995,6 +1002,9 @@ export default function ExpenseManagementPage() {
                       </option>
                     ))}
                   </select>
+                  {!selectedLocationHasWarehouse && formData.location_id ? (
+                    <div style={warningTextStyle}>এই location-এর জন্য warehouse mapped নেই</div>
+                  ) : null}
                 </Field>
 
                 <Field label="Employee">
