@@ -5786,6 +5786,7 @@ export default function WarehouseTradingPage() {
               const purchaseLinks = Array.isArray(salePreviewSummary?.purchase_links) ? salePreviewSummary.purchase_links : preview.purchaseLinks;
               const transportCharge = toNumber(salePreviewSummary?.transport_charge || salePreviewSummary?.summary?.transport_charge || 0);
               const transportBillNo = String(salePreviewSummary?.transport_bilti_no || "").trim() || "-";
+              const transportDebug = salePreviewSummary?.transport_debug || null;
               const summaryCards = [
                 { label: "Voucher No", value: preview.voucherNo },
                 { label: "Sale Type", value: preview.saleType },
@@ -5822,6 +5823,19 @@ export default function WarehouseTradingPage() {
                     <div style={{ border: "1px solid #d1d5db", borderRadius: 10, padding: 14, background: "#fff" }}>
                       <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 0.7, color: "#6b7280", marginBottom: 4 }}>Transport Amount</div>
                       <div style={{ fontSize: 15, fontWeight: 800, color: "#111827" }}>{formatMoney(transportCharge)}</div>
+                    </div>
+                  </div>
+
+                  <div style={{ marginTop: 12, border: "1px solid #cbd5e1", borderRadius: 10, background: "#f8fafc", padding: 12 }}>
+                    <div style={{ fontSize: 12, fontWeight: 800, color: "#0f172a", marginBottom: 8 }}>Transport Debug</div>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10, fontSize: 12 }}>
+                      <div><strong>Sale ID:</strong> {transportDebug?.sale_id || String(previewSource?.id || previewSource?._id || "-")}</div>
+                      <div><strong>Matched Source:</strong> {transportDebug?.matched_source || "unknown"}</div>
+                      <div><strong>Transport Sale ID:</strong> {transportDebug?.matched_sale_id || "-"}</div>
+                      <div><strong>Bilti No:</strong> {transportDebug?.matched_bilti_no || transportBillNo}</div>
+                      <div><strong>Payable Amount:</strong> {formatMoney(transportDebug?.matched_payable_amount || transportCharge)}</div>
+                      <div><strong>Voucher No:</strong> {transportDebug?.matched_voucher_no || preview.voucherNo}</div>
+                      <div><strong>Lorry No:</strong> {transportDebug?.matched_lorry_no || preview.lorryNo}</div>
                     </div>
                   </div>
 
