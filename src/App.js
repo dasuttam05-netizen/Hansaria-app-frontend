@@ -427,6 +427,24 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       />
+
+      <Route
+        path="/expenses"
+        element={
+          <ProtectedRoute permission={["expense.entry", "expense.view", "expense.create", "expense.edit", "expense.delete"]}>
+            <ExpenseManagementPage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/expense-edit/:id"
+        element={
+          <ProtectedRoute permission={["expense.entry", "expense.view", "expense.create", "expense.edit", "expense.delete"]}>
+            <ExpenseManagementPage />
+          </ProtectedRoute>
+        }
+      />
     </Routes>
   );
 }
