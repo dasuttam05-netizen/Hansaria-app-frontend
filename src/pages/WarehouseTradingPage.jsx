@@ -5799,6 +5799,27 @@ export default function WarehouseTradingPage() {
               const adjustedTotalDeduction = baseTotalDeduction + transportCharge;
               const netPayable = Math.max(grossAmount - adjustedTotalDeduction, 0);
               const profitLoss = netPayable - toNumber(summary?.direct_purchase_amount ?? preview.directPurchaseAmount);
+              const handleTransportReset = () => {
+                setSaleTransportMode("auto");
+                setSaleTransportManualAmount(formatMoney(transportChargeAuto));
+              };
+              const handleTransportSave = () => {
+                setSalePreviewSummary((prev) => {
+                  if (!prev) return prev;
+                  const nextSummary = {
+                    ...(prev.summary || {}),
+                    total_deduction: adjustedTotalDeduction,
+                    net_payable: netPayable,
+                    net_receivable: netPayable,
+                    profit_loss: profitLoss,
+                  };
+                  return {
+                    ...prev,
+                    transport_charge: transportCharge,
+                    summary: nextSummary,
+                  };
+                });
+              };
               const summaryCards = [
                 { label: "Voucher No", value: preview.voucherNo },
                 { label: "Sale Type", value: preview.saleType },
@@ -5944,61 +5965,7 @@ export default function WarehouseTradingPage() {
                           </tr>
                           <tr>
                             <td style={td}>Transport Charge</td>
-                            <td style={td}>
-                              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                                <button
-                                  type="button"
-                                  onClick={() => setSaleTransportMode("auto")}
-                                  style={{
-                                    border: "none",
-                                    borderRadius: 999,
-                                    padding: "5px 10px",
-                                    fontSize: 12,
-                                    fontWeight: 700,
-                                    cursor: "pointer",
-                                    background: saleTransportMode === "auto" ? "#0f766e" : "#e2e8f0",
-                                    color: saleTransportMode === "auto" ? "#fff" : "#334155",
-                                  }}
-                                >
-                                  Auto
-                                </button>
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    setSaleTransportMode("manual");
-                                    setSaleTransportManualAmount(String(transportChargeAuto || 0));
-                                  }}
-                                  style={{
-                                    border: "none",
-                                    borderRadius: 999,
-                                    padding: "5px 10px",
-                                    fontSize: 12,
-                                    fontWeight: 700,
-                                    cursor: "pointer",
-                                    background: saleTransportMode === "manual" ? "#0f766e" : "#e2e8f0",
-                                    color: saleTransportMode === "manual" ? "#fff" : "#334155",
-                                  }}
-                                >
-                                  Manual
-                                </button>
-                                {saleTransportMode === "manual" ? (
-                                  <input
-                                    type="number"
-                                    step="0.0001"
-                                    value={saleTransportManualAmount}
-                                    onChange={(e) => setSaleTransportManualAmount(e.target.value)}
-                                    style={{
-                                      ...erpInput,
-                                      maxWidth: 140,
-                                      padding: "6px 10px",
-                                      height: 34,
-                                    }}
-                                  />
-                                ) : (
-                                  <strong>{formatMoney(transportCharge)}</strong>
-                                )}
-                              </div>
-                            </td>
+                            <td style={td}>{formatMoney(transportCharge)}</td>
                             <td style={td}>Adjustment</td>
                             <td style={td}>{preview.adjustmentAmount}</td>
                           </tr>
@@ -6021,6 +5988,61 @@ export default function WarehouseTradingPage() {
                     <div style={{ border: "1px solid #111827", borderRadius: 10, padding: 12, background: "#111827" }}>
                       <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 0.7, color: "#d1d5db", marginBottom: 4 }}>{profitLoss >= 0 ? "Net Profit" : "Net Loss"}</div>
                       <div style={{ fontSize: 18, fontWeight: 900, color: "#fff" }}>{formatMoney(profitLoss)}</div>
+                    </div>
+                  </div>
+
+                  <div style={{ marginTop: 14, border: "1px solid #d1d5db", borderRadius: 10, overflow: "hidden", background: "#fff" }}>
+                    <div style={{ padding: "10px 12px", background: "#f3f4f6", borderBottom: "1px solid #d1d5db", fontWeight: 800, color: "#111827" }}>
+                      Transport Summary
+                    </div>
+                    <div style={{ overflowX: "auto" }}>
+                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                        <thead>
+                          <tr style={reportHeaderRowStyle}>
+                            <th style={th}>Particulars</th>
+                            <th style={th}>Value</th>
+                            <th style={th}>Particulars</th>
+                            <th style={th}>Value</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr>
+                            <td style={td}>Transport Mode</td>
+                            <td style={td}>
+                              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                                <button type="button" onClick={() => setSaleTransportMode("auto")} style={{ border: "none", borderRadius: 999, padding: "5px 10px", fontSize: 12, fontWeight: 700, cursor: "pointer", background: saleTransportMode === "auto" ? "#0f766e" : "#e2e8f0", color: saleTransportMode === "auto" ? "#fff" : "#334155" }}>Auto</button>
+                                <button type="button" onClick={() => { setSaleTransportMode("manual"); setSaleTransportManualAmount(String(transportChargeAuto || 0)); }} style={{ border: "none", borderRadius: 999, padding: "5px 10px", fontSize: 12, fontWeight: 700, cursor: "pointer", background: saleTransportMode === "manual" ? "#0f766e" : "#e2e8f0", color: saleTransportMode === "manual" ? "#fff" : "#334155" }}>Manual</button>
+                              </div>
+                            </td>
+                            <td style={td}>Transport Charge</td>
+                            <td style={td}>
+                              {saleTransportMode === "manual" ? (
+                                <input
+                                  type="number"
+                                  step="0.0001"
+                                  value={saleTransportManualAmount}
+                                  onChange={(e) => setSaleTransportManualAmount(e.target.value)}
+                                  style={{ ...erpInput, maxWidth: 140, padding: "6px 10px", height: 34 }}
+                                />
+                              ) : (
+                                <strong>{formatMoney(transportCharge)}</strong>
+                              )}
+                            </td>
+                          </tr>
+                          <tr>
+                            <td style={td}>Gross Amount</td>
+                            <td style={td}>{formatMoney(grossAmount)}</td>
+                            <td style={td}>Net Receivable</td>
+                            <td style={td}>{formatMoney(netPayable + adjustedTotalDeduction)}</td>
+                          </tr>
+                          <tr>
+                            <td style={td}>Total Deduction</td>
+                            <td style={td}>{formatMoney(adjustedTotalDeduction)}</td>
+                            <td style={td}>Net Profit / Loss</td>
+                            <td style={td}>{formatMoney(profitLoss)}</td>
+                          </tr>
+                        </tbody>
+                      </table>
                     </div>
                   </div>
 
@@ -6116,11 +6138,13 @@ export default function WarehouseTradingPage() {
                     </div>
                   )}
 
-                  <div style={{ marginTop: 12, color: "#64748b", fontSize: 12 }}>
-                    Transport amount comes from linked transport bilti payable amount and can be edited on the bill form after opening the sale voucher.
-                  </div>
-
                   <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 16, flexWrap: "wrap" }}>
+                    <button type="button" onClick={handleTransportReset} style={{ ...btnPrimary, background: "#94a3b8" }}>
+                      Reset
+                    </button>
+                    <button type="button" onClick={handleTransportSave} style={{ ...btnPrimary, background: "#0f766e" }}>
+                      Save
+                    </button>
                     <button type="button" onClick={() => { setShowSalePreview(false); setSalePreviewRow(null); }} style={{ ...btnPrimary, background: "#64748b" }}>
                       Close
                     </button>
