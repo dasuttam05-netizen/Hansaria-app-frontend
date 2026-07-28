@@ -4389,7 +4389,11 @@ export default function WarehouseTradingPage() {
                     </thead>
                     <tbody>
                       {filteredReportData.map((item, i) => (
-                        <tr key={item.id || i} style={{ background: i % 2 ? "#f8fafc" : "#fff" }}>
+                        <tr
+                          key={item.id || i}
+                          style={{ background: i % 2 ? "#f8fafc" : "#fff", cursor: activeReport === "sale" ? "pointer" : "default" }}
+                          onClick={activeReport === "sale" ? () => showSaleReportPreview(item) : undefined}
+                        >
                           {activeReportColumns.map(([key, _label, render]) => (
                             <td key={key} style={td}>{render(item, i)}</td>
                           ))}
@@ -4435,7 +4439,12 @@ export default function WarehouseTradingPage() {
                 {activeReport === "sale" && (
                   <div className="purchase-mobile-report-list">
                     {filteredReportData.map((item, i) => (
-                      <div key={item.id || item._id || i} className="purchase-mobile-report-card sale-mobile-entry-card">
+                      <div
+                        key={item.id || item._id || i}
+                        className="purchase-mobile-report-card sale-mobile-entry-card"
+                        style={{ cursor: "pointer" }}
+                        onClick={() => showSaleReportPreview(item)}
+                      >
                         <div className="purchase-mobile-entry-head">
                           <div>
                             <span>#{i + 1}</span>
