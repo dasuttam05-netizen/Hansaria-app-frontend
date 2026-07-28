@@ -92,7 +92,7 @@ export default function LocationManagementPage() {
     if (unmappedMeta.unmapped_count === 0) {
       return "All locations have a warehouse mapping.";
     }
-    return `${unmappedMeta.unmapped_count} location${unmappedMeta.unmapped_count === 1 ? "" : "s"} have no warehouse mapped.`;
+    return `${unmappedMeta.unmapped_count} location${unmappedMeta.unmapped_count === 1 ? "" : "s"} do not have a warehouse mapped yet.`;
   }, [unmappedMeta.unmapped_count]);
 
   return (
@@ -126,6 +126,11 @@ export default function LocationManagementPage() {
           <div style={noticeCard}>
             <div style={{ fontWeight: 700, color: "#0f172a", marginBottom: 6 }}>Warehouse mapping status</div>
             <div style={{ color: "#334155", marginBottom: 10 }}>{unmappedSummary}</div>
+            {unmappedLocations.length > 0 ? (
+              <div style={{ color: "#92400e", marginBottom: 10, fontSize: 13 }}>
+                These locations need a warehouse created and linked to them before warehouse-based expense entry can work.
+              </div>
+            ) : null}
             {unmappedLocations.length > 0 ? (
               <div style={{ overflowX: "auto" }}>
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
