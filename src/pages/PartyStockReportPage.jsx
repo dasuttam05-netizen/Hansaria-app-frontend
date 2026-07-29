@@ -32,8 +32,8 @@ export default function PartyStockReportPage() {
     const params = new URLSearchParams(location.search);
     const warehouseId = params.get("warehouse_id") || "";
     const locationId = params.get("location_id") || "";
-    const locationIds = params.getAll("location_ids");
-    const warehouseIds = params.getAll("warehouse_ids");
+    const locationIds = (params.get("location_ids") || "").split(",").map((item) => item.trim()).filter(Boolean);
+    const warehouseIds = (params.get("warehouse_ids") || "").split(",").map((item) => item.trim()).filter(Boolean);
     const companyId = params.get("company_id") || "";
     const fromDate = params.get("from_date") || "";
     const toDate = params.get("to_date") || "";
@@ -159,9 +159,10 @@ export default function PartyStockReportPage() {
     const params = new URLSearchParams();
     Object.entries(newFilters).forEach(([key, value]) => {
       if (Array.isArray(value)) {
-        value.forEach((item) => {
-          if (item) params.append(key, item);
-        });
+        const compact = value.map(String).map((item) => item.trim()).filter(Boolean);
+        if (compact.length) {
+          params.set(key, compact.join(","));
+        }
       } else if (value) {
         params.append(key, value);
       }
