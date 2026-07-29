@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import { loadSession, hasPermission } from "../utils/auth";
 import MasterPartyDetailForm from "../components/MasterPartyDetailForm";
+import MasterModuleSidebar from "../components/MasterModuleSidebar";
 
 const emptyForm = () => ({
   name: "",
@@ -230,6 +231,9 @@ export default function BuyerNamesManagementPage() {
 
   if (view === "form") {
     return (
+      <div style={pageShell}>
+        <MasterModuleSidebar />
+        <div style={pageContent}>
       <div style={{ fontFamily: "Segoe UI, Arial, sans-serif", padding: "8px" }}>
         <div style={{ ...card, maxWidth: "1000px" }}>
           <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "12px", marginBottom: "20px" }}>
@@ -253,10 +257,15 @@ export default function BuyerNamesManagementPage() {
           </form>
         </div>
       </div>
+        </div>
+      </div>
     );
   }
 
   return (
+    <div style={pageShell}>
+      <MasterModuleSidebar />
+      <div style={pageContent}>
     <div style={{ fontFamily: "Segoe UI, Arial, sans-serif", padding: "8px" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px", flexWrap: "wrap", gap: "10px" }}>
         <h2 style={{ margin: 0, fontSize: "18px", color: "#0f172a" }}>Buyer names</h2>
@@ -336,11 +345,15 @@ export default function BuyerNamesManagementPage() {
         </table>
       </div>
     </div>
+      </div>
+    </div>
   );
 }
 
 const th = { padding: "10px 8px", textAlign: "left", borderBottom: "1px solid #0d5c56" };
 const td = { padding: "8px", borderBottom: "1px solid #e2e8f0" };
 const mini = { border: "none", color: "#fff", padding: "5px 10px", borderRadius: "6px", cursor: "pointer", fontSize: "12px", fontWeight: 600 };
+const pageShell = { display: "flex", gap: 16, alignItems: "flex-start", padding: 16, flexWrap: "wrap" };
+const pageContent = { flex: 1, minWidth: 0 };
 
 
