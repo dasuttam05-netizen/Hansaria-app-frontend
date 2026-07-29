@@ -28,6 +28,14 @@ export default function PartyStockReportPage() {
     product_id: "",
   });
 
+  const normalizeIdList = (input) => {
+    if (Array.isArray(input)) {
+      return input.map((item) => String(item).trim()).filter(Boolean);
+    }
+    const text = String(input || "").trim();
+    return text ? [text] : [];
+  };
+
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const warehouseId = params.get("warehouse_id") || "";
@@ -137,8 +145,8 @@ export default function PartyStockReportPage() {
       const res = await axios.get(`${API_BASE}/reports/party-stock`, {
         params: {
           ...filters,
-          location_ids: (filters.location_ids || []).join(","),
-          warehouse_ids: (filters.warehouse_ids || []).join(","),
+          location_ids: normalizeIdList(filters.location_ids).join(","),
+          warehouse_ids: normalizeIdList(filters.warehouse_ids).join(","),
         },
       });
       setSummary(res.data.summary || []);
@@ -151,7 +159,9 @@ export default function PartyStockReportPage() {
   };
 
   const handleChange = (e) => {
-    const nextValue = Array.isArray(e.target.value) ? e.target.value.map(String) : e.target.value;
+    const nextValue = e.target.name === "location_ids" || e.target.name === "warehouse_ids"
+      ? normalizeIdList(e.target.value)
+      : String(e.target.value || "");
     setFilters((prev) => ({ ...prev, [e.target.name]: nextValue }));
   };
 
