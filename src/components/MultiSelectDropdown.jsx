@@ -14,7 +14,21 @@ export default function MultiSelectDropdown({
   const [search, setSearch] = useState("");
   const rootRef = useRef(null);
 
-  const selectedValues = Array.isArray(value) ? value.map(String) : [];
+  const normalizedOptions = useMemo(
+    () =>
+      (options || []).map((option) => ({
+        ...option,
+        value: String(option?.value ?? "").trim(),
+        label: String(option?.label ?? "").trim(),
+      })),
+    [options]
+  );
+
+  const selectedValues = useMemo(() => {
+    if (Array.isArray(value)) return value.map((item) => String(item).trim()).filter(Boolean);
+    if (value === null || value === undefined || value === "") return [];
+    return [String(value).trim()].filter(Boolean);
+  }, [value]);
 
   React.useEffect(() => {
     const handleClickOutside = (event) => {
@@ -28,16 +42,16 @@ export default function MultiSelectDropdown({
 
   const filteredOptions = useMemo(() => {
     const query = search.trim().toLowerCase();
-    if (!query) return options;
-    return options.filter((option) => String(option.label || "").toLowerCase().includes(query));
-  }, [options, search]);
+    if (!query) return normalizedOptions;
+    return normalizedOptions.filter((option) => option.label.toLowerCase().includes(query));
+  }, [normalizedOptions, search]);
 
   const selectedLabels = useMemo(
     () =>
-      options
+      normalizedOptions
         .filter((option) => selectedValues.includes(String(option.value)))
         .map((option) => option.label),
-    [options, selectedValues]
+    [normalizedOptions, selectedValues]
   );
 
   const toggleValue = (nextValue) => {
@@ -126,7 +140,7 @@ export default function MultiSelectDropdown({
           <div style={{ maxHeight, overflowY: "auto", padding: 8 }}>
             {filteredOptions.length ? (
               filteredOptions.map((option) => {
-                const checked = selectedValues.includes(String(option.value));
+                const checked = selectedValues.includes(option.value);
                 return (
                   <label
                     key={option.value}
