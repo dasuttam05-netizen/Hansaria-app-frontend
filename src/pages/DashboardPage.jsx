@@ -3,7 +3,6 @@ import API from "./axiosInstance";
 import { useNavigate } from "react-router-dom";
 import logo from "./logo.png";
 import { clearSession, hasAnyPermission, hasPermission, loadSession } from "../utils/auth";
-import { formatLocalMonthInput } from "../utils/date";
 import "./Dashboard.css";
 
 import LocationManagementPage from "./LocationManagementPage";
@@ -91,7 +90,7 @@ export default function DashboardPage() {
   const [searchText, setSearchText] = useState("");
 
   const API_BASE = "/api";
-  const currentMonth = formatLocalMonthInput();
+  const currentMonth = new Date().toISOString().slice(0, 7);
 
   const fetchData = async (currentUser) => {
     try {
@@ -429,127 +428,13 @@ export default function DashboardPage() {
   const rawMenuItems = [
     { title: "Dashboard", icon: <FaHome /> },
     {
-      title: "Employee",
-      permission: "employees.view",
-      icon: <FaUsers />,
-      submenu: [
-        { label: "Employee Management", permission: "employees.view", action: () => setShowEmployeePopup(true) },
-      ],
-    },
-    {
-      title: "Company Name",
-      permission: "companies.manage",
-      icon: <FaBuilding />,
-      submenu: [
-        { label: "Company Management", permission: "companies.manage", action: () => setShowCompanyPopup(true) },
-      ],
-    },
-    {
-      title: "Company Account",
-      permission: "companyAccounts.manage",
-      icon: <FaBuilding />,
-      submenu: [
-        {
-          label: "Company Account Management",
-          permission: "companyAccounts.manage",
-          action: () => setShowCompanyAccountPopup(true),
-        },
-      ],
-    },
-    {
-      title: "Location",
-      permission: "locations.manage",
-      icon: <FaMapMarkerAlt />,
-      submenu: [
-        { label: "Location Management", permission: "locations.manage", action: () => setShowLocationPopup(true) },
-      ],
-    },
-    {
-      title: "Warehouse",
-      permission: [
-        "warehouses.manage",
-        "farmers.view",
-        "warehouse.trading.purchase.view",
-        "warehouse.trading.sale.view",
-        "warehouse.trading.payment.view",
-        "warehouse.trading.receipt.view",
-        "warehouse.trading.journal.view",
-        "warehouse.trading.report.sale",
-        "warehouse.trading.report.purchase",
-        "warehouse.trading.report.profitLoss",
-      ],
-      icon: <FaWarehouse />,
-      submenu: [
-        { label: "Warehouse Management", permission: "warehouses.manage", action: () => setShowWarehousePopup(true) },
-        { label: "Farmer Master", permission: "farmers.view", action: () => navigate("/farmers") },
-        { label: "Purchase Voucher", permission: ["warehouse.trading.purchase.view", "warehouse.trading.purchase.create", "warehouse.trading.purchase.edit", "warehouse.trading.purchase.delete"], action: () => navigate("/warehouse-trading?type=purchase") },
-        { label: "Sale Voucher", permission: ["warehouse.trading.sale.view", "warehouse.trading.sale.create", "warehouse.trading.sale.edit", "warehouse.trading.sale.delete"], action: () => navigate("/warehouse-trading?type=sale") },
-        { label: "Payment Voucher", permission: ["warehouse.trading.payment.view", "warehouse.trading.payment.create", "warehouse.trading.payment.edit", "warehouse.trading.payment.delete"], action: () => navigate("/warehouse-trading?type=payment") },
-        { label: "Receipt Voucher", permission: ["warehouse.trading.receipt.view", "warehouse.trading.receipt.create", "warehouse.trading.receipt.edit", "warehouse.trading.receipt.delete"], action: () => navigate("/warehouse-trading?type=receipt") },
-        { label: "Journal Entry", permission: ["warehouse.trading.journal.view", "warehouse.trading.journal.create", "warehouse.trading.journal.edit", "warehouse.trading.journal.delete"], action: () => navigate("/warehouse-trading?type=journal") },
-        { label: "Sales Report", permission: "warehouse.trading.report.sale", action: () => navigate("/warehouse-trading?tab=reports&report=sale") },
-        { label: "Purchase Report", permission: "warehouse.trading.report.purchase", action: () => navigate("/warehouse-trading?tab=reports&report=purchase") },
-        { label: "Profit/Loss", permission: "warehouse.trading.report.profitLoss", action: () => navigate("/warehouse-trading?tab=reports&report=profit-loss") },
-        { label: "Stock Report", permission: ["warehouse.trading.purchase.view", "warehouse.trading.sale.view", "warehouse.trading.payment.view", "warehouse.trading.receipt.view", "warehouse.trading.journal.view"], action: () => navigate("/warehouse-trading") },
-      ],
-    },
-    {
-      title: "Products",
-      permission: "products.manage",
-      icon: <FaBoxOpen />,
-      submenu: [
-        { label: "Products Management", permission: "products.manage", action: () => setShowProductsPopup(true) },
-      ],
-    },
-    {
-      title: "Masters and Admin",
-      permission: [
-        "employees.view",
-        "locations.view",
-        "companies.view",
-        "companyAccounts.view",
-        "products.view",
-        "dashboard.view",
-      ],
-      icon: <FaCog />,
-      submenu: [
-        { label: "Employees", permission: "employees.view", action: () => setShowEmployeePopup(true) },
-        { label: "Location", permission: "locations.view", action: () => setShowLocationPopup(true) },
-        { label: "Companies", permission: "companies.view", action: () => setShowCompanyPopup(true) },
-        { label: "Company Accounts", permission: "companyAccounts.view", action: () => setShowCompanyAccountPopup(true) },
-        { label: "Products", permission: "products.view", action: () => setShowProductsPopup(true) },
-      ],
-    },
-    {
-      title: "Entry",
-      permission: ["inward.view", "inward.create", "inward.edit", "inward.delete"],
+      title: "Transport",
+      permission: "transport.manage",
       icon: <FaFileAlt />,
       submenu: [
-        {
-          label: "Inward Entry",
-          permission: ["inward.view", "inward.create", "inward.edit", "inward.delete"],
-          action: () => setShowInwardPopup(true),
-        },
-        {
-          label: "Palti Lorry",
-          permission: "expense.palti",
-          action: () => navigate("/palti-lorry"),
-        },
-        {
-          label: "Self Loading",
-          permission: "expense.selfLoading",
-          action: () => navigate("/self-loading"),
-        },
-        {
-          label: "Local Sale",
-          permission: "expense.localSale",
-          action: () => navigate("/local-sale"),
-        },
-        {
-          label: "Outward Entry",
-          permission: ["outward.view", "outward.create", "outward.edit", "outward.delete"],
-          action: () => setShowOutwardPopup(true),
-        },
+        { label: "Transport Management", permission: "transport.manage", action: () => navigate("/transport-management") },
+        { label: "Create Bilti", permission: "transport.manage", action: () => navigate("/transport-bilti") },
+        { label: "Transport Report", permission: "transport.manage", action: () => navigate("/transport-report") },
       ],
     },
     {
@@ -655,33 +540,6 @@ export default function DashboardPage() {
               action: () => navigate("/cash-activity-logs"),
             },
           ],
-    },
-    {
-      title: "Names",
-      permission: ["buyerNames.view", "buyerNames.create", "buyerNames.edit", "buyerNames.delete", "consigneeNames.view", "consigneeNames.create", "consigneeNames.edit", "consigneeNames.delete"],
-      icon: <FaUserTag />,
-      submenu: [
-        {
-          label: "Buyer Names",
-          permission: ["buyerNames.view", "buyerNames.create", "buyerNames.edit", "buyerNames.delete"],
-          action: () => setShowBuyerNamesPopup(true),
-        },
-        {
-          label: "Consignee Names",
-          permission: ["consigneeNames.view", "consigneeNames.create", "consigneeNames.edit", "consigneeNames.delete"],
-          action: () => setShowConsigneeNamesPopup(true),
-        },
-      ],
-    },
-    {
-      title: "Transport",
-      permission: "transport.manage",
-      icon: <FaFileAlt />,
-      submenu: [
-        { label: "Transport Management", permission: "transport.manage", action: () => navigate("/transport-management") },
-        { label: "Create Bilti", permission: "transport.manage", action: () => navigate("/transport-bilti") },
-        { label: "Transport Report", permission: "transport.manage", action: () => navigate("/transport-report") },
-      ],
     },
     {
       title: "Reports",
