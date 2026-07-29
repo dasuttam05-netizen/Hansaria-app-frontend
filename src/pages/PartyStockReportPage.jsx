@@ -152,41 +152,7 @@ export default function PartyStockReportPage() {
 
   const handleChange = (e) => {
     const nextValue = Array.isArray(e.target.value) ? e.target.value.map(String) : e.target.value;
-    const newFilters = { ...filters, [e.target.name]: nextValue };
-    setFilters(newFilters);
-    
-    // Update URL with new filters
-    const params = new URLSearchParams();
-    Object.entries(newFilters).forEach(([key, value]) => {
-      if (Array.isArray(value)) {
-        const compact = value.map(String).map((item) => item.trim()).filter(Boolean);
-        if (compact.length) {
-          params.set(key, compact.join(","));
-        }
-      } else if (value) {
-        params.append(key, value);
-      }
-    });
-    if ((newFilters.location_ids || []).length === 1) {
-      params.set("location_id", newFilters.location_ids[0]);
-    }
-    if ((newFilters.location_ids || []).length > 1) {
-      params.delete("location_id");
-    }
-    if ((newFilters.warehouse_ids || []).length === 1) {
-      params.set("warehouse_id", newFilters.warehouse_ids[0]);
-    }
-    if ((newFilters.warehouse_ids || []).length > 1) {
-      params.delete("warehouse_id");
-    }
-    
-    // Preserve dashboard_view if it exists
-    const currentParams = new URLSearchParams(location.search);
-    if (currentParams.get("dashboard_view")) {
-      params.append("dashboard_view", currentParams.get("dashboard_view"));
-    }
-    
-    navigate(`/party-stock-report${params.toString() ? `?${params.toString()}` : ""}`);
+    setFilters((prev) => ({ ...prev, [e.target.name]: nextValue }));
   };
 
   const exportCSV = () => {
