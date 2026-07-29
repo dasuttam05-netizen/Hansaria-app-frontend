@@ -151,7 +151,8 @@ export default function PartyStockReportPage() {
   };
 
   const handleChange = (e) => {
-    const newFilters = { ...filters, [e.target.name]: e.target.value };
+    const nextValue = Array.isArray(e.target.value) ? e.target.value.map(String) : e.target.value;
+    const newFilters = { ...filters, [e.target.name]: nextValue };
     setFilters(newFilters);
     
     // Update URL with new filters
@@ -168,8 +169,14 @@ export default function PartyStockReportPage() {
     if ((newFilters.location_ids || []).length === 1) {
       params.set("location_id", newFilters.location_ids[0]);
     }
+    if ((newFilters.location_ids || []).length > 1) {
+      params.delete("location_id");
+    }
     if ((newFilters.warehouse_ids || []).length === 1) {
       params.set("warehouse_id", newFilters.warehouse_ids[0]);
+    }
+    if ((newFilters.warehouse_ids || []).length > 1) {
+      params.delete("warehouse_id");
     }
     
     // Preserve dashboard_view if it exists
