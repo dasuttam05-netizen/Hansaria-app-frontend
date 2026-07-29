@@ -248,4 +248,4 @@ const th = { padding: "10px 8px", textAlign: "left", borderBottom: "1px solid #0
 const td = { padding: "8px", borderBottom: "1px solid #e2e8f0" };
 const mini = { border: "none", color: "#fff", padding: "5px 10px", borderRadius: "6px", cursor: "pointer", fontSize: "12px", fontWeight: 600 };
 const pageShell = { display: "flex", gap: 16, alignItems: "flex-start", padding: 16, flexWrap: "wrap" };
-const pageContent = { flex: 1, minWidth: 0 };
+const pageContent = { flex: 1, minWidth: 0 };.
