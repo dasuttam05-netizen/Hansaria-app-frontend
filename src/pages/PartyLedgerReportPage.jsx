@@ -1,17 +1,16 @@
 import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 import MultiSelectDropdown from "../components/MultiSelectDropdown";
 import ReportSectionToggles from "../components/ReportSectionToggles";
 import { formatDisplayDate } from "../utils/date";
 
-export default function PartyStockReportPage() {
-  const API_BASE = "/api";
-  const location = useLocation();
+export default function PartyLedgerReportPage() {
   const navigate = useNavigate();
+  const API_BASE = "/api";
+
   const [summary, setSummary] = useState([]);
   const [details, setDetails] = useState([]);
-  const [employees, setEmployees] = useState([]);
   const [companies, setCompanies] = useState([]);
   const [locations, setLocations] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
@@ -21,55 +20,11 @@ export default function PartyStockReportPage() {
   const [filters, setFilters] = useState({
     from_date: "",
     to_date: "",
-    employee_id: "",
     company_id: "",
     location_ids: [],
     warehouse_ids: [],
     product_id: "",
   });
-
-  useEffect(() => {
-    const params = new URLSearchParams(location.search);
-    const warehouseId = params.get("warehouse_id") || "";
-    const locationId = params.get("location_id") || "";
-    const locationIds = params.getAll("location_ids");
-    const warehouseIds = params.getAll("warehouse_ids");
-    const companyId = params.get("company_id") || "";
-    const fromDate = params.get("from_date") || "";
-    const toDate = params.get("to_date") || "";
-    const employeeId = params.get("employee_id") || "";
-    const productId = params.get("product_id") || "";
-
-    setFilters((prev) => ({
-      ...prev,
-      location_ids: locationIds.length ? locationIds : locationId ? [locationId] : [],
-      warehouse_ids: warehouseIds.length ? warehouseIds : warehouseId ? [warehouseId] : [],
-      company_id: companyId,
-      from_date: fromDate,
-      to_date: toDate,
-      employee_id: employeeId,
-      product_id: productId,
-    }));
-  }, [location.search]);
-
-  const dashboardView = useMemo(() => {
-    const params = new URLSearchParams(location.search);
-    return params.get("dashboard_view") === "1";
-  }, [location.search]);
-
-  const activeWarehouseName = useMemo(
-    () =>
-      warehouses
-        .filter((item) => (filters.warehouse_ids || []).includes(String(item.id)))
-        .map((item) => item.name)
-        .join(", "),
-    [warehouses, filters.warehouse_ids]
-  );
-
-  const activeCompanyName = useMemo(
-    () => companies.find((item) => String(item.id) === String(filters.company_id))?.name || "",
-    [companies, filters.company_id]
-  );
 
   const card = {
     background: "#fff",
@@ -112,29 +67,19 @@ export default function PartyStockReportPage() {
     whiteSpace: "nowrap",
   };
 
-  const tdHover = {
-    ...td,
-    cursor: "pointer",
-    transition: "background-color 0.2s ease",
-  };
-
   const num = (v) => Number(v || 0).toFixed(2);
 
   useEffect(() => {
-    axios.get(`${API_BASE}/employees`).then((res) => setEmployees(res.data || [])).catch(() => setEmployees([]));
     axios.get(`${API_BASE}/companies`).then((res) => setCompanies(res.data || [])).catch(() => setCompanies([]));
     axios.get(`${API_BASE}/locations`).then((res) => setLocations(res.data || [])).catch(() => setLocations([]));
     axios.get(`${API_BASE}/warehouses`).then((res) => setWarehouses(res.data || [])).catch(() => setWarehouses([]));
     axios.get(`${API_BASE}/products`).then((res) => setProducts(res.data || [])).catch(() => setProducts([]));
-  }, []);
-
-  useEffect(() => {
     fetchReport();
-  }, [filters]);
+  }, []);
 
   const fetchReport = async () => {
     try {
-      const res = await axios.get(`${API_BASE}/reports/party-stock`, {
+      const res = await axios.get(`${API_BASE}/reports/party-ledger`, {
         params: {
           ...filters,
           location_ids: (filters.location_ids || []).join(","),
@@ -151,65 +96,31 @@ export default function PartyStockReportPage() {
   };
 
   const handleChange = (e) => {
-    const nextValue = Array.isArray(e.target.value) ? e.target.value.map(String) : e.target.value;
-    const newFilters = { ...filters, [e.target.name]: nextValue };
-    setFilters(newFilters);
-    
-    // Update URL with new filters
-    const params = new URLSearchParams();
-    Object.entries(newFilters).forEach(([key, value]) => {
-      if (Array.isArray(value)) {
-        value.forEach((item) => {
-          if (item) params.append(key, item);
-        });
-      } else if (value) {
-        params.append(key, value);
-      }
-    });
-    if ((newFilters.location_ids || []).length === 1) {
-      params.set("location_id", newFilters.location_ids[0]);
-    }
-    if ((newFilters.location_ids || []).length > 1) {
-      params.delete("location_id");
-    }
-    if ((newFilters.warehouse_ids || []).length === 1) {
-      params.set("warehouse_id", newFilters.warehouse_ids[0]);
-    }
-    if ((newFilters.warehouse_ids || []).length > 1) {
-      params.delete("warehouse_id");
-    }
-    
-    // Preserve dashboard_view if it exists
-    const currentParams = new URLSearchParams(location.search);
-    if (currentParams.get("dashboard_view")) {
-      params.append("dashboard_view", currentParams.get("dashboard_view"));
-    }
-    
-    navigate(`/party-stock-report${params.toString() ? `?${params.toString()}` : ""}`);
+    setFilters((prev) => ({ ...prev, [e.target.name]: e.target.value }));
   };
 
   const exportCSV = () => {
-    let csv = "Party,Account,Lorry,Employee,Warehouse,Location,Product,Inward Date,Outward Date,Days,Gross Qty,Shortage,Net Opening,Already Adjusted,Available Balance\n";
+    let csv = "Date,Party,Address,Mobile,Account,Warehouse,Product,Voucher,Lorry,Gross,Shortage,Net,Adjusted,Balance\n";
     details.forEach((row) => {
-      csv += `${row.company_name || ""},${row.account_name || ""},${row.lorry_no || ""},${row.employee_name || ""},${row.warehouse_name || ""},${row.location_name || ""},${row.product_name || ""},${formatDisplayDate(row.date) || ""},${formatDisplayDate(row.outward_date) || ""},${row.days_diff},${num(row.gross_qty)},${num(row.shortage_qty)},${num(row.net_opening_qty)},${num(row.already_adjusted_qty)},${num(row.available_balance_qty)}\n`;
+      csv += `${formatDisplayDate(row.date) || ""},${row.party_name || ""},${row.company_address || ""},${row.company_mobile || ""},${row.account_name || ""},${row.warehouse_name || ""},${row.product_name || ""},${row.voucher_no || ""},${row.lorry_no || ""},${num(row.gross_weight)},${num(row.shortage_qty)},${num(row.net_qty)},${num(row.adjusted_qty)},${num(row.balance_qty)}\n`;
     });
     const blob = new Blob([csv], { type: "text/csv" });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = "Party_Stock_Report.csv";
+    a.download = "Party_Ledger_Report.csv";
     a.click();
   };
 
   const totals = useMemo(
     () =>
       details.reduce(
-        (acc, row) => {
-          acc.gross += Number(row.gross_qty) || 0;
-          acc.shortage += Number(row.shortage_qty) || 0;
-          acc.net += Number(row.net_opening_qty) || 0;
-          acc.adjusted += Number(row.already_adjusted_qty) || 0;
-          acc.balance += Number(row.available_balance_qty) || 0;
+        (acc, r) => {
+          acc.gross += Number(r.gross_weight) || 0;
+          acc.shortage += Number(r.shortage_qty) || 0;
+          acc.net += Number(r.net_qty) || 0;
+          acc.adjusted += Number(r.adjusted_qty) || 0;
+          acc.balance += Number(r.balance_qty) || 0;
           return acc;
         },
         { gross: 0, shortage: 0, net: 0, adjusted: 0, balance: 0 }
@@ -217,37 +128,14 @@ export default function PartyStockReportPage() {
     [details]
   );
 
-  const summaryTotals = useMemo(
-    () =>
-      summary.reduce(
-        (acc, row) => {
-          acc.gross += Number(row.gross_qty) || 0;
-          acc.shortage += Number(row.shortage_qty) || 0;
-          acc.net += Number(row.net_opening_qty) || 0;
-          acc.adjusted += Number(row.already_adjusted_qty) || 0;
-          acc.balance += Number(row.available_balance_qty) || 0;
-          return acc;
-        },
-        { gross: 0, shortage: 0, net: 0, adjusted: 0, balance: 0 }
-      ),
-    [summary]
-  );
-
   return (
     <div style={{ padding: 20, background: "#f8fafc", minHeight: "100vh", fontFamily: "Segoe UI, Arial, sans-serif" }}>
       <div style={{ ...card, marginBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
         <div>
-          <h2 style={{ margin: 0, color: "#0f172a" }}>Party Wise Stock Report</h2>
+          <h2 style={{ margin: 0, color: "#0f172a" }}>Party Wise Inward Adjustment Ledger</h2>
           <p style={{ margin: "6px 0 0", color: "#64748b" }}>
-            Detailed party (company) wise stock report with address, contact details, and stock calculations. Includes Gross Qty, Shortage, Net Opening, Already Adjusted, and Available Balance.
+            Detailed party (company) wise inward adjustment ledger with address, contact details, and stock adjustments. Includes Gross, Shortage, Net, Adjusted, and Balance.
           </p>
-          {dashboardView ? (
-            <div style={{ marginTop: 12, color: "#0f766e", fontWeight: 700, fontSize: 14 }}>
-              Focused detail view
-              {activeWarehouseName ? ` | Warehouse: ${activeWarehouseName}` : ""}
-              {activeCompanyName ? ` | Party: ${activeCompanyName}` : ""}
-            </div>
-          ) : null}
         </div>
         <button
           onClick={() => navigate("/dashboard")}
@@ -271,13 +159,6 @@ export default function PartyStockReportPage() {
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
           <input type="date" name="from_date" value={filters.from_date} onChange={handleChange} style={input} />
           <input type="date" name="to_date" value={filters.to_date} onChange={handleChange} style={input} />
-
-          <select name="employee_id" value={filters.employee_id} onChange={handleChange} style={input}>
-            <option value="">All Employees</option>
-            {employees.map((e) => (
-              <option key={e.id} value={e.id}>{e.name}</option>
-            ))}
-          </select>
 
           <select name="company_id" value={filters.company_id} onChange={handleChange} style={input}>
             <option value="">All Parties</option>
@@ -309,6 +190,10 @@ export default function PartyStockReportPage() {
             ))}
           </select>
 
+          <button onClick={fetchReport} style={{ ...button, background: "#0f766e" }}>
+            Apply
+          </button>
+
           <button onClick={exportCSV} style={{ ...button, background: "#2563eb" }}>
             Export CSV
           </button>
@@ -329,121 +214,108 @@ export default function PartyStockReportPage() {
 
       {visibleSections.includes("totals") ? (
       <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 16, marginBottom: 16 }}>
-        <div style={card}><div>Gross Qty</div><div style={{ fontSize: 24, fontWeight: 700 }}>{num(totals.gross)}</div></div>
+        <div style={card}><div>Gross</div><div style={{ fontSize: 24, fontWeight: 700 }}>{num(totals.gross)}</div></div>
         <div style={card}><div>Shortage</div><div style={{ fontSize: 24, fontWeight: 700 }}>{num(totals.shortage)}</div></div>
-        <div style={card}><div>Net Opening</div><div style={{ fontSize: 24, fontWeight: 700 }}>{num(totals.net)}</div></div>
-        <div style={card}><div>Already Adjusted</div><div style={{ fontSize: 24, fontWeight: 700 }}>{num(totals.adjusted)}</div></div>
-        <div style={card}><div>Available Balance</div><div style={{ fontSize: 24, fontWeight: 700 }}>{num(totals.balance)}</div></div>
+        <div style={card}><div>Net</div><div style={{ fontSize: 24, fontWeight: 700 }}>{num(totals.net)}</div></div>
+        <div style={card}><div>Adjusted</div><div style={{ fontSize: 24, fontWeight: 700 }}>{num(totals.adjusted)}</div></div>
+        <div style={card}><div>Balance</div><div style={{ fontSize: 24, fontWeight: 700 }}>{num(totals.balance)}</div></div>
       </div>
       ) : null}
 
-      {!dashboardView && visibleSections.includes("summary") ? (
-        <div style={{ ...card, marginBottom: 16, overflowX: "auto" }}>
-          <h3 style={{ margin: "0 0 12px", color: "#0f172a" }}>Summary by Party</h3>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-            <thead>
+      {visibleSections.includes("summary") ? (
+      <div style={{ ...card, marginBottom: 16, overflowX: "auto" }}>
+        <h3 style={{ margin: "0 0 12px", color: "#0f172a" }}>Summary by Party</h3>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+          <thead>
+            <tr>
+              <th style={th}>Party Name</th>
+              <th style={th}>Account</th>
+              <th style={th}>Address</th>
+              <th style={th}>Mobile</th>
+              <th style={th}>Gross</th>
+              <th style={th}>Shortage</th>
+              <th style={th}>Net</th>
+              <th style={th}>Adjusted</th>
+              <th style={th}>Balance</th>
+            </tr>
+          </thead>
+          <tbody>
+            {summary.length > 0 ? (
+              summary.map((row, index) => (
+                <tr key={`${row.party_name}-${row.company_account_id || row.account_name || index}`}>
+                  <td style={td}>{row.party_name || "-"}</td>
+                  <td style={td}>{row.account_name || "-"}</td>
+                  <td style={td}>{row.company_address || "-"}</td>
+                  <td style={td}>{row.company_mobile || "-"}</td>
+                  <td style={td}>{num(row.gross_weight)}</td>
+                  <td style={td}>{num(row.shortage_qty)}</td>
+                  <td style={td}>{num(row.net_qty)}</td>
+                  <td style={td}>{num(row.adjusted_qty)}</td>
+                  <td style={td}>{num(row.balance_qty)}</td>
+                </tr>
+              ))
+            ) : (
               <tr>
-                <th style={th}>Party Name</th>
-                <th style={th}>Address</th>
-                <th style={th}>Warehouse Name</th>
-                <th style={th}>Gross Qty</th>
-                <th style={th}>Shortage</th>
-                <th style={th}>Net Opening</th>
-                <th style={th}>Already Adjusted</th>
-                <th style={th}>Available Balance</th>
+                <td style={td} colSpan="9">No summary records found</td>
               </tr>
-            </thead>
-            <tbody>
-              {summary.length > 0 ? (
-                summary.map((row, index) => (
-                  <tr key={`${row.party_name}-${row.warehouse_name}-${index}`} style={{ transition: "background-color 0.2s ease" }} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#87ceeb'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#fff'}>
-                    <td style={td}>{row.party_name}</td>
-                    <td style={td}>{row.company_address || "-"}</td>
-                    <td style={td}>{row.warehouse_name || "-"}</td>
-                    <td style={td}>{num(row.gross_qty)}</td>
-                    <td style={td}>{num(row.shortage_qty)}</td>
-                    <td style={td}>{num(row.net_opening_qty)}</td>
-                    <td style={td}>{num(row.already_adjusted_qty)}</td>
-                    <td style={td}>{num(row.available_balance_qty)}</td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td style={td} colSpan="8">No summary records found</td>
-                </tr>
-              )}
-              {summary.length > 0 && (
-                <tr style={{ backgroundColor: "#87ceeb", fontWeight: 700 }}>
-                  <td style={td} colSpan="3">Total Weight</td>
-                  <td style={td}>{num(summaryTotals.gross)}</td>
-                  <td style={td}>{num(summaryTotals.shortage)}</td>
-                  <td style={td}>{num(summaryTotals.net)}</td>
-                  <td style={td}>{num(summaryTotals.adjusted)}</td>
-                  <td style={td}>{num(summaryTotals.balance)}</td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+            )}
+          </tbody>
+        </table>
+      </div>
       ) : null}
 
       {visibleSections.includes("details") ? (
       <div style={{ ...card, overflow: "hidden" }}>
-        <h3 style={{ marginTop: 0, marginBottom: 12, color: "#0f172a" }}>
-          {dashboardView ? "Filtered Details" : "Full Details"}
-        </h3>
         <div style={{ overflowX: "auto", maxHeight: "72vh" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
             <thead>
               <tr>
+                <th style={th}>Date</th>
                 <th style={th}>Party</th>
+                <th style={th}>Address</th>
+                <th style={th}>Mobile</th>
                 <th style={th}>Account</th>
-                <th style={th}>Lorry</th>
-                <th style={th}>Employee</th>
                 <th style={th}>Warehouse</th>
-                <th style={th}>Location</th>
                 <th style={th}>Product</th>
-                <th style={th}>Inward Date</th>
-                <th style={th}>Outward Date</th>
-                <th style={th}>Days</th>
-                <th style={th}>Gross Qty</th>
+                <th style={th}>Voucher</th>
+                <th style={th}>Lorry</th>
+                <th style={th}>Gross</th>
                 <th style={th}>Shortage</th>
-                <th style={th}>Net Opening</th>
-                <th style={th}>Already Adjusted</th>
-                <th style={th}>Available Balance</th>
+                <th style={th}>Net</th>
+                <th style={th}>Adjusted</th>
+                <th style={th}>Balance</th>
               </tr>
             </thead>
             <tbody>
               {details.length > 0 ? (
                 details.map((row) => (
-                  <tr key={row.id} style={{ transition: "background-color 0.2s ease" }} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#87ceeb'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#fff'}>
-                    <td style={td}>{row.company_name || row.account_name || "Unknown Party"}</td>
-                    <td style={td}>{row.account_name || "-"}</td>
-                    <td style={td}>{row.lorry_no}</td>
-                    <td style={td}>{row.employee_name}</td>
-                    <td style={td}>{row.warehouse_name || "-"}</td>
-                    <td style={td}>{row.location_name}</td>
-                    <td style={td}>{row.product_name}</td>
+                  <tr key={row.id}>
                     <td style={td}>{formatDisplayDate(row.date)}</td>
-                    <td style={td}>{formatDisplayDate(row.outward_date) || "-"}</td>
-                    <td style={td}>{row.days_diff}</td>
-                    <td style={td}>{num(row.gross_qty)}</td>
+                    <td style={td}>{row.party_name}</td>
+                    <td style={td}>{row.company_address || "-"}</td>
+                    <td style={td}>{row.company_mobile || "-"}</td>
+                    <td style={td}>{row.account_name || "-"}</td>
+                    <td style={td}>{row.warehouse_name}</td>
+                    <td style={td}>{row.product_name}</td>
+                    <td style={td}>{row.voucher_no}</td>
+                    <td style={td}>{row.lorry_no}</td>
+                    <td style={td}>{num(row.gross_weight)}</td>
                     <td style={td}>{num(row.shortage_qty)}</td>
-                    <td style={td}>{num(row.net_opening_qty)}</td>
-                    <td style={td}>{num(row.already_adjusted_qty)}</td>
-                    <td style={td}>{num(row.available_balance_qty)}</td>
+                    <td style={td}>{num(row.net_qty)}</td>
+                    <td style={td}>{num(row.adjusted_qty)}</td>
+                    <td style={td}>{num(row.balance_qty)}</td>
                   </tr>
                 ))
               ) : (
                 <tr>
-                  <td style={td} colSpan="15">No records found</td>
+                  <td style={td} colSpan="14">No records found</td>
                 </tr>
               )}
             </tbody>
             {details.length > 0 && (
               <tfoot>
                 <tr style={{ background: "#ecfdf5", fontWeight: 700 }}>
-                  <td style={td} colSpan="10">Totals</td>
+                  <td style={td} colSpan="9">Totals</td>
                   <td style={td}>{num(totals.gross)}</td>
                   <td style={td}>{num(totals.shortage)}</td>
                   <td style={td}>{num(totals.net)}</td>
