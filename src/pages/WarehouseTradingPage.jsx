@@ -5952,6 +5952,29 @@ export default function WarehouseTradingPage() {
                         </thead>
                         <tbody>
                           <tr>
+                            <td style={td}>Transport Mode</td>
+                            <td style={td}>
+                              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                                <button type="button" onClick={() => setSaleTransportMode("auto")} style={{ border: "none", borderRadius: 999, padding: "5px 10px", fontSize: 12, fontWeight: 700, cursor: "pointer", background: saleTransportMode === "auto" ? "#0f766e" : "#e2e8f0", color: saleTransportMode === "auto" ? "#fff" : "#334155" }}>Auto</button>
+                                <button type="button" onClick={() => { setSaleTransportMode("manual"); setSaleTransportManualAmount(String(transportChargeAuto || 0)); }} style={{ border: "none", borderRadius: 999, padding: "5px 10px", fontSize: 12, fontWeight: 700, cursor: "pointer", background: saleTransportMode === "manual" ? "#0f766e" : "#e2e8f0", color: saleTransportMode === "manual" ? "#fff" : "#334155" }}>Manual</button>
+                              </div>
+                            </td>
+                            <td style={td}>Transport Charge</td>
+                            <td style={td}>
+                              {saleTransportMode === "manual" ? (
+                                <input
+                                  type="number"
+                                  step="0.0001"
+                                  value={saleTransportManualAmount}
+                                  onChange={(e) => setSaleTransportManualAmount(e.target.value)}
+                                  style={{ ...erpInput, maxWidth: 140, padding: "6px 10px", height: 34 }}
+                                />
+                              ) : (
+                                <strong>{formatMoney(transportCharge)}</strong>
+                              )}
+                            </td>
+                          </tr>
+                          <tr>
                             <td style={td}>Claim</td>
                             <td style={td}>{preview.claimAmount}</td>
                             <td style={td}>Shortage</td>
@@ -5993,61 +6016,6 @@ export default function WarehouseTradingPage() {
 
                   <div style={{ marginTop: 14, border: "1px solid #d1d5db", borderRadius: 10, overflow: "hidden", background: "#fff" }}>
                     <div style={{ padding: "10px 12px", background: "#f3f4f6", borderBottom: "1px solid #d1d5db", fontWeight: 800, color: "#111827" }}>
-                      Transport Summary
-                    </div>
-                    <div style={{ overflowX: "auto" }}>
-                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                        <thead>
-                          <tr style={reportHeaderRowStyle}>
-                            <th style={th}>Particulars</th>
-                            <th style={th}>Value</th>
-                            <th style={th}>Particulars</th>
-                            <th style={th}>Value</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          <tr>
-                            <td style={td}>Transport Mode</td>
-                            <td style={td}>
-                              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
-                                <button type="button" onClick={() => setSaleTransportMode("auto")} style={{ border: "none", borderRadius: 999, padding: "5px 10px", fontSize: 12, fontWeight: 700, cursor: "pointer", background: saleTransportMode === "auto" ? "#0f766e" : "#e2e8f0", color: saleTransportMode === "auto" ? "#fff" : "#334155" }}>Auto</button>
-                                <button type="button" onClick={() => { setSaleTransportMode("manual"); setSaleTransportManualAmount(String(transportChargeAuto || 0)); }} style={{ border: "none", borderRadius: 999, padding: "5px 10px", fontSize: 12, fontWeight: 700, cursor: "pointer", background: saleTransportMode === "manual" ? "#0f766e" : "#e2e8f0", color: saleTransportMode === "manual" ? "#fff" : "#334155" }}>Manual</button>
-                              </div>
-                            </td>
-                            <td style={td}>Transport Charge</td>
-                            <td style={td}>
-                              {saleTransportMode === "manual" ? (
-                                <input
-                                  type="number"
-                                  step="0.0001"
-                                  value={saleTransportManualAmount}
-                                  onChange={(e) => setSaleTransportManualAmount(e.target.value)}
-                                  style={{ ...erpInput, maxWidth: 140, padding: "6px 10px", height: 34 }}
-                                />
-                              ) : (
-                                <strong>{formatMoney(transportCharge)}</strong>
-                              )}
-                            </td>
-                          </tr>
-                          <tr>
-                            <td style={td}>Gross Amount</td>
-                            <td style={td}>{formatMoney(grossAmount)}</td>
-                            <td style={td}>Net Receivable</td>
-                            <td style={td}>{formatMoney(netPayable + adjustedTotalDeduction)}</td>
-                          </tr>
-                          <tr>
-                            <td style={td}>Total Deduction</td>
-                            <td style={td}>{formatMoney(adjustedTotalDeduction)}</td>
-                            <td style={td}>Net Profit / Loss</td>
-                            <td style={td}>{formatMoney(profitLoss)}</td>
-                          </tr>
-                        </tbody>
-                      </table>
-                    </div>
-                  </div>
-
-                  <div style={{ marginTop: 14, border: "1px solid #d1d5db", borderRadius: 10, overflow: "hidden", background: "#fff" }}>
-                    <div style={{ padding: "10px 12px", background: "#f3f4f6", borderBottom: "1px solid #d1d5db", fontWeight: 800, color: "#111827" }}>
                       Payment / Receipt Details
                     </div>
                     <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 14, padding: 12 }}>
@@ -6073,6 +6041,44 @@ export default function WarehouseTradingPage() {
                           </div>
                         )) : <div style={{ color: "#64748b", fontSize: 13 }}>No journal entry found.</div>}
                       </div>
+                    </div>
+                  </div>
+
+                  <div style={{ marginTop: 14, border: "1px solid #d1d5db", borderRadius: 10, overflow: "hidden", background: "#fff" }}>
+                    <div style={{ padding: "10px 12px", background: "#f3f4f6", borderBottom: "1px solid #d1d5db", fontWeight: 800, color: "#111827" }}>
+                      All Summary
+                    </div>
+                    <div style={{ overflowX: "auto" }}>
+                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                        <thead>
+                          <tr style={reportHeaderRowStyle}>
+                            <th style={th}>Particulars</th>
+                            <th style={th}>Value</th>
+                            <th style={th}>Particulars</th>
+                            <th style={th}>Value</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          <tr>
+                            <td style={td}>Gross Amount</td>
+                            <td style={td}>{formatMoney(grossAmount)}</td>
+                            <td style={td}>Transport Charge</td>
+                            <td style={td}>{formatMoney(transportCharge)}</td>
+                          </tr>
+                          <tr>
+                            <td style={td}>Total Deduction</td>
+                            <td style={td}>{formatMoney(adjustedTotalDeduction)}</td>
+                            <td style={td}>Net Receivable</td>
+                            <td style={td}>{formatMoney(netPayable)}</td>
+                          </tr>
+                          <tr>
+                            <td style={td}>Net Profit / Loss</td>
+                            <td style={td}>{formatMoney(profitLoss)}</td>
+                            <td style={td}>Transport Mode</td>
+                            <td style={td}>{saleTransportMode === "manual" ? "Manual" : "Auto"}</td>
+                          </tr>
+                        </tbody>
+                      </table>
                     </div>
                   </div>
 
@@ -6111,7 +6117,7 @@ export default function WarehouseTradingPage() {
                   {purchaseLinks.length > 0 && (
                     <div style={{ marginTop: 14, border: "1px solid #d1d5db", borderRadius: 10, overflow: "hidden", background: "#fff" }}>
                       <div style={{ padding: "10px 12px", background: "#f3f4f6", borderBottom: "1px solid #d1d5db", fontWeight: 800, color: "#111827" }}>
-                        Purchase Details
+                        Purchase Links
                       </div>
                       <div style={{ overflowX: "auto" }}>
                         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
