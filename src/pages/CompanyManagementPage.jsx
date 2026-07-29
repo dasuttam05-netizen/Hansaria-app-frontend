@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
 import { loadSession, hasPermission } from "../utils/auth";
+import MasterModuleSidebar from "../components/MasterModuleSidebar";
 
 const emptyForm = () => ({
   name: "",
@@ -112,115 +113,120 @@ export default function CompanyManagementPage() {
   };
 
   return (
-    <div style={{ fontFamily: "Segoe UI, Arial, sans-serif", padding: "8px" }}>
-      {showForm ? (
-        <div style={card}>
-          <div style={headerRow}>
-            <h2 style={titleStyle}>{editId ? "Edit Company" : "Add Company"}</h2>
-            <button type="button" onClick={resetForm} style={btnPrimary}>Back To Company List</button>
-          </div>
-          <form onSubmit={handleSubmit}>
-            <div style={formGrid}>
-              <Field label="Company Name">
-                <input name="name" value={formData.name} onChange={handleChange} placeholder="Company Name *" style={inp} />
-              </Field>
-              <Field label="Mobile">
-                <input name="mobile" value={formData.mobile} onChange={handleChange} placeholder="Mobile No. *" style={inp} />
-              </Field>
-              <Field label="Shortage % (blank = Auto)">
-                <input
-                  name="shortage_percent"
-                  value={formData.shortage_percent}
-                  onChange={handleChange}
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  placeholder="e.g. 0.50, 0.75, 1.00"
-                  style={inp}
-                />
-              </Field>
-              <Field label="Opening Balance">
-                <input name="opening_balance" value={formData.opening_balance} onChange={handleChange} type="number" step="0.01" style={inp} />
-              </Field>
-              <Field label="Balance Type">
-                <select name="opening_balance_type" value={formData.opening_balance_type} onChange={handleChange} style={inp}>
-                  <option value="dr">Dr</option>
-                  <option value="cr">Cr</option>
-                </select>
-              </Field>
-              <div style={{ gridColumn: "1 / -1" }}>
-                <Field label="Address">
-                  <textarea name="address" value={formData.address} onChange={handleChange} rows={3} style={{ ...inp, minHeight: 72, resize: "vertical" }} />
-                </Field>
+    <div style={pageShell}>
+      <MasterModuleSidebar />
+      <div style={pageContent}>
+        <div style={{ fontFamily: "Segoe UI, Arial, sans-serif", padding: "8px" }}>
+          {showForm ? (
+            <div style={card}>
+              <div style={headerRow}>
+                <h2 style={titleStyle}>{editId ? "Edit Company" : "Add Company"}</h2>
+                <button type="button" onClick={resetForm} style={btnPrimary}>Back To Company List</button>
               </div>
+              <form onSubmit={handleSubmit}>
+                <div style={formGrid}>
+                  <Field label="Company Name">
+                    <input name="name" value={formData.name} onChange={handleChange} placeholder="Company Name *" style={inp} />
+                  </Field>
+                  <Field label="Mobile">
+                    <input name="mobile" value={formData.mobile} onChange={handleChange} placeholder="Mobile No. *" style={inp} />
+                  </Field>
+                  <Field label="Shortage % (blank = Auto)">
+                    <input
+                      name="shortage_percent"
+                      value={formData.shortage_percent}
+                      onChange={handleChange}
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      placeholder="e.g. 0.50, 0.75, 1.00"
+                      style={inp}
+                    />
+                  </Field>
+                  <Field label="Opening Balance">
+                    <input name="opening_balance" value={formData.opening_balance} onChange={handleChange} type="number" step="0.01" style={inp} />
+                  </Field>
+                  <Field label="Balance Type">
+                    <select name="opening_balance_type" value={formData.opening_balance_type} onChange={handleChange} style={inp}>
+                      <option value="dr">Dr</option>
+                      <option value="cr">Cr</option>
+                    </select>
+                  </Field>
+                  <div style={{ gridColumn: "1 / -1" }}>
+                    <Field label="Address">
+                      <textarea name="address" value={formData.address} onChange={handleChange} rows={3} style={{ ...inp, minHeight: 72, resize: "vertical" }} />
+                    </Field>
+                  </div>
+                </div>
+                <div style={actionRow}>
+                  <button type="submit" style={btnPrimary}>Save</button>
+                  <button type="button" onClick={resetForm} style={btnPrimary}>Back To Company List</button>
+                </div>
+              </form>
             </div>
-            <div style={actionRow}>
-              <button type="submit" style={btnPrimary}>Save</button>
-              <button type="button" onClick={resetForm} style={btnPrimary}>Back To Company List</button>
-            </div>
-          </form>
-        </div>
-      ) : (
-        <>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px", gap: 10, flexWrap: "wrap" }}>
-            <h2 style={titleStyle}>Company Management</h2>
-            {canCreate && (
-              <button type="button" onClick={() => setShowForm(true)} style={{ ...btnPrimary, background: "#0f766e" }}>
-                Add Company
-              </button>
-            )}
-          </div>
-          <div style={tableCard}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
-              <thead>
-                <tr style={{ background: "#0f766e", color: "#fff" }}>
-                  <th style={th}>ID</th>
-                  <th style={th}>Company Name</th>
-                  <th style={th}>Address</th>
-                  <th style={th}>Mobile</th>
-                  <th style={th}>Shortage %</th>
-                  <th style={th}>Opening Balance</th>
-                  <th style={th}>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {companies.map((comp, i) => {
-                  const openingBalance = Number(comp.opening_balance ?? 0);
-                  const openingType = String(comp.opening_balance_type || "dr").toUpperCase();
-                  const shortagePercent = comp.shortage_percent === "" || comp.shortage_percent === null || comp.shortage_percent === undefined
-                    ? null
-                    : Number(comp.shortage_percent);
-                  return (
-                    <tr key={comp._id} style={{ background: i % 2 ? "#f8fafc" : "#fff" }}>
-                      <td style={td}>{String(i + 1).padStart(2, "0")}</td>
-                      <td style={td}>{comp.name || "-"}</td>
-                      <td style={td}>{comp.address || "-"}</td>
-                      <td style={td}>{comp.mobile || "-"}</td>
-                      <td style={td}>{shortagePercent === null ? "Auto" : `${shortagePercent.toFixed(2)}%`}</td>
-                      <td style={td}>{`${openingBalance.toFixed(2)} ${openingType}`}</td>
-                      <td style={td}>
-                        {canEdit && (
-                          <button type="button" onClick={() => handleEdit(comp)} style={{ ...mini, background: "#2563eb" }}>
-                            Edit
-                          </button>
-                        )}
-                        {canDelete && (
-                          <button type="button" onClick={() => handleDelete(comp._id)} style={{ ...mini, background: "#dc2626" }}>
-                            Delete
-                          </button>
-                        )}
-                      </td>
+          ) : (
+            <>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px", gap: 10, flexWrap: "wrap" }}>
+                <h2 style={titleStyle}>Company Management</h2>
+                {canCreate && (
+                  <button type="button" onClick={() => setShowForm(true)} style={{ ...btnPrimary, background: "#0f766e" }}>
+                    Add Company
+                  </button>
+                )}
+              </div>
+              <div style={tableCard}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
+                  <thead>
+                    <tr style={{ background: "#0f766e", color: "#fff" }}>
+                      <th style={th}>ID</th>
+                      <th style={th}>Company Name</th>
+                      <th style={th}>Address</th>
+                      <th style={th}>Mobile</th>
+                      <th style={th}>Shortage %</th>
+                      <th style={th}>Opening Balance</th>
+                      <th style={th}>Actions</th>
                     </tr>
-                  );
-                })}
-                {companies.length === 0 ? (
-                  <tr><td colSpan={7} style={{ ...td, textAlign: "center", padding: "20px" }}>No companies found.</td></tr>
-                ) : null}
-              </tbody>
-            </table>
-          </div>
-        </>
-      )}
+                  </thead>
+                  <tbody>
+                    {companies.map((comp, i) => {
+                      const openingBalance = Number(comp.opening_balance ?? 0);
+                      const openingType = String(comp.opening_balance_type || "dr").toUpperCase();
+                      const shortagePercent = comp.shortage_percent === "" || comp.shortage_percent === null || comp.shortage_percent === undefined
+                        ? null
+                        : Number(comp.shortage_percent);
+                      return (
+                        <tr key={comp._id} style={{ background: i % 2 ? "#f8fafc" : "#fff" }}>
+                          <td style={td}>{String(i + 1).padStart(2, "0")}</td>
+                          <td style={td}>{comp.name || "-"}</td>
+                          <td style={td}>{comp.address || "-"}</td>
+                          <td style={td}>{comp.mobile || "-"}</td>
+                          <td style={td}>{shortagePercent === null ? "Auto" : `${shortagePercent.toFixed(2)}%`}</td>
+                          <td style={td}>{`${openingBalance.toFixed(2)} ${openingType}`}</td>
+                          <td style={td}>
+                            {canEdit && (
+                              <button type="button" onClick={() => handleEdit(comp)} style={{ ...mini, background: "#2563eb" }}>
+                                Edit
+                              </button>
+                            )}
+                            {canDelete && (
+                              <button type="button" onClick={() => handleDelete(comp._id)} style={{ ...mini, background: "#dc2626" }}>
+                                Delete
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {companies.length === 0 ? (
+                      <tr><td colSpan={7} style={{ ...td, textAlign: "center", padding: "20px" }}>No companies found.</td></tr>
+                    ) : null}
+                  </tbody>
+                </table>
+              </div>
+            </>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -241,3 +247,5 @@ const btnPrimary = { background: "#2563eb", color: "#fff", border: "none", paddi
 const th = { padding: "10px 8px", textAlign: "left", borderBottom: "1px solid #0d5c56" };
 const td = { padding: "8px", borderBottom: "1px solid #e2e8f0" };
 const mini = { border: "none", color: "#fff", padding: "5px 10px", borderRadius: "6px", cursor: "pointer", fontSize: "12px", fontWeight: 600 };
+const pageShell = { display: "flex", gap: 16, alignItems: "flex-start", padding: 16, flexWrap: "wrap" };
+const pageContent = { flex: 1, minWidth: 0 };
