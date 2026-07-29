@@ -31,6 +31,7 @@ export default function PartyStockReportPage() {
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const warehouseId = params.get("warehouse_id") || "";
+    const locationId = params.get("location_id") || "";
     const locationIds = params.getAll("location_ids");
     const warehouseIds = params.getAll("warehouse_ids");
     const companyId = params.get("company_id") || "";
@@ -41,7 +42,7 @@ export default function PartyStockReportPage() {
 
     setFilters((prev) => ({
       ...prev,
-      location_ids: locationIds,
+      location_ids: locationIds.length ? locationIds : locationId ? [locationId] : [],
       warehouse_ids: warehouseIds.length ? warehouseIds : warehouseId ? [warehouseId] : [],
       company_id: companyId,
       from_date: fromDate,
@@ -164,6 +165,12 @@ export default function PartyStockReportPage() {
         params.append(key, value);
       }
     });
+    if ((newFilters.location_ids || []).length === 1) {
+      params.set("location_id", newFilters.location_ids[0]);
+    }
+    if ((newFilters.warehouse_ids || []).length === 1) {
+      params.set("warehouse_id", newFilters.warehouse_ids[0]);
+    }
     
     // Preserve dashboard_view if it exists
     const currentParams = new URLSearchParams(location.search);
