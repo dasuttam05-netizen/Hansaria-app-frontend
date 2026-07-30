@@ -586,21 +586,6 @@ const downloadPDF = () => {
   doc.setTextColor(25, 25, 25);
   doc.text("Transport Payment Advice", leftX, topY + 13);
 
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(8.5);
-  doc.setTextColor(90, 90, 90);
-  doc.text("Bill format copy for transport payment processing and dispatch settlement.", leftX, topY + 21);
-
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(7.5);
-  doc.setTextColor(90, 90, 90);
-  doc.text(
-    "Prepared bilti advice with dispatch, shortage and payable summary for operational review.",
-    leftX,
-    topY + 28,
-    { maxWidth: 110 }
-  );
-
   const statStartX = 175;
   const statWidth = 34;
   const statGap = 8;
@@ -633,7 +618,7 @@ const downloadPDF = () => {
   drawPanel({
     x: leftX,
     y: infoY,
-    w: 92,
+    w: 90,
     h: 48,
     fill: [245, 245, 245],
     border: [205, 205, 205],
@@ -648,11 +633,27 @@ const downloadPDF = () => {
   });
 
   drawPanel({
-    x: leftX + 96,
+    x: leftX + 94,
     y: infoY,
-    w: 56,
+    w: 90,
     h: 48,
     fill: [248, 248, 248],
+    border: [205, 205, 205],
+    title: "PARTY DETAILS",
+    titleColor: [40, 40, 40],
+    rows: [
+      ["Consignor", consignorName],
+      ["Consignee", consigneeName],
+      ["Buyer", formData.buyer_name || "-"],
+    ],
+  });
+
+  drawPanel({
+    x: leftX + 188,
+    y: infoY,
+    w: 92,
+    h: 48,
+    fill: [245, 245, 245],
     border: [205, 205, 205],
     title: "TRIP DATA",
     titleColor: [40, 40, 40],
@@ -661,23 +662,6 @@ const downloadPDF = () => {
       ["Days", formData.days || "0"],
       ["Destination", formData.destination || "-"],
       ["Warehouse", warehouseName],
-    ],
-  });
-
-  drawPanel({
-    x: leftX + 156,
-    y: infoY,
-    w: 133,
-    h: 48,
-    fill: [245, 245, 245],
-    border: [205, 205, 205],
-    title: "PAYMENT DETAILS",
-    titleColor: [40, 40, 40],
-    rows: [
-      ["Current Payment", money(netAmount)],
-      ["TDS Amount", money(tds)],
-      ["Advance Paid", money(advance)],
-      ["Net Payable", money(payable)],
     ],
   });
 
@@ -717,25 +701,9 @@ const downloadPDF = () => {
   drawPanel({
     x: leftX,
     y: lowerY,
-    w: 92,
+    w: 90,
     h: 42,
     fill: [246, 246, 246],
-    border: [205, 205, 205],
-    title: "PARTY DETAILS",
-    titleColor: [40, 40, 40],
-    rows: [
-      ["Consignor", consignorName],
-      ["Consignee", consigneeName],
-      ["Buyer", formData.buyer_name || "-"],
-    ],
-  });
-
-  drawPanel({
-    x: leftX + 96,
-    y: lowerY,
-    w: 56,
-    h: 42,
-    fill: [248, 248, 248],
     border: [205, 205, 205],
     title: "SHORTAGE",
     titleColor: [40, 40, 40],
@@ -747,18 +715,35 @@ const downloadPDF = () => {
   });
 
   drawPanel({
-    x: leftX + 156,
+    x: leftX + 94,
     y: lowerY,
-    w: 133,
+    w: 90,
     h: 42,
-    fill: [246, 246, 246],
+    fill: [248, 248, 248],
     border: [205, 205, 205],
     title: "CHARGES BREAKUP",
     titleColor: [40, 40, 40],
     rows: [
       ["Detain Charges", money(detain)],
       ["Other Charges", money(others)],
-      ["Transport Address", transporterAddress],
+      ["Transport Rate", money(rate)],
+    ],
+  });
+
+  drawPanel({
+    x: leftX + 188,
+    y: lowerY,
+    w: 92,
+    h: 42,
+    fill: [246, 246, 246],
+    border: [205, 205, 205],
+    title: "PAYMENT DETAILS",
+    titleColor: [40, 40, 40],
+    rows: [
+      ["Current Payment", money(netAmount)],
+      ["TDS Amount", money(tds)],
+      ["Advance Paid", money(advance)],
+      ["Net Payable", money(payable)],
     ],
   });
 
@@ -772,8 +757,8 @@ const downloadPDF = () => {
   doc.setFont("helvetica", "bold");
   doc.setFontSize(18);
   doc.setTextColor(35, 35, 35);
-  doc.text(`$${money(payable)}`, 181, kpiY + 12);
-  doc.text(`$${money(netAmount)}`, 247, kpiY + 12);
+  doc.text(`${money(payable)}`, 181, kpiY + 12);
+  doc.text(`${money(netAmount)}`, 247, kpiY + 12);
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8);
