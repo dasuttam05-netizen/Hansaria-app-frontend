@@ -170,8 +170,10 @@ export default function LoginPage() {
                     type="button"
                     onClick={() => setShowPassword((prev) => !prev)}
                     style={toggleButtonStyle}
+                    aria-label={showPassword ? "Hide password" : "Show password"}
+                    title={showPassword ? "Hide password" : "Show password"}
                   >
-                    {showPassword ? "Hide" : "View"}
+                    {showPassword ? "🙈" : "👁"}
                   </button>
                 </div>
               </label>
