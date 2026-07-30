@@ -99,16 +99,16 @@ export default function TransportBiltiPage() {
   const sourceTh = {
     padding: "8px 10px",
     borderBottom: "1px solid #cbd5e1",
-    background: "#f1f5f9",
+    background: "#0f766e",
     textAlign: "left",
-    color: "#334155",
+    color: "#ffffff",
     fontSize: 12,
   };
 
   const sourceTd = {
     padding: "8px 10px",
     borderBottom: "1px solid #e2e8f0",
-    color: "#0f172a",
+    color: "#000000",
     fontSize: 12,
   };
 
@@ -407,8 +407,8 @@ export default function TransportBiltiPage() {
       if (mode === "manual" && name === "company_id") {
         const company = companies.find((c) => String(c.id) === String(value));
         next.company_name = company?.name || "";
-        next.company_account_id = "";
         next.account_name = "";
+        next.company_account_id = "";
       }
 
       if (mode === "manual" && name === "company_account_id") {
