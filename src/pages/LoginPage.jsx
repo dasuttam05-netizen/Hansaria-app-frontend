@@ -51,6 +51,7 @@ function resolveLandingPath(user) {
 export default function LoginPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
@@ -58,7 +59,7 @@ export default function LoginPage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get("idle") === "1") {
-      setError("1 hour inactive thakar karone auto logout hoyeche. Abar login korun.");
+      setError("You were automatically logged out after 1 hour of inactivity. Please log in again.");
     }
   }, []);
 
@@ -155,15 +156,24 @@ export default function LoginPage() {
 
               <label style={labelStyle}>
                 Password
-                <input
-                  type="password"
-                  placeholder="Enter password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  style={inputStyle}
-                  autoComplete="current-password"
-                  required
-                />
+                <div style={passwordFieldWrapStyle}>
+                  <input
+                    type={showPassword ? "text" : "password"}
+                    placeholder="Enter password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    style={{ ...inputStyle, paddingRight: 90 }}
+                    autoComplete="current-password"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword((prev) => !prev)}
+                    style={toggleButtonStyle}
+                  >
+                    {showPassword ? "Hide" : "View"}
+                  </button>
+                </div>
               </label>
 
               {error ? <div style={errorStyle}>{error}</div> : null}
@@ -394,6 +404,26 @@ const inputStyle = {
   fontSize: 15,
   outline: "none",
   background: "#fff",
+};
+
+const passwordFieldWrapStyle = {
+  position: "relative",
+  display: "flex",
+  alignItems: "center",
+};
+
+const toggleButtonStyle = {
+  position: "absolute",
+  right: 10,
+  top: "50%",
+  transform: "translateY(-50%)",
+  border: "none",
+  background: "transparent",
+  color: "#0f766e",
+  fontWeight: 700,
+  cursor: "pointer",
+  padding: "4px 8px",
+  fontSize: 13,
 };
 
 const errorStyle = {
