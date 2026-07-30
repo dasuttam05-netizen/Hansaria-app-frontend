@@ -524,7 +524,7 @@ const downloadPDF = () => {
   const pageHeight = doc.internal.pageSize.getHeight();
   const leftX = 8;
   const topY = 8;
-  const contentWidth = pageWidth - 16;
+  const rightX = pageWidth - 8;
 
   const voucherNo = formData.voucher_no || meta?.outward_voucher_no || meta?.voucher_no || "-";
   const billNo = meta?.bilti_no || (formData.id ? `BLT-${formData.id}` : "DRAFT");
@@ -555,83 +555,79 @@ const downloadPDF = () => {
 
   const drawPanel = ({ x, y, w, h, fill, border, title, rows, titleColor = [255, 255, 255] }) => {
     doc.setDrawColor(border[0], border[1], border[2]);
-    doc.setLineWidth(0.25);
+    doc.setLineWidth(0.3);
     doc.setFillColor(255, 255, 255);
-    doc.roundedRect(x, y, w, h, 4, 4, "FD");
+    doc.roundedRect(x, y, w, h, 2, 2, "FD");
     doc.setFillColor(fill[0], fill[1], fill[2]);
-    doc.roundedRect(x, y, w, 10, 4, 4, "F");
-    doc.rect(x, y + 4, w, 6, "F");
+    doc.rect(x, y, w, 8, "F");
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(9.5);
+    doc.setFontSize(8.2);
     doc.setTextColor(titleColor[0], titleColor[1], titleColor[2]);
-    doc.text(title, x + 4, y + 6.5);
+    doc.text(title, x + 3, y + 5.2);
 
-    let rowY = y + 14;
+    let rowY = y + 12;
     rows.forEach((row, index) => {
-      doc.setFillColor(index % 2 === 0 ? 246 : 255, index % 2 === 0 ? 246 : 255, index % 2 === 0 ? 246 : 255);
-      doc.roundedRect(x + 2.5, rowY - 3.8, w - 5, 7.2, 1.8, 1.8, "F");
+      doc.setFillColor(index % 2 === 0 ? 250 : 255, index % 2 === 0 ? 250 : 255, index % 2 === 0 ? 250 : 255);
+      doc.rect(x + 1.5, rowY - 3.2, w - 3, 6.6, "F");
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(7.2);
-      doc.setTextColor(90, 90, 90);
-      doc.text(row[0], x + 5, rowY);
-      doc.setFont("helvetica", "normal");
+      doc.setFontSize(6.8);
       doc.setTextColor(35, 35, 35);
-      doc.text(String(row[1]), x + w - 5, rowY, { align: "right" });
-      rowY += 8;
+      doc.text(row[0], x + 4, rowY);
+      doc.setFont("helvetica", "normal");
+      doc.setTextColor(20, 20, 20);
+      doc.text(String(row[1]), x + w - 4, rowY, { align: "right" });
+      rowY += 7.2;
     });
   };
 
   doc.setFillColor(255, 255, 255);
   doc.rect(0, 0, pageWidth, pageHeight, "F");
 
-  doc.setFillColor(245, 245, 245);
-  doc.circle(34, pageHeight - 12, 18, "F");
-  doc.setFillColor(236, 236, 236);
-  doc.circle(pageWidth - 20, 16, 16, "F");
+  doc.setDrawColor(180, 180, 180);
+  doc.setLineWidth(0.35);
+  doc.rect(3, 3, pageWidth - 6, pageHeight - 6);
 
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(22);
-  doc.setTextColor(25, 25, 25);
-  doc.text("Transport Payment Advice", leftX, topY + 13);
+  doc.setFontSize(16);
+  doc.setTextColor(15, 23, 42);
+  doc.text("Transport Company", leftX, topY + 8);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(7.6);
+  doc.setTextColor(51, 65, 85);
+  doc.text(transporterAddress || "-", leftX, topY + 13, { maxWidth: 135 });
+  doc.text(`PAN : ${transporterPan}`, leftX, topY + 18);
+  doc.text(`Phone : ${transporterPhone}`, leftX, topY + 23);
 
-  const statStartX = 175;
-  const statWidth = 34;
-  const statGap = 8;
-  const stats = [
-    ["Net Payable", money(payable), [15, 118, 110]],
-    ["Gross Freight", money(gross), [15, 118, 110]],
-    ["LR Date", lrDate || "-", [15, 118, 110]],
-  ];
+  const logoBoxW = 44;
+  doc.setDrawColor(200, 200, 200);
+  doc.rect(rightX - logoBoxW, topY + 2, logoBoxW, 20);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(13);
+  doc.setTextColor(15, 23, 42);
+  doc.text("Transport", rightX - 3, topY + 9, { align: "right" });
+  doc.setFontSize(7.2);
+  doc.setTextColor(71, 85, 105);
+  doc.text("Payment Advice", rightX - 3, topY + 14, { align: "right" });
+  doc.text(billNo, rightX - 3, topY + 19, { align: "right" });
 
-  stats.forEach((stat, index) => {
-    const x = statStartX + index * (statWidth + statGap);
-    doc.setFillColor(255, 255, 255);
-    doc.setDrawColor(210, 210, 210);
-    doc.roundedRect(x, topY + 10, statWidth, 22, 3.5, 3.5, "FD");
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(8.8);
-    doc.setTextColor(stat[2][0], stat[2][1], stat[2][2]);
-    doc.text(stat[1], x + statWidth / 2, topY + 19, { align: "center" });
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(6.2);
-    doc.setTextColor(100, 116, 139);
-    doc.text(stat[0], x + statWidth / 2, topY + 26, { align: "center" });
-  });
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(23);
+  doc.setTextColor(15, 23, 42);
+  doc.text("TRANSPORT PAYMENT ADVICE", pageWidth / 2, topY + 34, { align: "center" });
+  doc.setDrawColor(15, 118, 110);
+  doc.setLineWidth(0.6);
+  doc.line(leftX, topY + 38, rightX, topY + 38);
 
-  doc.setDrawColor(190, 190, 190);
-  doc.setLineWidth(0.25);
-  doc.line(leftX, topY + 36, pageWidth - leftX, topY + 36);
-
-  const infoY = topY + 41;
+  const infoY = topY + 42;
   drawPanel({
     x: leftX,
     y: infoY,
     w: 90,
-    h: 56,
-    fill: [245, 245, 245],
-    border: [199, 210, 254],
+    h: 50,
+    fill: [15, 118, 110],
+    border: [15, 118, 110],
     title: "GENERAL DETAILS",
-    titleColor: [15, 118, 110],
+    titleColor: [255, 255, 255],
     rows: [
       ["Bilti No", billNo],
       ["Transport", transporterName],
@@ -644,11 +640,11 @@ const downloadPDF = () => {
     x: leftX + 94,
     y: infoY,
     w: 90,
-    h: 56,
-    fill: [248, 248, 248],
-    border: [191, 219, 254],
+    h: 50,
+    fill: [37, 99, 235],
+    border: [37, 99, 235],
     title: "PARTY DETAILS",
-    titleColor: [37, 99, 235],
+    titleColor: [255, 255, 255],
     rows: [
       ["Voucher No", voucherNo],
       ["Consignor", consignorName],
@@ -661,11 +657,11 @@ const downloadPDF = () => {
     x: leftX + 188,
     y: infoY,
     w: 92,
-    h: 56,
-    fill: [245, 245, 245],
-    border: [199, 210, 254],
+    h: 50,
+    fill: [15, 23, 42],
+    border: [15, 23, 42],
     title: "TRIP DATA",
-    titleColor: [15, 118, 110],
+    titleColor: [255, 255, 255],
     rows: [
       ["Dispatch", lrDate || "-"],
       ["Days", formData.days || "0"],
@@ -675,11 +671,11 @@ const downloadPDF = () => {
   });
 
   autoTable(doc, {
-    startY: infoY + 62,
+    startY: infoY + 56,
     margin: { left: leftX, right: leftX },
     theme: "grid",
-    styles: { fontSize: 7.1, cellPadding: 1.8, lineWidth: 0.18, lineColor: [200, 200, 200], textColor: [35, 35, 35] },
-    headStyles: { fillColor: [238, 238, 238], textColor: [25, 25, 25], fontStyle: "bold" },
+    styles: { fontSize: 7, cellPadding: 1.6, lineWidth: 0.18, lineColor: [200, 200, 200], textColor: [20, 20, 20] },
+    headStyles: { fillColor: [15, 118, 110], textColor: [255, 255, 255], fontStyle: "bold" },
     head: [[
       "Bilti No",
       "Voucher",
@@ -711,11 +707,11 @@ const downloadPDF = () => {
     x: leftX,
     y: lowerY,
     w: 90,
-    h: 44,
-    fill: [246, 246, 246],
-    border: [199, 210, 254],
+    h: 42,
+    fill: [15, 118, 110],
+    border: [15, 118, 110],
     title: "SHORTAGE",
-    titleColor: [15, 118, 110],
+    titleColor: [255, 255, 255],
     rows: [
       ["Shortage Qty", money(calculation.shortageQty)],
       ["Free KG", money(num(formData.shortage_free_kg))],
@@ -727,11 +723,11 @@ const downloadPDF = () => {
     x: leftX + 94,
     y: lowerY,
     w: 90,
-    h: 44,
-    fill: [248, 248, 248],
-    border: [191, 219, 254],
+    h: 42,
+    fill: [37, 99, 235],
+    border: [37, 99, 235],
     title: "CHARGES BREAKUP",
-    titleColor: [37, 99, 235],
+    titleColor: [255, 255, 255],
     rows: [
       ["Detain Charges", money(detain)],
       ["Other Charges", money(others)],
@@ -743,11 +739,11 @@ const downloadPDF = () => {
     x: leftX + 188,
     y: lowerY,
     w: 92,
-    h: 44,
-    fill: [246, 246, 246],
-    border: [199, 210, 254],
+    h: 42,
+    fill: [15, 23, 42],
+    border: [15, 23, 42],
     title: "PAYMENT DETAILS",
-    titleColor: [15, 118, 110],
+    titleColor: [255, 255, 255],
     rows: [
       ["Current Payment", money(netAmount)],
       ["TDS Amount", money(tds)],
@@ -759,14 +755,15 @@ const downloadPDF = () => {
   const kpiY = lowerY + 51;
   doc.setFont("helvetica", "normal");
   doc.setFontSize(6.5);
-  doc.setTextColor(90, 90, 90);
+  doc.setTextColor(71, 85, 105);
   doc.text("Total consolidated transport payable:", 170, kpiY);
   doc.text("Estimated chargeable freight after deductions:", 234, kpiY);
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(18);
-  doc.setTextColor(35, 35, 35);
+  doc.setTextColor(15, 118, 110);
   doc.text(`${money(payable)}`, 181, kpiY + 12);
+  doc.setTextColor(37, 99, 235);
   doc.text(`${money(netAmount)}`, 247, kpiY + 12);
 
   doc.setFont("helvetica", "bold");
