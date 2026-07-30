@@ -30,7 +30,10 @@ export default function PartyStockReportPage() {
 
   const normalizeIdList = (input) => {
     if (Array.isArray(input)) {
-      return input.map((item) => String(item).trim()).filter(Boolean);
+      return input
+        .flatMap((item) => String(item || "").split(","))
+        .map((item) => item.trim())
+        .filter(Boolean);
     }
     if (input === null || input === undefined || input === "") {
       return [];
@@ -43,12 +46,17 @@ export default function PartyStockReportPage() {
       .filter(Boolean);
   };
 
+  const parseQueryIdValues = (params, key) => {
+    const values = params.getAll(key);
+    return normalizeIdList(values.length ? values : params.get(key));
+  };
+
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const warehouseId = params.get("warehouse_id") || "";
     const locationId = params.get("location_id") || "";
-    const locationIds = (params.get("location_ids") || "").split(",").map((item) => item.trim()).filter(Boolean);
-    const warehouseIds = (params.get("warehouse_ids") || "").split(",").map((item) => item.trim()).filter(Boolean);
+    const locationIds = parseQueryIdValues(params, "location_ids");
+    const warehouseIds = parseQueryIdValues(params, "warehouse_ids");
     const companyId = params.get("company_id") || "";
     const fromDate = params.get("from_date") || "";
     const toDate = params.get("to_date") || "";
