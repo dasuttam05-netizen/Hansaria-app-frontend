@@ -582,10 +582,14 @@ const downloadPDF = () => {
   doc.circle(pageWidth - 20, 16, 16, "F");
 
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(23);
-  doc.setTextColor(57, 96, 103);
-  doc.text("Transport", leftX, topY + 13);
-  doc.text("Settlement Copy", leftX, topY + 26);
+  doc.setFontSize(22);
+  doc.setTextColor(30, 41, 59);
+  doc.text("Transport Payment Advice", leftX, topY + 13);
+
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8.5);
+  doc.setTextColor(71, 85, 105);
+  doc.text("Bill format copy for transport payment processing and dispatch settlement.", leftX, topY + 21);
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7.5);
@@ -593,7 +597,7 @@ const downloadPDF = () => {
   doc.text(
     "Prepared bilti advice with dispatch, shortage and payable summary for operational review.",
     leftX,
-    topY + 34,
+    topY + 28,
     { maxWidth: 110 }
   );
 
@@ -622,9 +626,9 @@ const downloadPDF = () => {
 
   doc.setDrawColor(120, 151, 157);
   doc.setLineWidth(0.35);
-  doc.line(leftX, topY + 39, pageWidth - leftX, topY + 39);
+  doc.line(leftX, topY + 36, pageWidth - leftX, topY + 36);
 
-  const infoY = topY + 44;
+  const infoY = topY + 41;
   drawPanel({
     x: leftX,
     y: infoY,
@@ -773,7 +777,7 @@ const downloadPDF = () => {
   doc.setFont("helvetica", "bold");
   doc.text("Authorized Signatory", pageWidth - 48, pageHeight - 12);
 
-  doc.save(`Transport_LR_${voucherNo !== "-" ? voucherNo : billNo}.pdf`);
+  doc.save(`Transport_Payment_Advice_${voucherNo !== "-" ? voucherNo : billNo}.pdf`);
 };
 
 
