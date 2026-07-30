@@ -624,8 +624,8 @@ const downloadPDF = () => {
     y: infoY,
     w: 90,
     h: 50,
-    fill: [15, 118, 110],
-    border: [15, 118, 110],
+    fill: [22, 163, 74],
+    border: [134, 239, 172],
     title: "GENERAL DETAILS",
     titleColor: [255, 255, 255],
     rows: [
@@ -641,8 +641,8 @@ const downloadPDF = () => {
     y: infoY,
     w: 90,
     h: 50,
-    fill: [37, 99, 235],
-    border: [37, 99, 235],
+    fill: [34, 197, 94],
+    border: [134, 239, 172],
     title: "PARTY DETAILS",
     titleColor: [255, 255, 255],
     rows: [
@@ -658,8 +658,8 @@ const downloadPDF = () => {
     y: infoY,
     w: 92,
     h: 50,
-    fill: [15, 23, 42],
-    border: [15, 23, 42],
+    fill: [21, 128, 61],
+    border: [134, 239, 172],
     title: "TRIP DATA",
     titleColor: [255, 255, 255],
     rows: [
@@ -675,7 +675,7 @@ const downloadPDF = () => {
     margin: { left: leftX, right: leftX },
     theme: "grid",
     styles: { fontSize: 7, cellPadding: 1.6, lineWidth: 0.18, lineColor: [200, 200, 200], textColor: [20, 20, 20] },
-    headStyles: { fillColor: [15, 118, 110], textColor: [255, 255, 255], fontStyle: "bold" },
+    headStyles: { fillColor: [34, 197, 94], textColor: [255, 255, 255], fontStyle: "bold" },
     head: [[
       "Bilti No",
       "Voucher",
@@ -708,8 +708,8 @@ const downloadPDF = () => {
     y: lowerY,
     w: 90,
     h: 42,
-    fill: [15, 118, 110],
-    border: [15, 118, 110],
+    fill: [22, 163, 74],
+    border: [134, 239, 172],
     title: "SHORTAGE",
     titleColor: [255, 255, 255],
     rows: [
@@ -724,8 +724,8 @@ const downloadPDF = () => {
     y: lowerY,
     w: 90,
     h: 42,
-    fill: [37, 99, 235],
-    border: [37, 99, 235],
+    fill: [34, 197, 94],
+    border: [134, 239, 172],
     title: "CHARGES BREAKUP",
     titleColor: [255, 255, 255],
     rows: [
@@ -740,8 +740,8 @@ const downloadPDF = () => {
     y: lowerY,
     w: 92,
     h: 42,
-    fill: [15, 23, 42],
-    border: [15, 23, 42],
+    fill: [21, 128, 61],
+    border: [134, 239, 172],
     title: "PAYMENT DETAILS",
     titleColor: [255, 255, 255],
     rows: [
@@ -761,9 +761,9 @@ const downloadPDF = () => {
 
   doc.setFont("helvetica", "bold");
   doc.setFontSize(18);
-  doc.setTextColor(15, 118, 110);
+  doc.setTextColor(22, 163, 74);
   doc.text(`${money(payable)}`, 181, kpiY + 12);
-  doc.setTextColor(37, 99, 235);
+  doc.setTextColor(21, 128, 61);
   doc.text(`${money(netAmount)}`, 247, kpiY + 12);
 
   doc.setFont("helvetica", "bold");
