@@ -295,7 +295,7 @@ export default function PartyStockReportPage() {
 
           <MultiSelectDropdown
             label="Locations"
-            options={locations.map((item) => ({ value: String(item.id), label: item.name }))}
+            options={locations.map((item) => ({ value: String(item.id ?? item._id ?? ""), label: item.name || "" }))}
             value={filters.location_ids}
             onChange={(next) => handleChange({ target: { name: "location_ids", value: next } })}
             placeholder="All Locations"
@@ -303,7 +303,7 @@ export default function PartyStockReportPage() {
 
           <MultiSelectDropdown
             label="Warehouses"
-            options={warehouses.map((item) => ({ value: String(item.id), label: item.name }))}
+            options={warehouses.map((item) => ({ value: String(item.id ?? item._id ?? ""), label: item.name || "" }))}
             value={filters.warehouse_ids}
             onChange={(next) => handleChange({ target: { name: "warehouse_ids", value: next } })}
             placeholder="All Warehouses"
