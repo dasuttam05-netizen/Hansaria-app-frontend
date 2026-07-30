@@ -525,6 +525,7 @@ const downloadPDF = () => {
   const transporterName = selectedTransporter?.name || "Transport Copy";
   const transporterAddress = selectedTransporter?.address || "-";
   const transporterPan = selectedTransporter?.pan_no || "-";
+  const transporterPhone = selectedTransporter?.mobile || "-";
   const consigneeName = formData.consignee_name || "-";
   const consignorName = selectedAccount?.account_name || formData.account_name || "-";
   const consignorAddress = selectedAccount?.address || "-";
@@ -590,9 +591,9 @@ const downloadPDF = () => {
   const statWidth = 34;
   const statGap = 8;
   const stats = [
-    ["Net Payable", money(payable), [60, 60, 60]],
-    ["Gross Freight", money(gross), [60, 60, 60]],
-    ["LR Date", lrDate || "-", [60, 60, 60]],
+    ["Net Payable", money(payable), [15, 118, 110]],
+    ["Gross Freight", money(gross), [15, 118, 110]],
+    ["LR Date", lrDate || "-", [15, 118, 110]],
   ];
 
   stats.forEach((stat, index) => {
@@ -606,7 +607,7 @@ const downloadPDF = () => {
     doc.text(stat[1], x + statWidth / 2, topY + 19, { align: "center" });
     doc.setFont("helvetica", "normal");
     doc.setFontSize(6.2);
-    doc.setTextColor(71, 85, 105);
+    doc.setTextColor(100, 116, 139);
     doc.text(stat[0], x + statWidth / 2, topY + 26, { align: "center" });
   });
 
@@ -619,16 +620,16 @@ const downloadPDF = () => {
     x: leftX,
     y: infoY,
     w: 90,
-    h: 48,
+    h: 56,
     fill: [245, 245, 245],
-    border: [205, 205, 205],
+    border: [199, 210, 254],
     title: "GENERAL DETAILS",
-    titleColor: [40, 40, 40],
+    titleColor: [15, 118, 110],
     rows: [
       ["Bilti No", billNo],
-      ["Voucher No", voucherNo],
-      ["Transporter", transporterName],
-      ["Vehicle", formData.lorry_no || "-"],
+      ["Transport", transporterName],
+      ["PAN No", transporterPan],
+      ["Phone No", transporterPhone],
     ],
   });
 
@@ -636,12 +637,13 @@ const downloadPDF = () => {
     x: leftX + 94,
     y: infoY,
     w: 90,
-    h: 48,
+    h: 56,
     fill: [248, 248, 248],
-    border: [205, 205, 205],
+    border: [191, 219, 254],
     title: "PARTY DETAILS",
-    titleColor: [40, 40, 40],
+    titleColor: [37, 99, 235],
     rows: [
+      ["Voucher No", voucherNo],
       ["Consignor", consignorName],
       ["Consignee", consigneeName],
       ["Buyer", formData.buyer_name || "-"],
@@ -652,21 +654,21 @@ const downloadPDF = () => {
     x: leftX + 188,
     y: infoY,
     w: 92,
-    h: 48,
+    h: 56,
     fill: [245, 245, 245],
-    border: [205, 205, 205],
+    border: [199, 210, 254],
     title: "TRIP DATA",
-    titleColor: [40, 40, 40],
+    titleColor: [15, 118, 110],
     rows: [
       ["Dispatch", lrDate || "-"],
       ["Days", formData.days || "0"],
       ["Destination", formData.destination || "-"],
-      ["Warehouse", warehouseName],
+      ["Vehicle", formData.lorry_no || "-"],
     ],
   });
 
   autoTable(doc, {
-    startY: infoY + 54,
+    startY: infoY + 62,
     margin: { left: leftX, right: leftX },
     theme: "grid",
     styles: { fontSize: 7.1, cellPadding: 1.8, lineWidth: 0.18, lineColor: [200, 200, 200], textColor: [35, 35, 35] },
@@ -702,11 +704,11 @@ const downloadPDF = () => {
     x: leftX,
     y: lowerY,
     w: 90,
-    h: 42,
+    h: 44,
     fill: [246, 246, 246],
-    border: [205, 205, 205],
+    border: [199, 210, 254],
     title: "SHORTAGE",
-    titleColor: [40, 40, 40],
+    titleColor: [15, 118, 110],
     rows: [
       ["Shortage Qty", money(calculation.shortageQty)],
       ["Free KG", money(num(formData.shortage_free_kg))],
@@ -718,11 +720,11 @@ const downloadPDF = () => {
     x: leftX + 94,
     y: lowerY,
     w: 90,
-    h: 42,
+    h: 44,
     fill: [248, 248, 248],
-    border: [205, 205, 205],
+    border: [191, 219, 254],
     title: "CHARGES BREAKUP",
-    titleColor: [40, 40, 40],
+    titleColor: [37, 99, 235],
     rows: [
       ["Detain Charges", money(detain)],
       ["Other Charges", money(others)],
@@ -734,11 +736,11 @@ const downloadPDF = () => {
     x: leftX + 188,
     y: lowerY,
     w: 92,
-    h: 42,
+    h: 44,
     fill: [246, 246, 246],
-    border: [205, 205, 205],
+    border: [199, 210, 254],
     title: "PAYMENT DETAILS",
-    titleColor: [40, 40, 40],
+    titleColor: [15, 118, 110],
     rows: [
       ["Current Payment", money(netAmount)],
       ["TDS Amount", money(tds)],
@@ -747,7 +749,7 @@ const downloadPDF = () => {
     ],
   });
 
-  const kpiY = lowerY + 49;
+  const kpiY = lowerY + 51;
   doc.setFont("helvetica", "normal");
   doc.setFontSize(6.5);
   doc.setTextColor(90, 90, 90);
