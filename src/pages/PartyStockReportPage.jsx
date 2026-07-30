@@ -23,6 +23,7 @@ export default function PartyStockReportPage() {
     to_date: "",
     employee_id: "",
     company_id: "",
+    account_id: "",
     location_ids: [],
     warehouse_ids: [],
     product_id: "",
@@ -62,12 +63,14 @@ export default function PartyStockReportPage() {
     const toDate = params.get("to_date") || "";
     const employeeId = params.get("employee_id") || "";
     const productId = params.get("product_id") || "";
+    const accountId = params.get("account_id") || "";
 
     setFilters((prev) => ({
       ...prev,
       location_ids: locationIds.length ? locationIds : locationId ? [locationId] : [],
       warehouse_ids: warehouseIds.length ? warehouseIds : warehouseId ? [warehouseId] : [],
       company_id: companyId,
+      account_id: accountId,
       from_date: fromDate,
       to_date: toDate,
       employee_id: employeeId,
@@ -163,17 +166,19 @@ export default function PartyStockReportPage() {
           to_date: filters.to_date,
           employee_id: filters.employee_id,
           company_id: filters.company_id,
+          account_id: filters.account_id,
           product_id: filters.product_id,
           location_ids: locList.join(","),
           warehouse_ids: whList.join(","),
         };
+        if (locList.length === 1) params.location_id = locList[0];
+        if (whList.length === 1) params.warehouse_id = whList[0];
 
-        if (locList.length === 1) {
-          params.location_id = locList[0];
-        }
-        if (whList.length === 1) {
-          params.warehouse_id = whList[0];
-        }
+        // Debug: show what we're sending to the API
+        try {
+          // eslint-disable-next-line no-console
+          console.debug("Fetching /reports/party-stock with params:", params);
+        } catch (e) {}
 
         const res = await axios.get(`${API_BASE}/reports/party-stock`, { params });
         if (!cancelled) {
