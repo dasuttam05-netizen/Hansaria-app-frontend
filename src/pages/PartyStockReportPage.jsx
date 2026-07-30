@@ -32,8 +32,15 @@ export default function PartyStockReportPage() {
     if (Array.isArray(input)) {
       return input.map((item) => String(item).trim()).filter(Boolean);
     }
-    const text = String(input || "").trim();
-    return text ? [text] : [];
+    if (input === null || input === undefined || input === "") {
+      return [];
+    }
+    const text = String(input).trim();
+    if (!text) return [];
+    return text
+      .split(",")
+      .map((item) => item.trim())
+      .filter(Boolean);
   };
 
   useEffect(() => {
@@ -137,32 +144,43 @@ export default function PartyStockReportPage() {
   }, []);
 
   useEffect(() => {
-    fetchReport();
+    let cancelled = false;
+    const run = async () => {
+      try {
+        const res = await axios.get(`${API_BASE}/reports/party-stock`, {
+          params: {
+            ...filters,
+            location_ids: normalizeIdList(filters.location_ids).join(","),
+            warehouse_ids: normalizeIdList(filters.warehouse_ids).join(","),
+          },
+        });
+        if (!cancelled) {
+          setSummary(res.data.summary || []);
+          setDetails(res.data.details || []);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          console.error(err);
+          setSummary([]);
+          setDetails([]);
+        }
+      }
+    };
+
+    run();
+    return () => {
+      cancelled = true;
+    };
   }, [filters]);
 
-  const fetchReport = async () => {
-    try {
-      const res = await axios.get(`${API_BASE}/reports/party-stock`, {
-        params: {
-          ...filters,
-          location_ids: normalizeIdList(filters.location_ids).join(","),
-          warehouse_ids: normalizeIdList(filters.warehouse_ids).join(","),
-        },
-      });
-      setSummary(res.data.summary || []);
-      setDetails(res.data.details || []);
-    } catch (err) {
-      console.error(err);
-      setSummary([]);
-      setDetails([]);
-    }
-  };
-
   const handleChange = (e) => {
-    const nextValue = e.target.name === "location_ids" || e.target.name === "warehouse_ids"
-      ? normalizeIdList(e.target.value)
-      : String(e.target.value || "");
-    setFilters((prev) => ({ ...prev, [e.target.name]: nextValue }));
+    const { name, value } = e.target;
+    if (name === "location_ids" || name === "warehouse_ids") {
+      const normalized = normalizeIdList(value);
+      setFilters((prev) => ({ ...prev, [name]: normalized }));
+      return;
+    }
+    setFilters((prev) => ({ ...prev, [name]: String(value || "") }));
   };
 
   const exportCSV = () => {
