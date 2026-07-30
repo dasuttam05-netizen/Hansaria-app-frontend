@@ -282,6 +282,7 @@ export default function TransportBiltiPage() {
   );
 
   const selectedAccount = useMemo(() => {
+    const selectedCompany = companies.find((c) => String(c.id) === String(formData.company_id)) || null;
     if (formData.company_account_id) {
       return (
         companyAccounts.find((a) => String(a.id) === String(formData.company_account_id)) ||
@@ -295,7 +296,7 @@ export default function TransportBiltiPage() {
           (formData.account_name || "").trim().toLowerCase()
       ) || null
     );
-  }, [companyAccounts, formData.company_account_id, formData.account_name]);
+  }, [companyAccounts, companies, formData.company_account_id, formData.account_name, formData.company_id]);
 
   const selectedConsignee = useMemo(
     () =>
@@ -408,7 +409,13 @@ export default function TransportBiltiPage() {
         const company = companies.find((c) => String(c.id) === String(value));
         next.company_name = company?.name || "";
         next.account_name = "";
-        next.company_account_id = "";
+        const matchingAccounts = companyAccounts.filter(
+          (a) =>
+            String(a.company_id) === String(value) ||
+            String(a.company_name || "").trim().toLowerCase() === String(company?.name || "").trim().toLowerCase()
+        );
+        next.company_account_id = matchingAccounts[0]?.id ? String(matchingAccounts[0].id) : "";
+        next.account_name = matchingAccounts[0]?.account_name || "";
       }
 
       if (mode === "manual" && name === "company_account_id") {
@@ -1036,10 +1043,28 @@ const downloadPDF = () => {
                     <select name="company_account_id" value={formData.company_account_id} onChange={handleChange} style={input}>
                       <option value="">Select Account</option>
                       {companyAccounts
-                        .filter((a) => String(a.company_id) === String(formData.company_id))
+                        .filter((a) => {
+                          if (!formData.company_id) return false;
+                          const company = companies.find((c) => String(c.id) === String(formData.company_id));
+                          return (
+                            String(a.company_id) === String(formData.company_id) ||
+                            String(a.company_name || "").trim().toLowerCase() === String(company?.name || "").trim().toLowerCase()
+                          );
+                        })
                         .map((a) => (
-                          <option key={a.id} value={a.id}>{a.account_name}</option>
+                          <option key={a.id} value={a.id}>
+                            {a.account_name}
+                            {a.company_name ? ` - ${a.company_name}` : ""}
+                          </option>
                         ))}
+                      {formData.company_id &&
+                        companyAccounts.filter((a) => {
+                          const company = companies.find((c) => String(c.id) === String(formData.company_id));
+                          return (
+                            String(a.company_id) === String(formData.company_id) ||
+                            String(a.company_name || "").trim().toLowerCase() === String(company?.name || "").trim().toLowerCase()
+                          );
+                        }).length === 0 && <option value="" disabled>No account found</option>}
                     </select>
                   </div>
                   <div>
