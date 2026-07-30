@@ -147,13 +147,17 @@ export default function PartyStockReportPage() {
     let cancelled = false;
     const run = async () => {
       try {
-        const res = await axios.get(`${API_BASE}/reports/party-stock`, {
-          params: {
-            ...filters,
-            location_ids: normalizeIdList(filters.location_ids).join(","),
-            warehouse_ids: normalizeIdList(filters.warehouse_ids).join(","),
-          },
-        });
+        const params = {
+          from_date: filters.from_date,
+          to_date: filters.to_date,
+          employee_id: filters.employee_id,
+          company_id: filters.company_id,
+          product_id: filters.product_id,
+          location_ids: normalizeIdList(filters.location_ids).join(","),
+          warehouse_ids: normalizeIdList(filters.warehouse_ids).join(","),
+        };
+
+        const res = await axios.get(`${API_BASE}/reports/party-stock`, { params });
         if (!cancelled) {
           setSummary(res.data.summary || []);
           setDetails(res.data.details || []);
