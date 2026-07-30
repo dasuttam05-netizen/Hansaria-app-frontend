@@ -155,15 +155,25 @@ export default function PartyStockReportPage() {
     let cancelled = false;
     const run = async () => {
       try {
+        const locList = normalizeIdList(filters.location_ids);
+        const whList = normalizeIdList(filters.warehouse_ids);
+
         const params = {
           from_date: filters.from_date,
           to_date: filters.to_date,
           employee_id: filters.employee_id,
           company_id: filters.company_id,
           product_id: filters.product_id,
-          location_ids: normalizeIdList(filters.location_ids).join(","),
-          warehouse_ids: normalizeIdList(filters.warehouse_ids).join(","),
+          location_ids: locList.join(","),
+          warehouse_ids: whList.join(","),
         };
+
+        if (locList.length === 1) {
+          params.location_id = locList[0];
+        }
+        if (whList.length === 1) {
+          params.warehouse_id = whList[0];
+        }
 
         const res = await axios.get(`${API_BASE}/reports/party-stock`, { params });
         if (!cancelled) {
