@@ -72,12 +72,7 @@ export default function InwardReportPage() {
 
   const fetchReport = async () => {
     try {
-      const res = await axios.get(`${API_BASE}/reports/party-stock`, { params: {
-        from_date: filters.from,
-        to_date: filters.to,
-        company_id: filters.company_id,
-        warehouse_id: filters.warehouse_id,
-      } });
+      const res = await axios.get(`${API_BASE}/reports/party-stock`);
       setRecords(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
       console.error("Report fetch failed:", err);
@@ -103,14 +98,23 @@ export default function InwardReportPage() {
 
   const filteredRecords = useMemo(() => {
     const s = searchText.trim().toLowerCase();
-    if (!s) return records;
-    return records.filter((r) =>
-      [r.sl_no, r.voucher_no, r.inward_date || r.date, r.company_name, r.warehouse_name, r.employee_name, r.product_name, r.gross_weight ?? r.weight]
+    const from = filters.from || "";
+    const to = filters.to || "";
+    const companyId = String(filters.company_id || "");
+    const warehouseId = String(filters.warehouse_id || "");
+    return records.filter((r) => {
+      const rowDate = String(r.inward_date || r.date || "").slice(0, 10);
+      if (from && rowDate && rowDate < from) return false;
+      if (to && rowDate && rowDate > to) return false;
+      if (companyId && String(r.company_id || "") !== companyId) return false;
+      if (warehouseId && String(r.warehouse_id || "") !== warehouseId) return false;
+      if (!s) return true;
+      return [r.sl_no, r.voucher_no, rowDate, r.company_name, r.warehouse_name, r.employee_name, r.product_name, r.gross_weight ?? r.weight]
         .join(" ")
         .toLowerCase()
         .includes(s)
-    );
-  }, [records, searchText]);
+    });
+  }, [records, searchText, filters.company_id, filters.warehouse_id, filters.from, filters.to]);
 
   const exportCSV = () => {
     let csv = "Sl No,Voucher No,Date,Company,Warehouse,Employee,Product,Weight\n";
