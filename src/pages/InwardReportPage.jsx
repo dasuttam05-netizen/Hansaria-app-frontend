@@ -72,7 +72,12 @@ export default function InwardReportPage() {
 
   const fetchReport = async () => {
     try {
-      const res = await axios.get(`${API_BASE}/adjustment/inward/report`, { params: filters });
+      const res = await axios.get(`${API_BASE}/reports/party-stock`, { params: {
+        from_date: filters.from,
+        to_date: filters.to,
+        company_id: filters.company_id,
+        warehouse_id: filters.warehouse_id,
+      } });
       setRecords(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
       console.error("Report fetch failed:", err);
@@ -88,7 +93,7 @@ export default function InwardReportPage() {
     () =>
       records.reduce(
         (acc, r) => {
-          acc.weight += Number(r.weight) || 0;
+          acc.weight += Number(r.gross_weight ?? r.weight ?? 0) || 0;
           return acc;
         },
         { weight: 0 }
@@ -100,7 +105,7 @@ export default function InwardReportPage() {
     const s = searchText.trim().toLowerCase();
     if (!s) return records;
     return records.filter((r) =>
-      [r.sl_no, r.voucher_no, r.date, r.company_name, r.warehouse_name, r.employee_name, r.product_name, r.weight]
+      [r.sl_no, r.voucher_no, r.inward_date || r.date, r.company_name, r.warehouse_name, r.employee_name, r.product_name, r.gross_weight ?? r.weight]
         .join(" ")
         .toLowerCase()
         .includes(s)
@@ -110,7 +115,7 @@ export default function InwardReportPage() {
   const exportCSV = () => {
     let csv = "Sl No,Voucher No,Date,Company,Warehouse,Employee,Product,Weight\n";
     filteredRecords.forEach((r) => {
-      csv += `${r.sl_no ?? ""},${r.voucher_no ?? ""},${formatDisplayDate(r.date)},${r.company_name ?? ""},${r.warehouse_name ?? ""},${r.employee_name ?? ""},${r.product_name ?? ""},${r.weight ?? ""}\n`;
+      csv += `${r.sl_no ?? ""},${r.voucher_no ?? ""},${formatDisplayDate(r.inward_date || r.date)},${r.company_name ?? ""},${r.warehouse_name ?? ""},${r.employee_name ?? ""},${r.product_name ?? ""},${r.gross_weight ?? r.weight ?? ""}\n`;
     });
     const blob = new Blob([csv], { type: "text/csv" });
     const url = window.URL.createObjectURL(blob);
@@ -190,12 +195,12 @@ export default function InwardReportPage() {
                   <tr key={r.id || idx} style={{ background: idx % 2 === 0 ? "#ffffff" : "#f8fafc" }}>
                     <td style={tdStyle}>{r.sl_no ?? "—"}</td>
                     <td style={tdStyle}>{r.voucher_no}</td>
-                    <td style={tdStyle}>{formatDisplayDate(r.date)}</td>
+                    <td style={tdStyle}>{formatDisplayDate(r.inward_date || r.date)}</td>
                     <td style={tdStyle}>{r.company_name}</td>
                     <td style={tdStyle}>{r.warehouse_name}</td>
                     <td style={tdStyle}>{r.employee_name}</td>
                     <td style={tdStyle}>{r.product_name}</td>
-                    <td style={tdRight}>{Number(r.weight || 0).toFixed(2)}</td>
+                    <td style={tdRight}>{Number(r.gross_weight ?? r.weight ?? 0).toFixed(2)}</td>
                   </tr>
                 ))
               ) : (
