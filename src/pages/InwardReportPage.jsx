@@ -72,7 +72,7 @@ export default function InwardReportPage() {
 
   const fetchReport = async () => {
     try {
-      const res = await axios.get(`${API_BASE}/inward/report`, { params: filters });
+      const res = await axios.get(`${API_BASE}/adjustment/inward/report`, { params: filters });
       setRecords(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
       console.error("Report fetch failed:", err);
