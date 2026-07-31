@@ -1310,7 +1310,14 @@ export default function WarehouseTradingPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    // For purchase vouchers we allow direct save from the form (preview is optional)
+    if (isPurchaseVoucher && !editId) {
+      setShowPurchasePreview(true);
+      return;
+    }
+    if (isPurchaseVoucher && editId) {
+      setShowPurchasePreview(true);
+      return;
+    }
     await saveVoucher();
   };
 
@@ -3821,103 +3828,7 @@ export default function WarehouseTradingPage() {
                     <textarea name="description" value={formData.description} onChange={handleChange} rows={2} style={{ ...inp, minHeight: 60, resize: "vertical" }} />
                   </Field>
                 </div>
-
-                {activeVoucherType === "purchase" && (
-                  <div style={{ marginTop: 12, marginBottom: 12 }}>
-                    <div style={{ marginBottom: "12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                      <h3 style={{ fontSize: 16, margin: 0 }}>Purchase Details</h3>
-                      <button type="button" onClick={() => setShowPurchasePreview(true)} style={{ ...btnAction, background: "#0f766e" }}>Preview (F3)</button>
-                    </div>
-                    <div style={{ border: "1px solid #e2e8f0", borderRadius: 8, padding: 12, background: "#fff" }}>
-                      <div style={{ overflowX: "auto" }}>
-                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                          <thead>
-                            <tr style={reportHeaderRowStyle}>
-                              <th style={th}>Particulars</th>
-                              <th style={th}>Value</th>
-                              <th style={th}>Particulars</th>
-                              <th style={th}>Value</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            <tr>
-                              <td style={td}>Packet</td>
-                              <td style={td}>{formData.packet || "-"}</td>
-                              <td style={td}>Gross Weight</td>
-                              <td style={td}>{formatDecimal4(toNumber(formData.gross_weight))}</td>
-                            </tr>
-                            <tr>
-                              <td style={td}>Tare Weight</td>
-                              <td style={td}>{formatDecimal4(toNumber(formData.tare_weight))}</td>
-                              <td style={td}>New Weight</td>
-                              <td style={td}>{formatDecimal4(Math.max(toNumber(formData.gross_weight) - toNumber(formData.tare_weight), 0))}</td>
-                            </tr>
-                            <tr>
-                              <td style={td}>Net Qty</td>
-                              <td style={td}>{formatDecimal4(safePurchaseNetWeight)}</td>
-                              <td style={td}>Rate</td>
-                              <td style={td}>{formatMoney(toNumber(formData.rate))}</td>
-                            </tr>
-                            <tr>
-                              <td style={td}>Gross Amount</td>
-                              <td style={td}>{formatMoney(purchaseGrossAmount)}</td>
-                              <td style={td}>Net Payable</td>
-                              <td style={td}>{formatMoney(purchaseNetPayable)}</td>
-                            </tr>
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-
-                    <div style={{ marginTop: 10, border: "1px solid #e2e8f0", borderRadius: 8, padding: 12, background: "#fff" }}>
-                      <div style={{ fontWeight: 800, marginBottom: 8 }}>Deduction Breakdown</div>
-                      <div style={{ overflowX: "auto" }}>
-                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                          <thead>
-                            <tr style={reportHeaderRowStyle}>
-                              <th style={th}>Particulars</th>
-                              <th style={th}>Value</th>
-                              <th style={th}>Particulars</th>
-                              <th style={th}>Value</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            <tr>
-                              <td style={td}>Less Bags Weight</td>
-                              <td style={td}>{formatMoney(toNumber(formData.less_bags_weight))}</td>
-                              <td style={td}>Moisture</td>
-                              <td style={td}>{formatMoney(toNumber(formData.moisture))}</td>
-                            </tr>
-                            <tr>
-                              <td style={td}>Dunki</td>
-                              <td style={td}>{formatMoney(toNumber(formData.dunki))}</td>
-                              <td style={td}>Fungus</td>
-                              <td style={td}>{formatMoney(toNumber(formData.fungus))}</td>
-                            </tr>
-                            <tr>
-                              <td style={td}>Discolour</td>
-                              <td style={td}>{formatMoney(toNumber(formData.discolour))}</td>
-                              <td style={td}>Others</td>
-                              <td style={td}>{formatMoney(toNumber(formData.others))}</td>
-                            </tr>
-                            <tr>
-                              <td style={td}>Bags Claim</td>
-                              <td style={td}>{formatMoney(toNumber(formData.bags_claim))}</td>
-                              <td style={td}>Labour</td>
-                              <td style={td}>{formatMoney(toNumber(formData.labour))}</td>
-                            </tr>
-                            <tr>
-                              <td style={td}>Freight</td>
-                              <td style={td}>{formatMoney(toNumber(formData.transport_charge))}</td>
-                              <td style={td}><strong>Total Deduction</strong></td>
-                              <td style={td}><strong>{formatMoney(purchaseTotalDeduction)}</strong></td>
-                            </tr>
-                          </tbody>
-                        </table>
-                      </div>
-                    </div>
-                  </div>
-                )}
+                </div>
               )}
               <div style={{ marginTop: 16, display: "flex", gap: 10 }}>
                 <button type="submit" disabled={loading} style={btnPrimary}>
