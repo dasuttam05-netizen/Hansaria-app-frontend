@@ -1310,14 +1310,7 @@ export default function WarehouseTradingPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (isPurchaseVoucher && !editId) {
-      setShowPurchasePreview(true);
-      return;
-    }
-    if (isPurchaseVoucher && editId) {
-      setShowPurchasePreview(true);
-      return;
-    }
+    // For purchase vouchers we allow direct save from the form (preview is optional)
     await saveVoucher();
   };
 
@@ -3828,7 +3821,103 @@ export default function WarehouseTradingPage() {
                     <textarea name="description" value={formData.description} onChange={handleChange} rows={2} style={{ ...inp, minHeight: 60, resize: "vertical" }} />
                   </Field>
                 </div>
-                </div>
+
+                {activeVoucherType === "purchase" && (
+                  <div style={{ marginTop: 12, marginBottom: 12 }}>
+                    <div style={{ marginBottom: "12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <h3 style={{ fontSize: 16, margin: 0 }}>Purchase Details</h3>
+                      <button type="button" onClick={() => setShowPurchasePreview(true)} style={{ ...btnAction, background: "#0f766e" }}>Preview (F3)</button>
+                    </div>
+                    <div style={{ border: "1px solid #e2e8f0", borderRadius: 8, padding: 12, background: "#fff" }}>
+                      <div style={{ overflowX: "auto" }}>
+                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                          <thead>
+                            <tr style={reportHeaderRowStyle}>
+                              <th style={th}>Particulars</th>
+                              <th style={th}>Value</th>
+                              <th style={th}>Particulars</th>
+                              <th style={th}>Value</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <tr>
+                              <td style={td}>Packet</td>
+                              <td style={td}>{formData.packet || "-"}</td>
+                              <td style={td}>Gross Weight</td>
+                              <td style={td}>{formatDecimal4(toNumber(formData.gross_weight))}</td>
+                            </tr>
+                            <tr>
+                              <td style={td}>Tare Weight</td>
+                              <td style={td}>{formatDecimal4(toNumber(formData.tare_weight))}</td>
+                              <td style={td}>New Weight</td>
+                              <td style={td}>{formatDecimal4(Math.max(toNumber(formData.gross_weight) - toNumber(formData.tare_weight), 0))}</td>
+                            </tr>
+                            <tr>
+                              <td style={td}>Net Qty</td>
+                              <td style={td}>{formatDecimal4(safePurchaseNetWeight)}</td>
+                              <td style={td}>Rate</td>
+                              <td style={td}>{formatMoney(toNumber(formData.rate))}</td>
+                            </tr>
+                            <tr>
+                              <td style={td}>Gross Amount</td>
+                              <td style={td}>{formatMoney(purchaseGrossAmount)}</td>
+                              <td style={td}>Net Payable</td>
+                              <td style={td}>{formatMoney(purchaseNetPayable)}</td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    <div style={{ marginTop: 10, border: "1px solid #e2e8f0", borderRadius: 8, padding: 12, background: "#fff" }}>
+                      <div style={{ fontWeight: 800, marginBottom: 8 }}>Deduction Breakdown</div>
+                      <div style={{ overflowX: "auto" }}>
+                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                          <thead>
+                            <tr style={reportHeaderRowStyle}>
+                              <th style={th}>Particulars</th>
+                              <th style={th}>Value</th>
+                              <th style={th}>Particulars</th>
+                              <th style={th}>Value</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            <tr>
+                              <td style={td}>Less Bags Weight</td>
+                              <td style={td}>{formatMoney(toNumber(formData.less_bags_weight))}</td>
+                              <td style={td}>Moisture</td>
+                              <td style={td}>{formatMoney(toNumber(formData.moisture))}</td>
+                            </tr>
+                            <tr>
+                              <td style={td}>Dunki</td>
+                              <td style={td}>{formatMoney(toNumber(formData.dunki))}</td>
+                              <td style={td}>Fungus</td>
+                              <td style={td}>{formatMoney(toNumber(formData.fungus))}</td>
+                            </tr>
+                            <tr>
+                              <td style={td}>Discolour</td>
+                              <td style={td}>{formatMoney(toNumber(formData.discolour))}</td>
+                              <td style={td}>Others</td>
+                              <td style={td}>{formatMoney(toNumber(formData.others))}</td>
+                            </tr>
+                            <tr>
+                              <td style={td}>Bags Claim</td>
+                              <td style={td}>{formatMoney(toNumber(formData.bags_claim))}</td>
+                              <td style={td}>Labour</td>
+                              <td style={td}>{formatMoney(toNumber(formData.labour))}</td>
+                            </tr>
+                            <tr>
+                              <td style={td}>Freight</td>
+                              <td style={td}>{formatMoney(toNumber(formData.transport_charge))}</td>
+                              <td style={td}><strong>Total Deduction</strong></td>
+                              <td style={td}><strong>{formatMoney(purchaseTotalDeduction)}</strong></td>
+                            </tr>
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  </div>
+                )}
               )}
               <div style={{ marginTop: 16, display: "flex", gap: 10 }}>
                 <button type="submit" disabled={loading} style={btnPrimary}>
@@ -5796,29 +5885,74 @@ export default function WarehouseTradingPage() {
               const transportCharge = saleTransportMode === "manual" ? toNumber(saleTransportManualAmount) : transportChargeAuto;
               const grossAmount = toNumber(summary?.gross_amount ?? preview.grossAmount);
               const baseTotalDeduction = toNumber(summary?.total_deduction ?? preview.totalDeduction);
-              const adjustedTotalDeduction = baseTotalDeduction;
-              const netPayable = Math.max(grossAmount - adjustedTotalDeduction - transportCharge, 0);
+              const adjustedTotalDeduction = baseTotalDeduction + transportCharge;
+              const netPayable = Math.max(grossAmount - adjustedTotalDeduction, 0);
               const profitLoss = netPayable - toNumber(summary?.direct_purchase_amount ?? preview.directPurchaseAmount);
               const handleTransportReset = () => {
                 setSaleTransportMode("auto");
                 setSaleTransportManualAmount(formatMoney(transportChargeAuto));
               };
-              const handleTransportSave = () => {
-                setSalePreviewSummary((prev) => {
-                  if (!prev) return prev;
-                  const nextSummary = {
-                    ...(prev.summary || {}),
-                    total_deduction: baseTotalDeduction,
-                    net_payable: netPayable,
-                    net_receivable: netPayable,
-                    profit_loss: profitLoss,
+              const handleTransportSave = async () => {
+                const saleId = salePreviewRow?.id || salePreviewRow?._id;
+                if (!saleId) {
+                  alert("Sale voucher not selected for save");
+                  return;
+                }
+                setLoading(true);
+                try {
+                  const saleQty = toNumber(salePreviewRow?.quantity || salePreviewRow?.unloading_qty || 0);
+                  const unloadingQtyValue = toNumber(salePreviewRow?.unloading_qty || salePreviewRow?.quantity || 0);
+                  const shortageQty = Math.max(saleQty - unloadingQtyValue, 0);
+                  const shortageAmount = toNumber(salePreviewRow?.shortage_amount || salePreviewRow?.claim_amount || 0);
+                  const transportChargeValue = transportCharge;
+                  const claimValue = toNumber(salePreviewRow?.claim_amount || shortageAmount);
+                  const otherDeductionValue = toNumber(salePreviewRow?.other_deduction);
+                  const cdAmountValue = toNumber(salePreviewRow?.cd_amount);
+                  const adjustmentValue = toNumber(salePreviewRow?.adjustment_amount);
+                  const tdsValue = toNumber(salePreviewRow?.tds_amount);
+                  const roundOffValue = toNumber(salePreviewRow?.round_off);
+                  const payload = {
+                    deduction_only: true,
+                    sale_type: salePreviewRow?.sale_type || "direct",
+                    unloading_date: salePreviewRow?.unloading_date || salePreviewRow?.date || "",
+                    unloading_qty: unloadingQtyValue,
+                    shortage_quantity: shortageQty,
+                    shortage_amount: shortageAmount,
+                    claim_amount: claimValue,
+                    other_deduction: otherDeductionValue,
+                    cd_percent: toNumber(salePreviewRow?.cd_percent),
+                    cd_amount: cdAmountValue,
+                    adjustment_amount: adjustmentValue,
+                    tds_amount: tdsValue,
+                    transport_charge: transportChargeValue,
+                    round_off: roundOffValue,
+                    total_deduction:
+                      toNumber(salePreviewSummary?.summary?.total_deduction) ||
+                      toNumber(salePreviewRow?.total_deduction) ||
+                      claimValue +
+                        otherDeductionValue +
+                        cdAmountValue +
+                        adjustmentValue +
+                        tdsValue,
                   };
-                  return {
-                    ...prev,
-                    transport_charge: transportCharge,
-                    summary: nextSummary,
-                  };
-                });
+
+                  await axios.put(`/api/wh-vouchers/sale/${saleId}`, payload);
+                  const updated = await axios.get(`/api/wh-vouchers/sale/${saleId}/summary`);
+                  setSalePreviewSummary(updated.data || salePreviewSummary);
+                  setSalePreviewRow(updated.data?.sale || salePreviewRow);
+                  alert("Direct sale report saved successfully");
+                  if (activeTab === "reports") {
+                    await loadReport();
+                  }
+                  if (activeTab === "vouchers") {
+                    await loadVouchers();
+                  }
+                } catch (err) {
+                  console.error(err);
+                  alert(err?.response?.data?.error || "Failed to save direct sale report");
+                } finally {
+                  setLoading(false);
+                }
               };
               const summaryCards = [
                 { label: "Voucher No", value: preview.voucherNo },
