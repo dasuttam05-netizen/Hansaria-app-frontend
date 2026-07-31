@@ -65,7 +65,7 @@ export default function PageBackCloseActions({
         onClick={closePage}
         style={{
           ...buttonBaseStyle,
-          background: "#334155",
+          background: "#dc2626",
           color: "#fff",
           border: "none",
           cursor: "pointer",
