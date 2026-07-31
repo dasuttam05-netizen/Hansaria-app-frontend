@@ -1310,14 +1310,7 @@ export default function WarehouseTradingPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (isPurchaseVoucher && !editId) {
-      setShowPurchasePreview(true);
-      return;
-    }
-    if (isPurchaseVoucher && editId) {
-      setShowPurchasePreview(true);
-      return;
-    }
+    // For purchase vouchers we allow direct save from the form (preview is optional)
     await saveVoucher();
   };
 
