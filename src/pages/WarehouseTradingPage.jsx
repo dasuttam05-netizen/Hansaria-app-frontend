@@ -5796,8 +5796,8 @@ export default function WarehouseTradingPage() {
               const transportCharge = saleTransportMode === "manual" ? toNumber(saleTransportManualAmount) : transportChargeAuto;
               const grossAmount = toNumber(summary?.gross_amount ?? preview.grossAmount);
               const baseTotalDeduction = toNumber(summary?.total_deduction ?? preview.totalDeduction);
-              const adjustedTotalDeduction = baseTotalDeduction + transportCharge;
-              const netPayable = Math.max(grossAmount - adjustedTotalDeduction, 0);
+              const adjustedTotalDeduction = baseTotalDeduction;
+              const netPayable = Math.max(grossAmount - adjustedTotalDeduction - transportCharge, 0);
               const profitLoss = netPayable - toNumber(summary?.direct_purchase_amount ?? preview.directPurchaseAmount);
               const handleTransportReset = () => {
                 setSaleTransportMode("auto");
@@ -5808,7 +5808,7 @@ export default function WarehouseTradingPage() {
                   if (!prev) return prev;
                   const nextSummary = {
                     ...(prev.summary || {}),
-                    total_deduction: adjustedTotalDeduction,
+                    total_deduction: baseTotalDeduction,
                     net_payable: netPayable,
                     net_receivable: netPayable,
                     profit_loss: profitLoss,
