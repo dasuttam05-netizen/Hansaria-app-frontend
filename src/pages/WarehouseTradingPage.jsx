@@ -3918,8 +3918,9 @@ export default function WarehouseTradingPage() {
                     </div>
                   </div>
                 )}
-              )}
-              <div style={{ marginTop: 16, display: "flex", gap: 10 }}>
+              </div>
+            )}
+            <div style={{ marginTop: 16, display: "flex", gap: 10 }}>
                 <button type="submit" disabled={loading} style={btnPrimary}>
                   {loading ? "Saving..." : editId ? (activeVoucherType === "sale" ? "Save Deductions" : "Update Voucher") : "Save Voucher"}
                 </button>
