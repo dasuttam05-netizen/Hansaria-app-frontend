@@ -433,7 +433,7 @@ export default function DashboardPage() {
       permission: "employees.view",
       icon: <FaUsers />,
       submenu: [
-        { label: "Employee Management", permission: "employees.view", action: () => setShowEmployeePopup(true) },
+        { label: "Employee Management", permission: "employees.view", action: () => navigate("/employees") },
       ],
     },
     {
@@ -752,7 +752,7 @@ export default function DashboardPage() {
       title: "Employees",
       icon: <FaUsers />,
       subtitle: "Manage employee profiles",
-      action: () => setShowEmployeePopup(true),
+      action: () => navigate("/employees"),
       permission: "employees.view",
     },
     {
