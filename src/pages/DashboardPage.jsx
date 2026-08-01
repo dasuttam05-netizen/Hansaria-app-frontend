@@ -461,7 +461,7 @@ export default function DashboardPage() {
       permission: "locations.manage",
       icon: <FaMapMarkerAlt />,
       submenu: [
-        { label: "Location Management", permission: "locations.manage", action: () => setShowLocationPopup(true) },
+        { label: "Location Management", permission: "locations.manage", action: () => navigate("/locations") },
       ],
     },
     {
@@ -480,7 +480,7 @@ export default function DashboardPage() {
       ],
       icon: <FaWarehouse />,
       submenu: [
-        { label: "Warehouse Management", permission: "warehouses.manage", action: () => setShowWarehousePopup(true) },
+        { label: "Warehouse Management", permission: "warehouses.manage", action: () => navigate("/warehouses") },
         { label: "Farmer Master", permission: "farmers.view", action: () => navigate("/farmers") },
         { label: "Purchase Voucher", permission: ["warehouse.trading.purchase.view", "warehouse.trading.purchase.create", "warehouse.trading.purchase.edit", "warehouse.trading.purchase.delete"], action: () => navigate("/warehouse-trading?type=purchase") },
         { label: "Sale Voucher", permission: ["warehouse.trading.sale.view", "warehouse.trading.sale.create", "warehouse.trading.sale.edit", "warehouse.trading.sale.delete"], action: () => navigate("/warehouse-trading?type=sale") },
@@ -498,7 +498,7 @@ export default function DashboardPage() {
       permission: "products.manage",
       icon: <FaBoxOpen />,
       submenu: [
-        { label: "Products Management", permission: "products.manage", action: () => setShowProductsPopup(true) },
+        { label: "Products Management", permission: "products.manage", action: () => navigate("/products") },
       ],
     },
     {
@@ -514,10 +514,10 @@ export default function DashboardPage() {
       icon: <FaCog />,
       submenu: [
         { label: "Employees", permission: "employees.view", action: () => navigate("/employees") },
-        { label: "Location", permission: "locations.view", action: () => setShowLocationPopup(true) },
+        { label: "Location", permission: "locations.view", action: () => navigate("/locations") },
         { label: "Companies", permission: "companies.view", action: () => navigate("/companies") },
         { label: "Company Accounts", permission: "companyAccounts.view", action: () => navigate("/company-accounts") },
-        { label: "Products", permission: "products.view", action: () => setShowProductsPopup(true) },
+        { label: "Products", permission: "products.view", action: () => navigate("/products") },
       ],
     },
     {
@@ -528,7 +528,7 @@ export default function DashboardPage() {
         {
           label: "Inward Entry",
           permission: ["inward.view", "inward.create", "inward.edit", "inward.delete"],
-          action: () => setShowInwardPopup(true),
+          action: () => navigate("/inward"),
         },
         {
           label: "Palti Lorry",
@@ -548,7 +548,7 @@ export default function DashboardPage() {
         {
           label: "Outward Entry",
           permission: ["outward.view", "outward.create", "outward.edit", "outward.delete"],
-          action: () => setShowOutwardPopup(true),
+          action: () => navigate("/outward"),
         },
       ],
     },
@@ -664,12 +664,12 @@ export default function DashboardPage() {
         {
           label: "Buyer Names",
           permission: ["buyerNames.view", "buyerNames.create", "buyerNames.edit", "buyerNames.delete"],
-          action: () => setShowBuyerNamesPopup(true),
+          action: () => navigate("/buyer-names"),
         },
         {
           label: "Consignee Names",
           permission: ["consigneeNames.view", "consigneeNames.create", "consigneeNames.edit", "consigneeNames.delete"],
-          action: () => setShowConsigneeNamesPopup(true),
+          action: () => navigate("/consignee-names"),
         },
       ],
     },
@@ -766,7 +766,7 @@ export default function DashboardPage() {
       title: "Locations",
       icon: <FaMapMarkerAlt />,
       subtitle: "View location settings",
-      action: () => setShowLocationPopup(true),
+      action: () => navigate("/locations"),
       permission: "locations.manage",
     },
     {
@@ -780,14 +780,14 @@ export default function DashboardPage() {
       title: "Buyer Names",
       icon: <FaUserTag />,
       subtitle: "Manage buyer list",
-      action: () => setShowBuyerNamesPopup(true),
+      action: () => navigate("/buyer-names"),
       permission: ["buyerNames.view", "buyerNames.create", "buyerNames.edit", "buyerNames.delete"],
     },
     {
       title: "Consignee Names",
       icon: <FaUserTag />,
       subtitle: "Manage consignee list",
-      action: () => setShowConsigneeNamesPopup(true),
+      action: () => navigate("/consignee-names"),
       permission: ["consigneeNames.view", "consigneeNames.create", "consigneeNames.edit", "consigneeNames.delete"],
     },
   ];
