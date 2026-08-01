@@ -1386,7 +1386,7 @@ export default function DashboardPage() {
             <div className="hero-stat hero-stat-grid">
               <div className="hero-stat-item">
                 <span>Total Stock</span>
-                <strong>{Number(totalStock).toFixed(2)}</strong>
+                <strong>{Number(totalWarehouseStock).toFixed(2)}</strong>
               </div>
               <div className="hero-stat-item">
                 <span>Total Rent</span>
