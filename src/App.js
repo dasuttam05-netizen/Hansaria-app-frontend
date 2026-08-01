@@ -1,47 +1,48 @@
-import React, { useEffect } from "react";
+import React, { useEffect, Suspense, lazy } from "react";
 import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
 import axios from "axios";
 
-import LoginPage from "./pages/LoginPage";
-import { DashboardPageSafe } from "./pages/DashboardPage";
-import LocationManagementPage from "./pages/LocationManagementPage";
-import EmployeeManagementPage from "./pages/EmployeeManagementPage";
-import CompanyManagementPage from "./pages/CompanyManagementPage";
-import CompanyAccountsPage from "./pages/CompanyAccountsPage";
-import WarehouseManagementPage from "./pages/WarehouseManagementPage";
-import ProductsManagementPage from "./pages/ProductsManagementPage";
-import BuyerNamesManagementPage from "./pages/BuyerNamesManagementPage";
-import ConsigneeNamesManagementPage from "./pages/ConsigneeNamesManagementPage";
-import InwardPage from "./pages/InwardPage";
-import InwardReportPage from "./pages/InwardReportPage";
-import OutwardPage from "./pages/OutwardPage";
-import PendingAdjustment from "./pages/PendingAdjustment";
-import ERPReportPage from "./pages/ERPReportPage";
-import PartyLedgerReportPage from "./pages/PartyLedgerReportPage";
-import PartyStockReportPage from "./pages/PartyStockReportPage";
-import WarehouseRentLedgerPage from "./pages/WarehouseRentLedgerPage";
-import WarehouseRentDashboard from "./pages/WarehouseRentDashboard";
-import OutwardSettlementReportPage from "./pages/OutwardSettlementReportPage";
-import OutwardEntryDetailsReportPage from "./pages/OutwardEntryDetailsReportPage";
-import TransportManagementPage from "./pages/TransportManagementPage";
-import TransportBiltiPage from "./pages/TransportBiltiPage";
-import TransportReportPage from "./pages/TransportReportPage";
-import ExpenseManagementPage from "./pages/ExpenseManagementPage";
-import ExpenseReportPage from "./pages/ExpenseReportPage";
-import ExpensePostedInwardPage from "./pages/ExpensePostedInwardPage";
-import PaltiLorryPage from "./pages/PaltiLorryPage";
-import PaltiLorryAdjustmentReportPage from "./pages/PaltiLorryAdjustmentReportPage";
-import SelfLoadingPage from "./pages/SelfLoadingPage";
-import LocalSalePage from "./pages/LocalSalePage";
-import CashEntriesPage from "./pages/CashEntriesPage";
-import MainCashBookPage from "./pages/MainCashBookPage";
-import PartiesCashBookPage from "./pages/PartiesCashBookPage";
-import EmployeeCashBookPage from "./pages/EmployeeCashBookPage";
-import FarmerManagementPage from "./pages/FarmerManagementPage";
-import WarehouseTradingPage from "./pages/WarehouseTradingPage";
-import ExpensesPendingPage from "./pages/ExpensesPendingPage";
-import CashActivityLogPage from "./pages/CashActivityLogPage";
 import "./mobile.css";
+
+const LoginPage = lazy(() => import("./pages/LoginPage"));
+const DashboardPageSafe = lazy(() => import("./pages/DashboardPage").then((module) => ({ default: module.DashboardPageSafe })));
+const LocationManagementPage = lazy(() => import("./pages/LocationManagementPage"));
+const EmployeeManagementPage = lazy(() => import("./pages/EmployeeManagementPage"));
+const CompanyManagementPage = lazy(() => import("./pages/CompanyManagementPage"));
+const CompanyAccountsPage = lazy(() => import("./pages/CompanyAccountsPage"));
+const WarehouseManagementPage = lazy(() => import("./pages/WarehouseManagementPage"));
+const ProductsManagementPage = lazy(() => import("./pages/ProductsManagementPage"));
+const BuyerNamesManagementPage = lazy(() => import("./pages/BuyerNamesManagementPage"));
+const ConsigneeNamesManagementPage = lazy(() => import("./pages/ConsigneeNamesManagementPage"));
+const InwardPage = lazy(() => import("./pages/InwardPage"));
+const InwardReportPage = lazy(() => import("./pages/InwardReportPage"));
+const OutwardPage = lazy(() => import("./pages/OutwardPage"));
+const PendingAdjustment = lazy(() => import("./pages/PendingAdjustment"));
+const ERPReportPage = lazy(() => import("./pages/ERPReportPage"));
+const PartyLedgerReportPage = lazy(() => import("./pages/PartyLedgerReportPage"));
+const PartyStockReportPage = lazy(() => import("./pages/PartyStockReportPage"));
+const WarehouseRentLedgerPage = lazy(() => import("./pages/WarehouseRentLedgerPage"));
+const WarehouseRentDashboard = lazy(() => import("./pages/WarehouseRentDashboard"));
+const OutwardSettlementReportPage = lazy(() => import("./pages/OutwardSettlementReportPage"));
+const OutwardEntryDetailsReportPage = lazy(() => import("./pages/OutwardEntryDetailsReportPage"));
+const TransportManagementPage = lazy(() => import("./pages/TransportManagementPage"));
+const TransportBiltiPage = lazy(() => import("./pages/TransportBiltiPage"));
+const TransportReportPage = lazy(() => import("./pages/TransportReportPage"));
+const ExpenseManagementPage = lazy(() => import("./pages/ExpenseManagementPage"));
+const ExpenseReportPage = lazy(() => import("./pages/ExpenseReportPage"));
+const ExpensePostedInwardPage = lazy(() => import("./pages/ExpensePostedInwardPage"));
+const PaltiLorryPage = lazy(() => import("./pages/PaltiLorryPage"));
+const PaltiLorryAdjustmentReportPage = lazy(() => import("./pages/PaltiLorryAdjustmentReportPage"));
+const SelfLoadingPage = lazy(() => import("./pages/SelfLoadingPage"));
+const LocalSalePage = lazy(() => import("./pages/LocalSalePage"));
+const CashEntriesPage = lazy(() => import("./pages/CashEntriesPage"));
+const MainCashBookPage = lazy(() => import("./pages/MainCashBookPage"));
+const PartiesCashBookPage = lazy(() => import("./pages/PartiesCashBookPage"));
+const EmployeeCashBookPage = lazy(() => import("./pages/EmployeeCashBookPage"));
+const FarmerManagementPage = lazy(() => import("./pages/FarmerManagementPage"));
+const WarehouseTradingPage = lazy(() => import("./pages/WarehouseTradingPage"));
+const ExpensesPendingPage = lazy(() => import("./pages/ExpensesPendingPage"));
+const CashActivityLogPage = lazy(() => import("./pages/CashActivityLogPage"));
 
 import ProtectedRoute from "./components/ProtectedRoute";
 import SessionIdleGuard from "./components/SessionIdleGuard";
@@ -51,13 +52,33 @@ import { getApiOrigin } from "./utils/api";
 // ✅ ONLY ONE IMPORTANT LINE
 axios.defaults.baseURL = getApiOrigin();
 
+function RouteLoadingFallback() {
+  return (
+    <div
+      style={{
+        minHeight: "100vh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        background: "#f8fafc",
+        color: "#0f172a",
+        fontSize: "15px",
+        fontWeight: 600,
+      }}
+    >
+      Loading page...
+    </div>
+  );
+}
+
 function AppRoutes() {
   useEffect(() => {
     loadSession();
   }, []);
 
   return (
-    <Routes>
+    <Suspense fallback={<RouteLoadingFallback />}>
+      <Routes>
       <Route path="/" element={<LoginPage />} />
 
       <Route
@@ -445,7 +466,8 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       />
-    </Routes>
+      </Routes>
+    </Suspense>
   );
 }
 
