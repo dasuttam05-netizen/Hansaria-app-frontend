@@ -146,6 +146,25 @@ export default function PartyStockReportPage() {
 
   const num = (v) => Number(v || 0).toFixed(2);
 
+  const normalizePartyStockRow = (row) => ({
+    ...row,
+    company_name: row.company_name || row.party_name || row.company_name || row.account_name || "",
+    account_name: row.account_name || "",
+    lorry_no: row.lorry_no || "",
+    employee_name: row.employee_name || "",
+    warehouse_name: row.warehouse_name || row.warehouse || "",
+    location_name: row.location_name || "",
+    product_name: row.product_name || "",
+    gross_qty: Number(row.gross_qty ?? row.gross_weight ?? 0),
+    shortage_qty: Number(row.shortage_qty ?? 0),
+    net_opening_qty: Number(row.net_opening_qty ?? row.net_qty ?? 0),
+    already_adjusted_qty: Number(row.already_adjusted_qty ?? row.adjusted_qty ?? 0),
+    available_balance_qty: Number(row.available_balance_qty ?? row.balance_qty ?? 0),
+    date: row.date || row.inward_date || "",
+    outward_date: row.outward_date || "",
+    days_diff: row.days_diff ?? 0,
+  });
+
   useEffect(() => {
     axios.get(`${API_BASE}/employees`).then((res) => setEmployees(res.data || [])).catch(() => setEmployees([]));
     axios.get(`${API_BASE}/companies`).then((res) => setCompanies(res.data || [])).catch(() => setCompanies([]));
@@ -182,8 +201,10 @@ export default function PartyStockReportPage() {
 
         const res = await axios.get(`${API_BASE}/reports/party-stock`, { params });
         if (!cancelled) {
-          setSummary(res.data.summary || []);
-          setDetails(res.data.details || []);
+          const normalizedSummary = (res.data.summary || []).map(normalizePartyStockRow);
+          const normalizedDetails = (res.data.details || []).map(normalizePartyStockRow);
+          setSummary(normalizedSummary);
+          setDetails(normalizedDetails);
         }
       } catch (err) {
         if (!cancelled) {
