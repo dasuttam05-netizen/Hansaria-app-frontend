@@ -1,4 +1,4 @@
-import React, { Component, useState, useEffect, useRef } from "react";
+import React, { Component, useState, useEffect, useRef, lazy, Suspense } from "react";
 import API from "./axiosInstance";
 import { useNavigate } from "react-router-dom";
 import logo from "./logo.png";
@@ -6,18 +6,18 @@ import { clearSession, hasAnyPermission, hasPermission, loadSession } from "../u
 import { formatLocalMonthInput } from "../utils/date";
 import "./Dashboard.css";
 
-import LocationManagementPage from "./LocationManagementPage";
-import EmployeeManagementPage from "./EmployeeManagementPage";
-import CompanyManagementPage from "./CompanyManagementPage";
-import CompanyAccountsPage from "./CompanyAccountsPage";
-import WarehouseManagementPage from "./WarehouseManagementPage";
-import ProductsManagementPage from "./ProductsManagementPage";
-import InwardPage from "./InwardPage";
-import OutwardPage from "./OutwardPage";
-import ExpenseManagementPage from "./ExpenseManagementPage";
-import ExpenseReportPage from "./ExpenseReportPage";
-import ConsigneeNamesManagementPage from "./ConsigneeNamesManagementPage";
-import BuyerNamesManagementPage from "./BuyerNamesManagementPage";
+const LocationManagementPage = lazy(() => import("./LocationManagementPage"));
+const EmployeeManagementPage = lazy(() => import("./EmployeeManagementPage"));
+const CompanyManagementPage = lazy(() => import("./CompanyManagementPage"));
+const CompanyAccountsPage = lazy(() => import("./CompanyAccountsPage"));
+const WarehouseManagementPage = lazy(() => import("./WarehouseManagementPage"));
+const ProductsManagementPage = lazy(() => import("./ProductsManagementPage"));
+const InwardPage = lazy(() => import("./InwardPage"));
+const OutwardPage = lazy(() => import("./OutwardPage"));
+const ExpenseManagementPage = lazy(() => import("./ExpenseManagementPage"));
+const ExpenseReportPage = lazy(() => import("./ExpenseReportPage"));
+const ConsigneeNamesManagementPage = lazy(() => import("./ConsigneeNamesManagementPage"));
+const BuyerNamesManagementPage = lazy(() => import("./BuyerNamesManagementPage"));
 
 import {
   FaHome,
@@ -41,6 +41,23 @@ import {
   FaLink,
   FaCog,
 } from "react-icons/fa";
+
+function DashboardModalFallback() {
+  return (
+    <div
+      style={{
+        minHeight: "60vh",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        color: "#0f172a",
+        fontWeight: 600,
+      }}
+    >
+      Loading content...
+    </div>
+  );
+}
 
 export default function DashboardPage() {
   const navigate = useNavigate();
@@ -1733,68 +1750,92 @@ export default function DashboardPage() {
 
       {showLocationPopup && (
         <ModalWrapper onClose={() => setShowLocationPopup(false)}>
-          <LocationManagementPage locations={locations} />
+          <Suspense fallback={<DashboardModalFallback />}>
+            <LocationManagementPage locations={locations} />
+          </Suspense>
         </ModalWrapper>
       )}
       {showEmployeePopup && (
         <ModalWrapper onClose={() => setShowEmployeePopup(false)}>
-          <EmployeeManagementPage employees={employees} />
+          <Suspense fallback={<DashboardModalFallback />}>
+            <EmployeeManagementPage employees={employees} />
+          </Suspense>
         </ModalWrapper>
       )}
       {showCompanyPopup && (
         <ModalWrapper onClose={() => setShowCompanyPopup(false)}>
-          <CompanyManagementPage companies={companies} />
+          <Suspense fallback={<DashboardModalFallback />}>
+            <CompanyManagementPage companies={companies} />
+          </Suspense>
         </ModalWrapper>
       )}
       {showCompanyAccountPopup && (
         <ModalWrapper onClose={() => setShowCompanyAccountPopup(false)}>
-          <CompanyAccountsPage accounts={companyAccounts} />
+          <Suspense fallback={<DashboardModalFallback />}>
+            <CompanyAccountsPage accounts={companyAccounts} />
+          </Suspense>
         </ModalWrapper>
       )}
       {showWarehousePopup && (
         <ModalWrapper onClose={() => setShowWarehousePopup(false)}>
-          <WarehouseManagementPage warehouses={warehouses} />
+          <Suspense fallback={<DashboardModalFallback />}>
+            <WarehouseManagementPage warehouses={warehouses} />
+          </Suspense>
         </ModalWrapper>
       )}
       {showProductsPopup && (
         <ModalWrapper onClose={() => setShowProductsPopup(false)}>
-          <ProductsManagementPage products={products} />
+          <Suspense fallback={<DashboardModalFallback />}>
+            <ProductsManagementPage products={products} />
+          </Suspense>
         </ModalWrapper>
       )}
 
       {showInwardPopup && (
         <FullScreenModal onClose={() => setShowInwardPopup(false)}>
-          <InwardPage />
+          <Suspense fallback={<DashboardModalFallback />}>
+            <InwardPage />
+          </Suspense>
         </FullScreenModal>
       )}
 
       {showOutwardPopup && (
         <FullScreenModal onClose={() => setShowOutwardPopup(false)}>
-          <OutwardPage />
+          <Suspense fallback={<DashboardModalFallback />}>
+            <OutwardPage />
+          </Suspense>
         </FullScreenModal>
       )}
 
       {showExpensePopup && (
         <FullScreenModal onClose={() => setShowExpensePopup(false)}>
-          <ExpenseManagementPage />
+          <Suspense fallback={<DashboardModalFallback />}>
+            <ExpenseManagementPage />
+          </Suspense>
         </FullScreenModal>
       )}
 
       {showExpenseReportPopup && (
         <FullScreenModal onClose={() => setShowExpenseReportPopup(false)}>
-          <ExpenseReportPage />
+          <Suspense fallback={<DashboardModalFallback />}>
+            <ExpenseReportPage />
+          </Suspense>
         </FullScreenModal>
       )}
 
       {showConsigneeNamesPopup && (
         <ModalWrapper onClose={() => setShowConsigneeNamesPopup(false)}>
-          <ConsigneeNamesManagementPage />
+          <Suspense fallback={<DashboardModalFallback />}>
+            <ConsigneeNamesManagementPage />
+          </Suspense>
         </ModalWrapper>
       )}
 
       {showBuyerNamesPopup && (
         <ModalWrapper onClose={() => setShowBuyerNamesPopup(false)}>
-          <BuyerNamesManagementPage />
+          <Suspense fallback={<DashboardModalFallback />}>
+            <BuyerNamesManagementPage />
+          </Suspense>
         </ModalWrapper>
       )}
 
