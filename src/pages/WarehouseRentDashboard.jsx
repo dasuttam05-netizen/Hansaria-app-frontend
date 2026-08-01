@@ -83,6 +83,26 @@ export default function WarehouseRentDashboard() {
   };
 
   const num = (v) => Number(v || 0).toFixed(2);
+
+  const normalizeWarehouseRentRow = (row) => ({
+    ...row,
+    month: row.month || row.month_end_date || month,
+    month_label: row.month_label || row.month_label || "",
+    inward_date: row.inward_date || "",
+    party_name: row.party_name || "",
+    warehouse_name: row.warehouse_name || "",
+    voucher_no: row.voucher_no || "",
+    lorry_no: row.lorry_no || "",
+    original_weight: Number(row.original_weight ?? row.weight ?? 0),
+    balance_qty: Number(row.balance_qty ?? 0),
+    days_diff: row.days_diff ?? row.days_diff ?? 0,
+    month_slab: row.month_slab ?? row.month_slab ?? 0,
+    rent_rate: Number(row.rent_rate ?? 0),
+    adjusted_rent_amount: Number(row.adjusted_rent_amount ?? row.adjustedRentAmount ?? 0),
+    balance_rent_amount: Number(row.balance_rent_amount ?? row.balanceRentAmount ?? 0),
+    rent_amount: Number(row.rent_amount ?? 0),
+  });
+
   useEffect(() => {
     axios.get(`${API_BASE}/companies`).then((res) => setCompanies(res.data || []));
     axios.get(`${API_BASE}/warehouses`).then((res) => setWarehouses(res.data || []));
@@ -97,8 +117,8 @@ export default function WarehouseRentDashboard() {
           warehouse_id: warehouseId,
         },
       });
-      setSummary(res.data.summary || []);
-      setDetails(res.data.details || []);
+      setSummary((res.data.summary || []).map(normalizeWarehouseRentRow));
+      setDetails((res.data.details || []).map(normalizeWarehouseRentRow));
     } catch (err) {
       console.error(err);
       setSummary([]);
