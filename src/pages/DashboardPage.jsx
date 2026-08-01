@@ -441,7 +441,7 @@ export default function DashboardPage() {
       permission: "companies.manage",
       icon: <FaBuilding />,
       submenu: [
-        { label: "Company Management", permission: "companies.manage", action: () => setShowCompanyPopup(true) },
+        { label: "Company Management", permission: "companies.manage", action: () => navigate("/companies") },
       ],
     },
     {
@@ -452,7 +452,7 @@ export default function DashboardPage() {
         {
           label: "Company Account Management",
           permission: "companyAccounts.manage",
-          action: () => setShowCompanyAccountPopup(true),
+          action: () => navigate("/company-accounts"),
         },
       ],
     },
@@ -513,10 +513,10 @@ export default function DashboardPage() {
       ],
       icon: <FaCog />,
       submenu: [
-        { label: "Employees", permission: "employees.view", action: () => setShowEmployeePopup(true) },
+        { label: "Employees", permission: "employees.view", action: () => navigate("/employees") },
         { label: "Location", permission: "locations.view", action: () => setShowLocationPopup(true) },
-        { label: "Companies", permission: "companies.view", action: () => setShowCompanyPopup(true) },
-        { label: "Company Accounts", permission: "companyAccounts.view", action: () => setShowCompanyAccountPopup(true) },
+        { label: "Companies", permission: "companies.view", action: () => navigate("/companies") },
+        { label: "Company Accounts", permission: "companyAccounts.view", action: () => navigate("/company-accounts") },
         { label: "Products", permission: "products.view", action: () => setShowProductsPopup(true) },
       ],
     },
