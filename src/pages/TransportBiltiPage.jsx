@@ -522,9 +522,9 @@ const downloadPDF = () => {
   const doc = new jsPDF("l", "mm", "a4");
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
-  const leftX = 8;
-  const topY = 8;
-  const contentWidth = pageWidth - 16;
+  const margin = 12;
+  const leftX = margin;
+  const rightX = pageWidth - margin;
 
   const voucherNo = formData.voucher_no || meta?.outward_voucher_no || meta?.voucher_no || "-";
   const billNo = meta?.bilti_no || (formData.id ? `BLT-${formData.id}` : "DRAFT");
@@ -535,9 +535,6 @@ const downloadPDF = () => {
   const transporterPhone = selectedTransporter?.mobile || "-";
   const consigneeName = formData.consignee_name || "-";
   const consignorName = selectedAccount?.account_name || formData.account_name || "-";
-  const consignorAddress = selectedAccount?.address || "-";
-  const consigneeAddress = selectedConsignee?.address || "-";
-  const warehouseName = formData.warehouse_name || "-";
 
   const dispatchWeight = num(formData.dispatch_qty);
   const outwardWeight = num(formData.outward_qty);
@@ -553,75 +550,69 @@ const downloadPDF = () => {
 
   const money = (v) => Number(v || 0).toFixed(2);
 
-  const drawPanel = ({ x, y, w, h, fill, border, title, rows, titleColor = [255, 255, 255] }) => {
-    doc.setDrawColor(border[0], border[1], border[2]);
+  const drawPanel = ({ x, y, w, h, fill, title, rows }) => {
+    doc.setDrawColor(210, 214, 220);
     doc.setLineWidth(0.25);
-    doc.setFillColor(255, 255, 255);
-    doc.roundedRect(x, y, w, h, 4, 4, "FD");
+    doc.roundedRect(x, y, w, h, 3, 3, "FD");
     doc.setFillColor(fill[0], fill[1], fill[2]);
-    doc.roundedRect(x, y, w, 10, 4, 4, "F");
-    doc.rect(x, y + 4, w, 6, "F");
+    doc.roundedRect(x, y, w, 9, 3, 3, "F");
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(9.5);
-    doc.setTextColor(titleColor[0], titleColor[1], titleColor[2]);
-    doc.text(title, x + 4, y + 6.5);
+    doc.setFontSize(9);
+    doc.setTextColor(255, 255, 255);
+    doc.text(title, x + 4, y + 5.8);
 
     let rowY = y + 14;
     rows.forEach((row, index) => {
-      doc.setFillColor(index % 2 === 0 ? 246 : 255, index % 2 === 0 ? 246 : 255, index % 2 === 0 ? 246 : 255);
-      doc.roundedRect(x + 2.5, rowY - 3.8, w - 5, 7.2, 1.8, 1.8, "F");
+      doc.setFillColor(index % 2 === 0 ? 245 : 255, index % 2 === 0 ? 245 : 255, index % 2 === 0 ? 245 : 255);
+      doc.rect(x + 2, rowY - 4, w - 4, 8.5, "F");
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(7.2);
-      doc.setTextColor(90, 90, 90);
-      doc.text(row[0], x + 5, rowY);
+      doc.setFontSize(7.5);
+      doc.setTextColor(33, 37, 41);
+      doc.text(row[0], x + 4.5, rowY + 2);
       doc.setFont("helvetica", "normal");
-      doc.setTextColor(35, 35, 35);
-      doc.text(String(row[1]), x + w - 5, rowY, { align: "right" });
-      rowY += 8;
+      doc.setFontSize(7.5);
+      doc.setTextColor(55, 65, 81);
+      doc.text(String(row[1]), x + w - 4.5, rowY + 2, { align: "right" });
+      rowY += 10;
     });
   };
 
   doc.setFillColor(255, 255, 255);
   doc.rect(0, 0, pageWidth, pageHeight, "F");
 
-  doc.setFillColor(245, 245, 245);
-  doc.circle(34, pageHeight - 12, 18, "F");
-  doc.setFillColor(236, 236, 236);
-  doc.circle(pageWidth - 20, 16, 16, "F");
+  doc.setDrawColor(203, 213, 225);
+  doc.setLineWidth(0.35);
+  doc.roundedRect(4, 4, pageWidth - 8, pageHeight - 8, 3, 3, "S");
 
+  const titleY = margin + 4;
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(18);
-  doc.setTextColor(15, 118, 110);
-  doc.text("TRANSPORT PAYMENT ADVICE", pageWidth / 2, topY + 14, { align: "center" });
+  doc.setFontSize(22);
+  doc.setTextColor(15, 23, 42);
+  doc.text("TRANSPORT PAYMENT ADVICE", pageWidth / 2, titleY + 4, { align: "center" });
 
-  const netBoxWidth = 62;
-  const netBoxHeight = 24;
-  const netBoxX = pageWidth - leftX - netBoxWidth;
-  const netBoxY = topY;
-  doc.setFillColor(16, 185, 129);
-  doc.roundedRect(netBoxX, netBoxY, netBoxWidth, netBoxHeight, 4, 4, "F");
+  const netBoxX = rightX - 62;
+  const netBoxY = titleY - 2;
+  doc.setFillColor(34, 197, 94);
+  doc.roundedRect(netBoxX, netBoxY, 62, 28, 3, 3, "F");
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(8.3);
+  doc.setFontSize(8);
   doc.setTextColor(255, 255, 255);
-  doc.text("NET PAYABLE", netBoxX + 4, netBoxY + 8);
-  doc.setFontSize(13);
-  doc.text(money(payable), netBoxX + netBoxWidth / 2, netBoxY + 18, { align: "center" });
+  doc.text("NET PAYABLE", netBoxX + 31, netBoxY + 8, { align: "center" });
+  doc.setFontSize(14);
+  doc.text(money(payable), netBoxX + 31, netBoxY + 18, { align: "center" });
 
-  doc.setDrawColor(190, 190, 190);
-  doc.setLineWidth(0.25);
-  doc.line(leftX, topY + 44, pageWidth - leftX, topY + 44);
+  const infoY = titleY + 18;
+  const sectionWidth = (pageWidth - margin * 2 - 16) / 3;
 
-  const infoY = topY + 50;
   drawPanel({
     x: leftX,
     y: infoY,
-    w: 90,
+    w: sectionWidth,
     h: 56,
-    fill: [245, 245, 245],
-    border: [199, 210, 254],
+    fill: [15, 23, 42],
     title: "GENERAL DETAILS",
-    titleColor: [15, 118, 110],
     rows: [
+      ["LR Date", lrDate || "-"],
       ["Bilti No", billNo],
       ["Transport", transporterName],
       ["PAN No", transporterPan],
@@ -630,45 +621,43 @@ const downloadPDF = () => {
   });
 
   drawPanel({
-    x: leftX + 94,
+    x: leftX + sectionWidth + 8,
     y: infoY,
-    w: 90,
+    w: sectionWidth,
     h: 56,
-    fill: [248, 248, 248],
-    border: [37, 78, 163],
+    fill: [34, 197, 94],
     title: "PARTY DETAILS",
-    titleColor: [37, 78, 163],
     rows: [
       ["Voucher No", voucherNo],
       ["Consignor", consignorName],
       ["Consignee", consigneeName],
       ["Buyer", formData.buyer_name || "-"],
+      ["Warehouse", formData.warehouse_name || "-"],
     ],
   });
 
   drawPanel({
-    x: leftX + 188,
+    x: leftX + (sectionWidth + 8) * 2,
     y: infoY,
-    w: 92,
+    w: sectionWidth,
     h: 56,
-    fill: [245, 245, 245],
-    border: [37, 78, 163],
+    fill: [15, 23, 42],
     title: "TRIP DATA",
-    titleColor: [37, 78, 163],
     rows: [
       ["Dispatch", lrDate || "-"],
       ["Days", formData.days || "0"],
       ["Destination", formData.destination || "-"],
       ["Vehicle", formData.lorry_no || "-"],
+      ["Product", formData.product_name || "-"],
     ],
   });
 
   autoTable(doc, {
-    startY: infoY + 62,
+    startY: infoY + 66,
     margin: { left: leftX, right: leftX },
     theme: "grid",
-    styles: { fontSize: 7.1, cellPadding: 1.8, lineWidth: 0.18, lineColor: [200, 200, 200], textColor: [35, 35, 35] },
-    headStyles: { fillColor: [238, 238, 238], textColor: [25, 25, 25], fontStyle: "bold" },
+    styles: { fontSize: 7.2, cellPadding: 1.8, lineWidth: 0.22, lineColor: [200, 200, 200], textColor: [22, 28, 36] },
+    headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: "bold" },
     head: [[
       "Bilti No",
       "Voucher",
@@ -695,16 +684,16 @@ const downloadPDF = () => {
     ]],
   });
 
-  const lowerY = doc.lastAutoTable.finalY + 6;
+  const lowerY = doc.lastAutoTable.finalY + 8;
+  const lowerWidth = (pageWidth - margin * 2 - 16) / 3;
+
   drawPanel({
     x: leftX,
     y: lowerY,
-    w: 90,
-    h: 44,
-    fill: [246, 246, 246],
-    border: [15, 118, 110],
+    w: lowerWidth,
+    h: 42,
+    fill: [15, 23, 42],
     title: "SHORTAGE",
-    titleColor: [15, 118, 110],
     rows: [
       ["Shortage Qty", money(calculation.shortageQty)],
       ["Free KG", money(num(formData.shortage_free_kg))],
@@ -713,14 +702,12 @@ const downloadPDF = () => {
   });
 
   drawPanel({
-    x: leftX + 94,
+    x: leftX + lowerWidth + 8,
     y: lowerY,
-    w: 90,
-    h: 44,
-    fill: [248, 248, 248],
-    border: [15, 118, 110],
+    w: lowerWidth,
+    h: 42,
+    fill: [34, 197, 94],
     title: "CHARGES BREAKUP",
-    titleColor: [15, 118, 110],
     rows: [
       ["Detain Charges", money(detain)],
       ["Other Charges", money(others)],
@@ -729,14 +716,12 @@ const downloadPDF = () => {
   });
 
   drawPanel({
-    x: leftX + 188,
+    x: leftX + (lowerWidth + 8) * 2,
     y: lowerY,
-    w: 92,
-    h: 44,
-    fill: [246, 246, 246],
-    border: [15, 118, 110],
+    w: lowerWidth,
+    h: 42,
+    fill: [15, 23, 42],
     title: "PAYMENT DETAILS",
-    titleColor: [15, 118, 110],
     rows: [
       ["Gross Freight", money(gross)],
       ["Current Payment", money(netAmount)],
@@ -746,27 +731,32 @@ const downloadPDF = () => {
     ],
   });
 
-  const kpiY = lowerY + 61;
+  const summaryY = lowerY + 52;
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(6.5);
-  doc.setTextColor(90, 90, 90);
-  doc.text("Total consolidated transport payable:", 170, kpiY);
-  doc.text("Estimated chargeable freight after deductions:", 234, kpiY);
+  doc.setFontSize(7.2);
+  doc.setTextColor(71, 85, 105);
+  doc.text("Total consolidated transport payable:", leftX + 2, summaryY);
+  doc.text("Estimated chargeable freight after deductions:", leftX + lowerWidth + 8 + 2, summaryY);
 
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(18);
-  doc.setTextColor(35, 35, 35);
-  doc.text(`${money(payable)}`, 181, kpiY + 12);
-  doc.text(`${money(netAmount)}`, 247, kpiY + 12);
+  doc.setFontSize(14);
+  doc.setTextColor(15, 23, 42);
+  doc.text(money(payable), leftX + 2, summaryY + 9);
+  doc.setTextColor(34, 197, 94);
+  doc.text(money(gross), leftX + lowerWidth + 8 + 2, summaryY + 9);
 
+  const remarkY = pageHeight - 24;
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8);
-  doc.setTextColor(90, 90, 90);
-  doc.text("Remark:", leftX, pageHeight - 12);
+  doc.setTextColor(55, 65, 81);
+  doc.text("Remark:", leftX, remarkY);
   doc.setFont("helvetica", "normal");
-  doc.text(formData.narration || "-", leftX + 18, pageHeight - 12, { maxWidth: 130 });
+  doc.setFontSize(7.5);
+  doc.text(formData.narration || "-", leftX + 18, remarkY, { maxWidth: 140 });
+
   doc.setFont("helvetica", "bold");
-  doc.text("Authorized Signatory", pageWidth - 48, pageHeight - 12);
+  doc.setFontSize(9);
+  doc.text("Authorized Signatory", pageWidth - margin - 10, remarkY, { align: "right" });
 
   doc.save(`Transport_Payment_Advice_${voucherNo !== "-" ? voucherNo : billNo}.pdf`);
 };
