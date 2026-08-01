@@ -7,7 +7,8 @@ export default function WarehouseRentDashboard() {
   const API_BASE = "/api";
   const location = useLocation();
 
-  const [month, setMonth] = useState(() => formatLocalMonthInput());
+  const [fromMonth, setFromMonth] = useState(() => formatLocalMonthInput());
+  const [toMonth, setToMonth] = useState(() => formatLocalMonthInput());
   const [companies, setCompanies] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
   const [companyId, setCompanyId] = useState("");
@@ -17,11 +18,13 @@ export default function WarehouseRentDashboard() {
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
-    const queryMonth = params.get("month");
+    const queryFromMonth = params.get("from_month");
+    const queryToMonth = params.get("to_month");
     const queryCompanyId = params.get("company_id");
     const queryWarehouseId = params.get("warehouse_id");
 
-    if (queryMonth) setMonth(queryMonth);
+    if (queryFromMonth) setFromMonth(queryFromMonth);
+    if (queryToMonth) setToMonth(queryToMonth);
     if (queryCompanyId) setCompanyId(queryCompanyId);
     if (queryWarehouseId) setWarehouseId(queryWarehouseId);
   }, [location.search]);
@@ -110,12 +113,20 @@ export default function WarehouseRentDashboard() {
 
   const fetchReport = async () => {
     try {
+      const params = {
+        company_id: companyId,
+        warehouse_id: warehouseId,
+      };
+
+      if (fromMonth && toMonth) {
+        params.from_month = fromMonth;
+        params.to_month = toMonth;
+      } else if (fromMonth) {
+        params.month = fromMonth;
+      }
+
       const res = await axios.get(`${API_BASE}/reports/warehouse-rent-month-end`, {
-        params: {
-          month,
-          company_id: companyId,
-          warehouse_id: warehouseId,
-        },
+        params,
       });
       setSummary((res.data.summary || []).map(normalizeWarehouseRentRow));
       setDetails((res.data.details || []).map(normalizeWarehouseRentRow));
@@ -128,7 +139,7 @@ export default function WarehouseRentDashboard() {
 
   useEffect(() => {
     fetchReport();
-  }, [month, companyId, warehouseId]);
+  }, [fromMonth, toMonth, companyId, warehouseId]);
 
   const totals = useMemo(
     () =>
@@ -162,7 +173,15 @@ export default function WarehouseRentDashboard() {
 
       <div style={{ ...card, marginBottom: 16 }}>
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-          <input type="month" value={month} onChange={(e) => setMonth(e.target.value)} style={input} />
+          <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            From Month
+            <input type="month" value={fromMonth} onChange={(e) => setFromMonth(e.target.value)} style={input} />
+          </label>
+
+          <label style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+            To Month
+            <input type="month" value={toMonth} onChange={(e) => setToMonth(e.target.value)} style={input} />
+          </label>
 
           <select value={companyId} onChange={(e) => setCompanyId(e.target.value)} style={input}>
             <option value="">All Parties</option>
