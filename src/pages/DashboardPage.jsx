@@ -269,10 +269,27 @@ export default function DashboardPage() {
       setProducts(prodRes.data || []);
       setInwards(inwardRes.data || []);
       setOutwards(outwardRes.data || []);
-      setPartyStock(partyStockRes.data?.summary || []);
-      setWarehouseStock(warehouseStockRes.data || []);
-      setTotalStock(Number(totalStockRes?.data?.total || 0));
-      setMonthEndRentSummary(monthEndRentRes?.data?.summary || []);
+      const normalizedPartyStock = Array.isArray(partyStockRes?.data?.summary)
+        ? partyStockRes.data.summary
+        : Array.isArray(partyStockRes?.data)
+          ? partyStockRes.data
+          : [];
+      const normalizedWarehouseStock = Array.isArray(warehouseStockRes?.data)
+        ? warehouseStockRes.data
+        : Array.isArray(warehouseStockRes?.data?.summary)
+          ? warehouseStockRes.data.summary
+          : [];
+      const normalizedTotalStock = Number(
+        totalStockRes?.data?.total ?? totalStockRes?.data?.summary?.[0]?.total ?? 0
+      );
+      const normalizedRentSummary = Array.isArray(monthEndRentRes?.data?.summary)
+        ? monthEndRentRes.data.summary
+        : [];
+
+      setPartyStock(normalizedPartyStock);
+      setWarehouseStock(normalizedWarehouseStock);
+      setTotalStock(normalizedTotalStock);
+      setMonthEndRentSummary(normalizedRentSummary);
     } catch (err) {
       console.error("Failed to fetch dashboard data:", err);
     }
@@ -853,14 +870,14 @@ export default function DashboardPage() {
 
   const groupedWarehouseStock = Object.values(
     safeWarehouseStock.reduce((acc, row) => {
-      const warehouseName = String(row.warehouse || "Unknown").trim() || "Unknown";
+      const warehouseName = String(row.warehouse || row.warehouse_name || "Unknown").trim() || "Unknown";
       if (!acc[warehouseName]) {
         acc[warehouseName] = {
           warehouse: warehouseName,
           stock: 0,
         };
       }
-      acc[warehouseName].stock += Number(row.stock || 0);
+      acc[warehouseName].stock += Number(row.stock ?? row.available_balance_qty ?? row.total_stock ?? 0);
       return acc;
     }, {})
   ).sort((a, b) => b.stock - a.stock);
@@ -882,23 +899,27 @@ export default function DashboardPage() {
   );
 
   const filteredCompanyStock = partyStock.filter((row) => {
-    const partyName = row.party_name || row.party;
-    const warehouseName = row.warehouse_name;
+    const partyName = row.party_name || row.party || row.company_name || row.account_name || "";
+    const warehouseName = row.warehouse_name || row.warehouse || "";
     return (
       matchesStockWarehouse(warehouseName) &&
       matchesStockSearch(
         partyName,
         warehouseName,
         row.gross_qty,
-        row.available_balance_qty
+        row.available_balance_qty,
+        row.total_weight,
+        row.balance_qty
       )
     );
   });
 
   const filteredMonthEndRentSummary = monthEndRentSummary.filter((row) => {
+    const rentValue = row.total_rent ?? row.rent_amount ?? row.balance_rent_amount ?? 0;
+    const entryCount = row.total_entries ?? row.entries ?? 0;
     return (
       matchesStockWarehouse(row.warehouse_name) &&
-      matchesStockSearch(row.party_name, row.warehouse_name, row.total_rent, row.total_entries)
+      matchesStockSearch(row.party_name, row.warehouse_name, rentValue, entryCount)
     );
   });
 
@@ -948,7 +969,7 @@ export default function DashboardPage() {
     0
   );
   const totalRentCollected = filteredMonthEndRentSummary.reduce(
-    (sum, row) => sum + Number(row.total_rent || 0),
+    (sum, row) => sum + Number(row.total_rent ?? row.rent_amount ?? 0),
     0
   );
 
@@ -1045,7 +1066,7 @@ export default function DashboardPage() {
 
   const partyStockSummary = Object.values(
     filteredCompanyStock.reduce((acc, row) => {
-      const key = row.party_name || row.party || "Unknown";
+      const key = row.party_name || row.party || row.company_name || row.account_name || "Unknown";
       if (!acc[key]) {
         acc[key] = {
           party_name: key,
@@ -1056,11 +1077,11 @@ export default function DashboardPage() {
           available_balance_qty: 0,
         };
       }
-      acc[key].gross_qty += Number(row.gross_qty || 0);
-      acc[key].shortage_qty += Number(row.shortage_qty || 0);
-      acc[key].net_opening_qty += Number(row.net_opening_qty || 0);
-      acc[key].already_adjusted_qty += Number(row.already_adjusted_qty || 0);
-      acc[key].available_balance_qty += Number(row.available_balance_qty || 0);
+      acc[key].gross_qty += Number(row.gross_qty ?? row.total_weight ?? 0);
+      acc[key].shortage_qty += Number(row.shortage_qty ?? 0);
+      acc[key].net_opening_qty += Number(row.net_opening_qty ?? row.balance_qty ?? 0);
+      acc[key].already_adjusted_qty += Number(row.already_adjusted_qty ?? 0);
+      acc[key].available_balance_qty += Number(row.available_balance_qty ?? row.balance_qty ?? row.stock ?? 0);
       return acc;
     }, {})
   ).sort((a, b) => b.available_balance_qty - a.available_balance_qty);
