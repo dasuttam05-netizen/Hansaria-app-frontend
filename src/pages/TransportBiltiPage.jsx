@@ -737,18 +737,19 @@ const downloadPDF = () => {
     ["Gross Freight", money(gross)],
     ["Less: Total Deductions", money(deductionTotal)],
     ["Net Freight", money(netAmount)],
-    ["Current Payment", money(netAmount)],
     ["TDS Amount", money(tds)],
     ["Advance Paid", money(advance)],
+    ["Net Payable", money(payable)],
   ];
 
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(7.5);
-  doc.setTextColor(71, 85, 105);
   rightRows.forEach((row) => {
+    const isTotal = row[0] === "Net Payable";
+    doc.setFont("helvetica", isTotal ? "bold" : "normal");
+    doc.setFontSize(isTotal ? 8.5 : 7.5);
+    doc.setTextColor(15, 23, 42);
     doc.text(row[0], rightCol1, rowY);
     doc.text(row[1], rightCol2, rowY, { align: "right" });
-    rowY += 7.5;
+    rowY += isTotal ? 9 : 7.5;
   });
 
   const bottomY = sectionY + sectionHeight + 14;
@@ -762,12 +763,10 @@ const downloadPDF = () => {
   doc.text(money(payable), rightX - 2, bottomY + 11, { align: "right" });
 
   const footerY = bottomY + 22;
-  doc.setFont("helvetica", "normal");
+  doc.setFont("helvetica", "bold");
   doc.setFontSize(7.5);
   doc.setTextColor(71, 85, 105);
-  doc.text("Prepared By:", leftX, footerY);
-  doc.text("Authorized By:", leftX + 90, footerY);
-  doc.text("Date:", rightX - 40, footerY);
+  doc.text("Authorized By:", rightX - 2, footerY, { align: "right" });
 
   doc.save(`Transport_Payment_Advice_${voucherNo !== "-" ? voucherNo : billNo}.pdf`);
 };
