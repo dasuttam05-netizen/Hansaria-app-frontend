@@ -553,7 +553,7 @@ const downloadPDF = () => {
   const drawPanel = ({ x, y, w, h, fill, title, rows }) => {
     doc.setDrawColor(210, 214, 220);
     doc.setLineWidth(0.25);
-    doc.roundedRect(x, y, w, h, 3, 3, "FD");
+    doc.roundedRect(x, y, w, h, 3, 3, "S");
     doc.setFillColor(fill[0], fill[1], fill[2]);
     doc.roundedRect(x, y, w, 9, 3, 3, "F");
     doc.setFont("helvetica", "bold");
@@ -562,9 +562,7 @@ const downloadPDF = () => {
     doc.text(title, x + 4, y + 5.8);
 
     let rowY = y + 14;
-    rows.forEach((row, index) => {
-      doc.setFillColor(index % 2 === 0 ? 245 : 255, index % 2 === 0 ? 245 : 255, index % 2 === 0 ? 245 : 255);
-      doc.rect(x + 2, rowY - 4, w - 4, 8.5, "F");
+    rows.forEach((row) => {
       doc.setFont("helvetica", "bold");
       doc.setFontSize(7.5);
       doc.setTextColor(33, 37, 41);
