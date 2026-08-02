@@ -815,16 +815,18 @@ const downloadPDF = () => {
   doc.setTextColor(15, 23, 42);
   doc.text("Net Payable", rightCol1, sectionY + sectionHeight - 10);
 
-  const payableBoxWidth = 42;
+  const payableBoxWidth = 34;
   const payableBoxHeight = 10;
-  const payableBoxX = rightCol2 - payableBoxWidth - 2;
-  const payableBoxY = sectionY + sectionHeight - 15;
-  doc.setFillColor(220, 248, 233);
-  doc.roundedRect(payableBoxX, payableBoxY, payableBoxWidth, payableBoxHeight, 2, 2, "F");
+  const payableBoxX = rightCol2 - payableBoxWidth;
+  const payableBoxY = sectionY + sectionHeight - 14.5;
+  doc.setFillColor(188, 239, 188);
+  doc.setDrawColor(188, 239, 188);
+  doc.setLineWidth(0.4);
+  doc.roundedRect(payableBoxX, payableBoxY, payableBoxWidth, payableBoxHeight, 2, 2, "FD");
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9);
   doc.setTextColor(15, 23, 42);
-  doc.text(money(payable), rightCol2, sectionY + sectionHeight - 7, { align: "right" });
+  doc.text(money(payable), rightCol2 - 2, sectionY + sectionHeight - 7, { align: "right" });
 
   const amountInWords = `Indian Rupees ${numberToWords(payable)}`;
   const footerY = sectionY + sectionHeight + 8;
