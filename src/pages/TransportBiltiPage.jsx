@@ -117,6 +117,72 @@ export default function TransportBiltiPage() {
     return Number.isFinite(n) ? n : 0;
   };
 
+  const numberToWords = (value) => {
+    const number = Number(value);
+    if (!Number.isFinite(number)) return "Zero";
+    const absolute = Math.abs(number);
+    const integerPart = Math.floor(absolute);
+    const fractionalPart = Math.round((absolute - integerPart) * 100);
+
+    const wordsForNumber = (num) => {
+      const units = [
+        "Zero",
+        "One",
+        "Two",
+        "Three",
+        "Four",
+        "Five",
+        "Six",
+        "Seven",
+        "Eight",
+        "Nine",
+        "Ten",
+        "Eleven",
+        "Twelve",
+        "Thirteen",
+        "Fourteen",
+        "Fifteen",
+        "Sixteen",
+        "Seventeen",
+        "Eighteen",
+        "Nineteen",
+      ];
+      const tens = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
+
+      if (num < 20) return units[num];
+      if (num < 100) {
+        const tensName = tens[Math.floor(num / 10)];
+        const unitName = num % 10 ? ` ${units[num % 10]}` : "";
+        return `${tensName}${unitName}`;
+      }
+      if (num < 1000) {
+        const hundreds = Math.floor(num / 100);
+        const remainder = num % 100;
+        return `${units[hundreds]} Hundred${remainder ? ` ${wordsForNumber(remainder)}` : ""}`;
+      }
+      const scales = ["Thousand", "Million", "Billion"];
+      let scaleIndex = -1;
+      let remainder = num;
+      let result = "";
+
+      while (remainder > 0) {
+        const chunk = remainder % 1000;
+        remainder = Math.floor(remainder / 1000);
+        scaleIndex += 1;
+        if (chunk) {
+          const chunkText = wordsForNumber(chunk);
+          result = `${chunkText} ${scales[scaleIndex]}${result ? ` ${result}` : ""}`.trim();
+        }
+      }
+      return result;
+    };
+
+    const integerWords = integerPart === 0 ? "Zero" : wordsForNumber(integerPart);
+    const fractionalWords = fractionalPart ? ` and ${fractionalPart}/100` : "";
+    const sign = number < 0 ? "Minus " : "";
+    return `${sign}${integerWords}${fractionalWords} only`;
+  };
+
   const formatDate = (dateStr) => {
     if (!dateStr) return "";
     const d = new Date(dateStr);
@@ -565,15 +631,6 @@ const downloadPDF = () => {
   doc.setTextColor(255, 255, 255);
   doc.text("TRANSPORT PAYMENT ADVICE", leftX + 10, margin + 16);
 
-  const netBoxWidth = 62;
-  doc.setFillColor(16, 185, 129);
-  doc.roundedRect(rightX - netBoxWidth, margin + 5, netBoxWidth, 16, 3, 3, "F");
-  doc.setFontSize(8);
-  doc.text("NET PAYABLE", rightX - netBoxWidth + 31, margin + 12, { align: "center" });
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(12);
-  doc.text(money(payable), rightX - netBoxWidth + 31, margin + 20, { align: "center" });
-
   const topBlockY = margin + headerHeight + 8;
   const topBlockHeight = 24;
   doc.setFillColor(255, 255, 255);
@@ -680,7 +737,7 @@ const downloadPDF = () => {
 
   const sectionY = doc.lastAutoTable.finalY + 10;
   const sectionWidth = (contentWidth - 10) / 2;
-  const sectionHeight = 60;
+  const sectionHeight = 78;
 
   doc.setDrawColor(203, 213, 225);
   doc.setFillColor(255, 255, 255);
@@ -722,7 +779,7 @@ const downloadPDF = () => {
 
   doc.setDrawColor(226, 232, 240);
   doc.setLineWidth(0.2);
-  doc.line(leftX + 5, sectionY + sectionHeight - 18, leftX + sectionWidth - 5, sectionY + sectionHeight - 18);
+  doc.line(leftX + 5, sectionY + sectionHeight - 20, leftX + sectionWidth - 5, sectionY + sectionHeight - 20);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8);
   doc.setTextColor(15, 23, 42);
@@ -739,34 +796,37 @@ const downloadPDF = () => {
     ["Net Freight", money(netAmount)],
     ["TDS Amount", money(tds)],
     ["Advance Paid", money(advance)],
-    ["Net Payable", money(payable)],
   ];
 
   rightRows.forEach((row) => {
-    const isTotal = row[0] === "Net Payable";
-    doc.setFont("helvetica", isTotal ? "bold" : "normal");
-    doc.setFontSize(isTotal ? 8.5 : 7.5);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.5);
     doc.setTextColor(15, 23, 42);
     doc.text(row[0], rightCol1, rowY);
     doc.text(row[1], rightCol2, rowY, { align: "right" });
-    rowY += isTotal ? 9 : 7.5;
+    rowY += 7.5;
   });
 
-  const bottomY = sectionY + sectionHeight + 14;
-  doc.setFillColor(16, 185, 129);
-  doc.roundedRect(leftX, bottomY, 90, 16, 3, 3, "F");
+  doc.setDrawColor(226, 232, 240);
+  doc.setLineWidth(0.4);
+  doc.line(leftX + sectionWidth + 10, sectionY + sectionHeight - 20, leftX + sectionWidth * 2 + 10, sectionY + sectionHeight - 20);
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9);
-  doc.setTextColor(255, 255, 255);
-  doc.text("NET PAYABLE", leftX + 8, bottomY + 11);
-  doc.setFontSize(14);
-  doc.text(money(payable), rightX - 2, bottomY + 11, { align: "right" });
+  doc.setTextColor(15, 23, 42);
+  doc.text("Net Payable", rightCol1, sectionY + sectionHeight - 8);
+  doc.text(money(payable), rightCol2, sectionY + sectionHeight - 8, { align: "right" });
 
-  const footerY = bottomY + 22;
+  const amountInWords = numberToWords(payable);
+  const footerY = sectionY + sectionHeight + 10;
   doc.setFont("helvetica", "bold");
+  doc.setFontSize(8);
+  doc.setTextColor(15, 23, 42);
+  doc.text("Authorized By:", leftX, footerY);
+
+  doc.setFont("helvetica", "normal");
   doc.setFontSize(7.5);
-  doc.setTextColor(71, 85, 105);
-  doc.text("Authorized By:", rightX - 2, footerY, { align: "right" });
+  doc.text(`Amount in words: ${amountInWords}`, leftX, footerY + 7);
+  doc.text("This is a system generated document and does not require a signature.", leftX, footerY + 14);
 
   doc.save(`Transport_Payment_Advice_${voucherNo !== "-" ? voucherNo : billNo}.pdf`);
 };
