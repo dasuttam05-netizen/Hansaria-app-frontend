@@ -813,29 +813,33 @@ const downloadPDF = () => {
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9);
   doc.setTextColor(15, 23, 42);
-  doc.text("Net Payable", rightCol1, sectionY + sectionHeight - 8);
+  doc.text("Net Payable", rightCol1, sectionY + sectionHeight - 10);
 
-  const payableBoxWidth = 32;
-  const payableBoxHeight = 8;
-  const payableBoxX = rightCol2 - payableBoxWidth - 3;
-  const payableBoxY = sectionY + sectionHeight - 13;
+  const payableBoxWidth = 42;
+  const payableBoxHeight = 10;
+  const payableBoxX = rightCol2 - payableBoxWidth - 2;
+  const payableBoxY = sectionY + sectionHeight - 15;
   doc.setFillColor(220, 248, 233);
   doc.roundedRect(payableBoxX, payableBoxY, payableBoxWidth, payableBoxHeight, 2, 2, "F");
   doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
   doc.setTextColor(15, 23, 42);
-  doc.text(money(payable), rightCol2, sectionY + sectionHeight - 8, { align: "right" });
+  doc.text(money(payable), rightCol2, sectionY + sectionHeight - 7, { align: "right" });
 
   const amountInWords = `Indian Rupees ${numberToWords(payable)}`;
-  const footerY = sectionY + sectionHeight + 10;
+  const footerY = sectionY + sectionHeight + 8;
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8);
   doc.setTextColor(15, 23, 42);
+  doc.text(`Amount in words: ${amountInWords}`, leftX, footerY);
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8);
   doc.text("Authorized By:", rightX - 2, footerY, { align: "right" });
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7.5);
-  doc.text(`Amount in words: ${amountInWords}`, leftX, footerY + 7);
-  doc.text("This is a system generated document.", leftX, footerY + 14);
+  doc.text("This is a system generated document.", leftX, footerY + 8);
 
   doc.save(`Transport_Payment_Advice_${voucherNo !== "-" ? voucherNo : billNo}.pdf`);
 };
