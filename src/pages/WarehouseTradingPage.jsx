@@ -398,10 +398,12 @@ export default function WarehouseTradingPage() {
   const saleDispatchQty = toNumber(formData.dispatch_qty) || toNumber(formData.quantity) || toNumber(formData.unloading_qty);
   const saleUnloadingQty = toNumber(formData.unloading_qty);
   const saleRejectQty = toNumber(formData.reject_qty);
-  const saleShortageQty = Math.max(saleDispatchQty - saleUnloadingQty, 0);
+  const saleRemainingQty = Math.max(saleDispatchQty - saleUnloadingQty, 0);
+  const saleShortageQty = saleRemainingQty;
   const saleShortageAmount = saleShortageQty * toNumber(formData.rate);
   const saleAddQty = Math.max(toNumber(formData.add_qty), 0);
-  const saleTotalQtyPreview = Math.max(saleShortageQty + saleAddQty, 0);
+  const saleNextBillQty = Math.max(saleRemainingQty + saleAddQty, 0);
+  const saleTotalQtyPreview = saleNextBillQty;
   const saleQualityDeduction =
     toNumber(formData.moisture) +
     toNumber(formData.dunki) +
@@ -1925,6 +1927,18 @@ export default function WarehouseTradingPage() {
         .get(`/api/wh-vouchers/next-voucher-no`, { params: { type: "sale" } })
         .then((res) => res.data?.voucher_no || "")
         .catch(() => "");
+
+      if (nextDispatchQty <= 0) {
+        alert("Sale voucher pass saved successfully. No remaining quantity left to create the next bill.");
+        setShowSaleDeductionModal(false);
+        setEditId(null);
+        setFormData(defaultForm());
+        await loadVouchers();
+        if (activeTab === "reports") await loadReport();
+        fetchNextVoucherNo(activeVoucherType);
+        return;
+      }
+
       const nextPayload = {
         ...formData,
         voucher_no: nextVoucherNo || "",
@@ -4957,9 +4971,9 @@ export default function WarehouseTradingPage() {
             </div>
 
             <div style={{ marginTop: 14, padding: "10px 12px", border: "1px solid #d7dce4", borderRadius: 8, background: "#f8fafc" }}>
-              <div style={{ fontSize: 12, fontWeight: 700, color: "#0f766e", marginBottom: 4 }}>F2 Journey Setup</div>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#0f766e", marginBottom: 4 }}>Sale Unloading / Journey (Outward-style)</div>
               <div style={{ fontSize: 12, color: "#475569", lineHeight: 1.5 }}>
-                First leg can stay auto. Later consignee legs can be entered manually using the same journey link.
+                Select a sale bill, enter unloading qty, rate, bill no and other details manually. Save this unloading leg and Save & New will create the next bill for the remaining / palti quantity.
               </div>
             </div>
 
@@ -5033,7 +5047,7 @@ export default function WarehouseTradingPage() {
                     <input value={formatDecimal4(Math.max(saleDispatchQty - saleUnloadingQty, 0))} readOnly style={readOnlyInp} />
                   </div>
                   <div>
-                    <label style={lbl}>Add Qty</label>
+                    <label style={lbl}>Extra Qty for Next Bill</label>
                     <input
                       type="number"
                       step="0.0001"
@@ -5041,11 +5055,11 @@ export default function WarehouseTradingPage() {
                       value={formData.add_qty}
                       onChange={handleChange}
                       style={inp}
-                      placeholder="Manual add qty"
+                      placeholder="Optional extra qty"
                     />
                   </div>
                   <div>
-                    <label style={lbl}>Total Qty</label>
+                    <label style={lbl}>Next Bill Qty</label>
                     <input value={formatDecimal4(saleTotalQtyPreview)} readOnly style={readOnlyInp} />
                   </div>
                 </div>
@@ -5422,10 +5436,10 @@ export default function WarehouseTradingPage() {
               </div>
               <div style={{ gridColumn: "1 / -1", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
                 <div style={{ fontSize: 12, color: "#475569" }}>
-                  Same lorry can carry multiple bills. Keep each leg as a separate bill entry if needed.
+                  Same lorry can carry multiple legs. Each unloading/bill is saved as a separate entry, just like outward buyer adjustment.
                 </div>
                 <div style={{ fontSize: 12, fontWeight: 700, color: "#0f766e" }}>
-                  Remaining after this leg: {formatDecimal4(Math.max(saleDispatchQty - saleUnloadingQty, 0))}
+                  Remaining after this leg: {formatDecimal4(saleRemainingQty)}
                 </div>
               </div>
             </div>
