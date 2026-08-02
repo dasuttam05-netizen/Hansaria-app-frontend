@@ -606,64 +606,62 @@ const downloadPDF = () => {
   doc.text(money(payable), netBoxX + 31, netBoxY + 18, { align: "center" });
 
   const infoY = titleY + 18;
-  const sectionWidth = (pageWidth - margin * 2 - 16) / 3;
+  const summaryBoxHeight = 34;
+  const summaryBoxWidth = pageWidth - margin * 2;
+  doc.setDrawColor(203, 213, 225);
+  doc.setFillColor(255, 255, 255);
+  doc.roundedRect(leftX, infoY, summaryBoxWidth, summaryBoxHeight, 4, 4, "FD");
 
-  drawPanel({
-    x: leftX,
-    y: infoY,
-    w: sectionWidth,
-    h: 72,
-    title: "GENERAL DETAILS",
-    rows: [
-      ["LR Date", lrDate || "-"],
-      ["Bilti No", billNo],
-      ["Transport", transporterName],
-      ["PAN No", transporterPan],
-      ["Phone No", transporterPhone],
-    ],
+  const summaryFields = [
+    ["LR Date", lrDate || "-"],
+    ["Voucher", voucherNo],
+    ["Transport", transporterName],
+    ["Consignee", consigneeName],
+    ["Buyer", formData.buyer_name || "-"],
+    ["Warehouse", formData.warehouse_name || "-"],
+    ["Destination", formData.destination || "-"],
+    ["Vehicle", formData.lorry_no || "-"],
+    ["Product", formData.product_name || "-"],
+    ["Days", formData.days || "0"],
+  ];
+
+  const summaryCols = 5;
+  const summaryColWidth = summaryBoxWidth / summaryCols;
+  summaryFields.forEach((field, index) => {
+    const col = index % summaryCols;
+    const row = Math.floor(index / summaryCols);
+    const cellX = leftX + col * summaryColWidth;
+    const cellY = infoY + 4 + row * 11;
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7.5);
+    doc.setTextColor(15, 23, 42);
+    doc.text(field[0], cellX + 3, cellY + 4);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.5);
+    doc.setTextColor(71, 85, 105);
+    doc.text(String(field[1]), cellX + 3, cellY + 9);
+
+    if (col < summaryCols - 1) {
+      doc.setDrawColor(226, 232, 240);
+      doc.setLineWidth(0.2);
+      doc.line(cellX + summaryColWidth, infoY + 3, cellX + summaryColWidth, infoY + summaryBoxHeight - 3);
+    }
   });
 
-  drawPanel({
-    x: leftX + sectionWidth + 8,
-    y: infoY,
-    w: sectionWidth,
-    h: 72,
-    title: "PARTY DETAILS",
-    rows: [
-      ["Voucher No", voucherNo],
-      ["Consignor", consignorName],
-      ["Consignee", consigneeName],
-      ["Buyer", formData.buyer_name || "-"],
-      ["Warehouse", formData.warehouse_name || "-"],
-    ],
-  });
-
-  drawPanel({
-    x: leftX + (sectionWidth + 8) * 2,
-    y: infoY,
-    w: sectionWidth,
-    h: 72,
-    title: "TRIP DATA",
-    rows: [
-      ["Dispatch", lrDate || "-"],
-      ["Days", formData.days || "0"],
-      ["Destination", formData.destination || "-"],
-      ["Vehicle", formData.lorry_no || "-"],
-      ["Product", formData.product_name || "-"],
-    ],
-  });
-
+  const tableStartY = infoY + summaryBoxHeight + 12;
   autoTable(doc, {
-    startY: infoY + 66,
+    startY: tableStartY,
     margin: { left: leftX, right: leftX },
     theme: "grid",
-    tableLineWidth: 0.25,
-    tableLineColor: [15, 23, 42],
+    tableLineWidth: 0.22,
+    tableLineColor: [148, 163, 184],
     styles: {
-      fontSize: 7.6,
-      cellPadding: 3,
-      lineWidth: 0.25,
-      lineColor: [148, 163, 184],
+      fontSize: 8,
+      cellPadding: 4,
+      lineWidth: 0.22,
+      lineColor: [203, 213, 225],
       textColor: [15, 23, 42],
       fillColor: [255, 255, 255],
     },
@@ -678,8 +676,12 @@ const downloadPDF = () => {
       textColor: [15, 23, 42],
       minCellHeight: 10,
     },
-    alternateRowStyles: { fillColor: [255, 255, 255] },
+    alternateRowStyles: { fillColor: [249, 250, 251] },
     columnStyles: {
+      2: { halign: "left" },
+      3: { halign: "left" },
+      4: { halign: "center" },
+      5: { halign: "center" },
       6: { halign: "right" },
       7: { halign: "right" },
       8: { halign: "right" },
@@ -711,7 +713,7 @@ const downloadPDF = () => {
     ]],
   });
 
-  const lowerY = doc.lastAutoTable.finalY + 8;
+  const lowerY = doc.lastAutoTable.finalY + 10;
   const lowerWidth = (pageWidth - margin * 2 - 16) / 3;
 
   drawPanel({
