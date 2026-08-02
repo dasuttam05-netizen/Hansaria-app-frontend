@@ -550,27 +550,33 @@ const downloadPDF = () => {
 
   const money = (v) => Number(v || 0).toFixed(2);
 
-  const drawPanel = ({ x, y, w, h, fill, title, rows }) => {
-    doc.setDrawColor(210, 214, 220);
-    doc.setLineWidth(0.25);
+  const drawPanel = ({ x, y, w, h, title, rows }) => {
+    doc.setDrawColor(30, 64, 175);
+    doc.setLineWidth(0.3);
     doc.roundedRect(x, y, w, h, 3, 3, "S");
-    doc.setFillColor(fill[0], fill[1], fill[2]);
-    doc.roundedRect(x, y, w, 9, 3, 3, "F");
+    doc.setFillColor(56, 189, 248);
+    doc.roundedRect(x, y, w, 10, 3, 3, "F");
     doc.setFont("helvetica", "bold");
     doc.setFontSize(9);
     doc.setTextColor(255, 255, 255);
-    doc.text(title, x + 4, y + 5.8);
+    doc.text(title, x + 4, y + 6);
 
-    let rowY = y + 14;
-    rows.forEach((row) => {
+    let rowY = y + 16;
+    rows.forEach((row, index) => {
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(7.5);
-      doc.setTextColor(33, 37, 41);
+      doc.setFontSize(7.8);
+      doc.setTextColor(15, 23, 42);
       doc.text(row[0], x + 4.5, rowY + 2);
       doc.setFont("helvetica", "normal");
-      doc.setFontSize(7.5);
+      doc.setFontSize(7.8);
       doc.setTextColor(55, 65, 81);
       doc.text(String(row[1]), x + w - 4.5, rowY + 2, { align: "right" });
+
+      if (index < rows.length - 1) {
+        doc.setDrawColor(226, 232, 240);
+        doc.setLineWidth(0.18);
+        doc.line(x + 4, rowY + 5, x + w - 4, rowY + 5);
+      }
       rowY += 10;
     });
   };
@@ -578,8 +584,8 @@ const downloadPDF = () => {
   doc.setFillColor(255, 255, 255);
   doc.rect(0, 0, pageWidth, pageHeight, "F");
 
-  doc.setDrawColor(203, 213, 225);
-  doc.setLineWidth(0.35);
+  doc.setDrawColor(56, 189, 248);
+  doc.setLineWidth(0.45);
   doc.roundedRect(4, 4, pageWidth - 8, pageHeight - 8, 3, 3, "S");
 
   const titleY = margin + 4;
@@ -654,8 +660,25 @@ const downloadPDF = () => {
     startY: infoY + 66,
     margin: { left: leftX, right: leftX },
     theme: "grid",
-    styles: { fontSize: 7.2, cellPadding: 1.8, lineWidth: 0.22, lineColor: [200, 200, 200], textColor: [22, 28, 36] },
-    headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: "bold" },
+    styles: {
+      fontSize: 7.2,
+      cellPadding: 2.4,
+      lineWidth: 0.18,
+      lineColor: [148, 163, 184],
+      textColor: [30, 41, 59],
+      fillColor: [255, 255, 255],
+    },
+    headStyles: {
+      fillColor: [56, 189, 248],
+      textColor: [255, 255, 255],
+      fontStyle: "bold",
+      halign: "center",
+    },
+    bodyStyles: {
+      fillColor: [255, 255, 255],
+      textColor: [30, 41, 59],
+    },
+    alternateRowStyles: { fillColor: [255, 255, 255] },
     head: [[
       "Bilti No",
       "Voucher",
