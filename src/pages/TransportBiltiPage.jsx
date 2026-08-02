@@ -551,33 +551,33 @@ const downloadPDF = () => {
   const money = (v) => Number(v || 0).toFixed(2);
 
   const drawPanel = ({ x, y, w, h, title, rows }) => {
-    doc.setDrawColor(30, 64, 175);
-    doc.setLineWidth(0.3);
-    doc.roundedRect(x, y, w, h, 3, 3, "S");
-    doc.setFillColor(56, 189, 248);
-    doc.roundedRect(x, y, w, 10, 3, 3, "F");
+    doc.setDrawColor(15, 23, 42);
+    doc.setLineWidth(0.35);
+    doc.roundedRect(x, y, w, h, 4, 4, "S");
+    doc.setFillColor(15, 23, 42);
+    doc.roundedRect(x, y, w, 12, 4, 4, "F");
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(9);
+    doc.setFontSize(10);
     doc.setTextColor(255, 255, 255);
-    doc.text(title, x + 4, y + 6);
+    doc.text(title, x + 5, y + 7);
 
-    let rowY = y + 16;
+    let rowY = y + 20;
     rows.forEach((row, index) => {
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(7.8);
+      doc.setFontSize(8);
       doc.setTextColor(15, 23, 42);
-      doc.text(row[0], x + 4.5, rowY + 2);
+      doc.text(row[0], x + 5, rowY + 2);
       doc.setFont("helvetica", "normal");
-      doc.setFontSize(7.8);
+      doc.setFontSize(8);
       doc.setTextColor(55, 65, 81);
-      doc.text(String(row[1]), x + w - 4.5, rowY + 2, { align: "right" });
+      doc.text(String(row[1]), x + w - 5, rowY + 2, { align: "right" });
 
       if (index < rows.length - 1) {
         doc.setDrawColor(226, 232, 240);
-        doc.setLineWidth(0.18);
-        doc.line(x + 4, rowY + 5, x + w - 4, rowY + 5);
+        doc.setLineWidth(0.2);
+        doc.line(x + 5, rowY + 7, x + w - 5, rowY + 7);
       }
-      rowY += 10;
+      rowY += 13;
     });
   };
 
@@ -612,8 +612,7 @@ const downloadPDF = () => {
     x: leftX,
     y: infoY,
     w: sectionWidth,
-    h: 56,
-    fill: [15, 23, 42],
+    h: 72,
     title: "GENERAL DETAILS",
     rows: [
       ["LR Date", lrDate || "-"],
@@ -628,8 +627,7 @@ const downloadPDF = () => {
     x: leftX + sectionWidth + 8,
     y: infoY,
     w: sectionWidth,
-    h: 56,
-    fill: [34, 197, 94],
+    h: 72,
     title: "PARTY DETAILS",
     rows: [
       ["Voucher No", voucherNo],
@@ -644,8 +642,7 @@ const downloadPDF = () => {
     x: leftX + (sectionWidth + 8) * 2,
     y: infoY,
     w: sectionWidth,
-    h: 56,
-    fill: [15, 23, 42],
+    h: 72,
     title: "TRIP DATA",
     rows: [
       ["Dispatch", lrDate || "-"],
@@ -660,25 +657,34 @@ const downloadPDF = () => {
     startY: infoY + 66,
     margin: { left: leftX, right: leftX },
     theme: "grid",
+    tableLineWidth: 0.25,
+    tableLineColor: [15, 23, 42],
     styles: {
-      fontSize: 7.2,
-      cellPadding: 2.4,
-      lineWidth: 0.18,
+      fontSize: 7.6,
+      cellPadding: 3,
+      lineWidth: 0.25,
       lineColor: [148, 163, 184],
-      textColor: [30, 41, 59],
+      textColor: [15, 23, 42],
       fillColor: [255, 255, 255],
     },
     headStyles: {
-      fillColor: [56, 189, 248],
+      fillColor: [15, 23, 42],
       textColor: [255, 255, 255],
       fontStyle: "bold",
       halign: "center",
     },
     bodyStyles: {
       fillColor: [255, 255, 255],
-      textColor: [30, 41, 59],
+      textColor: [15, 23, 42],
+      minCellHeight: 10,
     },
     alternateRowStyles: { fillColor: [255, 255, 255] },
+    columnStyles: {
+      6: { halign: "right" },
+      7: { halign: "right" },
+      8: { halign: "right" },
+      9: { halign: "right" },
+    },
     head: [[
       "Bilti No",
       "Voucher",
@@ -712,8 +718,7 @@ const downloadPDF = () => {
     x: leftX,
     y: lowerY,
     w: lowerWidth,
-    h: 42,
-    fill: [15, 23, 42],
+    h: 52,
     title: "SHORTAGE",
     rows: [
       ["Shortage Qty", money(calculation.shortageQty)],
@@ -726,8 +731,7 @@ const downloadPDF = () => {
     x: leftX + lowerWidth + 8,
     y: lowerY,
     w: lowerWidth,
-    h: 42,
-    fill: [34, 197, 94],
+    h: 52,
     title: "CHARGES BREAKUP",
     rows: [
       ["Detain Charges", money(detain)],
@@ -740,8 +744,7 @@ const downloadPDF = () => {
     x: leftX + (lowerWidth + 8) * 2,
     y: lowerY,
     w: lowerWidth,
-    h: 42,
-    fill: [15, 23, 42],
+    h: 52,
     title: "PAYMENT DETAILS",
     rows: [
       ["Gross Freight", money(gross)],
