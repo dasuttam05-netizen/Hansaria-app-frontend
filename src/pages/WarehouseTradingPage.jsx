@@ -1240,7 +1240,6 @@ export default function WarehouseTradingPage() {
         payload.against_purchase_links = payload.against_purchase_enabled ? salePurchaseLinks : [];
         payload.create_against_purchase = payload.sale_type === "direct" && !editId;
         if (payload.sale_type === "direct") payload.warehouse_id = "";
-        if (editId) payload.deduction_only = true;
       }
       if (activeVoucherType === "payment") {
         payload.adjustments = paymentAdjustments
