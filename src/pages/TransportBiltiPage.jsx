@@ -546,10 +546,9 @@ const downloadPDF = () => {
   const payable = calculation.payableAmount;
   const netAmount = calculation.netAmount;
   const shortageQty = calculation.shortageQty;
+  const money = (v) => Number(v || 0).toFixed(2);
   const deductionTotal = Math.max(0, shortage + detain + others);
   const shortageDetail = `${money(outwardWeight)} - ${money(dispatchWeight)} = ${money(Math.max(outwardWeight - dispatchWeight, 0))}`;
-
-  const money = (v) => Number(v || 0).toFixed(2);
 
   doc.setFillColor(255, 255, 255);
   doc.rect(0, 0, pageWidth, pageHeight, "F");
