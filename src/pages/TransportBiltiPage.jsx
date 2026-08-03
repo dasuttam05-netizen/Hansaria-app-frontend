@@ -117,6 +117,9 @@ export default function TransportBiltiPage() {
     return Number.isFinite(n) ? n : 0;
   };
 
+  const getRecordId = (record) => record?._id || record?.id || "";
+  const sameId = (left, right) => String(left ?? "") === String(right ?? "");
+
   const numberToWords = (value) => {
     const number = Number(value);
     if (!Number.isFinite(number)) return "Zero";
@@ -348,11 +351,10 @@ export default function TransportBiltiPage() {
   );
 
   const selectedAccount = useMemo(() => {
-    const selectedCompany = companies.find((c) => String(c.id) === String(formData.company_id)) || null;
+    const selectedCompany = companies.find((c) => sameId(getRecordId(c), formData.company_id)) || null;
     if (formData.company_account_id) {
       return (
-        companyAccounts.find((a) => String(a.id) === String(formData.company_account_id)) ||
-        null
+        companyAccounts.find((a) => sameId(getRecordId(a), formData.company_account_id)) || null
       );
     }
     return (
@@ -472,20 +474,23 @@ export default function TransportBiltiPage() {
       }
 
       if (mode === "manual" && name === "company_id") {
-        const company = companies.find((c) => String(c.id) === String(value));
+        const company = companies.find((c) => sameId(getRecordId(c), value));
         next.company_name = company?.name || "";
+        next.company_id = getRecordId(company) || value;
         next.account_name = "";
-        const matchingAccounts = companyAccounts.filter(
-          (a) =>
-            String(a.company_id) === String(value) ||
+        const matchingAccounts = companyAccounts.filter((a) => {
+          const accountCompanyId = getRecordId({ _id: a.company_id, id: a.company_id });
+          return (
+            sameId(accountCompanyId, value) ||
             String(a.company_name || "").trim().toLowerCase() === String(company?.name || "").trim().toLowerCase()
-        );
-        next.company_account_id = matchingAccounts[0]?.id ? String(matchingAccounts[0].id) : "";
+          );
+        });
+        next.company_account_id = matchingAccounts[0] ? String(getRecordId(matchingAccounts[0])) : "";
         next.account_name = matchingAccounts[0]?.account_name || "";
       }
 
       if (mode === "manual" && name === "company_account_id") {
-        const acc = companyAccounts.find((a) => String(a.id) === String(value));
+        const acc = companyAccounts.find((a) => sameId(getRecordId(a), value));
         next.account_name = acc?.account_name || "";
       }
 
@@ -1099,7 +1104,7 @@ const downloadPDF = () => {
                     <select name="company_id" value={formData.company_id} onChange={handleChange} style={input}>
                       <option value="">Select Party</option>
                       {companies.map((c) => (
-                        <option key={c.id} value={c.id}>{c.name}</option>
+                        <option key={getRecordId(c)} value={getRecordId(c)}>{c.name}</option>
                       ))}
                     </select>
                   </div>
@@ -1110,23 +1115,25 @@ const downloadPDF = () => {
                       {companyAccounts
                         .filter((a) => {
                           if (!formData.company_id) return false;
-                          const company = companies.find((c) => String(c.id) === String(formData.company_id));
+                          const company = companies.find((c) => sameId(getRecordId(c), formData.company_id));
+                          const accountCompanyId = getRecordId({ _id: a.company_id, id: a.company_id });
                           return (
-                            String(a.company_id) === String(formData.company_id) ||
+                            sameId(accountCompanyId, formData.company_id) ||
                             String(a.company_name || "").trim().toLowerCase() === String(company?.name || "").trim().toLowerCase()
                           );
                         })
                         .map((a) => (
-                          <option key={a.id} value={a.id}>
+                          <option key={getRecordId(a)} value={getRecordId(a)}>
                             {a.account_name}
                             {a.company_name ? ` - ${a.company_name}` : ""}
                           </option>
                         ))}
                       {formData.company_id &&
                         companyAccounts.filter((a) => {
-                          const company = companies.find((c) => String(c.id) === String(formData.company_id));
+                          const company = companies.find((c) => sameId(getRecordId(c), formData.company_id));
+                          const accountCompanyId = getRecordId({ _id: a.company_id, id: a.company_id });
                           return (
-                            String(a.company_id) === String(formData.company_id) ||
+                            sameId(accountCompanyId, formData.company_id) ||
                             String(a.company_name || "").trim().toLowerCase() === String(company?.name || "").trim().toLowerCase()
                           );
                         }).length === 0 && <option value="" disabled>No account found</option>}
