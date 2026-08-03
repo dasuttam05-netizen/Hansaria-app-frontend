@@ -6781,3 +6781,4 @@ const erpInput = {
   fontSize: 12,
   borderRadius: 0,
   boxSizing: "border-box",
+};
