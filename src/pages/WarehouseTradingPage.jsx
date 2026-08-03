@@ -1295,7 +1295,8 @@ export default function WarehouseTradingPage() {
       setShowPaymentAdjustPopup(false);
       setShowReceiptAdjustPopup(false);
       setEditId(null);
-      loadVouchers();
+      await loadVouchers();
+      if (activeTab === "reports") await loadReport();
       fetchNextVoucherNo(activeVoucherType);
 
       if (activeVoucherType === "purchase") {
@@ -1425,6 +1426,10 @@ export default function WarehouseTradingPage() {
     });
     setEditId(voucherId);
     window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const handleSelectPurchaseLedgerBill = (rowKey) => {
+    setSelectedLedgerBillId(rowKey);
   };
 
   const handleGeneratePDF = async (voucherId) => {
@@ -4585,7 +4590,11 @@ export default function WarehouseTradingPage() {
                           const rowKey = String(row.purchase_id || row.voucher_no);
                           const isSelected = selectedBill && rowKey === String(selectedBill.purchase_id || selectedBill.voucher_no);
                           return (
-                            <tr key={rowKey} style={{ background: isSelected ? "#e0f2fe" : "#fff" }}>
+                            <tr
+                              key={rowKey}
+                              style={{ background: isSelected ? "#e0f2fe" : "#fff", cursor: "pointer" }}
+                              onClick={() => handleSelectPurchaseLedgerBill(rowKey)}
+                            >
                               <td style={td}>{row.voucher_no || "-"}</td>
                               <td style={td}>{row.farmer_name || getFarmerName(row) || "-"}</td>
                               <td style={td}>{getAccountName(row)}</td>
@@ -4593,7 +4602,10 @@ export default function WarehouseTradingPage() {
                               <td style={td}>
                                 <button
                                   type="button"
-                                  onClick={() => setSelectedLedgerBillId(rowKey)}
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    handleSelectPurchaseLedgerBill(rowKey);
+                                  }}
                                   style={linkButtonStyle}
                                 >
                                   {formatMoney(row.payment_amount || 0)}
@@ -4615,8 +4627,74 @@ export default function WarehouseTradingPage() {
                   </div>
 
                   <div style={paymentDetailBoxStyle}>
-                    <strong>{selectedBill?.voucher_no || "Select a bill"}</strong>
-                    <div style={{ color: "#64748b", fontSize: 12, margin: "4px 0 8px" }}>Payment details</div>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 10 }}>
+                      <div>
+                        <strong>{selectedBill?.voucher_no || "Select a bill"}</strong>
+                        <div style={{ color: "#64748b", fontSize: 12, margin: "4px 0 8px" }}>Purchase bill details</div>
+                      </div>
+                      {selectedBill && !selectedBill.legacy_purchase_entry && (
+                        <button
+                          type="button"
+                          onClick={() => handleEditPurchaseReport(selectedBill)}
+                          style={{ ...btnAction, background: "#2563eb" }}
+                        >
+                          Edit Purchase
+                        </button>
+                      )}
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10, marginBottom: 10 }}>
+                      <div style={smartInfoBoxStyle}>
+                        <span>Purchase Amount</span>
+                        <strong>Rs.{formatMoney(selectedBill?.purchase_amount || 0)}</strong>
+                      </div>
+                      <div style={smartInfoBoxStyle}>
+                        <span>Payment Amount</span>
+                        <strong>Rs.{formatMoney(selectedBill?.payment_amount || 0)}</strong>
+                      </div>
+                      <div style={smartInfoBoxStyle}>
+                        <span>Bill Balance</span>
+                        <strong>Rs.{formatMoney(selectedBill?.bill_balance || 0)}</strong>
+                      </div>
+                      <div style={smartInfoBoxStyle}>
+                        <span>Round Off</span>
+                        <strong>Rs.{formatMoney(selectedBill?.round_off || 0)}</strong>
+                      </div>
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10, marginBottom: 14 }}>
+                      <div style={smartInfoBoxStyle}>
+                        <span>Freight / Transport</span>
+                        <strong>Rs.{formatMoney(selectedBill?.transport_charge || selectedBill?.freight || 0)}</strong>
+                      </div>
+                      <div style={smartInfoBoxStyle}>
+                        <span>Labour</span>
+                        <strong>Rs.{formatMoney(selectedBill?.labour || 0)}</strong>
+                      </div>
+                      <div style={smartInfoBoxStyle}>
+                        <span>Bags Claim</span>
+                        <strong>Rs.{formatMoney(selectedBill?.bags_claim || 0)}</strong>
+                      </div>
+                      <div style={smartInfoBoxStyle}>
+                        <span>Other Deductions</span>
+                        <strong>Rs.{formatMoney(
+                          Number(selectedBill?.dhalta || 0) + Number(selectedBill?.moisture || 0) + Number(selectedBill?.dunki || 0) + Number(selectedBill?.fungus || 0) + Number(selectedBill?.discolour || 0) + Number(selectedBill?.others || 0)
+                        )}</strong>
+                      </div>
+                    </div>
+                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 8 }}>
+                      <div style={purchaseDetailBoxStyle}>
+                        <div style={{ fontSize: 12, color: "#64748b", marginBottom: 6 }}>Quantity / Rate</div>
+                        <div>{formatDecimal4(selectedBill?.total_quantity || selectedBill?.net_weight || 0)} units</div>
+                        <div>{formatMoney(selectedBill?.rate || 0)} per unit</div>
+                      </div>
+                      <div style={purchaseDetailBoxStyle}>
+                        <div style={{ fontSize: 12, color: "#64748b", marginBottom: 6 }}>Purchase Deductions</div>
+                        <div>Claim: Rs.{formatMoney(selectedBill?.bags_claim || 0)}</div>
+                        <div>Labour: Rs.{formatMoney(selectedBill?.labour || 0)}</div>
+                        <div>Transport: Rs.{formatMoney(selectedBill?.transport_charge || selectedBill?.freight || 0)}</div>
+                        <div>Round Off: Rs.{formatMoney(selectedBill?.round_off || 0)}</div>
+                      </div>
+                    </div>
+                    <div style={{ color: "#64748b", fontSize: 12, marginTop: 10 }}>Payment details</div>
                     {(selectedBill?.payment_details || []).length > 0 ? (
                       (selectedBill.payment_details || []).map((detail, index) => (
                         <div key={`${detail.payment_voucher_no}-${index}`} style={paymentDetailRowStyle}>
@@ -6703,81 +6781,3 @@ const erpInput = {
   fontSize: 12,
   borderRadius: 0,
   boxSizing: "border-box",
-};
-const erpFocusInput = { borderColor: "#4d90fe", boxShadow: "inset 0 0 0 1px rgba(77,144,254,0.15)" };
-const erpSectionLabel = { fontSize: 12, color: "#111827", margin: "3px 0 2px" };
-const erpGridWrap = {
-  overflowX: "auto",
-  border: "1px solid #c3d8d5",
-  background: "#fff",
-};
-const erpItemsTable = { width: "100%", minWidth: 1320, borderCollapse: "collapse", tableLayout: "fixed", fontSize: 12 };
-const erpTh = {
-  border: "1px solid #c3d8d5",
-  background: "#e8f3f1",
-  color: "#111827",
-  padding: "2px 4px",
-  fontWeight: 500,
-  textAlign: "left",
-  height: 20,
-  whiteSpace: "nowrap",
-};
-const erpTd = {
-  border: "1px solid #c3d8d5",
-  background: "#fff",
-  color: "#111827",
-  padding: 0,
-  height: 22,
-  lineHeight: "20px",
-  verticalAlign: "middle",
-};
-const erpCellInput = {
-  width: "100%",
-  height: 21,
-  border: "none",
-  background: "transparent",
-  padding: "1px 4px",
-  fontSize: 12,
-  boxSizing: "border-box",
-  outline: "none",
-};
-const erpReadOnlyCell = { background: "#f5f7fb", color: "#111827", fontWeight: 700 };
-const erpMiddleBar = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
-  gap: 12,
-  fontSize: 12,
-  padding: "5px 2px 3px",
-};
-const erpBottomGrid = {
-  display: "grid",
-  gridTemplateColumns: "minmax(420px, 1fr) minmax(420px, 1fr)",
-  gap: 10,
-  alignItems: "start",
-};
-const erpMiniTable = { width: "100%", borderCollapse: "collapse", tableLayout: "fixed", fontSize: 12, background: "#fff" };
-const erpRemarksRow = { display: "flex", alignItems: "stretch", gap: 6, marginTop: 8 };
-const erpTextarea = {
-  flex: 1,
-  minHeight: 48,
-  border: "1px solid #c9c9c9",
-  resize: "vertical",
-  padding: 6,
-  fontSize: 12,
-  fontFamily: "Arial, Segoe UI, sans-serif",
-};
-const erpTotalPanel = {
-  marginTop: 8,
-  minHeight: 46,
-  border: "1px solid #c9c9d5",
-  background: "#e8f3f1",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  padding: "0 14px",
-  fontWeight: 900,
-  fontSize: 18,
-};
-const erpTotalLabel = { letterSpacing: 8, color: "#2f542c" };
-const erpTotalAmount = { letterSpacing: 0, color: "#2f542c", fontSize: 30 };
