@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
+import { FaSave, FaEdit, FaTrash, FaWhatsapp, FaTimes, FaFilePdf } from "react-icons/fa";
 import { consigneeHasBuyer } from "../utils/consigneeBuyers";
 
 export default function TransportBiltiPage() {
@@ -589,7 +590,7 @@ export default function TransportBiltiPage() {
     }
   };
 
-const downloadPDF = () => {
+const buildTransportPdf = () => {
   const doc = new jsPDF("l", "mm", "a4");
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
@@ -616,7 +617,6 @@ const downloadPDF = () => {
   const advance = num(formData.advance_amount);
   const payable = calculation.payableAmount;
   const netAmount = calculation.netAmount;
-  const shortageQty = calculation.shortageQty;
   const money = (v) => Number(v || 0).toFixed(2);
   const deductionTotal = Math.max(0, shortage + detain + others);
   const shortageDetail = `${money(outwardWeight)} - ${money(dispatchWeight)} = ${money(Math.max(outwardWeight - dispatchWeight, 0))}`;
@@ -848,15 +848,51 @@ const downloadPDF = () => {
   doc.setFontSize(7.5);
   doc.text("This is a system generated document.", leftX, footerY + 8);
 
+  return doc;
+};
+
+const downloadPDF = () => {
+  const voucherNo = formData.voucher_no || meta?.outward_voucher_no || meta?.voucher_no || "-";
+  const billNo = meta?.bilti_no || (formData.id ? `BLT-${formData.id}` : "DRAFT");
+  const doc = buildTransportPdf();
   doc.save(`Transport_Payment_Advice_${voucherNo !== "-" ? voucherNo : billNo}.pdf`);
+};
+
+const shareToWhatsApp = async () => {
+  const voucherNo = formData.voucher_no || meta?.outward_voucher_no || meta?.voucher_no || "-";
+  const billNo = meta?.bilti_no || (formData.id ? `BLT-${formData.id}` : "DRAFT");
+  const payable = calculation.payableAmount;
+  const pdfName = `Transport_Payment_Advice_${voucherNo !== "-" ? voucherNo : billNo}.pdf`;
+  const doc = buildTransportPdf();
+  const pdfBlob = doc.output("blob");
+  const pdfFile = new File([pdfBlob], pdfName, { type: "application/pdf" });
+  const textMessage = `Transport Payment Advice\nBill No: ${billNo}\nVoucher: ${voucherNo}\nPayable Amount: ${Number(payable || 0).toFixed(2)}`;
+
+  try {
+    if (navigator.share && navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
+      await navigator.share({
+        title: "Transport Payment Advice",
+        text: textMessage,
+        files: [pdfFile],
+      });
+      return;
+    }
+  } catch (err) {
+    console.error("WhatsApp share failed", err);
+  }
+
+  window.open(`https://wa.me/?text=${encodeURIComponent(textMessage)}`, "_blank");
 };
 
 
 
   return (
     <div style={{ padding: 20, background: "#f8fafc", minHeight: "100vh", fontFamily: "Segoe UI, Arial, sans-serif" }}>
-      <div style={{ ...card, marginBottom: 16 }}>
+      <div style={{ ...card, marginBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
         <h2 style={{ margin: 0, color: "#0f172a" }}>Create Transport Bilti</h2>
+        <button onClick={resetForm} style={{ ...btn, background: "#475569", padding: "8px 14px", display: "inline-flex", alignItems: "center", gap: 8 }}>
+          <FaTimes /> Close
+        </button>
       </div>
 
       <div style={{ ...card, marginBottom: 16 }}>
@@ -1288,18 +1324,21 @@ const downloadPDF = () => {
             <div style={card}><div>Payable Amount</div><div style={{ fontSize: 24, fontWeight: 700 }}>{calculation.payableAmount.toFixed(2)}</div></div>
           </div>
 
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
-            <button onClick={saveBilti} style={{ ...btn, background: "#16a34a" }}>
-              Save Bilti
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, flexWrap: "wrap" }}>
+            <button onClick={saveBilti} style={{ ...btn, background: "#16a34a", display: "inline-flex", alignItems: "center", gap: 8 }}>
+              <FaSave /> Save
             </button>
-            <button onClick={editBilti} style={{ ...btn, background: "#2563eb" }}>
-              Edit Bilti
+            <button onClick={editBilti} style={{ ...btn, background: "#2563eb", display: "inline-flex", alignItems: "center", gap: 8 }}>
+              <FaEdit /> Edit
             </button>
-            <button onClick={deleteBilti} style={{ ...btn, background: "#dc2626" }}>
-              Delete
+            <button onClick={deleteBilti} style={{ ...btn, background: "#dc2626", display: "inline-flex", alignItems: "center", gap: 8 }}>
+              <FaTrash /> Delete
             </button>
-            <button onClick={downloadPDF} style={{ ...btn, background: "#475569" }}>
-              PDF
+            <button onClick={downloadPDF} style={{ ...btn, background: "#475569", display: "inline-flex", alignItems: "center", gap: 8 }}>
+              <FaFilePdf /> PDF
+            </button>
+            <button onClick={shareToWhatsApp} style={{ ...btn, background: "#25D366", display: "inline-flex", alignItems: "center", gap: 8 }}>
+              <FaWhatsapp /> WhatsApp
             </button>
           </div>
         </>
