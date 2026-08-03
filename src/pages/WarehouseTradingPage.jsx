@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
-import { useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { FaFilePdf, FaWhatsapp } from "react-icons/fa";
+import PageBackCloseActions from "../components/PageBackCloseActions";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { hasPermission, loadSession } from "../utils/auth";
@@ -134,6 +135,7 @@ const purchaseParticulars = [
 
 export default function WarehouseTradingPage() {
   const { user } = loadSession();
+  const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState("vouchers");
   const [activeVoucherType, setActiveVoucherType] = useState("purchase");
@@ -1320,6 +1322,8 @@ export default function WarehouseTradingPage() {
   };
 
   const isPurchaseVoucher = activeVoucherType === "purchase";
+  const isPaymentVoucher = activeVoucherType === "payment";
+  const isReceiptVoucher = activeVoucherType === "receipt";
   const isSaleVoucher = activeVoucherType === "sale";
 
   const handleDeleteVoucher = async (voucherId) => {
@@ -1681,6 +1685,116 @@ export default function WarehouseTradingPage() {
       alert(err?.response?.data?.error || "Purchase import failed");
     } finally {
       setImportingPurchase(false);
+    }
+  };
+
+  const downloadPaymentImportTemplate = async () => {
+    try {
+      const response = await axios.get("/api/wh-vouchers/payment/import-template", {
+        responseType: "blob",
+      });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", "payment_voucher_import_format.xlsx");
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error(err);
+      alert(err?.response?.data?.error || "Failed to download payment format");
+    }
+  };
+
+  const handlePaymentExcelImport = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    const fileName = file.name.toLowerCase();
+    if (!fileName.endsWith(".xlsx") && !fileName.endsWith(".xls")) {
+      alert("Please select an Excel file (.xlsx or .xls)");
+      return;
+    }
+    const uploadForm = new FormData();
+    uploadForm.append("file", file);
+    setImportingPayment(true);
+    try {
+      const res = await axios.post("/api/wh-vouchers/payment/import-xlsx", uploadForm, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      const imported = Number(res.data?.imported || 0);
+      const failed = Number(res.data?.failed || 0);
+      const errors = Array.isArray(res.data?.errors) ? res.data.errors : [];
+      const errorText = errors
+        .slice(0, 8)
+        .map((item) => `Row ${item.row}: ${item.error}`)
+        .join("\n");
+      alert(`Payment import complete.\nImported: ${imported}\nFailed: ${failed}${errorText ? `\n\n${errorText}` : ""}`);
+      setActiveVoucherType("payment");
+      await loadVouchers();
+      if (activeTab === "reports") await loadReport();
+      fetchNextVoucherNo("payment");
+    } catch (err) {
+      console.error(err);
+      alert(err?.response?.data?.error || "Payment import failed");
+    } finally {
+      setImportingPayment(false);
+    }
+  };
+
+  const downloadReceiptImportTemplate = async () => {
+    try {
+      const response = await axios.get("/api/wh-vouchers/receipt/import-template", {
+        responseType: "blob",
+      });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", "receipt_voucher_import_format.xlsx");
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error(err);
+      alert(err?.response?.data?.error || "Failed to download receipt format");
+    }
+  };
+
+  const handleReceiptExcelImport = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    const fileName = file.name.toLowerCase();
+    if (!fileName.endsWith(".xlsx") && !fileName.endsWith(".xls")) {
+      alert("Please select an Excel file (.xlsx or .xls)");
+      return;
+    }
+    const uploadForm = new FormData();
+    uploadForm.append("file", file);
+    setImportingReceipt(true);
+    try {
+      const res = await axios.post("/api/wh-vouchers/receipt/import-xlsx", uploadForm, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      const imported = Number(res.data?.imported || 0);
+      const failed = Number(res.data?.failed || 0);
+      const errors = Array.isArray(res.data?.errors) ? res.data.errors : [];
+      const errorText = errors
+        .slice(0, 8)
+        .map((item) => `Row ${item.row}: ${item.error}`)
+        .join("\n");
+      alert(`Receipt import complete.\nImported: ${imported}\nFailed: ${failed}${errorText ? `\n\n${errorText}` : ""}`);
+      setActiveVoucherType("receipt");
+      await loadVouchers();
+      if (activeTab === "reports") await loadReport();
+      fetchNextVoucherNo("receipt");
+    } catch (err) {
+      console.error(err);
+      alert(err?.response?.data?.error || "Receipt import failed");
+    } finally {
+      setImportingReceipt(false);
     }
   };
 
@@ -2943,26 +3057,69 @@ export default function WarehouseTradingPage() {
 
           <div style={card}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 12 }}>
-              <h3 style={{ margin: 0 }}>{editId ? "Edit" : "New"} {activeVoucherType.charAt(0).toUpperCase() + activeVoucherType.slice(1)} Voucher</h3>
-              {isPurchaseVoucher && (
-                hasPermission(user, "warehouse.trading.purchase.create") ||
-                hasPermission(user, "warehouse.trading.purchase.edit") ||
-                hasPermission(user, "warehouse.trading.purchase.delete")
+              <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                <h3 style={{ margin: 0 }}>{editId ? "Edit" : "New"} {activeVoucherType.charAt(0).toUpperCase() + activeVoucherType.slice(1)} Voucher</h3>
+                <PageBackCloseActions navigate={navigate} size="compact" />
+              </div>
+              {(isPurchaseVoucher || isPaymentVoucher || isReceiptVoucher) && (
+                (
+                  (isPurchaseVoucher && (hasPermission(user, "warehouse.trading.purchase.create") || hasPermission(user, "warehouse.trading.purchase.edit") || hasPermission(user, "warehouse.trading.purchase.delete"))) ||
+                  (isPaymentVoucher && (hasPermission(user, "warehouse.trading.payment.create") || hasPermission(user, "warehouse.trading.payment.edit") || hasPermission(user, "warehouse.trading.payment.delete"))) ||
+                  (isReceiptVoucher && (hasPermission(user, "warehouse.trading.receipt.create") || hasPermission(user, "warehouse.trading.receipt.edit") || hasPermission(user, "warehouse.trading.receipt.delete")))
+                )
               ) && (
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                  <button type="button" onClick={downloadPurchaseImportTemplate} style={{ ...btnAction, background: "#0f766e" }}>
-                    Download Excel Format
-                  </button>
-                  <label style={{ ...btnAction, background: importingPurchase ? "#94a3b8" : "#2563eb", cursor: importingPurchase ? "not-allowed" : "pointer" }}>
-                    {importingPurchase ? "Importing..." : "Import Excel"}
-                    <input
-                      type="file"
-                      accept=".xlsx,.xls"
-                      onChange={handlePurchaseExcelImport}
-                      disabled={importingPurchase}
-                      style={{ display: "none" }}
-                    />
-                  </label>
+                  {isPurchaseVoucher && (
+                    <>
+                      <button type="button" onClick={downloadPurchaseImportTemplate} style={{ ...btnAction, background: "#0f766e" }}>
+                        Download Excel Format
+                      </button>
+                      <label style={{ ...btnAction, background: importingPurchase ? "#94a3b8" : "#2563eb", cursor: importingPurchase ? "not-allowed" : "pointer" }}>
+                        {importingPurchase ? "Importing..." : "Import Excel"}
+                        <input
+                          type="file"
+                          accept=".xlsx,.xls"
+                          onChange={handlePurchaseExcelImport}
+                          disabled={importingPurchase}
+                          style={{ display: "none" }}
+                        />
+                      </label>
+                    </>
+                  )}
+                  {isPaymentVoucher && (
+                    <>
+                      <button type="button" onClick={downloadPaymentImportTemplate} style={{ ...btnAction, background: "#0f766e" }}>
+                        Download Excel Format
+                      </button>
+                      <label style={{ ...btnAction, background: importingPayment ? "#94a3b8" : "#2563eb", cursor: importingPayment ? "not-allowed" : "pointer" }}>
+                        {importingPayment ? "Importing..." : "Import Excel"}
+                        <input
+                          type="file"
+                          accept=".xlsx,.xls"
+                          onChange={handlePaymentExcelImport}
+                          disabled={importingPayment}
+                          style={{ display: "none" }}
+                        />
+                      </label>
+                    </>
+                  )}
+                  {isReceiptVoucher && (
+                    <>
+                      <button type="button" onClick={downloadReceiptImportTemplate} style={{ ...btnAction, background: "#0f766e" }}>
+                        Download Excel Format
+                      </button>
+                      <label style={{ ...btnAction, background: importingReceipt ? "#94a3b8" : "#2563eb", cursor: importingReceipt ? "not-allowed" : "pointer" }}>
+                        {importingReceipt ? "Importing..." : "Import Excel"}
+                        <input
+                          type="file"
+                          accept=".xlsx,.xls"
+                          onChange={handleReceiptExcelImport}
+                          disabled={importingReceipt}
+                          style={{ display: "none" }}
+                        />
+                      </label>
+                    </>
+                  )}
                 </div>
               )}
             </div>
