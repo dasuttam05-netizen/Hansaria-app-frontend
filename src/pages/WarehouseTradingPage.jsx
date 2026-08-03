@@ -120,7 +120,6 @@ const purchaseDeductionFields = [
   { key: "fungus", label: "Fungus" },
   { key: "discolour", label: "Discolour" },
   { key: "others", label: "Others" },
-  { key: "transport_charge", label: "Freight" },
 ];
 
 const purchaseParticulars = [
@@ -3111,27 +3110,27 @@ export default function WarehouseTradingPage() {
                     <div className="purchase-voucher-bottom-panel" style={{ display: "grid", gap: 12 }}>
                       <div style={{ border: "1px solid #dbe4ef", borderRadius: 10, background: "#fff", overflow: "hidden" }}>
                         <div style={{ padding: "10px 12px", background: "#0b2a5b", color: "#fff", fontWeight: 800 }}>Journal / Deduction Details</div>
-                        <div style={{ padding: 12, display: "grid", gap: 10 }}>
-                          <div style={erpRow}>
-                            <label style={erpLabel}>Claim</label>
-                            <input name="bags_claim" type="number" step="0.0001" value={formData.bags_claim} onChange={handleChange} style={erpInput} />
-                          </div>
-                          <div style={erpRow}>
-                            <label style={erpLabel}>Labour</label>
-                            <input name="labour" type="number" step="0.0001" value={formData.labour} onChange={handleChange} style={erpInput} />
-                          </div>
-                          <div style={erpRow}>
-                            <label style={erpLabel}>Freight</label>
-                            <input name="transport_charge" type="number" step="0.0001" value={formData.transport_charge} onChange={handleChange} style={erpInput} />
-                          </div>
-                          <div style={erpRow}>
-                            <label style={erpLabel}>Round Off</label>
-                            <input name="round_off" type="number" step="0.0001" value={formData.round_off} onChange={handleChange} style={erpInput} />
-                          </div>
-                          <div style={{ ...erpRow, marginBottom: 0 }}>
-                            <label style={erpLabel}>Total Deduction</label>
-                            <input value={formatMoney(purchaseTotalDeduction)} readOnly style={{ ...erpInput, background: "#f8fafc", fontWeight: 800 }} />
-                          </div>
+                        <div style={{ overflowX: "auto" }}>
+                          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                            <thead>
+                              <tr>
+                                <th style={{ ...erpTh, background: "#eef4ff", textAlign: "center" }}>Claim</th>
+                                <th style={{ ...erpTh, background: "#eef4ff", textAlign: "center" }}>Labour</th>
+                                <th style={{ ...erpTh, background: "#eef4ff", textAlign: "center" }}>Freight</th>
+                                <th style={{ ...erpTh, background: "#eef4ff", textAlign: "center" }}>Round Off</th>
+                                <th style={{ ...erpTh, background: "#eef4ff", textAlign: "center" }}>Total Deduction</th>
+                              </tr>
+                            </thead>
+                            <tbody>
+                              <tr>
+                                <td style={erpTd}><input name="bags_claim" type="number" step="0.0001" value={formData.bags_claim} onChange={handleChange} style={{ ...erpInput, width: "100%" }} /></td>
+                                <td style={erpTd}><input name="labour" type="number" step="0.0001" value={formData.labour} onChange={handleChange} style={{ ...erpInput, width: "100%" }} /></td>
+                                <td style={erpTd}><input name="transport_charge" type="number" step="0.0001" value={formData.transport_charge} onChange={handleChange} style={{ ...erpInput, width: "100%" }} /></td>
+                                <td style={erpTd}><input name="round_off" type="number" step="0.0001" value={formData.round_off} onChange={handleChange} style={{ ...erpInput, width: "100%" }} /></td>
+                                <td style={erpTd}><input value={formatMoney(purchaseTotalDeduction)} readOnly style={{ ...erpInput, width: "100%", background: "#f8fafc", fontWeight: 800 }} /></td>
+                              </tr>
+                            </tbody>
+                          </table>
                         </div>
                       </div>
 
