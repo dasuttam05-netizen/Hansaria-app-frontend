@@ -618,7 +618,9 @@ const buildTransportPdf = () => {
   const payable = calculation.payableAmount;
   const netAmount = calculation.netAmount;
   const money = (v) => Number(v || 0).toFixed(2);
-  const deductionTotal = Math.max(0, shortage + detain + others);
+  const claimAmount = Math.max(0, shortage);
+  const addOnCharges = Math.max(0, detain + others);
+  const netFreight = Math.max(0, gross - claimAmount + addOnCharges);
   const shortageDetail = `${money(outwardWeight)} - ${money(dispatchWeight)} = ${money(Math.max(outwardWeight - dispatchWeight, 0))}`;
 
   doc.setFillColor(255, 255, 255);
@@ -765,9 +767,9 @@ const buildTransportPdf = () => {
   let rowY = sectionY + 18;
 
   const leftRows = [
-    ["Shortage Qty", shortageDetail, money(shortage)],
+    ["Shortage Qty", shortageDetail, ""],
     ["Free KG", formData.shortage_free_kg || "-", ""],
-    ["Claim Amt", "", money(shortage)],
+    ["Claim Amount", "", money(claimAmount)],
     ["Detain Charges", "", money(detain)],
     ["Other Charges", "", money(others)],
   ];
@@ -788,8 +790,8 @@ const buildTransportPdf = () => {
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8);
   doc.setTextColor(15, 23, 42);
-  doc.text("Total Deductions", leftCol1, sectionY + sectionHeight - 8);
-  doc.text(money(deductionTotal), leftCol3, sectionY + sectionHeight - 8, { align: "right" });
+  doc.text("Total Claim", leftCol1, sectionY + sectionHeight - 8);
+  doc.text(money(claimAmount), leftCol3, sectionY + sectionHeight - 8, { align: "right" });
 
   const rightCol1 = leftX + sectionWidth + 15;
   const rightCol2 = leftX + sectionWidth * 2 + 6;
@@ -797,8 +799,10 @@ const buildTransportPdf = () => {
 
   const rightRows = [
     ["Gross Freight", money(gross)],
-    ["Less: Total Deductions", money(deductionTotal)],
-    ["Net Freight", money(netAmount)],
+    ["Less: Claim Amount", money(claimAmount)],
+    ["Add: Detain Charges", money(detain)],
+    ["Add: Other Charges", money(others)],
+    ["Net Freight", money(netFreight)],
     ["TDS Amount", money(tds)],
     ["Advance Paid", money(advance)],
   ];
