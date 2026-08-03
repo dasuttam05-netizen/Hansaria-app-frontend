@@ -3019,6 +3019,8 @@ export default function WarehouseTradingPage() {
     doc.save(`stock-qty-details-${new Date().toISOString().slice(0, 10)}.pdf`);
   };
 
+  const noTradingAccess = !allowedVoucherTypes.length && !allowedReports.length;
+
   return (
     <div className="warehouse-trading-page" style={{ fontFamily: "Segoe UI, Arial, sans-serif", padding: "16px" }}>
       <div className="warehouse-trading-main-header" style={headerRow}>
@@ -3048,7 +3050,14 @@ export default function WarehouseTradingPage() {
         </div>
       </div>
 
-      {activeTab === "vouchers" ? (
+      {noTradingAccess ? (
+        <div style={{ ...card, textAlign: "center", padding: "40px" }}>
+          <h3 style={{ marginBottom: 12 }}>Access Denied</h3>
+          <p style={{ margin: 0, color: "#475569" }}>
+            You do not have permissions to view any warehouse trading vouchers or reports.
+          </p>
+        </div>
+      ) : activeTab === "vouchers" ? (
         <>
           <div style={voucherTypeRow}>
             {allowedVoucherTypes.map((type) => (
