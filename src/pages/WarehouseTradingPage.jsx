@@ -578,9 +578,15 @@ export default function WarehouseTradingPage() {
     if (validVoucherTypes.includes(requestedType)) {
       setActiveTab("vouchers");
       setActiveVoucherType(requestedType);
-    } else if (requestedTab === "reports" || validReports.includes(requestedReport)) {
+    } else if (requestedTab === "reports" && validReports.length) {
       setActiveTab("reports");
       setActiveReport(validReports.includes(requestedReport) ? requestedReport : validReports[0] || "sale");
+    } else if (requestedTab === "reports" && !validReports.length && validVoucherTypes.length) {
+      setActiveTab("vouchers");
+      setActiveVoucherType(validVoucherTypes[0]);
+    } else if (validReports.includes(requestedReport)) {
+      setActiveTab("reports");
+      setActiveReport(requestedReport);
     } else if (validVoucherTypes.length) {
       setActiveTab("vouchers");
       setActiveVoucherType(validVoucherTypes[0]);
