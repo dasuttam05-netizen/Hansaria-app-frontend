@@ -67,13 +67,19 @@ export default function PageBackCloseActions({
           ...buttonBaseStyle,
           background: "#dc2626",
           color: "#fff",
-          border: "none",
+          border: "1px solid #b91c1c",
           cursor: "pointer",
-          fontWeight: 700,
+          fontWeight: 800,
           whiteSpace: "nowrap",
+          display: "inline-flex",
+          alignItems: "center",
+          gap: 6,
+          boxShadow: "0 2px 6px rgba(220, 38, 38, 0.22)",
         }}
+        title="Close page"
       >
-        Close
+        <span aria-hidden="true" style={{ fontSize: 15, lineHeight: 1 }}>✕</span>
+        <span>Close</span>
       </button>
     </div>
   );
