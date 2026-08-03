@@ -944,10 +944,15 @@ export default function WarehouseTradingPage() {
       }
       if (
         activeVoucherType === "sale" &&
-        !editId &&
-        ["gross_weight", "tare_weight", "quantity", "unloading_qty", "shortage_quantity", "rate"].includes(name)
+        ["dispatch_qty", "gross_weight", "tare_weight", "quantity", "unloading_qty", "shortage_quantity", "rate"].includes(name)
       ) {
-        next.amount = saleGrossAmountFromData(next).toFixed(2);
+        const derivedDispatchQty = saleDispatchQtyFromData(next);
+        const derivedShortageQty = Math.max(derivedDispatchQty - toNumber(next.unloading_qty), 0);
+        next.shortage_quantity = formatDecimal4(derivedShortageQty);
+        next.shortage_amount = formatMoney(derivedShortageQty * toNumber(next.rate));
+        if (!editId) {
+          next.amount = saleGrossAmountFromData(next).toFixed(2);
+        }
       }
       if (activeVoucherType === "sale" && name === "cd_percent") {
         const gross = saleGrossAmountFromData(next);
