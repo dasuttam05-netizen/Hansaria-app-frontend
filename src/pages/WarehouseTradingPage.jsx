@@ -184,6 +184,8 @@ export default function WarehouseTradingPage() {
   const [showSaleBillWise, setShowSaleBillWise] = useState(false);
   const [selectedSaleLedgerBillId, setSelectedSaleLedgerBillId] = useState("");
   const [importingPurchase, setImportingPurchase] = useState(false);
+  const [importingPayment, setImportingPayment] = useState(false);
+  const [importingReceipt, setImportingReceipt] = useState(false);
   const [voucherNumberLoading, setVoucherNumberLoading] = useState(false);
   const [showSaleDeductionModal, setShowSaleDeductionModal] = useState(false);
   const [saleBillSearch, setSaleBillSearch] = useState("");
