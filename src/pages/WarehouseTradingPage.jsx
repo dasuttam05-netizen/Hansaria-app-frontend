@@ -2596,14 +2596,14 @@ export default function WarehouseTradingPage() {
   const purchaseBillRows = activeReport === "purchase-party-ledger"
     ? displayReportData.filter((row) => row.row_type === "entry" && row.voucher_type === "Purchase")
     : [];
-  const selectedBill = purchaseBillRows.find((row) => String(row.purchase_id || row.voucher_no) === String(selectedLedgerBillId)) || purchaseBillRows[0] || null;
+  const selectedBill = purchaseBillRows.find((row) => String(row.purchase_id || row.voucher_no) === String(selectedLedgerBillId)) || null;
   const saleBillRows = activeReport === "sale-party-ledger"
     ? displayReportData.filter((row) => row.row_type === "entry" && row.voucher_type === "Sale")
     : [];
   const saleJourneyRows = activeReport === "sale-journey"
     ? (Array.isArray(reportData) ? reportData : [])
     : [];
-  const selectedSaleBill = saleBillRows.find((row) => String(row.sale_id || row.voucher_no) === String(selectedSaleLedgerBillId)) || saleBillRows[0] || null;
+  const selectedSaleBill = saleBillRows.find((row) => String(row.sale_id || row.voucher_no) === String(selectedSaleLedgerBillId)) || null;
   const selectedSaleJourneySeed = activeReport === "sale-journey" ? (saleJourneyRows[0] || null) : selectedSaleBill;
   const selectedSaleJourneyKey = String(selectedSaleJourneySeed?.journey_token || selectedSaleJourneySeed?.journey_id || selectedSaleJourneySeed?.journey_group_no || "").trim();
   const selectedSaleJourneyRows = activeReport === "sale-journey"
