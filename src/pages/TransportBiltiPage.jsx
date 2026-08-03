@@ -117,71 +117,8 @@ export default function TransportBiltiPage() {
     return Number.isFinite(n) ? n : 0;
   };
 
-  const numberToWords = (value) => {
-    const number = Number(value);
-    if (!Number.isFinite(number)) return "Zero";
-    const absolute = Math.abs(number);
-    const integerPart = Math.floor(absolute);
-    const fractionalPart = Math.round((absolute - integerPart) * 100);
-
-    const wordsForNumber = (num) => {
-      const units = [
-        "Zero",
-        "One",
-        "Two",
-        "Three",
-        "Four",
-        "Five",
-        "Six",
-        "Seven",
-        "Eight",
-        "Nine",
-        "Ten",
-        "Eleven",
-        "Twelve",
-        "Thirteen",
-        "Fourteen",
-        "Fifteen",
-        "Sixteen",
-        "Seventeen",
-        "Eighteen",
-        "Nineteen",
-      ];
-      const tens = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"];
-
-      if (num < 20) return units[num];
-      if (num < 100) {
-        const tensName = tens[Math.floor(num / 10)];
-        const unitName = num % 10 ? ` ${units[num % 10]}` : "";
-        return `${tensName}${unitName}`;
-      }
-      if (num < 1000) {
-        const hundreds = Math.floor(num / 100);
-        const remainder = num % 100;
-        return `${units[hundreds]} Hundred${remainder ? ` ${wordsForNumber(remainder)}` : ""}`;
-      }
-      const scales = ["Thousand", "Million", "Billion"];
-      let scaleIndex = -1;
-      let remainder = num;
-      let result = "";
-
-      while (remainder > 0) {
-        const chunk = remainder % 1000;
-        remainder = Math.floor(remainder / 1000);
-        scaleIndex += 1;
-        if (chunk) {
-          const chunkText = wordsForNumber(chunk);
-          result = `${chunkText} ${scales[scaleIndex]}${result ? ` ${result}` : ""}`.trim();
-        }
-      }
-      return result;
-    };
-
-    const integerWords = integerPart === 0 ? "Zero" : wordsForNumber(integerPart);
-    const fractionalWords = fractionalPart ? ` and ${fractionalPart}/100` : "";
-    const sign = number < 0 ? "Minus " : "";
-    return `${sign}${integerWords}${fractionalWords} only`;
-  };
+  const getRecordId = (record) => record?.id ?? record?._id ?? "";
+  const sameId = (left, right) => String(left ?? "") === String(right ?? "");
 
   const formatDate = (dateStr) => {
     if (!dateStr) return "";
@@ -348,11 +285,10 @@ export default function TransportBiltiPage() {
   );
 
   const selectedAccount = useMemo(() => {
-    const selectedCompany = companies.find((c) => String(c.id) === String(formData.company_id)) || null;
+    const selectedCompany = companies.find((c) => sameId(getRecordId(c), formData.company_id)) || null;
     if (formData.company_account_id) {
       return (
-        companyAccounts.find((a) => String(a.id) === String(formData.company_account_id)) ||
-        null
+        companyAccounts.find((a) => sameId(getRecordId(a), formData.company_account_id)) || null
       );
     }
     return (
@@ -472,20 +408,24 @@ export default function TransportBiltiPage() {
       }
 
       if (mode === "manual" && name === "company_id") {
-        const company = companies.find((c) => String(c.id) === String(value));
+        const company = companies.find((c) => sameId(getRecordId(c), value));
+        const companyId = getRecordId(company);
+        next.company_id = companyId;
         next.company_name = company?.name || "";
         next.account_name = "";
-        const matchingAccounts = companyAccounts.filter(
-          (a) =>
-            String(a.company_id) === String(value) ||
+        const matchingAccounts = companyAccounts.filter((a) => {
+          const accountCompanyId = getRecordId({ _id: a.company_id, id: a.company_id });
+          return (
+            sameId(accountCompanyId, companyId) ||
             String(a.company_name || "").trim().toLowerCase() === String(company?.name || "").trim().toLowerCase()
-        );
-        next.company_account_id = matchingAccounts[0]?.id ? String(matchingAccounts[0].id) : "";
+          );
+        });
+        next.company_account_id = matchingAccounts[0] ? String(getRecordId(matchingAccounts[0])) : "";
         next.account_name = matchingAccounts[0]?.account_name || "";
       }
 
       if (mode === "manual" && name === "company_account_id") {
-        const acc = companyAccounts.find((a) => String(a.id) === String(value));
+        const acc = companyAccounts.find((a) => sameId(getRecordId(a), value));
         next.account_name = acc?.account_name || "";
       }
 
@@ -591,12 +531,14 @@ const downloadPDF = () => {
   const margin = 12;
   const leftX = margin;
   const rightX = pageWidth - margin;
-  const contentWidth = pageWidth - margin * 2;
 
   const voucherNo = formData.voucher_no || meta?.outward_voucher_no || meta?.voucher_no || "-";
   const billNo = meta?.bilti_no || (formData.id ? `BLT-${formData.id}` : "DRAFT");
   const lrDate = formatDate(formData.dispatch_date || formData.outward_date);
   const transporterName = selectedTransporter?.name || "Transport Copy";
+  const transporterAddress = selectedTransporter?.address || "-";
+  const transporterPan = selectedTransporter?.pan_no || "-";
+  const transporterPhone = selectedTransporter?.mobile || "-";
   const consigneeName = formData.consignee_name || "-";
   const consignorName = selectedAccount?.account_name || formData.account_name || "-";
 
@@ -611,104 +553,117 @@ const downloadPDF = () => {
   const advance = num(formData.advance_amount);
   const payable = calculation.payableAmount;
   const netAmount = calculation.netAmount;
-  const shortageQty = calculation.shortageQty;
+
   const money = (v) => Number(v || 0).toFixed(2);
-  const deductionTotal = Math.max(0, shortage + detain + others);
-  const shortageDetail = `${money(outwardWeight)} - ${money(dispatchWeight)} = ${money(Math.max(outwardWeight - dispatchWeight, 0))}`;
+
+  const drawPanel = ({ x, y, w, h, fill, title, rows }) => {
+    doc.setDrawColor(210, 214, 220);
+    doc.setLineWidth(0.25);
+    doc.roundedRect(x, y, w, h, 3, 3, "FD");
+    doc.setFillColor(fill[0], fill[1], fill[2]);
+    doc.roundedRect(x, y, w, 9, 3, 3, "F");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    doc.setTextColor(255, 255, 255);
+    doc.text(title, x + 4, y + 5.8);
+
+    let rowY = y + 14;
+    rows.forEach((row, index) => {
+      doc.setFillColor(index % 2 === 0 ? 245 : 255, index % 2 === 0 ? 245 : 255, index % 2 === 0 ? 245 : 255);
+      doc.rect(x + 2, rowY - 4, w - 4, 8.5, "F");
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(7.5);
+      doc.setTextColor(33, 37, 41);
+      doc.text(row[0], x + 4.5, rowY + 2);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(7.5);
+      doc.setTextColor(55, 65, 81);
+      doc.text(String(row[1]), x + w - 4.5, rowY + 2, { align: "right" });
+      rowY += 10;
+    });
+  };
 
   doc.setFillColor(255, 255, 255);
   doc.rect(0, 0, pageWidth, pageHeight, "F");
 
   doc.setDrawColor(203, 213, 225);
-  doc.setLineWidth(0.5);
-  doc.roundedRect(4, 4, pageWidth - 8, pageHeight - 8, 4, 4, "S");
+  doc.setLineWidth(0.35);
+  doc.roundedRect(4, 4, pageWidth - 8, pageHeight - 8, 3, 3, "S");
 
-  const headerHeight = 26;
-  doc.setFillColor(3, 105, 103);
-  doc.roundedRect(leftX, margin, contentWidth, headerHeight, 4, 4, "F");
+  const titleY = margin + 4;
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(18);
+  doc.setFontSize(22);
+  doc.setTextColor(15, 23, 42);
+  doc.text("TRANSPORT PAYMENT ADVICE", pageWidth / 2, titleY + 4, { align: "center" });
+
+  const netBoxX = rightX - 62;
+  const netBoxY = titleY - 2;
+  doc.setFillColor(34, 197, 94);
+  doc.roundedRect(netBoxX, netBoxY, 62, 28, 3, 3, "F");
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8);
   doc.setTextColor(255, 255, 255);
-  doc.text("TRANSPORT PAYMENT ADVICE", leftX + 10, margin + 16);
+  doc.text("NET PAYABLE", netBoxX + 31, netBoxY + 8, { align: "center" });
+  doc.setFontSize(14);
+  doc.text(money(payable), netBoxX + 31, netBoxY + 18, { align: "center" });
 
-  const topBlockY = margin + headerHeight + 8;
-  const topBlockHeight = 24;
-  doc.setFillColor(255, 255, 255);
-  doc.setDrawColor(203, 213, 225);
-  doc.roundedRect(leftX, topBlockY, contentWidth, topBlockHeight, 4, 4, "FD");
+  const infoY = titleY + 18;
+  const sectionWidth = (pageWidth - margin * 2 - 16) / 3;
 
-  const summaryFields = [
-    ["LR Date", lrDate || "-"],
-    ["Voucher No", voucherNo],
-    ["Transport", transporterName],
-    ["Consignee", consigneeName],
-    ["Buyer", formData.buyer_name || "-"],
-    ["Warehouse", formData.warehouse_name || "-"],
-    ["Destination", formData.destination || "-"],
-    ["Vehicle", formData.lorry_no || "-"],
-    ["Product", formData.product_name || "-"],
-    ["Days", formData.days || "0"],
-  ];
-
-  const cols = 5;
-  const colWidth = contentWidth / cols;
-  summaryFields.forEach((field, index) => {
-    const col = index % cols;
-    const row = Math.floor(index / cols);
-    const x = leftX + col * colWidth;
-    const y = topBlockY + 5 + row * 10;
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(7);
-    doc.setTextColor(15, 23, 42);
-    doc.text(field[0], x + 3, y);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(7);
-    doc.setTextColor(71, 85, 105);
-    doc.text(String(field[1]), x + 3, y + 4);
-    if (col < cols - 1) {
-      doc.setDrawColor(226, 232, 240);
-      doc.setLineWidth(0.2);
-      doc.line(x + colWidth, topBlockY + 4, x + colWidth, topBlockY + topBlockHeight - 4);
-    }
+  drawPanel({
+    x: leftX,
+    y: infoY,
+    w: sectionWidth,
+    h: 56,
+    fill: [15, 23, 42],
+    title: "GENERAL DETAILS",
+    rows: [
+      ["LR Date", lrDate || "-"],
+      ["Bilti No", billNo],
+      ["Transport", transporterName],
+      ["PAN No", transporterPan],
+      ["Phone No", transporterPhone],
+    ],
   });
 
-  const tableY = topBlockY + topBlockHeight + 10;
+  drawPanel({
+    x: leftX + sectionWidth + 8,
+    y: infoY,
+    w: sectionWidth,
+    h: 56,
+    fill: [34, 197, 94],
+    title: "PARTY DETAILS",
+    rows: [
+      ["Voucher No", voucherNo],
+      ["Consignor", consignorName],
+      ["Consignee", consigneeName],
+      ["Buyer", formData.buyer_name || "-"],
+      ["Warehouse", formData.warehouse_name || "-"],
+    ],
+  });
+
+  drawPanel({
+    x: leftX + (sectionWidth + 8) * 2,
+    y: infoY,
+    w: sectionWidth,
+    h: 56,
+    fill: [15, 23, 42],
+    title: "TRIP DATA",
+    rows: [
+      ["Dispatch", lrDate || "-"],
+      ["Days", formData.days || "0"],
+      ["Destination", formData.destination || "-"],
+      ["Vehicle", formData.lorry_no || "-"],
+      ["Product", formData.product_name || "-"],
+    ],
+  });
+
   autoTable(doc, {
-    startY: tableY,
+    startY: infoY + 66,
     margin: { left: leftX, right: leftX },
     theme: "grid",
-    tableLineWidth: 0.22,
-    tableLineColor: [148, 163, 184],
-    styles: {
-      fontSize: 7.8,
-      cellPadding: 3.5,
-      lineWidth: 0.22,
-      lineColor: [203, 213, 225],
-      textColor: [15, 23, 42],
-      fillColor: [255, 255, 255],
-    },
-    headStyles: {
-      fillColor: [3, 105, 103],
-      textColor: [255, 255, 255],
-      fontStyle: "bold",
-      halign: "center",
-    },
-    bodyStyles: {
-      fillColor: [255, 255, 255],
-      textColor: [15, 23, 42],
-      minCellHeight: 10,
-    },
-    alternateRowStyles: { fillColor: [249, 250, 251] },
-    columnStyles: {
-      2: { halign: "left" },
-      3: { halign: "left" },
-      4: { halign: "center" },
-      5: { halign: "center" },
-      6: { halign: "right" },
-      7: { halign: "right" },
-      8: { halign: "right" },
-      9: { halign: "right" },
-    },
+    styles: { fontSize: 7.2, cellPadding: 1.8, lineWidth: 0.22, lineColor: [200, 200, 200], textColor: [22, 28, 36] },
+    headStyles: { fillColor: [15, 23, 42], textColor: [255, 255, 255], fontStyle: "bold" },
     head: [[
       "Bilti No",
       "Voucher",
@@ -735,113 +690,79 @@ const downloadPDF = () => {
     ]],
   });
 
-  const sectionY = doc.lastAutoTable.finalY + 10;
-  const sectionWidth = (contentWidth - 10) / 2;
-  const sectionHeight = 78;
+  const lowerY = doc.lastAutoTable.finalY + 8;
+  const lowerWidth = (pageWidth - margin * 2 - 16) / 3;
 
-  doc.setDrawColor(203, 213, 225);
-  doc.setFillColor(255, 255, 255);
-  doc.roundedRect(leftX, sectionY, sectionWidth, sectionHeight, 4, 4, "FD");
-  doc.roundedRect(leftX + sectionWidth + 10, sectionY, sectionWidth, sectionHeight, 4, 4, "FD");
+  drawPanel({
+    x: leftX,
+    y: lowerY,
+    w: lowerWidth,
+    h: 42,
+    fill: [15, 23, 42],
+    title: "SHORTAGE",
+    rows: [
+      ["Shortage Qty", money(calculation.shortageQty)],
+      ["Free KG", money(num(formData.shortage_free_kg))],
+      ["Claim Amt", money(shortage)],
+    ],
+  });
 
-  doc.setFillColor(3, 105, 103);
-  doc.roundedRect(leftX, sectionY, sectionWidth, 12, 4, 4, "F");
-  doc.roundedRect(leftX + sectionWidth + 10, sectionY, sectionWidth, 12, 4, 4, "F");
+  drawPanel({
+    x: leftX + lowerWidth + 8,
+    y: lowerY,
+    w: lowerWidth,
+    h: 42,
+    fill: [34, 197, 94],
+    title: "CHARGES BREAKUP",
+    rows: [
+      ["Detain Charges", money(detain)],
+      ["Other Charges", money(others)],
+      ["Transport Rate", money(rate)],
+    ],
+  });
 
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(9);
-  doc.setTextColor(255, 255, 255);
-  doc.text("DEDUCTION DETAILS", leftX + 5, sectionY + 8);
-  doc.text("PAYMENT DETAILS", leftX + sectionWidth + 15, sectionY + 8);
+  drawPanel({
+    x: leftX + (lowerWidth + 8) * 2,
+    y: lowerY,
+    w: lowerWidth,
+    h: 42,
+    fill: [15, 23, 42],
+    title: "PAYMENT DETAILS",
+    rows: [
+      ["Gross Freight", money(gross)],
+      ["Current Payment", money(netAmount)],
+      ["TDS Amount", money(tds)],
+      ["Advance Paid", money(advance)],
+      ["Net Payable", money(payable)],
+    ],
+  });
 
-  const leftCol1 = leftX + 5;
-  const leftCol2 = leftX + sectionWidth * 0.45;
-  const leftCol3 = leftX + sectionWidth - 4;
-  let rowY = sectionY + 18;
-
-  const leftRows = [
-    ["Shortage Qty", shortageDetail, money(shortage)],
-    ["Free KG", formData.shortage_free_kg || "-", ""],
-    ["Claim Amt", "", money(shortage)],
-    ["Detain Charges", "", money(detain)],
-    ["Other Charges", "", money(others)],
-  ];
-
+  const summaryY = lowerY + 52;
   doc.setFont("helvetica", "normal");
-  doc.setFontSize(7.5);
+  doc.setFontSize(7.2);
   doc.setTextColor(71, 85, 105);
-  leftRows.forEach((row) => {
-    doc.text(row[0], leftCol1, rowY);
-    doc.text(row[1], leftCol2, rowY);
-    doc.text(row[2], leftCol3, rowY, { align: "right" });
-    rowY += 7.5;
-  });
+  doc.text("Total consolidated transport payable:", leftX + 2, summaryY);
+  doc.text("Estimated chargeable freight after deductions:", leftX + lowerWidth + 8 + 2, summaryY);
 
-  doc.setDrawColor(226, 232, 240);
-  doc.setLineWidth(0.2);
-  doc.line(leftX + 5, sectionY + sectionHeight - 20, leftX + sectionWidth - 5, sectionY + sectionHeight - 20);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(14);
+  doc.setTextColor(15, 23, 42);
+  doc.text(money(payable), leftX + 2, summaryY + 9);
+  doc.setTextColor(34, 197, 94);
+  doc.text(money(gross), leftX + lowerWidth + 8 + 2, summaryY + 9);
+
+  const remarkY = pageHeight - 24;
   doc.setFont("helvetica", "bold");
   doc.setFontSize(8);
-  doc.setTextColor(15, 23, 42);
-  doc.text("Total Deductions", leftCol1, sectionY + sectionHeight - 8);
-  doc.text(money(deductionTotal), leftCol3, sectionY + sectionHeight - 8, { align: "right" });
-
-  const rightCol1 = leftX + sectionWidth + 15;
-  const rightCol2 = leftX + sectionWidth * 2 + 6;
-  rowY = sectionY + 18;
-
-  const rightRows = [
-    ["Gross Freight", money(gross)],
-    ["Less: Total Deductions", money(deductionTotal)],
-    ["Net Freight", money(netAmount)],
-    ["TDS Amount", money(tds)],
-    ["Advance Paid", money(advance)],
-  ];
-
-  rightRows.forEach((row) => {
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(7.5);
-    doc.setTextColor(15, 23, 42);
-    doc.text(row[0], rightCol1, rowY);
-    doc.text(row[1], rightCol2, rowY, { align: "right" });
-    rowY += 7.5;
-  });
-
-  doc.setDrawColor(226, 232, 240);
-  doc.setLineWidth(0.4);
-  doc.line(leftX + sectionWidth + 10, sectionY + sectionHeight - 20, leftX + sectionWidth * 2 + 10, sectionY + sectionHeight - 20);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(9);
-  doc.setTextColor(15, 23, 42);
-  doc.text("Net Payable", rightCol1, sectionY + sectionHeight - 10);
-
-  const payableBoxWidth = 34;
-  const payableBoxHeight = 10;
-  const payableBoxX = rightCol2 - payableBoxWidth;
-  const payableBoxY = sectionY + sectionHeight - 14.5;
-  doc.setFillColor(188, 239, 188);
-  doc.setDrawColor(188, 239, 188);
-  doc.setLineWidth(0.4);
-  doc.roundedRect(payableBoxX, payableBoxY, payableBoxWidth, payableBoxHeight, 2, 2, "FD");
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(9);
-  doc.setTextColor(15, 23, 42);
-  doc.text(money(payable), rightCol2 - 2, sectionY + sectionHeight - 7, { align: "right" });
-
-  const amountInWords = `Indian Rupees ${numberToWords(payable)}`;
-  const footerY = sectionY + sectionHeight + 8;
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(8);
-  doc.setTextColor(15, 23, 42);
-  doc.text(`Amount in words: ${amountInWords}`, leftX, footerY);
-
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(8);
-  doc.text("Authorized By:", rightX - 2, footerY, { align: "right" });
-
+  doc.setTextColor(55, 65, 81);
+  doc.text("Remark:", leftX, remarkY);
   doc.setFont("helvetica", "normal");
   doc.setFontSize(7.5);
-  doc.text("This is a system generated document.", leftX, footerY + 8);
+  doc.text(formData.narration || "-", leftX + 18, remarkY, { maxWidth: 140 });
+
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(9);
+  doc.text("Authorized Signatory", pageWidth - margin - 10, remarkY, { align: "right" });
 
   doc.save(`Transport_Payment_Advice_${voucherNo !== "-" ? voucherNo : billNo}.pdf`);
 };
@@ -1099,7 +1020,7 @@ const downloadPDF = () => {
                     <select name="company_id" value={formData.company_id} onChange={handleChange} style={input}>
                       <option value="">Select Party</option>
                       {companies.map((c) => (
-                        <option key={c.id} value={c.id}>{c.name}</option>
+                        <option key={getRecordId(c)} value={getRecordId(c)}>{c.name}</option>
                       ))}
                     </select>
                   </div>
@@ -1110,23 +1031,25 @@ const downloadPDF = () => {
                       {companyAccounts
                         .filter((a) => {
                           if (!formData.company_id) return false;
-                          const company = companies.find((c) => String(c.id) === String(formData.company_id));
+                          const company = companies.find((c) => sameId(getRecordId(c), formData.company_id));
+                          const accountCompanyId = getRecordId({ _id: a.company_id, id: a.company_id });
                           return (
-                            String(a.company_id) === String(formData.company_id) ||
+                            sameId(accountCompanyId, formData.company_id) ||
                             String(a.company_name || "").trim().toLowerCase() === String(company?.name || "").trim().toLowerCase()
                           );
                         })
                         .map((a) => (
-                          <option key={a.id} value={a.id}>
+                          <option key={getRecordId(a)} value={getRecordId(a)}>
                             {a.account_name}
                             {a.company_name ? ` - ${a.company_name}` : ""}
                           </option>
                         ))}
                       {formData.company_id &&
                         companyAccounts.filter((a) => {
-                          const company = companies.find((c) => String(c.id) === String(formData.company_id));
+                          const company = companies.find((c) => sameId(getRecordId(c), formData.company_id));
+                          const accountCompanyId = getRecordId({ _id: a.company_id, id: a.company_id });
                           return (
-                            String(a.company_id) === String(formData.company_id) ||
+                            sameId(accountCompanyId, formData.company_id) ||
                             String(a.company_name || "").trim().toLowerCase() === String(company?.name || "").trim().toLowerCase()
                           );
                         }).length === 0 && <option value="" disabled>No account found</option>}
