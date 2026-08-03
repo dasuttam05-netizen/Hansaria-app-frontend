@@ -1716,6 +1716,9 @@ export default function WarehouseTradingPage() {
   const selectSaleVoucherForPass = (voucherId) => {
     const voucher = list.find((item) => String(item.id || item._id) === String(voucherId));
     if (!voucher) return;
+
+    const billDate = voucher.bill_date || voucher.date || "";
+    const loadingDate = voucher.date || billDate || "";
     const existingUnloadingDate = voucher.unloading_date || "";
     const existingDueDays = voucher.due_days !== undefined && voucher.due_days !== null && String(voucher.due_days).trim() !== ""
       ? toNumber(voucher.due_days)
@@ -1730,18 +1733,21 @@ export default function WarehouseTradingPage() {
         })()
       : rawDueDate;
     const derivedDueDays = existingDueDays !== "" ? existingDueDays : (computedDueDate && existingUnloadingDate ? diffDays(existingUnloadingDate, computedDueDate) : "");
+
     setFormData({
       ...defaultForm(),
       ...voucher,
+      date: loadingDate,
+      bill_date: billDate,
+      voucher_no: voucher.voucher_no || voucher.bill_no || "",
       bill_no: voucher.bill_no || voucher.voucher_no || "",
-      bill_date: voucher.bill_date || voucher.date || "",
       journey_token: voucher.journey_token || "",
       buyer_id: voucher.buyer_id || voucher.company_id || "",
       company_id: voucher.company_id || voucher.buyer_id || "",
       lorry_no: voucher.lorry_no || voucher.reference_id || "",
       dispatch_qty: formatDecimal4(toNumber(voucher.dispatch_qty || voucher.quantity || voucher.total_quantity || voucher.unloading_qty || 0)),
       unloading_qty: "",
-      unloading_date: existingUnloadingDate || new Date().toISOString().slice(0, 10),
+      unloading_date: existingUnloadingDate || "",
       due_days: derivedDueDays,
       due_date: computedDueDate || "",
       moisture: voucher.moisture || "",
