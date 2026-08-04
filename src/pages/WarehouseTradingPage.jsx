@@ -1484,24 +1484,6 @@ export default function WarehouseTradingPage() {
     setShowSalePreview(true);
   };
 
-  const purchaseReportRows = useMemo(() => {
-    const rows = Array.isArray(filteredReportData) ? filteredReportData : [];
-    return rows.filter((row) => row && (row.id || row._id || row.voucher_no));
-  }, [filteredReportData]);
-
-  const currentPurchasePreviewIndex = purchasePreviewRow
-    ? purchaseReportRows.findIndex((row) => String(getRecordId(row)) === String(getRecordId(purchasePreviewRow)))
-    : -1;
-
-  const navigatePurchasePreview = (direction) => {
-    if (currentPurchasePreviewIndex < 0) return;
-    const targetIndex = currentPurchasePreviewIndex + direction;
-    const targetRow = purchaseReportRows[targetIndex];
-    if (targetRow) {
-      setPurchasePreviewRow(targetRow);
-    }
-  };
-
   const resetPurchaseDeductions = () => {
     setFormData((prev) => ({
       ...prev,
@@ -2609,6 +2591,24 @@ export default function WarehouseTradingPage() {
     });
     return counts;
   }, [filteredReportData]);
+
+  const purchaseReportRows = useMemo(() => {
+    const rows = Array.isArray(filteredReportData) ? filteredReportData : [];
+    return rows.filter((row) => row && (row.id || row._id || row.voucher_no));
+  }, [filteredReportData]);
+
+  const currentPurchasePreviewIndex = purchasePreviewRow
+    ? purchaseReportRows.findIndex((row) => String(getRecordId(row)) === String(getRecordId(purchasePreviewRow)))
+    : -1;
+
+  const navigatePurchasePreview = (direction) => {
+    if (currentPurchasePreviewIndex < 0) return;
+    const targetIndex = currentPurchasePreviewIndex + direction;
+    const targetRow = purchaseReportRows[targetIndex];
+    if (targetRow) {
+      setPurchasePreviewRow(targetRow);
+    }
+  };
   const saleFollowupStatusMeta = {
     all: { label: "All Bills", bg: "#0f172a", color: "#fff" },
     payment_done: { label: "Payment Done", bg: "#dcfce7", color: "#166534" },
