@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { FaFilePdf, FaWhatsapp } from "react-icons/fa";
@@ -206,6 +206,9 @@ export default function WarehouseTradingPage() {
   const [showMobileReportHeader, setShowMobileReportHeader] = useState(true);
   const [showMobileTradingTabs, setShowMobileTradingTabs] = useState(false);
   const [globalSearch, setGlobalSearch] = useState("");
+  const masterLoadTokenRef = useRef(0);
+  const voucherLoadTokenRef = useRef(0);
+  const reportLoadTokenRef = useRef(0);
   const selectedVoucher = list.find((item) => String(item.id || item._id) === String(selectedPaymentId));
   const selectedReceiptVoucher = list.find((item) => String(item.id || item._id) === String(selectedReceiptId));
   const selectedWarehouse = warehouses.find((w) => String(w.id || w._id) === String(formData.warehouse_id));
@@ -594,9 +597,11 @@ export default function WarehouseTradingPage() {
 
   // Load voucher list when type changes
   useEffect(() => {
-    if (activeTab === "vouchers") {
+    if (activeTab !== "vouchers") return;
+    const timer = window.setTimeout(() => {
       loadVouchers();
-    }
+    }, 80);
+    return () => window.clearTimeout(timer);
   }, [activeTab, activeVoucherType]);
 
   useEffect(() => {
@@ -622,9 +627,14 @@ export default function WarehouseTradingPage() {
 
   // Load report when type changes
   useEffect(() => {
-    if (activeTab === "reports") {
+    if (activeTab !== "reports") return;
+    const timer = window.setTimeout(() => {
       loadReport();
-    }
+      if (activeReport === "warehouse-stock") {
+        loadWarehouseStockReport();
+      }
+    }, 80);
+    return () => window.clearTimeout(timer);
   }, [activeTab, activeReport, reportFilters.farmer_id, reportFilters.company_account_id, reportFilters.sale_buyer_id, reportFilters.sale_company_account_id, reportFilters.sale_journey_token, reportFilters.sale_lorry_no, reportFilters.sale_bill_no]);
 
   useEffect(() => {
@@ -741,6 +751,7 @@ export default function WarehouseTradingPage() {
   }, [activeTab, activeVoucherType, formData.sale_type, formData.warehouse_id, formData.product_id, editId]);
 
   const loadData = async () => {
+    const token = ++masterLoadTokenRef.current;
     try {
       const [wRes, fRes, bRes, cRes, caRes, coRes, pRes, eRes, lRes] = await Promise.allSettled([
         axios.get("/api/warehouses"),
@@ -754,6 +765,7 @@ export default function WarehouseTradingPage() {
         axios.get("/api/locations"),
       ]);
       const dataOf = (result) => (result.status === "fulfilled" ? result.value.data : []);
+      if (token !== masterLoadTokenRef.current) return;
       setWarehouses(Array.isArray(dataOf(wRes)) ? dataOf(wRes) : []);
       setFarmers(Array.isArray(dataOf(fRes)) ? dataOf(fRes) : []);
       setBuyerNames(Array.isArray(dataOf(bRes)) ? dataOf(bRes) : []);
@@ -763,12 +775,22 @@ export default function WarehouseTradingPage() {
       setProducts(Array.isArray(dataOf(pRes)) ? dataOf(pRes) : []);
       setEmployees(Array.isArray(dataOf(eRes)) ? dataOf(eRes) : []);
       setLocations(Array.isArray(dataOf(lRes)) ? dataOf(lRes) : []);
-      axios
-        .get("/api/wh-vouchers/report/warehouse-stock")
-        .then((res) => setWarehouseStockReport(Array.isArray(res.data) ? res.data : []))
-        .catch(() => setWarehouseStockReport([]));
     } catch (err) {
+      if (token !== masterLoadTokenRef.current) return;
       console.error(err);
+    }
+  };
+
+  const loadWarehouseStockReport = async () => {
+    const token = ++reportLoadTokenRef.current;
+    try {
+      const res = await axios.get("/api/wh-vouchers/report/warehouse-stock");
+      if (token !== reportLoadTokenRef.current) return;
+      setWarehouseStockReport(Array.isArray(res.data) ? res.data : []);
+    } catch (err) {
+      if (token !== reportLoadTokenRef.current) return;
+      console.error(err);
+      setWarehouseStockReport([]);
     }
   };
 
@@ -806,12 +828,15 @@ export default function WarehouseTradingPage() {
   };
 
   const loadVouchers = async () => {
+    const token = ++voucherLoadTokenRef.current;
     try {
       if (!hasPermission(user, voucherPermissionMap[activeVoucherType])) {
+        if (token !== voucherLoadTokenRef.current) return;
         setList([]);
         return;
       }
       const res = await axios.get(`/api/wh-vouchers/${activeVoucherType}`);
+      if (token !== voucherLoadTokenRef.current) return;
       const rows = Array.isArray(res.data) ? res.data : [];
       setList(
         rows.slice().sort((a, b) => {
@@ -821,6 +846,7 @@ export default function WarehouseTradingPage() {
         })
       );
     } catch (err) {
+      if (token !== voucherLoadTokenRef.current) return;
       console.error(err);
     }
   };
@@ -841,8 +867,10 @@ export default function WarehouseTradingPage() {
   };
 
   const loadReport = async () => {
+    const token = ++reportLoadTokenRef.current;
     try {
       if (!hasPermission(user, reportPermissionMap[activeReport])) {
+        if (token !== reportLoadTokenRef.current) return;
         setReportData([]);
         return;
       }
@@ -863,18 +891,22 @@ export default function WarehouseTradingPage() {
         params.company_account_id = reportFilters.company_account_id || reportFilters.sale_company_account_id;
       }
       const res = await axios.get(`/api/wh-vouchers/report/${endpoint}`, { params });
+      if (token !== reportLoadTokenRef.current) return;
       const rows = Array.isArray(res.data) ? res.data : [];
       if (activeReport === "purchase" && rows.length === 0 && hasPermission(user, voucherPermissionMap.purchase)) {
         const fallbackRes = await axios.get("/api/wh-vouchers/purchase");
+        if (token !== reportLoadTokenRef.current) return;
         setReportData(Array.isArray(fallbackRes.data) ? fallbackRes.data : []);
         return;
       }
       setReportData(rows);
     } catch (err) {
+      if (token !== reportLoadTokenRef.current) return;
       console.error(err);
       if (activeReport === "purchase" && hasPermission(user, voucherPermissionMap.purchase)) {
         try {
           const fallbackRes = await axios.get("/api/wh-vouchers/purchase");
+          if (token !== reportLoadTokenRef.current) return;
           setReportData(Array.isArray(fallbackRes.data) ? fallbackRes.data : []);
           return;
         } catch (fallbackErr) {
