@@ -260,6 +260,9 @@ export default function DashboardPage() {
           return;
         }
 
+        setInwards(Array.isArray(inwardRes?.data) ? inwardRes.data : []);
+        setOutwards(Array.isArray(outwardRes?.data) ? outwardRes.data : []);
+
         const normalizedPartyStock = Array.isArray(partyStockRes?.data?.summary)
           ? partyStockRes.data.summary
           : Array.isArray(partyStockRes?.data)
