@@ -65,7 +65,6 @@ export default function DashboardPage() {
   const [active, setActive] = useState("Dashboard");
   const [username, setUsername] = useState("");
   const [user, setUser] = useState(null);
-  const [booting, setBooting] = useState(true);
 
   const [locations, setLocations] = useState([]);
   const [employees, setEmployees] = useState([]);
@@ -265,8 +264,6 @@ export default function DashboardPage() {
       setInwards(inwardRes?.data || []);
       setOutwards(outwardRes?.data || []);
 
-      setBooting(false);
-
       window.setTimeout(async () => {
         const [partyStockRes, warehouseStockRes, totalStockRes, monthEndRentRes] = await resolveRequests(secondaryRequests);
 
@@ -298,7 +295,6 @@ export default function DashboardPage() {
       }, 0);
     } catch (err) {
       console.error("Failed to fetch dashboard data:", err);
-      setBooting(false);
     }
   };
 
@@ -1133,95 +1129,6 @@ export default function DashboardPage() {
     params.set("dashboard_view", "1");
     navigate(`/warehouse-rent-dashboard?${params.toString()}`);
   };
-
-  if (booting) {
-    return (
-      <div
-        style={{
-          minHeight: "100vh",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          background:
-            "radial-gradient(circle at top, rgba(20, 184, 166, 0.18), transparent 28%), linear-gradient(180deg, #0f172a 0%, #0b1220 52%, #111827 100%)",
-          color: "#0f172a",
-          fontFamily: "Segoe UI, Arial, sans-serif",
-          padding: 24,
-        }}
-      >
-        <div
-          style={{
-            position: "relative",
-            background: "rgba(255, 255, 255, 0.96)",
-            border: "1px solid rgba(255, 255, 255, 0.55)",
-            borderRadius: 28,
-            padding: "28px 32px",
-            boxShadow: "0 28px 60px rgba(2, 6, 23, 0.35)",
-            textAlign: "center",
-            minWidth: 320,
-            maxWidth: 420,
-            width: "100%",
-            overflow: "hidden",
-          }}
-        >
-          <div
-            style={{
-              position: "absolute",
-              top: -24,
-              right: -24,
-              width: 88,
-              height: 88,
-              borderRadius: "50%",
-              background: "radial-gradient(circle at 30% 30%, rgba(20,184,166,0.95), rgba(15,118,110,0.2) 70%)",
-              filter: "blur(2px)",
-            }}
-          />
-          <div
-            style={{
-              width: 64,
-              height: 64,
-              margin: "0 auto 16px",
-              borderRadius: "50%",
-              display: "grid",
-              placeItems: "center",
-              background: "linear-gradient(135deg, #0f766e, #14b8a6)",
-              color: "#fff",
-              fontSize: 22,
-              fontWeight: 900,
-              boxShadow: "0 12px 26px rgba(15, 118, 110, 0.28)",
-            }}
-          >
-            HF
-          </div>
-          <div style={{ fontSize: 20, fontWeight: 800, marginBottom: 10, color: "#0f172a" }}>
-            Loading Dashboard
-          </div>
-          <div style={{ color: "#475569", fontSize: 14, lineHeight: 1.5 }}>
-            Please wait while your session loads.
-          </div>
-          <div
-            style={{
-              marginTop: 18,
-              height: 10,
-              borderRadius: 999,
-              background: "#e2e8f0",
-              overflow: "hidden",
-            }}
-          >
-            <div
-              style={{
-                width: "42%",
-                height: "100%",
-                borderRadius: 999,
-                background: "linear-gradient(90deg, #14b8a6, #0f766e)",
-                boxShadow: "0 0 22px rgba(20, 184, 166, 0.45)",
-              }}
-            />
-          </div>
-        </div>
-      </div>
-    );
-  }
 
   return (
     <div className="dashboard-shell">
