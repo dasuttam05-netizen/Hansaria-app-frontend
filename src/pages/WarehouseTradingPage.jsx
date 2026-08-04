@@ -948,6 +948,7 @@ export default function WarehouseTradingPage() {
       if (!hasPermission(user, reportPermissionMap[activeReport])) {
         if (token !== reportLoadTokenRef.current) return;
         setReportData([]);
+        setWarehouseStockReport([]);
         return;
       }
       const endpoint = reportEndpointMap[activeReport] || activeReport;
@@ -969,6 +970,11 @@ export default function WarehouseTradingPage() {
       const res = await axios.get(`/api/wh-vouchers/report/${endpoint}`, { params });
       if (token !== reportLoadTokenRef.current) return;
       const rows = Array.isArray(res.data) ? res.data : [];
+      if (activeReport === "warehouse-stock") {
+        setWarehouseStockReport(rows);
+        setReportData(rows);
+        return;
+      }
       if (activeReport === "purchase" && rows.length === 0 && hasPermission(user, voucherPermissionMap.purchase)) {
         const fallbackRes = await axios.get("/api/wh-vouchers/purchase");
         if (token !== reportLoadTokenRef.current) return;
@@ -979,6 +985,11 @@ export default function WarehouseTradingPage() {
     } catch (err) {
       if (token !== reportLoadTokenRef.current) return;
       console.error(err);
+      if (activeReport === "warehouse-stock") {
+        setWarehouseStockReport([]);
+        setReportData([]);
+        return;
+      }
       if (activeReport === "purchase" && hasPermission(user, voucherPermissionMap.purchase)) {
         try {
           const fallbackRes = await axios.get("/api/wh-vouchers/purchase");
@@ -2582,13 +2593,14 @@ export default function WarehouseTradingPage() {
   };
 
   const activeReportColumns = reportColumns[activeReport] || (activeReport === "sale-journey" ? reportColumns["sale-party-ledger"] : reportColumns.sale);
+  const currentReportRows = activeReport === "warehouse-stock" ? warehouseStockReport : reportData;
   const displayReportData = useMemo(() => {
     if (activeReport === "sale-followup") {
       const rows = Array.isArray(reportData) ? reportData : [];
       if (saleFollowupFilter === "all") return rows;
       return rows.filter((row) => String(row.followup_status || "pending").toLowerCase() === saleFollowupFilter);
     }
-    if (activeReport !== "purchase-party-ledger" && activeReport !== "sale-party-ledger") return reportData;
+    if (activeReport !== "purchase-party-ledger" && activeReport !== "sale-party-ledger") return Array.isArray(currentReportRows) ? currentReportRows : [];
     const entries = (Array.isArray(reportData) ? reportData : []).filter((row) => row.row_type !== "closing");
     const ledgerPartyName = (row) => activeReport === "purchase-party-ledger"
       ? (row.farmer_name || getFarmerName(row) || "Unknown Farmer")
@@ -2650,7 +2662,7 @@ export default function WarehouseTradingPage() {
     });
     pushClosing();
     return grouped;
-  }, [activeReport, reportData, farmers, buyerNames, companyAccounts, saleFollowupFilter]);
+  }, [activeReport, currentReportRows, reportData, farmers, buyerNames, companyAccounts, saleFollowupFilter]);
   const saleFollowupRows = activeReport === "sale-followup" ? displayReportData : [];
   const normalizedGlobalSearch = String(globalSearch || "").trim().toLowerCase();
   const matchesGlobalSearch = (value) =>
