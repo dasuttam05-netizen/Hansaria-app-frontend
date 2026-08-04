@@ -114,6 +114,14 @@ const diffDays = (start, end) => {
   return Math.max(0, Math.floor((endDate - startDate) / (1000 * 60 * 60 * 24)));
 };
 
+const getArrowFocusableInputs = (root) =>
+  Array.from(
+    root.querySelectorAll("input:not([type='hidden']):not([disabled]), select:not([disabled]), textarea:not([disabled])")
+  ).filter((element) => {
+    const style = window.getComputedStyle(element);
+    return style.display !== "none" && style.visibility !== "hidden";
+  });
+
 const purchaseDeductionFields = [
   { key: "less_bags_weight", label: "Less Bags Weight" },
   { key: "moisture", label: "Moisture" },
@@ -207,6 +215,7 @@ export default function WarehouseTradingPage() {
   const [showMobileTradingTabs, setShowMobileTradingTabs] = useState(false);
   const [globalSearch, setGlobalSearch] = useState("");
   const masterLoadTokenRef = useRef(0);
+  const arrowNavRootRef = useRef(null);
   const voucherLoadTokenRef = useRef(0);
   const reportLoadTokenRef = useRef(0);
   const selectedVoucher = list.find((item) => String(item.id || item._id) === String(selectedPaymentId));
@@ -641,6 +650,65 @@ export default function WarehouseTradingPage() {
     if (activeReport !== "purchase-party-ledger") setShowPurchaseBillWise(false);
     if (activeReport !== "sale-party-ledger") setShowSaleBillWise(false);
   }, [activeReport]);
+
+  useEffect(() => {
+    const handleArrowNavigation = (event) => {
+      const { key, target } = event;
+      if (!target || !target.closest || !["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(key)) return;
+      if (!target.matches("input, select, textarea") || event.metaKey || event.ctrlKey || event.altKey) return;
+
+      const root = arrowNavRootRef.current;
+      if (!root || !root.contains(target)) return;
+
+      const focusableElements = getArrowFocusableInputs(root);
+      const index = focusableElements.indexOf(target);
+      if (index === -1) return;
+
+      const currentRect = target.getBoundingClientRect();
+      const currentCenterX = currentRect.left + currentRect.width / 2;
+      const currentCenterY = currentRect.top + currentRect.height / 2;
+      let candidate = null;
+      let bestScore = Number.POSITIVE_INFINITY;
+
+      focusableElements.forEach((element, elementIndex) => {
+        if (elementIndex === index) return;
+        const rect = element.getBoundingClientRect();
+        const elementCenterX = rect.left + rect.width / 2;
+        const elementCenterY = rect.top + rect.height / 2;
+
+        let score = Number.POSITIVE_INFINITY;
+        if (key === "ArrowRight") {
+          if (rect.left <= currentRect.left + 1) return;
+          score = (rect.left - currentRect.right) + Math.abs(elementCenterY - currentCenterY) * 0.2;
+        } else if (key === "ArrowLeft") {
+          if (rect.right >= currentRect.right - 1) return;
+          score = (currentRect.left - rect.right) + Math.abs(elementCenterY - currentCenterY) * 0.2;
+        } else if (key === "ArrowDown") {
+          if (rect.top <= currentRect.top + 1) return;
+          score = (rect.top - currentRect.bottom) + Math.abs(elementCenterX - currentCenterX) * 0.15;
+        } else if (key === "ArrowUp") {
+          if (rect.bottom >= currentRect.bottom - 1) return;
+          score = (currentRect.top - rect.bottom) + Math.abs(elementCenterX - currentCenterX) * 0.15;
+        }
+
+        if (score < bestScore) {
+          bestScore = score;
+          candidate = element;
+        }
+      });
+
+      if (candidate) {
+        event.preventDefault();
+        candidate.focus({ preventScroll: true });
+        if (typeof candidate.select === "function" && target.tagName !== "SELECT") {
+          candidate.select();
+        }
+      }
+    };
+
+    document.addEventListener("keydown", handleArrowNavigation);
+    return () => document.removeEventListener("keydown", handleArrowNavigation);
+  }, []);
 
   useEffect(() => {
     const handleLedgerRefresh = (event) => {
@@ -1354,6 +1422,23 @@ export default function WarehouseTradingPage() {
       alert(err?.response?.data?.error || `Failed to ${editId ? "update" : "save"} voucher`);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleFormKeyDown = (event) => {
+    if (event.key !== "Enter") return;
+
+    const target = event.target;
+    const isButtonTarget = target?.tagName === "BUTTON" || target?.closest("button");
+    const isSubmitButton = isButtonTarget && (target?.type === "submit" || target?.closest("button[type='submit']"));
+
+    if (isSubmitButton || isButtonTarget) {
+      return;
+    }
+
+    if (target && ["INPUT", "SELECT", "TEXTAREA"].includes(target.tagName)) {
+      event.preventDefault();
+      event.stopPropagation();
     }
   };
 
@@ -3075,7 +3160,7 @@ export default function WarehouseTradingPage() {
   };
 
   return (
-    <div className="warehouse-trading-page" style={{ fontFamily: "Segoe UI, Arial, sans-serif", padding: "16px" }}>
+    <div ref={arrowNavRootRef} className="warehouse-trading-page" style={{ fontFamily: "Segoe UI, Arial, sans-serif", padding: "16px" }}>
       <div className="warehouse-trading-main-header" style={headerRow}>
         <div className="warehouse-trading-title-block">
           <h2 style={titleStyle}>Warehouse Trading</h2>
@@ -3185,7 +3270,7 @@ export default function WarehouseTradingPage() {
                 </div>
               )}
             </div>
-            <form onSubmit={handleSubmit}>
+            <form onSubmit={handleSubmit} onKeyDown={handleFormKeyDown}>
               {isPurchaseVoucher ? (
                 <div className="purchase-voucher-mobile-form" style={erpShell}>
                   <div className="purchase-voucher-titlebar" style={erpTitleBar}>
