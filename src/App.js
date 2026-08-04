@@ -168,7 +168,7 @@ function AppRoutes() {
     },
     {
       path: "/companies",
-      element: (
+.      element: (
         <ProtectedRoute permission={["companies.view", "companies.create", "companies.edit", "companies.delete"]}>
           <CompanyManagementPage />
         </ProtectedRoute>
