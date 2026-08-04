@@ -363,134 +363,9 @@ export default function DashboardPage() {
     action();
   };
 
-  const handleMenuOpen = (title) => {
-    setActive(title);
-  };
-
   const handleSubmenuAction = (action) => {
     setShowMobileSidebar(false);
     action();
-  };
-
-  const dashboardBoxes = [
-    {
-      title: "Warehouses",
-      color: "#166534",
-      accent: "#22c55e",
-      surface: "linear-gradient(180deg, #eefbf8 0%, #d6f3ee 100%)",
-      icon: <FaWarehouse />,
-      data: warehouses.map((w) => w.name),
-      count: warehouses.length,
-    },
-    {
-      title: "Companies",
-      color: "#c2410c",
-      accent: "#f97316",
-      surface: "linear-gradient(180deg, #eefbf8 0%, #d6f3ee 100%)",
-      icon: <FaBuilding />,
-      data: companies.map((c) => c.name),
-      count: companies.length,
-    },
-    {
-      title: "Inwards",
-      color: "#1d4ed8",
-      accent: "#3b82f6",
-      surface: "linear-gradient(180deg, #eefbf8 0%, #d6f3ee 100%)",
-      icon: <FaFileAlt />,
-      data: inwards.map((i) => ({
-        id: i.id,
-        primary: i.voucher_no || `Inward #${i.id}`,
-        date: i.date || "",
-        party_name: i.party_name || i.company_name || i.account_name || "-",
-        lorry_no: i.lorry_no || "-",
-        weight: Number(i.weight || i.quantity || 0),
-      })),
-      count: inwards.length,
-    },
-    {
-      title: "Outwards",
-      color: "#0f766e",
-      accent: "#14b8a6",
-      surface: "linear-gradient(180deg, #eefbf8 0%, #d6f3ee 100%)",
-      icon: <FaBoxOpen />,
-      data: outwards.map((o) => ({
-        id: o.id,
-        primary: o.inv_no || `Outward #${o.id}`,
-        date: o.date || "",
-        party_name: o.party_name || o.company_name || o.account_name || "-",
-        lorry_no: o.lorry_no || "-",
-        weight: Number(o.weight || o.quantity || 0),
-      })),
-      count: outwards.length,
-    },
-    {
-      title: "Warehouse Stock",
-      color: "#0f766e",
-      accent: "#14b8a6",
-      surface: "linear-gradient(180deg, #ecfeff 0%, #cffafe 100%)",
-      icon: <FaWarehouse />,
-      count: filteredWarehouseStock.length,
-      reportTab: "warehouse_stock",
-    },
-    {
-      title: "Party Stock",
-      color: "#0b7285",
-      accent: "#22d3ee",
-      surface: "linear-gradient(180deg, #eff6ff 0%, #dbf4ff 100%)",
-      icon: <FaChartBar />,
-      count: partyStockSummary.length,
-      reportTab: "party_stock",
-    },
-    {
-      title: "Warehouse Rent",
-      color: "#b45309",
-      accent: "#f59e0b",
-      surface: "linear-gradient(180deg, #fff7ed 0%, #ffedd5 100%)",
-      icon: <FaMoneyBillWave />,
-      count: warehouseWiseRent.length,
-      reportTab: "warehouse_rent",
-    },
-    {
-      title: "Party Rent",
-      color: "#831843",
-      accent: "#ec4899",
-      surface: "linear-gradient(180deg, #fff1f2 0%, #ffe4e6 100%)",
-      icon: <FaBalanceScale />,
-      count: partyWiseRent.length,
-      reportTab: "party_rent",
-    },
-    {
-      title: "Employees",
-      color: "#7e22ce",
-      accent: "#a855f7",
-      surface: "linear-gradient(180deg, #eefbf8 0%, #d6f3ee 100%)",
-      icon: <FaUsers />,
-      data: employees.map((e) => e.name),
-      count: employees.length,
-    },
-    {
-      title: "Locations",
-      color: "#b45309",
-      accent: "#f59e0b",
-      surface: "linear-gradient(180deg, #eefbf8 0%, #d6f3ee 100%)",
-      icon: <FaMapMarkerAlt />,
-      data: locations.map((l) => l.name),
-      count: locations.length,
-    },
-  ];
-
-  const handleBoxClick = (box) => {
-    setSearchText("");
-    if (box.reportTab) {
-      setActiveStockTab(box.reportTab);
-      return;
-    }
-
-    setShowListPopup({
-      show: true,
-      title: box.title,
-      data: box.data || [],
-    });
   };
 
   const rawMenuItems = [
@@ -1096,6 +971,127 @@ export default function DashboardPage() {
       danger: true,
     },
   ];
+
+  const dashboardBoxes = [
+    {
+      title: "Warehouses",
+      color: "#166534",
+      accent: "#22c55e",
+      surface: "linear-gradient(180deg, #eefbf8 0%, #d6f3ee 100%)",
+      icon: <FaWarehouse />,
+      data: warehouses.map((w) => w.name),
+      count: warehouses.length,
+    },
+    {
+      title: "Companies",
+      color: "#c2410c",
+      accent: "#f97316",
+      surface: "linear-gradient(180deg, #eefbf8 0%, #d6f3ee 100%)",
+      icon: <FaBuilding />,
+      data: companies.map((c) => c.name),
+      count: companies.length,
+    },
+    {
+      title: "Inwards",
+      color: "#1d4ed8",
+      accent: "#3b82f6",
+      surface: "linear-gradient(180deg, #eefbf8 0%, #d6f3ee 100%)",
+      icon: <FaFileAlt />,
+      data: inwards.map((i) => ({
+        id: i.id,
+        primary: i.voucher_no || `Inward #${i.id}`,
+        date: i.date || "",
+        party_name: i.party_name || i.company_name || i.account_name || "-",
+        lorry_no: i.lorry_no || "-",
+        weight: Number(i.weight || i.quantity || 0),
+      })),
+      count: inwards.length,
+    },
+    {
+      title: "Outwards",
+      color: "#0f766e",
+      accent: "#14b8a6",
+      surface: "linear-gradient(180deg, #eefbf8 0%, #d6f3ee 100%)",
+      icon: <FaBoxOpen />,
+      data: outwards.map((o) => ({
+        id: o.id,
+        primary: o.inv_no || `Outward #${o.id}`,
+        date: o.date || "",
+        party_name: o.party_name || o.company_name || o.account_name || "-",
+        lorry_no: o.lorry_no || "-",
+        weight: Number(o.weight || o.quantity || 0),
+      })),
+      count: outwards.length,
+    },
+    {
+      title: "Warehouse Stock",
+      color: "#0f766e",
+      accent: "#14b8a6",
+      surface: "linear-gradient(180deg, #ecfeff 0%, #cffafe 100%)",
+      icon: <FaWarehouse />,
+      count: filteredWarehouseStock.length,
+      reportTab: "warehouse_stock",
+    },
+    {
+      title: "Party Stock",
+      color: "#0b7285",
+      accent: "#22d3ee",
+      surface: "linear-gradient(180deg, #eff6ff 0%, #dbf4ff 100%)",
+      icon: <FaChartBar />,
+      count: partyStockSummary.length,
+      reportTab: "party_stock",
+    },
+    {
+      title: "Warehouse Rent",
+      color: "#b45309",
+      accent: "#f59e0b",
+      surface: "linear-gradient(180deg, #fff7ed 0%, #ffedd5 100%)",
+      icon: <FaMoneyBillWave />,
+      count: warehouseWiseRent.length,
+      reportTab: "warehouse_rent",
+    },
+    {
+      title: "Party Rent",
+      color: "#831843",
+      accent: "#ec4899",
+      surface: "linear-gradient(180deg, #fff1f2 0%, #ffe4e6 100%)",
+      icon: <FaBalanceScale />,
+      count: partyWiseRent.length,
+      reportTab: "party_rent",
+    },
+    {
+      title: "Employees",
+      color: "#7e22ce",
+      accent: "#a855f7",
+      surface: "linear-gradient(180deg, #eefbf8 0%, #d6f3ee 100%)",
+      icon: <FaUsers />,
+      data: employees.map((e) => e.name),
+      count: employees.length,
+    },
+    {
+      title: "Locations",
+      color: "#b45309",
+      accent: "#f59e0b",
+      surface: "linear-gradient(180deg, #eefbf8 0%, #d6f3ee 100%)",
+      icon: <FaMapMarkerAlt />,
+      data: locations.map((l) => l.name),
+      count: locations.length,
+    },
+  ];
+
+  const handleBoxClick = (box) => {
+    setSearchText("");
+    if (box.reportTab) {
+      setActiveStockTab(box.reportTab);
+      return;
+    }
+
+    setShowListPopup({
+      show: true,
+      title: box.title,
+      data: box.data || [],
+    });
+  };
 
   const partyStockSummary = Object.values(
     filteredCompanyStock.reduce((acc, row) => {
