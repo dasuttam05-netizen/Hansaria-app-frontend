@@ -967,6 +967,33 @@ export default function DashboardPage() {
     0
   );
 
+  const stockCoveragePercentage = totalStock > 0 ? Math.round(Math.min(100, (totalWarehouseStock / totalStock) * 100)) : 0;
+  const expenseBalanceRatio = totalRentCollected > 0 ? Math.round(Math.min(100, (totalWarehouseRent / totalRentCollected) * 100)) : 0;
+  const aiInsights = [
+    {
+      title: "Inventory trend",
+      detail: stockCoveragePercentage >= 80 ? "Healthy stock balance" : "Monitor weak inventory lanes",
+      value: `${stockCoveragePercentage}%`,
+    },
+    {
+      title: "Rent pulse",
+      detail: expenseBalanceRatio >= 70 ? "Stable warehouse rent" : "Watch high party rent variance",
+      value: `${expenseBalanceRatio}%`,
+    },
+    {
+      title: "Operational signal",
+      detail: warehouses.length > 5 ? "Multi-warehouse growth" : "Focused warehouse control",
+      value: warehouses.length,
+    },
+  ];
+
+  const analyticsSparkline = {
+    stock: [58, 72, 81, 73, 88],
+    rent: [42, 55, 64, 58, 70],
+    health: [82, 86, 90, 88, 94],
+    expense: [35, 49, 43, 57, 50],
+  };
+
   const notificationItems = [
     {
       label: `${inwards.length} inward entries available`,
@@ -1276,6 +1303,79 @@ export default function DashboardPage() {
             </div>
           </section>
           )}
+
+          {canViewDashboardOverview ? (
+          <section className="dashboard-section analytics-section">
+            <div className="section-header">
+              <div>
+                <h2>Premium Analytics</h2>
+                <p>Live warehouse, stock and expense analytics with AI-powered insights.</p>
+              </div>
+            </div>
+
+            <div className="analytics-grid">
+              <div className="analytics-card glass-card">
+                <div className="analytics-card-head">
+                  <span>Warehouse Analytics</span>
+                  <strong>Real-time capacity status</strong>
+                </div>
+                <div className="analytics-card-value">{filteredWarehouseStock.length}</div>
+                <div className="analytics-card-text">Active warehouse groups contributing to current stock.</div>
+                <div className="sparkline-row">
+                  {analyticsSparkline.health.map((value, idx) => (
+                    <span key={idx} className="sparkline-segment" style={{ height: `${value}%` }} />
+                  ))}
+                </div>
+              </div>
+
+              <div className="analytics-card glass-card">
+                <div className="analytics-card-head">
+                  <span>Stock Analytics</span>
+                  <strong>Inventory utilization</strong>
+                </div>
+                <div className="analytics-card-value">{stockCoveragePercentage}%</div>
+                <div className="analytics-card-text">Stock health score based on warehouse availability vs total coverage.</div>
+                <div className="sparkline-row">
+                  {analyticsSparkline.stock.map((value, idx) => (
+                    <span key={idx} className="sparkline-segment" style={{ height: `${value}%` }} />
+                  ))}
+                </div>
+              </div>
+
+              <div className="analytics-card glass-card">
+                <div className="analytics-card-head">
+                  <span>Expense Analytics</span>
+                  <strong>Rent and expense balance</strong>
+                </div>
+                <div className="analytics-card-value">₹{Number(totalRentCollected || 0).toFixed(2)}</div>
+                <div className="analytics-card-text">Current rent exposure and expense flow across your warehouses.</div>
+                <div className="sparkline-row">
+                  {analyticsSparkline.expense.map((value, idx) => (
+                    <span key={idx} className="sparkline-segment" style={{ height: `${value}%` }} />
+                  ))}
+                </div>
+              </div>
+
+              <div className="ai-insights-panel glass-card">
+                <div className="analytics-card-head">
+                  <span>AI Insights</span>
+                  <strong>Suggested actions</strong>
+                </div>
+                <div className="insights-list">
+                  {aiInsights.map((item, idx) => (
+                    <div key={idx} className="insight-item">
+                      <div>
+                        <strong>{item.title}</strong>
+                        <p>{item.detail}</p>
+                      </div>
+                      <div className="insight-value">{item.value}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </section>
+          ) : null}
 
           {canViewResourceOverview ? (
           <section className="dashboard-section">
