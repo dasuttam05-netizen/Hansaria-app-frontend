@@ -110,180 +110,38 @@ export default function DashboardPage() {
 
   const fetchData = async (currentUser, isActive) => {
     try {
-      const canLoadPartyStockInsights = hasPermission(currentUser, "report.partyStock");
-      const canLoadWarehouseRentInsights = hasPermission(currentUser, "report.warehouseRentMonthEnd");
-      const canReadCompanies = hasAnyPermission(currentUser, [
-        "companies.manage",
-        "inward.view",
-        "inward.create",
-        "outward.view",
-        "outward.create",
-        "adjustment.manage",
-        "expense.entry",
-        "expense.view",
-        "expense.create",
-        "cash.view",
-        "settlement.view",
-        "report.inward",
-        "report.erp",
-        "report.partyLedger",
-        "report.partyStock",
-        "report.warehouseRentLedger",
-        "report.warehouseRentMonthEnd",
-        "report.outwardSettlement",
-        "report.expense",
-      ]);
-      const canReadCompanyAccounts = hasAnyPermission(currentUser, [
-        "companyAccounts.manage",
-        "inward.view",
-        "inward.create",
-        "outward.view",
-        "outward.create",
-        "adjustment.manage",
-        "expense.entry",
-        "expense.view",
-        "expense.create",
-        "cash.view",
-        "settlement.view",
-        "report.inward",
-        "report.erp",
-        "report.partyLedger",
-        "report.partyStock",
-        "report.warehouseRentLedger",
-        "report.warehouseRentMonthEnd",
-        "report.outwardSettlement",
-        "report.expense",
-      ]);
-      const canReadLocations = hasAnyPermission(currentUser, [
-        "locations.manage",
-        "expense.entry",
-        "expense.view",
-        "expense.create",
-        "expense.edit",
-        "inward.view",
-        "inward.create",
-        "outward.view",
-        "outward.create",
-        "employees.view",
-        "report.partyStock",
-        "report.warehouseRentLedger",
-        "report.warehouseRentMonthEnd",
-      ]);
-      const canReadEmployees = hasAnyPermission(currentUser, [
-        "employees.view",
-        "inward.view",
-        "outward.view",
-        "expense.entry",
-        "report.erp",
-      ]);
-      const canReadWarehouses = hasAnyPermission(currentUser, [
-        "warehouses.manage",
-        "warehouse.trading.purchase.view",
-        "warehouse.trading.sale.view",
-        "warehouse.trading.payment.view",
-        "warehouse.trading.receipt.view",
-        "warehouse.trading.journal.view",
-        "outward.view",
-        "inward.view",
-      ]);
-      const canReadProducts = hasAnyPermission(currentUser, [
-        "products.manage",
-        "inward.view",
-        "inward.create",
-        "outward.view",
-        "outward.create",
-        "adjustment.manage",
-        "expense.entry",
-        "expense.view",
-        "expense.create",
-        "transport.manage",
-        "report.inward",
-        "report.erp",
-        "report.partyLedger",
-        "report.partyStock",
-      ]);
-
-      const resolveRequests = async (requests) => {
-        const settled = await Promise.allSettled(requests);
-        return settled.map((result) => {
-          if (result.status === "fulfilled") {
-            return result.value;
-          }
-          return { data: [] };
-        });
-      };
-
-      const criticalRequests = [
-        canReadLocations ? API.get(`${API_BASE}/locations`) : Promise.resolve({ data: [] }),
-        canReadEmployees ? API.get(`${API_BASE}/employees`) : Promise.resolve({ data: [] }),
-        canReadCompanies ? API.get(`${API_BASE}/companies`) : Promise.resolve({ data: [] }),
-        canReadCompanyAccounts ? API.get(`${API_BASE}/company-accounts`) : Promise.resolve({ data: [] }),
-        canReadWarehouses ? API.get(`${API_BASE}/warehouses`) : Promise.resolve({ data: [] }),
-        canReadProducts ? API.get(`${API_BASE}/products`) : Promise.resolve({ data: [] }),
-      ];
-
-      const secondaryRequests = [
-        hasAnyPermission(currentUser, ["inward.manage", "inward.view", "inward.create"])
-          ? API.get(`${API_BASE}/inward`)
-          : Promise.resolve({ data: [] }),
-        hasAnyPermission(currentUser, ["outward.manage", "outward.view", "outward.create"])
-          ? API.get(`${API_BASE}/outward`)
-          : Promise.resolve({ data: [] }),
-        canLoadPartyStockInsights ? API.get(`${API_BASE}/reports/party-stock`) : Promise.resolve({ data: { summary: [] } }),
-        canLoadPartyStockInsights ? API.get(`${API_BASE}/reports/warehouse-stock`) : Promise.resolve({ data: [] }),
-        canLoadPartyStockInsights ? API.get(`${API_BASE}/reports/total-stock`) : Promise.resolve({ data: { total: 0 } }),
-        canLoadWarehouseRentInsights
-          ? API.get(`${API_BASE}/reports/warehouse-rent-month-end`, {
-              params: { month: currentMonth },
-            })
-          : Promise.resolve({ data: { summary: [] } }),
-      ];
-
-      const [locRes, empRes, compRes, compAccRes, wareRes, prodRes] = await resolveRequests(criticalRequests);
+      const payload = await API.get(`${API_BASE}/dashboard`);
 
       if (!isActive()) {
         return;
       }
 
-      setLocations(locRes?.data || []);
-      setEmployees(empRes?.data || []);
-      setCompanies(compRes?.data || []);
-      setCompanyAccounts(compAccRes?.data || []);
-      setWarehouses(wareRes?.data || []);
-      setProducts(prodRes?.data || []);
+      const data = payload?.data || {};
+      const normalizedLocations = Array.isArray(data.locations) ? data.locations : [];
+      const normalizedEmployees = Array.isArray(data.employees) ? data.employees : [];
+      const normalizedCompanies = Array.isArray(data.companies) ? data.companies : [];
+      const normalizedCompanyAccounts = Array.isArray(data.companyAccounts) ? data.companyAccounts : [];
+      const normalizedWarehouses = Array.isArray(data.warehouses) ? data.warehouses : [];
+      const normalizedProducts = Array.isArray(data.products) ? data.products : [];
+      const normalizedInwards = Array.isArray(data.inwards) ? data.inwards : [];
+      const normalizedOutwards = Array.isArray(data.outwards) ? data.outwards : [];
+      const normalizedPartyStock = Array.isArray(data.partyStock) ? data.partyStock : [];
+      const normalizedWarehouseStock = Array.isArray(data.warehouseStock) ? data.warehouseStock : [];
+      const normalizedMonthEndRentSummary = Array.isArray(data.monthEndRentSummary) ? data.monthEndRentSummary : [];
+      const normalizedTotalStock = Number(data.totalStock ?? 0);
 
-      window.setTimeout(async () => {
-        const [inwardRes, outwardRes, partyStockRes, warehouseStockRes, totalStockRes, monthEndRentRes] = await resolveRequests(secondaryRequests);
-
-        if (!isActive()) {
-          return;
-        }
-
-        setInwards(Array.isArray(inwardRes?.data) ? inwardRes.data : []);
-        setOutwards(Array.isArray(outwardRes?.data) ? outwardRes.data : []);
-
-        const normalizedPartyStock = Array.isArray(partyStockRes?.data?.summary)
-          ? partyStockRes.data.summary
-          : Array.isArray(partyStockRes?.data)
-            ? partyStockRes.data
-            : [];
-        const normalizedWarehouseStock = Array.isArray(warehouseStockRes?.data)
-          ? warehouseStockRes.data
-          : Array.isArray(warehouseStockRes?.data?.summary)
-            ? warehouseStockRes.data.summary
-            : [];
-        const normalizedTotalStock = Number(
-          totalStockRes?.data?.total ?? totalStockRes?.data?.summary?.[0]?.total ?? 0
-        );
-        const normalizedRentSummary = Array.isArray(monthEndRentRes?.data?.summary)
-          ? monthEndRentRes.data.summary
-          : [];
-
-        setPartyStock(normalizedPartyStock);
-        setWarehouseStock(normalizedWarehouseStock);
-        setTotalStock(normalizedTotalStock);
-        setMonthEndRentSummary(normalizedRentSummary);
-      }, 0);
+      setLocations(normalizedLocations);
+      setEmployees(normalizedEmployees);
+      setCompanies(normalizedCompanies);
+      setCompanyAccounts(normalizedCompanyAccounts);
+      setWarehouses(normalizedWarehouses);
+      setProducts(normalizedProducts);
+      setInwards(normalizedInwards);
+      setOutwards(normalizedOutwards);
+      setPartyStock(normalizedPartyStock);
+      setWarehouseStock(normalizedWarehouseStock);
+      setTotalStock(normalizedTotalStock);
+      setMonthEndRentSummary(normalizedMonthEndRentSummary);
     } catch (err) {
       console.error("Failed to fetch dashboard data:", err);
     }
