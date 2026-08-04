@@ -1485,9 +1485,9 @@ export default function WarehouseTradingPage() {
   };
 
   const purchaseReportRows = useMemo(() => {
-    if (!Array.isArray(reportData)) return [];
-    return reportData.filter((row) => row && (row.id || row._id));
-  }, [reportData]);
+    const rows = Array.isArray(filteredReportData) ? filteredReportData : [];
+    return rows.filter((row) => row && (row.id || row._id || row.voucher_no));
+  }, [filteredReportData]);
 
   const currentPurchasePreviewIndex = purchasePreviewRow
     ? purchaseReportRows.findIndex((row) => String(getRecordId(row)) === String(getRecordId(purchasePreviewRow)))
@@ -6661,7 +6661,7 @@ const smartInfoBoxStyle = {
   color: "#14532d",
   fontSize: 12,
 };
-const reportHeaderRowStyle = { background: "#087a73", color: "#fff" };
+const reportHeaderRowStyle = { background: "#087a73", color: "#fff", position: "sticky", top: 0, zIndex: 1 };
 const lbl = { display: "block", marginBottom: 6, fontWeight: 600, fontSize: 13, color: "#334155" };
 const memoShell = { border: "1px solid #d7dee8", borderRadius: 10, padding: 18, background: "#fbfdff" };
 const memoHeader = { display: "flex", justifyContent: "space-between", gap: 18, alignItems: "flex-start", borderBottom: "2px solid #ea580c", paddingBottom: 14, marginBottom: 16, flexWrap: "wrap" };
