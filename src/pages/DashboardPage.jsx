@@ -97,10 +97,6 @@ export default function DashboardPage() {
   const [openTopbarMenu, setOpenTopbarMenu] = useState(null);
   const [stockReportQuery, setStockReportQuery] = useState("");
   const [stockReportWarehouse, setStockReportWarehouse] = useState("all");
-  const [showAllWarehouseStock, setShowAllWarehouseStock] = useState(false);
-  const [showAllWarehousePartyStock, setShowAllWarehousePartyStock] = useState(false);
-  const [showAllPartyStock, setShowAllPartyStock] = useState(false);
-  const [showAllWarehouseRent, setShowAllWarehouseRent] = useState(false);
 
   const [showListPopup, setShowListPopup] = useState({
     show: false,
@@ -958,38 +954,6 @@ export default function DashboardPage() {
     0
   );
 
-  const totalPartyStock = filteredCompanyStock.reduce(
-    (sum, row) => sum + Number(row.available_balance_qty ?? row.balance_qty ?? row.stock ?? 0),
-    0
-  );
-
-  const warehousePartyStockSummary = Object.values(
-    filteredCompanyStock.reduce((acc, row) => {
-      const warehouseName = String(row.warehouse_name || row.warehouse || "Unknown").trim() || "Unknown";
-      const partyName = String(row.party_name || row.party || row.company_name || row.account_name || "Unknown").trim() || "Unknown";
-      const key = `${warehouseName}||${partyName}`;
-      if (!acc[key]) {
-        acc[key] = {
-          warehouse_name: warehouseName,
-          party_name: partyName,
-          available_balance_qty: 0,
-        };
-      }
-      acc[key].available_balance_qty += Number(row.available_balance_qty ?? row.balance_qty ?? row.stock ?? 0);
-      return acc;
-    }, {}),
-  ).sort((a, b) => b.available_balance_qty - a.available_balance_qty);
-
-  const displayedWarehouseStock = showAllWarehouseStock ? filteredWarehouseStock : filteredWarehouseStock.slice(0, 6);
-  const displayedWarehousePartyStockSummary = showAllWarehousePartyStock
-    ? warehousePartyStockSummary
-    : warehousePartyStockSummary.slice(0, 6);
-  const displayedPartyStockSummary = showAllPartyStock ? partyStockSummary : partyStockSummary.slice(0, 6);
-  const displayedWarehouseRent = showAllWarehouseRent ? warehouseWiseRent : warehouseWiseRent.slice(0, 6);
-
-  const warehousePartyMatchDiff = Number((totalWarehouseStock - totalPartyStock).toFixed(2));
-  const stockTotalsMatch = Math.abs(warehousePartyMatchDiff) < 0.01;
-
   const totalWarehouseRent = warehouseWiseRent.reduce(
     (sum, row) => sum + Number(row.total_rent || 0),
     0
@@ -1467,31 +1431,12 @@ export default function DashboardPage() {
             <div className="dashboard-panel table-card" style={{ padding: "18px" }}>
               <div className="report-highlight-row" style={{ marginBottom: "14px" }}>
                 <div className="report-highlight-card">
-                  <span>System Total Stock</span>
-                  <strong>{Number(totalStock).toFixed(2)}</strong>
-                  <p className="report-highlight-note">API total stock across all warehouses</p>
-                </div>
-                <div className="report-highlight-card">
-                  <span>Warehouse Total Stock</span>
+                  <span>Total Available Stock</span>
                   <strong>{Number(totalWarehouseStock).toFixed(2)}</strong>
-                  <p className="report-highlight-note">Sum of filtered warehouse balances</p>
                 </div>
                 <div className="report-highlight-card">
-                  <span>Party Total Stock</span>
-                  <strong>{Number(totalPartyStock).toFixed(2)}</strong>
-                  <p className="report-highlight-note">Sum of filtered party available balances</p>
-                </div>
-                <div className="report-highlight-card">
-                  <span>Total Rent</span>
-                  <strong>₹{Number(totalRentCollected || 0).toFixed(2)}</strong>
-                  <p className="report-highlight-note">Warehouse and party rent totals</p>
-                </div>
-              </div>
-              <div className="report-highlight-row" style={{ marginBottom: "14px", gap: "12px" }}>
-                <div className={`report-highlight-card ${stockTotalsMatch ? "match-good" : "match-warning"}`}>
-                  <span>Stock Match</span>
-                  <strong>{stockTotalsMatch ? "Matched" : `Diff ${warehousePartyMatchDiff.toFixed(2)}`}</strong>
-                  <p className="report-highlight-note">Warehouse vs party totals</p>
+                  <span>Total Current Rent</span>
+                  <strong>{Number(totalRentCollected).toFixed(2)}</strong>
                 </div>
               </div>
 
@@ -1563,7 +1508,7 @@ export default function DashboardPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {displayedWarehouseStock.length > 0 ? displayedWarehouseStock.map((row, idx) => (
+                        {filteredWarehouseStock.length > 0 ? filteredWarehouseStock.slice(0, 6).map((row, idx) => (
                           <tr key={row.warehouse || idx}>
                             <td>{idx + 1}</td>
                             <td>{row.warehouse}</td>
@@ -1574,71 +1519,6 @@ export default function DashboardPage() {
                         )}
                       </tbody>
                     </table>
-                    {filteredWarehouseStock.length > 6 && (
-                      <div className="table-action-row">
-                        <button
-                          type="button"
-                          className="view-more-btn"
-                          onClick={() => setShowAllWarehouseStock((prev) => !prev)}
-                        >
-                          {showAllWarehouseStock ? "Show less" : "View all"}
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-
-                <div className="report-module">
-                  <div className="report-card-header report-card-header-inline">
-                    <div>
-                      <h3>Warehouse-Party Stock</h3>
-                      <p>Warehouse and party stock matched together.</p>
-                    </div>
-                    <div className="report-metric-row">
-                      <div className="report-metric-stat">
-                        <span>Rows</span>
-                        <strong>{warehousePartyStockSummary.length}</strong>
-                      </div>
-                      <div className="report-metric-stat">
-                        <span>Total Balance</span>
-                        <strong>{Number(totalPartyStock).toFixed(2)}</strong>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="report-table-wrap">
-                    <table className="dashboard-table">
-                      <thead>
-                        <tr>
-                          <th>S.L No</th>
-                          <th>Warehouse</th>
-                          <th>Party</th>
-                          <th>Available Balance</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {displayedWarehousePartyStockSummary.length > 0 ? displayedWarehousePartyStockSummary.map((row, idx) => (
-                          <tr key={`${row.warehouse_name}-${row.party_name}-${idx}`}>
-                            <td>{idx + 1}</td>
-                            <td>{row.warehouse_name}</td>
-                            <td>{row.party_name}</td>
-                            <td className="table-value-cell">{Number(row.available_balance_qty || 0).toFixed(2)}</td>
-                          </tr>
-                        )) : (
-                          <tr><td colSpan="4">No warehouse-party stock data available</td></tr>
-                        )}
-                      </tbody>
-                    </table>
-                    {warehousePartyStockSummary.length > 6 && (
-                      <div className="table-action-row">
-                        <button
-                          type="button"
-                          className="view-more-btn"
-                          onClick={() => setShowAllWarehousePartyStock((prev) => !prev)}
-                        >
-                          {showAllWarehousePartyStock ? "Show less" : "View all"}
-                        </button>
-                      </div>
-                    )}
                   </div>
                 </div>
 
@@ -1654,8 +1534,8 @@ export default function DashboardPage() {
                         <strong>{partyStockSummary.length}</strong>
                       </div>
                       <div className="report-metric-stat">
-                        <span>Total Balance</span>
-                        <strong>{Number(totalPartyStock).toFixed(2)}</strong>
+                        <span>Rows</span>
+                        <strong>{filteredCompanyStock.length}</strong>
                       </div>
                     </div>
                   </div>
@@ -1669,7 +1549,7 @@ export default function DashboardPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {displayedPartyStockSummary.length > 0 ? displayedPartyStockSummary.map((row, idx) => (
+                        {partyStockSummary.length > 0 ? partyStockSummary.slice(0, 6).map((row, idx) => (
                           <tr key={row.party_name || idx}>
                             <td>{idx + 1}</td>
                             <td>{row.party_name}</td>
@@ -1680,17 +1560,6 @@ export default function DashboardPage() {
                         )}
                       </tbody>
                     </table>
-                    {partyStockSummary.length > 6 && (
-                      <div className="table-action-row">
-                        <button
-                          type="button"
-                          className="view-more-btn"
-                          onClick={() => setShowAllPartyStock((prev) => !prev)}
-                        >
-                          {showAllPartyStock ? "Show less" : "View all"}
-                        </button>
-                      </div>
-                    )}
                   </div>
                 </div>
 
@@ -1721,7 +1590,7 @@ export default function DashboardPage() {
                         </tr>
                       </thead>
                       <tbody>
-                        {displayedWarehouseRent.length > 0 ? displayedWarehouseRent.map((row, idx) => (
+                        {warehouseWiseRent.length > 0 ? warehouseWiseRent.slice(0, 6).map((row, idx) => (
                           <tr key={`${row.warehouse_name}-${idx}`}>
                             <td>{idx + 1}</td>
                             <td>{row.warehouse_name}</td>
@@ -1732,17 +1601,6 @@ export default function DashboardPage() {
                         )}
                       </tbody>
                     </table>
-                    {warehouseWiseRent.length > 6 && (
-                      <div className="table-action-row">
-                        <button
-                          type="button"
-                          className="view-more-btn"
-                          onClick={() => setShowAllWarehouseRent((prev) => !prev)}
-                        >
-                          {showAllWarehouseRent ? "Show less" : "View all"}
-                        </button>
-                      </div>
-                    )}
                   </div>
                 </div>
 
