@@ -48,6 +48,21 @@ function resolveLandingPath(user) {
   return "/dashboard";
 }
 
+const prefetchCommonModules = () => {
+  if (typeof window === "undefined") return;
+  const loaders = [
+    () => import("./DashboardPage"),
+    () => import("./WarehouseTradingPage"),
+    () => import("./InwardPage"),
+    () => import("./OutwardPage"),
+    () => import("./LocationManagementPage"),
+  ];
+
+  loaders.forEach((loader) => {
+    loader().catch(() => {});
+  });
+};
+
 export default function LoginPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -77,6 +92,9 @@ export default function LoginPage() {
       });
 
       const savedUser = saveSession(res.data.token, res.data.user);
+      if (typeof window !== "undefined") {
+        window.setTimeout(prefetchCommonModules, 0);
+      }
       navigate(resolveLandingPath(savedUser));
     } catch (err) {
       setError(err.response?.data?.error || "Login failed. Please try again.");
@@ -475,21 +493,3 @@ const responsiveCss = `
     }
     .login-form-panel {
       min-height: auto !important;
-      padding: 32px !important;
-    }
-  }
-
-  @media (max-width: 860px) {
-    main {
-      grid-template-columns: 1fr !important;
-    }
-    .login-brand-panel {
-      display: none !important;
-    }
-    .login-form-panel {
-      min-height: 100vh !important;
-      justify-content: center !important;
-      padding: 22px !important;
-    }
-  }
-`;
