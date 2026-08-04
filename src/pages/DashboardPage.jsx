@@ -424,6 +424,42 @@ export default function DashboardPage() {
       count: outwards.length,
     },
     {
+      title: "Warehouse Stock",
+      color: "#0f766e",
+      accent: "#14b8a6",
+      surface: "linear-gradient(180deg, #ecfeff 0%, #cffafe 100%)",
+      icon: <FaWarehouse />,
+      count: filteredWarehouseStock.length,
+      reportTab: "warehouse_stock",
+    },
+    {
+      title: "Party Stock",
+      color: "#0b7285",
+      accent: "#22d3ee",
+      surface: "linear-gradient(180deg, #eff6ff 0%, #dbf4ff 100%)",
+      icon: <FaChartBar />,
+      count: partyStockSummary.length,
+      reportTab: "party_stock",
+    },
+    {
+      title: "Warehouse Rent",
+      color: "#b45309",
+      accent: "#f59e0b",
+      surface: "linear-gradient(180deg, #fff7ed 0%, #ffedd5 100%)",
+      icon: <FaMoneyBillWave />,
+      count: warehouseWiseRent.length,
+      reportTab: "warehouse_rent",
+    },
+    {
+      title: "Party Rent",
+      color: "#831843",
+      accent: "#ec4899",
+      surface: "linear-gradient(180deg, #fff1f2 0%, #ffe4e6 100%)",
+      icon: <FaBalanceScale />,
+      count: partyWiseRent.length,
+      reportTab: "party_rent",
+    },
+    {
       title: "Employees",
       color: "#7e22ce",
       accent: "#a855f7",
@@ -445,6 +481,11 @@ export default function DashboardPage() {
 
   const handleBoxClick = (box) => {
     setSearchText("");
+    if (box.reportTab) {
+      setActiveStockTab(box.reportTab);
+      return;
+    }
+
     setShowListPopup({
       show: true,
       title: box.title,
@@ -1081,42 +1122,35 @@ export default function DashboardPage() {
     ? user.assigned_warehouses.map((item) => item?.name).filter(Boolean)
     : [];
 
-  const openPartyStockReport = () => navigate("/party-stock-report");
-  const openMonthEndRentReport = () => navigate("/warehouse-rent-dashboard");
+  const openPartyStockReport = () => {
+    setActiveStockTab("party_stock");
+    setStockReportWarehouse("all");
+    setStockReportQuery("");
+  };
+  const openMonthEndRentReport = () => {
+    setActiveStockTab("warehouse_rent");
+    setStockReportWarehouse("all");
+    setStockReportQuery("");
+  };
   const openWarehouseStockDetails = (warehouseName) => {
-    const matchedWarehouse = warehouses.find((item) => item.name === warehouseName);
-    if (matchedWarehouse?.id) {
-      navigate(`/party-stock-report?warehouse_id=${matchedWarehouse.id}&dashboard_view=1`);
-      return;
-    }
-    navigate("/party-stock-report");
+    setActiveStockTab("warehouse_stock");
+    setStockReportWarehouse(warehouseName || "all");
+    setStockReportQuery("");
   };
   const openCompanyStockDetails = (partyName, warehouseName) => {
-    const matchedCompany = companies.find((item) => item.name === partyName);
-    const matchedWarehouse = warehouses.find((item) => item.name === warehouseName);
-    const params = new URLSearchParams();
-
-    if (matchedCompany?.id) params.set("company_id", matchedCompany.id);
-    if (matchedWarehouse?.id) params.set("warehouse_id", matchedWarehouse.id);
-    params.set("dashboard_view", "1");
-
-    navigate(`/party-stock-report${params.toString() ? `?${params.toString()}` : ""}`);
+    setActiveStockTab("party_stock");
+    setStockReportWarehouse(warehouseName || "all");
+    setStockReportQuery(partyName || "");
   };
   const openWarehouseRentDetails = (warehouseName) => {
-    const matchedWarehouse = warehouses.find((item) => item.name === warehouseName);
-    const params = new URLSearchParams();
-    params.set("month", currentMonth);
-    if (matchedWarehouse?.id) params.set("warehouse_id", matchedWarehouse.id);
-    params.set("dashboard_view", "1");
-    navigate(`/warehouse-rent-dashboard?${params.toString()}`);
+    setActiveStockTab("warehouse_rent");
+    setStockReportWarehouse(warehouseName || "all");
+    setStockReportQuery("");
   };
   const openPartyRentDetails = (partyName) => {
-    const matchedCompany = companies.find((item) => item.name === partyName);
-    const params = new URLSearchParams();
-    params.set("month", currentMonth);
-    if (matchedCompany?.id) params.set("company_id", matchedCompany.id);
-    params.set("dashboard_view", "1");
-    navigate(`/warehouse-rent-dashboard?${params.toString()}`);
+    setActiveStockTab("party_rent");
+    setStockReportWarehouse("all");
+    setStockReportQuery(partyName || "");
   };
 
   return (
@@ -1418,7 +1452,6 @@ export default function DashboardPage() {
                 {[
                   { key: "warehouse_stock", label: "Warehouse Stock" },
                   { key: "party_stock", label: "Party Stock" },
-                  { key: "company_stock", label: "Company Stock" },
                   { key: "warehouse_rent", label: "Warehouse Rent" },
                   { key: "party_rent", label: "Party Rent" },
                 ].map((tab) => (
