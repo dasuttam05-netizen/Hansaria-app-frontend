@@ -221,15 +221,15 @@ export default function DashboardPage() {
         canReadCompanyAccounts ? API.get(`${API_BASE}/company-accounts`) : Promise.resolve({ data: [] }),
         canReadWarehouses ? API.get(`${API_BASE}/warehouses`) : Promise.resolve({ data: [] }),
         canReadProducts ? API.get(`${API_BASE}/products`) : Promise.resolve({ data: [] }),
+      ];
+
+      const secondaryRequests = [
         hasAnyPermission(currentUser, ["inward.manage", "inward.view", "inward.create"])
           ? API.get(`${API_BASE}/inward`)
           : Promise.resolve({ data: [] }),
         hasAnyPermission(currentUser, ["outward.manage", "outward.view", "outward.create"])
           ? API.get(`${API_BASE}/outward`)
           : Promise.resolve({ data: [] }),
-      ];
-
-      const secondaryRequests = [
         canLoadPartyStockInsights ? API.get(`${API_BASE}/reports/party-stock`) : Promise.resolve({ data: { summary: [] } }),
         canLoadPartyStockInsights ? API.get(`${API_BASE}/reports/warehouse-stock`) : Promise.resolve({ data: [] }),
         canLoadPartyStockInsights ? API.get(`${API_BASE}/reports/total-stock`) : Promise.resolve({ data: { total: 0 } }),
@@ -240,16 +240,7 @@ export default function DashboardPage() {
           : Promise.resolve({ data: { summary: [] } }),
       ];
 
-      const [
-        locRes,
-        empRes,
-        compRes,
-        compAccRes,
-        wareRes,
-        prodRes,
-        inwardRes,
-        outwardRes,
-      ] = await resolveRequests(criticalRequests);
+      const [locRes, empRes, compRes, compAccRes, wareRes, prodRes] = await resolveRequests(criticalRequests);
 
       if (!isActive()) {
         return;
@@ -261,11 +252,9 @@ export default function DashboardPage() {
       setCompanyAccounts(compAccRes?.data || []);
       setWarehouses(wareRes?.data || []);
       setProducts(prodRes?.data || []);
-      setInwards(inwardRes?.data || []);
-      setOutwards(outwardRes?.data || []);
 
       window.setTimeout(async () => {
-        const [partyStockRes, warehouseStockRes, totalStockRes, monthEndRentRes] = await resolveRequests(secondaryRequests);
+        const [inwardRes, outwardRes, partyStockRes, warehouseStockRes, totalStockRes, monthEndRentRes] = await resolveRequests(secondaryRequests);
 
         if (!isActive()) {
           return;
