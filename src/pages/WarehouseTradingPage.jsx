@@ -1308,6 +1308,14 @@ export default function WarehouseTradingPage() {
             alert("Voucher saved, but WhatsApp share could not be completed.");
           }
         }
+        if (purchasePreviewRow) {
+          setShowPurchasePreview(false);
+          setPurchasePreviewRow(null);
+          setActiveTab("reports");
+          setActiveReport("purchase");
+          await loadReport();
+          return;
+        }
       }
     } catch (err) {
       console.error(err);
@@ -1409,6 +1417,8 @@ export default function WarehouseTradingPage() {
     if (!voucherId) return;
     setActiveTab("vouchers");
     setActiveVoucherType("purchase");
+    setPurchasePreviewRow(voucher || null);
+    setShowPurchasePreview(false);
     const nextForm = { ...defaultForm(), ...voucher };
     setFormData(nextForm);
     setPurchaseBaseline({
@@ -1472,6 +1482,24 @@ export default function WarehouseTradingPage() {
     setSalePreviewRow(voucher);
     setSalePreviewSummary(null);
     setShowSalePreview(true);
+  };
+
+  const purchaseReportRows = useMemo(() => {
+    if (!Array.isArray(reportData)) return [];
+    return reportData.filter((row) => row && (row.id || row._id));
+  }, [reportData]);
+
+  const currentPurchasePreviewIndex = purchasePreviewRow
+    ? purchaseReportRows.findIndex((row) => String(getRecordId(row)) === String(getRecordId(purchasePreviewRow)))
+    : -1;
+
+  const navigatePurchasePreview = (direction) => {
+    if (currentPurchasePreviewIndex < 0) return;
+    const targetIndex = currentPurchasePreviewIndex + direction;
+    const targetRow = purchaseReportRows[targetIndex];
+    if (targetRow) {
+      setPurchasePreviewRow(targetRow);
+    }
   };
 
   const resetPurchaseDeductions = () => {
@@ -5879,7 +5907,7 @@ export default function WarehouseTradingPage() {
       {showPurchasePreview && (isPurchaseVoucher || purchasePreviewRow) && (
         <div className="purchase-preview-overlay" style={modalOverlayStyle}>
           <div className="purchase-preview-modal" style={{ ...paymentAdjustModalStyle, width: "min(1180px, 98vw)", background: "#fafafa" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start", marginBottom: 14, borderBottom: "1px solid #d1d5db", paddingBottom: 12 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "flex-start", marginBottom: 14, borderBottom: "1px solid #d1d5db", paddingBottom: 12, flexWrap: "wrap" }}>
               <div>
                 <div style={{ fontSize: 12, letterSpacing: 1.1, fontWeight: 800, color: "#6b7280" }}>PURCHASE VOUCHER PREVIEW</div>
                 <h3 style={{ margin: "4px 0 0", fontSize: 24, color: "#111827" }}>
@@ -5887,9 +5915,22 @@ export default function WarehouseTradingPage() {
                 </h3>
                 <div style={{ marginTop: 4, fontSize: 13, color: "#4b5563" }}>This preview follows a clean report layout for easy checking.</div>
               </div>
-              <button type="button" onClick={() => { setShowPurchasePreview(false); setPurchasePreviewRow(null); }} style={{ ...btnAction, background: "#64748b" }}>
-                Close
-              </button>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap" }}>
+                <button type="button" onClick={() => navigatePurchasePreview(-1)} disabled={currentPurchasePreviewIndex <= 0} style={{ ...btnAction, background: currentPurchasePreviewIndex <= 0 ? "#cbd5e1" : "#64748b" }}>
+                  ← Previous
+                </button>
+                <button type="button" onClick={() => navigatePurchasePreview(1)} disabled={currentPurchasePreviewIndex < 0 || currentPurchasePreviewIndex >= purchaseReportRows.length - 1} style={{ ...btnAction, background: currentPurchasePreviewIndex < 0 || currentPurchasePreviewIndex >= purchaseReportRows.length - 1 ? "#cbd5e1" : "#64748b" }}>
+                  Next →
+                </button>
+                {purchasePreviewRow && (
+                  <button type="button" onClick={() => handleEditPurchaseReport(purchasePreviewRow)} style={{ ...btnAction, background: "#0f766e" }}>
+                    Edit
+                  </button>
+                )}
+                <button type="button" onClick={() => { setShowPurchasePreview(false); setPurchasePreviewRow(null); }} style={{ ...btnAction, background: "#64748b" }}>
+                  Close
+                </button>
+              </div>
             </div>
 
             {(() => {
@@ -6033,6 +6074,11 @@ export default function WarehouseTradingPage() {
                   </div>
 
                   <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 16, flexWrap: "wrap" }}>
+                    {purchasePreviewRow && (
+                      <button type="button" onClick={() => handleEditPurchaseReport(purchasePreviewRow)} style={{ ...btnPrimary, background: "#0f766e" }}>
+                        Edit
+                      </button>
+                    )}
                     <button type="button" onClick={() => { setShowPurchasePreview(false); setPurchasePreviewRow(null); }} style={{ ...btnPrimary, background: "#64748b" }}>
                       {purchasePreviewRow ? "Close" : "Back to Edit"}
                     </button>
