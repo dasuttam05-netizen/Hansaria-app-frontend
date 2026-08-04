@@ -52,6 +52,66 @@ import { getApiOrigin } from "./utils/api";
 // ✅ ONLY ONE IMPORTANT LINE
 axios.defaults.baseURL = getApiOrigin();
 
+const preloadRouteModules = () => {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  const run = () => {
+    const loaders = [
+      () => import("./pages/LoginPage"),
+      () => import("./pages/DashboardPage"),
+      () => import("./pages/LocationManagementPage"),
+      () => import("./pages/EmployeeManagementPage"),
+      () => import("./pages/CompanyManagementPage"),
+      () => import("./pages/CompanyAccountsPage"),
+      () => import("./pages/WarehouseManagementPage"),
+      () => import("./pages/ProductsManagementPage"),
+      () => import("./pages/BuyerNamesManagementPage"),
+      () => import("./pages/ConsigneeNamesManagementPage"),
+      () => import("./pages/InwardPage"),
+      () => import("./pages/InwardReportPage"),
+      () => import("./pages/OutwardPage"),
+      () => import("./pages/PendingAdjustment"),
+      () => import("./pages/ERPReportPage"),
+      () => import("./pages/PartyLedgerReportPage"),
+      () => import("./pages/PartyStockReportPage"),
+      () => import("./pages/WarehouseRentLedgerPage"),
+      () => import("./pages/WarehouseRentDashboard"),
+      () => import("./pages/OutwardSettlementReportPage"),
+      () => import("./pages/OutwardEntryDetailsReportPage"),
+      () => import("./pages/TransportManagementPage"),
+      () => import("./pages/TransportBiltiPage"),
+      () => import("./pages/TransportReportPage"),
+      () => import("./pages/ExpenseManagementPage"),
+      () => import("./pages/ExpenseReportPage"),
+      () => import("./pages/ExpensePostedInwardPage"),
+      () => import("./pages/PaltiLorryPage"),
+      () => import("./pages/PaltiLorryAdjustmentReportPage"),
+      () => import("./pages/SelfLoadingPage"),
+      () => import("./pages/LocalSalePage"),
+      () => import("./pages/CashEntriesPage"),
+      () => import("./pages/MainCashBookPage"),
+      () => import("./pages/PartiesCashBookPage"),
+      () => import("./pages/EmployeeCashBookPage"),
+      () => import("./pages/FarmerManagementPage"),
+      () => import("./pages/WarehouseTradingPage"),
+      () => import("./pages/ExpensesPendingPage"),
+      () => import("./pages/CashActivityLogPage"),
+    ];
+
+    loaders.forEach((loader) => {
+      loader().catch(() => {});
+    });
+  };
+
+  if (window.requestIdleCallback) {
+    window.requestIdleCallback(run, { timeout: 1500 });
+  } else {
+    window.setTimeout(run, 300);
+  }
+};
+
 function RouteLoadingFallback() {
   return (
     <div
@@ -421,63 +481,3 @@ function AppRoutes() {
           </ProtectedRoute>
         }
       />
-
-      <Route
-        path="/parties-cash-book"
-        element={
-          <ProtectedRoute permission="cash.partiesBook.view">
-            <PartiesCashBookPage />
-          </ProtectedRoute>
-        }
-      />
-
-      <Route
-        path="/employee-cash-book"
-        element={
-          <ProtectedRoute permission="cash.employeeBook.view">
-            <EmployeeCashBookPage />
-          </ProtectedRoute>
-        }
-      />
-
-      <Route
-        path="/cash-activity-logs"
-        element={
-          <ProtectedRoute permission="all">
-            <CashActivityLogPage />
-          </ProtectedRoute>
-        }
-      />
-
-      <Route
-        path="/expenses"
-        element={
-          <ProtectedRoute permission={["expense.entry", "expense.view", "expense.create", "expense.edit", "expense.delete"]}>
-            <ExpenseManagementPage />
-          </ProtectedRoute>
-        }
-      />
-
-      <Route
-        path="/expense-edit/:id"
-        element={
-          <ProtectedRoute permission={["expense.entry", "expense.view", "expense.create", "expense.edit", "expense.delete"]}>
-            <ExpenseManagementPage />
-          </ProtectedRoute>
-        }
-      />
-      </Routes>
-    </Suspense>
-  );
-}
-
-function App() {
-  return (
-    <Router>
-      <SessionIdleGuard />
-      <AppRoutes />
-    </Router>
-  );
-}
-
-export default App;
