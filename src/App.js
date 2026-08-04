@@ -116,14 +116,18 @@ function RouteLoadingFallback() {
   return (
     <div
       style={{
-        minHeight: "100vh",
-        display: "flex",
-        alignItems: "center",
-        justifyContent: "center",
-        background: "#f8fafc",
-        color: "#0f172a",
-        fontSize: "15px",
-        fontWeight: 600,
+        position: "fixed",
+        top: 12,
+        right: 12,
+        zIndex: 9999,
+        padding: "8px 12px",
+        borderRadius: 999,
+        background: "rgba(15, 23, 42, 0.9)",
+        color: "#fff",
+        fontSize: "12px",
+        fontWeight: 700,
+        boxShadow: "0 10px 24px rgba(15, 23, 42, 0.2)",
+        pointerEvents: "none",
       }}
     >
       Loading page...
