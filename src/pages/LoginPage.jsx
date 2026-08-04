@@ -493,3 +493,21 @@ const responsiveCss = `
     }
     .login-form-panel {
       min-height: auto !important;
+      padding: 32px !important;
+    }
+  }
+
+  @media (max-width: 860px) {
+    main {
+      grid-template-columns: 1fr !important;
+    }
+    .login-brand-panel {
+      display: none !important;
+    }
+    .login-form-panel {
+      min-height: 100vh !important;
+      justify-content: center !important;
+      padding: 22px !important;
+    }
+  }
+`;
