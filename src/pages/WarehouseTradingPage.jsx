@@ -6569,7 +6569,7 @@ function SummaryInput({ label, name, value, onChange, readOnly = false }) {
   );
 }
 
-const headerRow = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, marginBottom: 18, flexWrap: "wrap" };
+const headerRow = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, marginBottom: 18, flexWrap: "wrap", position: "sticky", top: 0, zIndex: 30, background: "#fff", padding: "16px 0" };
 const subtitleStyle = { margin: 0, color: "#475569" };
 const titleStyle = { margin: 0, fontSize: 22, color: "#0f172a" };
 const tabRow = { display: "flex", gap: 10 };
