@@ -95,7 +95,6 @@ export default function DashboardPage() {
   const [showMobileSidebar, setShowMobileSidebar] = useState(false);
   const [isMobileHeaderCollapsed, setIsMobileHeaderCollapsed] = useState(false);
   const [openTopbarMenu, setOpenTopbarMenu] = useState(null);
-  const [activeStockTab, setActiveStockTab] = useState("warehouse_stock");
   const [stockReportQuery, setStockReportQuery] = useState("");
   const [stockReportWarehouse, setStockReportWarehouse] = useState("all");
 
@@ -1084,43 +1083,7 @@ export default function DashboardPage() {
     ? user.assigned_warehouses.map((item) => item?.name).filter(Boolean)
     : [];
 
-  const openPartyStockReport = () => navigate("/party-stock-report");
-  const openMonthEndRentReport = () => navigate("/warehouse-rent-dashboard");
-  const openWarehouseStockDetails = (warehouseName) => {
-    const matchedWarehouse = warehouses.find((item) => item.name === warehouseName);
-    if (matchedWarehouse?.id) {
-      navigate(`/party-stock-report?warehouse_id=${matchedWarehouse.id}&dashboard_view=1`);
-      return;
-    }
-    navigate("/party-stock-report");
-  };
-  const openCompanyStockDetails = (partyName, warehouseName) => {
-    const matchedCompany = companies.find((item) => item.name === partyName);
-    const matchedWarehouse = warehouses.find((item) => item.name === warehouseName);
-    const params = new URLSearchParams();
-
-    if (matchedCompany?.id) params.set("company_id", matchedCompany.id);
-    if (matchedWarehouse?.id) params.set("warehouse_id", matchedWarehouse.id);
-    params.set("dashboard_view", "1");
-
-    navigate(`/party-stock-report${params.toString() ? `?${params.toString()}` : ""}`);
-  };
-  const openWarehouseRentDetails = (warehouseName) => {
-    const matchedWarehouse = warehouses.find((item) => item.name === warehouseName);
-    const params = new URLSearchParams();
-    params.set("month", currentMonth);
-    if (matchedWarehouse?.id) params.set("warehouse_id", matchedWarehouse.id);
-    params.set("dashboard_view", "1");
-    navigate(`/warehouse-rent-dashboard?${params.toString()}`);
-  };
-  const openPartyRentDetails = (partyName) => {
-    const matchedCompany = companies.find((item) => item.name === partyName);
-    const params = new URLSearchParams();
-    params.set("month", currentMonth);
-    if (matchedCompany?.id) params.set("company_id", matchedCompany.id);
-    params.set("dashboard_view", "1");
-    navigate(`/warehouse-rent-dashboard?${params.toString()}`);
-  };
+  // Dashboard-only report cards; no external report page navigation from this section.
 
   return (
     <div className="dashboard-shell">
@@ -1417,200 +1380,171 @@ export default function DashboardPage() {
                 </button>
               </div>
 
-              <div className="stock-report-tab-row">
-                {[
-                  { key: "warehouse_stock", label: "Warehouse Stock" },
-                  { key: "party_stock", label: "Party Stock" },
-                  { key: "company_stock", label: "Company Stock" },
-                  { key: "warehouse_rent", label: "Warehouse Rent" },
-                  { key: "party_rent", label: "Party Rent" },
-                ].map((tab) => (
-                  <button
-                    key={tab.key}
-                    type="button"
-                    onClick={() => setActiveStockTab(tab.key)}
-                    style={{
-                      border: "1px solid #14b8a6",
-                      background: activeStockTab === tab.key ? "#0f766e" : "#ecfeff",
-                      color: activeStockTab === tab.key ? "#fff" : "#0f766e",
-                      borderRadius: 999,
-                      padding: "8px 14px",
-                      fontSize: 13,
-                      fontWeight: 700,
-                      cursor: "pointer",
-                    }}
-                  >
-                    {tab.label}
-                  </button>
-                ))}
+              <div className="dashboard-report-grid">
+                <div className="report-module">
+                  <div className="report-card-header report-card-header-inline">
+                    <div>
+                      <h3>Warehouse Stock</h3>
+                      <p>Top warehouse balances across the system.</p>
+                    </div>
+                    <div className="report-metric-row">
+                      <div className="report-metric-stat">
+                        <span>Warehouses</span>
+                        <strong>{filteredWarehouseStock.length}</strong>
+                      </div>
+                      <div className="report-metric-stat">
+                        <span>Total Stock</span>
+                        <strong>{Number(totalWarehouseStock).toFixed(2)}</strong>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="report-table-wrap">
+                    <table className="dashboard-table">
+                      <thead>
+                        <tr>
+                          <th>S.L No</th>
+                          <th>Warehouse</th>
+                          <th>Available Stock</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {filteredWarehouseStock.length > 0 ? filteredWarehouseStock.slice(0, 6).map((row, idx) => (
+                          <tr key={row.warehouse || idx}>
+                            <td>{idx + 1}</td>
+                            <td>{row.warehouse}</td>
+                            <td className="table-value-cell">{Number(row.stock || 0).toFixed(2)}</td>
+                          </tr>
+                        )) : (
+                          <tr><td colSpan="3">No warehouse stock data available</td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div className="report-module">
+                  <div className="report-card-header report-card-header-inline">
+                    <div>
+                      <h3>Party Stock</h3>
+                      <p>Stock exposure grouped by party, showing available balances.</p>
+                    </div>
+                    <div className="report-metric-row">
+                      <div className="report-metric-stat">
+                        <span>Parties</span>
+                        <strong>{partyStockSummary.length}</strong>
+                      </div>
+                      <div className="report-metric-stat">
+                        <span>Rows</span>
+                        <strong>{filteredCompanyStock.length}</strong>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="report-table-wrap">
+                    <table className="dashboard-table">
+                      <thead>
+                        <tr>
+                          <th>S.L No</th>
+                          <th>Party</th>
+                          <th>Available Balance</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {partyStockSummary.length > 0 ? partyStockSummary.slice(0, 6).map((row, idx) => (
+                          <tr key={row.party_name || idx}>
+                            <td>{idx + 1}</td>
+                            <td>{row.party_name}</td>
+                            <td className="table-value-cell">{Number(row.available_balance_qty || 0).toFixed(2)}</td>
+                          </tr>
+                        )) : (
+                          <tr><td colSpan="3">No party stock data available</td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div className="report-module">
+                  <div className="report-card-header report-card-header-inline">
+                    <div>
+                      <h3>Warehouse Rent</h3>
+                      <p>Rent collected by warehouse for the selected month.</p>
+                    </div>
+                    <div className="report-metric-row">
+                      <div className="report-metric-stat">
+                        <span>Warehouses</span>
+                        <strong>{warehouseWiseRent.length}</strong>
+                      </div>
+                      <div className="report-metric-stat">
+                        <span>Total Rent</span>
+                        <strong>₹{Number(totalWarehouseRent).toFixed(2)}</strong>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="report-table-wrap">
+                    <table className="dashboard-table">
+                      <thead>
+                        <tr>
+                          <th>S.L No</th>
+                          <th>Warehouse</th>
+                          <th>Total Rent</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {warehouseWiseRent.length > 0 ? warehouseWiseRent.slice(0, 6).map((row, idx) => (
+                          <tr key={`${row.warehouse_name}-${idx}`}>
+                            <td>{idx + 1}</td>
+                            <td>{row.warehouse_name}</td>
+                            <td className="table-value-cell">₹{Number(row.total_rent || 0).toFixed(2)}</td>
+                          </tr>
+                        )) : (
+                          <tr><td colSpan="3">No warehouse rent data available</td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                <div className="report-module">
+                  <div className="report-card-header report-card-header-inline">
+                    <div>
+                      <h3>Party Rent</h3>
+                      <p>Rent totals grouped by party, without leaving the dashboard.</p>
+                    </div>
+                    <div className="report-metric-row">
+                      <div className="report-metric-stat">
+                        <span>Parties</span>
+                        <strong>{partyWiseRent.length}</strong>
+                      </div>
+                      <div className="report-metric-stat">
+                        <span>Rent Total</span>
+                        <strong>₹{Number(totalPartyRent).toFixed(2)}</strong>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="report-table-wrap">
+                    <table className="dashboard-table">
+                      <thead>
+                        <tr>
+                          <th>S.L No</th>
+                          <th>Party</th>
+                          <th>Total Rent</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {partyWiseRent.length > 0 ? partyWiseRent.slice(0, 6).map((row, idx) => (
+                          <tr key={`${row.party_name}-${idx}`}>
+                            <td>{idx + 1}</td>
+                            <td>{row.party_name}</td>
+                            <td className="table-value-cell">₹{Number(row.total_rent || 0).toFixed(2)}</td>
+                          </tr>
+                        )) : (
+                          <tr><td colSpan="3">No party rent data available</td></tr>
+                        )}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
               </div>
-
-              {activeStockTab === "warehouse_stock" ? (
-                <div style={{ overflowX: "auto" }}>
-                  <table className="dashboard-table">
-                    <thead>
-                      <tr>
-                        <th>S.L No</th>
-                        <th>Warehouse</th>
-                        <th>Available Stock</th>
-                        <th>View</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredWarehouseStock.length > 0 ? filteredWarehouseStock.slice(0, 8).map((row, idx) => (
-                        <tr key={row.warehouse || idx}>
-                          <td>{idx + 1}</td>
-                          <td>{row.warehouse}</td>
-                          <td className="table-value-cell">{Number(row.stock || 0).toFixed(2)}</td>
-                          <td>
-                            <button type="button" className="table-view-button" onClick={() => openWarehouseStockDetails(row.warehouse)}>
-                              <FaEye />
-                            </button>
-                          </td>
-                        </tr>
-                      )) : <tr><td colSpan="4">No warehouse stock data available</td></tr>}
-                    </tbody>
-                  </table>
-                </div>
-              ) : null}
-
-              {activeStockTab === "party_stock" ? (
-                <div style={{ overflowX: "auto" }}>
-                  <table className="dashboard-table">
-                    <thead>
-                      <tr>
-                        <th>S.L No</th>
-                        <th>Party Name</th>
-                        <th>Gross Qty</th>
-                        <th>Shortage</th>
-                        <th>Net Opening</th>
-                        <th>Adjusted</th>
-                        <th>Available Balance</th>
-                        <th>View</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {partyStockSummary.length > 0 ? partyStockSummary.slice(0, 8).map((row, idx) => (
-                        <tr key={row.party_name || idx}>
-                          <td>{idx + 1}</td>
-                          <td>{row.party_name}</td>
-                          <td className="table-value-cell">{Number(row.gross_qty || 0).toFixed(2)}</td>
-                          <td className="table-value-cell">{Number(row.shortage_qty || 0).toFixed(2)}</td>
-                          <td className="table-value-cell">{Number(row.net_opening_qty || 0).toFixed(2)}</td>
-                          <td className="table-value-cell">{Number(row.already_adjusted_qty || 0).toFixed(2)}</td>
-                          <td className="table-value-cell">{Number(row.available_balance_qty || 0).toFixed(2)}</td>
-                          <td>
-                            <button type="button" className="table-view-button" onClick={() => openCompanyStockDetails(row.party_name, "")}>
-                              <FaEye />
-                            </button>
-                          </td>
-                        </tr>
-                      )) : <tr><td colSpan="8">No party stock data available</td></tr>}
-                    </tbody>
-                  </table>
-                </div>
-              ) : null}
-
-              {activeStockTab === "company_stock" ? (
-                <div style={{ overflowX: "auto" }}>
-                  <table className="dashboard-table">
-                    <thead>
-                      <tr>
-                        <th>S.L No</th>
-                        <th>Party Name</th>
-                        <th>Warehouse</th>
-                        <th>Gross Qty</th>
-                        <th>Shortage</th>
-                        <th>Net Opening</th>
-                        <th>Adjusted</th>
-                        <th>Available Balance</th>
-                        <th>View</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {filteredCompanyStock.length > 0 ? filteredCompanyStock.slice(0, 8).map((row, idx) => (
-                        <tr key={`${row.party_name || row.party}-${idx}`}>
-                          <td>{idx + 1}</td>
-                          <td>{row.party_name || row.party}</td>
-                          <td>{row.warehouse_name || "-"}</td>
-                          <td className="table-value-cell">{Number(row.gross_qty || 0).toFixed(2)}</td>
-                          <td className="table-value-cell">{Number(row.shortage_qty || 0).toFixed(2)}</td>
-                          <td className="table-value-cell">{Number(row.net_opening_qty || 0).toFixed(2)}</td>
-                          <td className="table-value-cell">{Number(row.already_adjusted_qty || 0).toFixed(2)}</td>
-                          <td className="table-value-cell">{Number(row.available_balance_qty || 0).toFixed(2)}</td>
-                          <td>
-                            <button type="button" className="table-view-button" onClick={() => openCompanyStockDetails(row.party_name || row.party, row.warehouse_name || "")}>
-                              <FaEye />
-                            </button>
-                          </td>
-                        </tr>
-                      )) : <tr><td colSpan="9">No stock data found</td></tr>}
-                    </tbody>
-                  </table>
-                </div>
-              ) : null}
-
-              {activeStockTab === "warehouse_rent" ? (
-                <div style={{ overflowX: "auto" }}>
-                  <table className="dashboard-table">
-                    <thead>
-                      <tr>
-                        <th>S.L No</th>
-                        <th>Warehouse</th>
-                        <th>Entries</th>
-                        <th>Total Rent</th>
-                        <th>View</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {warehouseWiseRent.length > 0 ? warehouseWiseRent.slice(0, 8).map((row, idx) => (
-                        <tr key={`${row.warehouse_name}-${idx}`}>
-                          <td>{idx + 1}</td>
-                          <td>{row.warehouse_name}</td>
-                          <td>{row.total_entries}</td>
-                          <td className="table-value-cell">{Number(row.total_rent || 0).toFixed(2)}</td>
-                          <td>
-                            <button type="button" className="table-view-button" onClick={() => openWarehouseRentDetails(row.warehouse_name)}>
-                              <FaEye />
-                            </button>
-                          </td>
-                        </tr>
-                      )) : <tr><td colSpan="5">No warehouse rent data available</td></tr>}
-                    </tbody>
-                  </table>
-                </div>
-              ) : null}
-
-              {activeStockTab === "party_rent" ? (
-                <div style={{ overflowX: "auto" }}>
-                  <table className="dashboard-table">
-                    <thead>
-                      <tr>
-                        <th>S.L No</th>
-                        <th>Party</th>
-                        <th>Entries</th>
-                        <th>Total Rent</th>
-                        <th>View</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {partyWiseRent.length > 0 ? partyWiseRent.slice(0, 8).map((row, idx) => (
-                        <tr key={`${row.party_name}-${idx}`}>
-                          <td>{idx + 1}</td>
-                          <td>{row.party_name}</td>
-                          <td>{row.total_entries}</td>
-                          <td className="table-value-cell">{Number(row.total_rent || 0).toFixed(2)}</td>
-                          <td>
-                            <button type="button" className="table-view-button" onClick={() => openPartyRentDetails(row.party_name)}>
-                              <FaEye />
-                            </button>
-                          </td>
-                        </tr>
-                      )) : <tr><td colSpan="5">No party rent data available</td></tr>}
-                    </tbody>
-                  </table>
-                </div>
-              ) : null}
             </div>
           </section>
           ) : null}
