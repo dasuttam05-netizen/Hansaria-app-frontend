@@ -593,19 +593,23 @@ export default function WarehouseTradingPage() {
     const requestedReport = searchParams.get("report");
     const validVoucherTypes = allowedVoucherTypes;
     const validReports = allowedReports;
+    const nextTab = validVoucherTypes.includes(requestedType)
+      ? "vouchers"
+      : requestedTab === "reports" || validReports.includes(requestedReport)
+        ? "reports"
+        : validVoucherTypes.length
+          ? "vouchers"
+          : validReports.length
+            ? "reports"
+            : "vouchers";
+    const nextVoucherType = validVoucherTypes.includes(requestedType) ? requestedType : validVoucherTypes[0] || "purchase";
+    const nextReport = validReports.includes(requestedReport) ? requestedReport : validReports[0] || "sale";
 
-    if (validVoucherTypes.includes(requestedType)) {
-      setActiveTab("vouchers");
-      setActiveVoucherType(requestedType);
-    } else if (requestedTab === "reports" || validReports.includes(requestedReport)) {
-      setActiveTab("reports");
-      setActiveReport(validReports.includes(requestedReport) ? requestedReport : validReports[0] || "sale");
-    } else if (validVoucherTypes.length) {
-      setActiveTab("vouchers");
-      setActiveVoucherType(validVoucherTypes[0]);
-    } else if (validReports.length) {
-      setActiveTab("reports");
-      setActiveReport(validReports[0]);
+    setActiveTab(nextTab);
+    setActiveVoucherType(nextVoucherType);
+    setActiveReport(nextReport);
+    if (nextTab === "reports") {
+      setShowMobileTradingTabs(true);
     }
 
     loadData();
@@ -940,34 +944,34 @@ export default function WarehouseTradingPage() {
     }
   };
 
-  const loadReport = async () => {
+  const loadReport = async (reportType = activeReport, page = reportPage, filters = reportFilters) => {
     const token = ++reportLoadTokenRef.current;
     try {
-      if (!hasPermission(user, reportPermissionMap[activeReport])) {
+      if (!hasPermission(user, reportPermissionMap[reportType])) {
         if (token !== reportLoadTokenRef.current) return;
         setReportData([]);
         setWarehouseStockReport([]);
         return;
       }
-      const endpoint = reportEndpointMap[activeReport] || activeReport;
+      const endpoint = reportEndpointMap[reportType] || reportType;
       const params = {};
-      if (activeReport === "purchase-party-ledger" && reportFilters.farmer_id) {
-        params.farmer_id = reportFilters.farmer_id;
+      if (reportType === "purchase-party-ledger" && filters.farmer_id) {
+        params.farmer_id = filters.farmer_id;
       }
-      if (activeReport === "sale-party-ledger" && reportFilters.sale_buyer_id) {
-        params.buyer_id = reportFilters.sale_buyer_id;
+      if (reportType === "sale-party-ledger" && filters.sale_buyer_id) {
+        params.buyer_id = filters.sale_buyer_id;
       }
-      if (activeReport === "sale-journey") {
-        if (reportFilters.sale_journey_token) params.journey_token = reportFilters.sale_journey_token;
-        if (reportFilters.sale_lorry_no) params.lorry_no = reportFilters.sale_lorry_no;
-        if (reportFilters.sale_bill_no) params.bill_no = reportFilters.sale_bill_no;
+      if (reportType === "sale-journey") {
+        if (filters.sale_journey_token) params.journey_token = filters.sale_journey_token;
+        if (filters.sale_lorry_no) params.lorry_no = filters.sale_lorry_no;
+        if (filters.sale_bill_no) params.bill_no = filters.sale_bill_no;
       }
-      if (reportFilters.company_account_id || reportFilters.sale_company_account_id) {
-        params.company_account_id = reportFilters.company_account_id || reportFilters.sale_company_account_id;
+      if (filters.company_account_id || filters.sale_company_account_id) {
+        params.company_account_id = filters.company_account_id || filters.sale_company_account_id;
       }
-      const serverPagedReport = activeReport === "sale" || activeReport === "purchase";
+      const serverPagedReport = reportType === "sale" || reportType === "purchase";
       if (serverPagedReport) {
-        params.page = reportPage;
+        params.page = page;
         params.page_size = PAGE_SIZE;
       }
       const res = await axios.get(`/api/wh-vouchers/report/${endpoint}`, { params });
@@ -975,17 +979,18 @@ export default function WarehouseTradingPage() {
       const payload = res.data || [];
       const rows = Array.isArray(payload) ? payload : Array.isArray(payload.data) ? payload.data : [];
       const pagination = Array.isArray(payload) ? null : payload.pagination || null;
-      if (activeReport === "warehouse-stock") {
+      if (reportType === "warehouse-stock") {
         setWarehouseStockReport(rows);
         setReportData(rows);
         setReportPageInfo({
-          page: pagination?.page || reportPage,
+          page: pagination?.page || page,
           pageSize: pagination?.pageSize || PAGE_SIZE,
+          total: pagination?.total ?? rows.length,
           hasMore: Boolean(pagination?.hasMore),
         });
         return;
       }
-      if (activeReport === "purchase" && rows.length === 0 && hasPermission(user, voucherPermissionMap.purchase)) {
+      if (reportType === "purchase" && rows.length === 0 && hasPermission(user, voucherPermissionMap.purchase)) {
         const fallbackRes = await axios.get("/api/wh-vouchers/purchase");
         if (token !== reportLoadTokenRef.current) return;
         setReportData(Array.isArray(fallbackRes.data) ? fallbackRes.data : []);
@@ -994,20 +999,21 @@ export default function WarehouseTradingPage() {
       setReportData(rows);
       if (serverPagedReport) {
         setReportPageInfo({
-          page: pagination?.page || reportPage,
+          page: pagination?.page || page,
           pageSize: pagination?.pageSize || PAGE_SIZE,
+          total: pagination?.total ?? rows.length,
           hasMore: Boolean(pagination?.hasMore),
         });
       }
     } catch (err) {
       if (token !== reportLoadTokenRef.current) return;
       console.error(err);
-      if (activeReport === "warehouse-stock") {
+      if (reportType === "warehouse-stock") {
         setWarehouseStockReport([]);
         setReportData([]);
         return;
       }
-      if (activeReport === "purchase" && hasPermission(user, voucherPermissionMap.purchase)) {
+      if (reportType === "purchase" && hasPermission(user, voucherPermissionMap.purchase)) {
         try {
           const fallbackRes = await axios.get("/api/wh-vouchers/purchase");
           if (token !== reportLoadTokenRef.current) return;
