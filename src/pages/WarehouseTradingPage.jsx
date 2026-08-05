@@ -168,6 +168,7 @@ export default function WarehouseTradingPage() {
   const [list, setList] = useState([]);
   const [reportData, setReportData] = useState([]);
   const [warehouseStockReport, setWarehouseStockReport] = useState([]);
+  const [reportPageInfo, setReportPageInfo] = useState({ page: 1, pageSize: PAGE_SIZE, hasMore: false });
   const [availableSaleStock, setAvailableSaleStock] = useState(null);
   const [reportFilters, setReportFilters] = useState({
     farmer_id: "",
@@ -645,12 +646,9 @@ export default function WarehouseTradingPage() {
     if (activeTab !== "reports") return;
     const timer = window.setTimeout(() => {
       loadReport();
-      if (activeReport === "warehouse-stock") {
-        loadWarehouseStockReport();
-      }
     }, 80);
     return () => window.clearTimeout(timer);
-  }, [activeTab, activeReport, reportFilters.farmer_id, reportFilters.company_account_id, reportFilters.sale_buyer_id, reportFilters.sale_company_account_id, reportFilters.sale_journey_token, reportFilters.sale_lorry_no, reportFilters.sale_bill_no]);
+  }, [activeTab, activeReport, reportPage, reportFilters.farmer_id, reportFilters.company_account_id, reportFilters.sale_buyer_id, reportFilters.sale_company_account_id, reportFilters.sale_journey_token, reportFilters.sale_lorry_no, reportFilters.sale_bill_no]);
 
   useEffect(() => {
     if (activeReport !== "purchase-party-ledger") setShowPurchaseBillWise(false);
@@ -967,12 +965,24 @@ export default function WarehouseTradingPage() {
       if (reportFilters.company_account_id || reportFilters.sale_company_account_id) {
         params.company_account_id = reportFilters.company_account_id || reportFilters.sale_company_account_id;
       }
+      const serverPagedReport = activeReport === "sale" || activeReport === "purchase" || activeReport === "warehouse-stock";
+      if (serverPagedReport) {
+        params.page = reportPage;
+        params.page_size = PAGE_SIZE;
+      }
       const res = await axios.get(`/api/wh-vouchers/report/${endpoint}`, { params });
       if (token !== reportLoadTokenRef.current) return;
-      const rows = Array.isArray(res.data) ? res.data : [];
+      const payload = res.data || [];
+      const rows = Array.isArray(payload) ? payload : Array.isArray(payload.data) ? payload.data : [];
+      const pagination = Array.isArray(payload) ? null : payload.pagination || null;
       if (activeReport === "warehouse-stock") {
         setWarehouseStockReport(rows);
         setReportData(rows);
+        setReportPageInfo({
+          page: pagination?.page || reportPage,
+          pageSize: pagination?.pageSize || PAGE_SIZE,
+          hasMore: Boolean(pagination?.hasMore),
+        });
         return;
       }
       if (activeReport === "purchase" && rows.length === 0 && hasPermission(user, voucherPermissionMap.purchase)) {
@@ -982,6 +992,13 @@ export default function WarehouseTradingPage() {
         return;
       }
       setReportData(rows);
+      if (serverPagedReport) {
+        setReportPageInfo({
+          page: pagination?.page || reportPage,
+          pageSize: pagination?.pageSize || PAGE_SIZE,
+          hasMore: Boolean(pagination?.hasMore),
+        });
+      }
     } catch (err) {
       if (token !== reportLoadTokenRef.current) return;
       console.error(err);
@@ -2725,6 +2742,8 @@ export default function WarehouseTradingPage() {
     );
   }, [displayReportData, normalizedGlobalSearch]);
   const filteredReportData = useMemo(() => {
+    const serverPagedReport = activeReport === "sale" || activeReport === "purchase" || activeReport === "warehouse-stock";
+    if (serverPagedReport) return filteredReportDataAll;
     const start = (reportPage - 1) * PAGE_SIZE;
     return filteredReportDataAll.slice(start, start + PAGE_SIZE);
   }, [filteredReportDataAll, reportPage]);
@@ -2733,7 +2752,7 @@ export default function WarehouseTradingPage() {
   }, [activeVoucherType, normalizedGlobalSearch, list.length]);
   useEffect(() => {
     setReportPage(1);
-  }, [activeReport, normalizedGlobalSearch, saleFollowupFilter, reportFilters.farmer_id, reportFilters.company_account_id, reportFilters.sale_buyer_id, reportFilters.sale_company_account_id, reportFilters.sale_journey_token, reportFilters.sale_lorry_no, reportFilters.sale_bill_no]);
+    }, [activeReport, normalizedGlobalSearch, saleFollowupFilter, reportFilters.farmer_id, reportFilters.company_account_id, reportFilters.sale_buyer_id, reportFilters.sale_company_account_id, reportFilters.sale_journey_token, reportFilters.sale_lorry_no, reportFilters.sale_bill_no]);
   useEffect(() => {
     setVoucherPage((current) => Math.min(current, Math.max(1, Math.ceil(filteredVoucherListAll.length / PAGE_SIZE))));
   }, [filteredVoucherListAll.length]);
@@ -2767,7 +2786,9 @@ export default function WarehouseTradingPage() {
     }
   };
   const totalVoucherPages = Math.max(1, Math.ceil(filteredVoucherListAll.length / PAGE_SIZE));
-  const totalReportPages = Math.max(1, Math.ceil(filteredReportDataAll.length / PAGE_SIZE));
+  const totalReportPages = activeReport === "sale" || activeReport === "purchase" || activeReport === "warehouse-stock"
+    ? (reportPageInfo.hasMore ? reportPage + 1 : reportPage)
+    : Math.max(1, Math.ceil(filteredReportDataAll.length / PAGE_SIZE));
   const renderPaginationBar = (page, totalPages, onPrev, onNext, totalItems, label = "rows") => {
     if (totalPages <= 1) return null;
     const start = totalItems === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
