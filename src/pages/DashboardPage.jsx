@@ -964,6 +964,10 @@ export default function DashboardPage() {
       return acc;
     }, {})
   ).sort((a, b) => b.available_balance_qty - a.available_balance_qty);
+  const totalPartyStock = partyStockSummary.reduce(
+    (sum, row) => sum + Number(row.available_balance_qty || 0),
+    0
+  );
   const assignedWarehouseNames = Array.isArray(user?.assigned_warehouses)
     ? user.assigned_warehouses.map((item) => item?.name).filter(Boolean)
     : [];
@@ -1392,8 +1396,8 @@ export default function DashboardPage() {
                         <strong>{partyStockSummary.length}</strong>
                       </div>
                       <div className="report-metric-stat">
-                        <span>Rows</span>
-                        <strong>{filteredCompanyStock.length}</strong>
+                        <span>Stock</span>
+                        <strong>{Number(totalPartyStock).toFixed(2)}</strong>
                       </div>
                     </div>
                   </div>
