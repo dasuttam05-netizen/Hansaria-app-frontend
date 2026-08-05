@@ -122,6 +122,15 @@ const getArrowFocusableInputs = (root) =>
     return style.display !== "none" && style.visibility !== "hidden";
   });
 
+const buildLookupMap = (rows) => {
+  const map = new Map();
+  (Array.isArray(rows) ? rows : []).forEach((row) => {
+    const key = String(row?.id || row?._id || "").trim();
+    if (key) map.set(key, row);
+  });
+  return map;
+};
+
 const PAGE_SIZE = 15;
 
 const purchaseDeductionFields = [
@@ -225,20 +234,28 @@ export default function WarehouseTradingPage() {
   const reportPanelRef = useRef(null);
   const voucherLoadTokenRef = useRef(0);
   const reportLoadTokenRef = useRef(0);
-  const selectedVoucher = list.find((item) => String(item.id || item._id) === String(selectedPaymentId));
-  const selectedReceiptVoucher = list.find((item) => String(item.id || item._id) === String(selectedReceiptId));
-  const selectedWarehouse = warehouses.find((w) => String(w.id || w._id) === String(formData.warehouse_id));
-  const selectedManualLocation = locations.find((l) => String(l.id || l._id) === String(formData.location_id));
-  const selectedWarehouseLocation =
-    locations.find((l) => String(l.id || l._id) === String(getRecordId(selectedWarehouse?.location_id)))?.name ||
-    selectedManualLocation?.name ||
-    selectedWarehouse?.location ||
-    selectedWarehouse?.address ||
-    "";
-  const selectedEmployee = employees.find((e) => String(e.id || e._id) === String(formData.employee_id));
-  const selectedFarmer = farmers.find((f) => String(f.id || f._id) === String(formData.farmer_id));
-  const selectedBuyer = buyerNames.find((b) => String(b.id || b._id) === String(formData.buyer_id || formData.company_id));
-  const selectedConsignee = consignees.find((c) => String(c.id || c._id) === String(formData.consignee_id));
+  const warehouseById = useMemo(() => buildLookupMap(warehouses), [warehouses]);
+  const farmerById = useMemo(() => buildLookupMap(farmers), [farmers]);
+  const buyerById = useMemo(() => buildLookupMap(buyerNames), [buyerNames]);
+  const companyById = useMemo(() => buildLookupMap(companies), [companies]);
+  const companyAccountById = useMemo(() => buildLookupMap(companyAccounts), [companyAccounts]);
+  const consigneeById = useMemo(() => buildLookupMap(consignees), [consignees]);
+  const productById = useMemo(() => buildLookupMap(products), [products]);
+  const employeeById = useMemo(() => buildLookupMap(employees), [employees]);
+  const locationById = useMemo(() => buildLookupMap(locations), [locations]);
+  const voucherById = useMemo(() => buildLookupMap(list), [list]);
+  const selectedVoucher = voucherById.get(String(selectedPaymentId)) || null;
+  const selectedReceiptVoucher = voucherById.get(String(selectedReceiptId)) || null;
+  const selectedWarehouse = warehouseById.get(String(formData.warehouse_id)) || null;
+  const selectedManualLocation = locationById.get(String(formData.location_id)) || null;
+  const selectedWarehouseLocation = useMemo(() => {
+    const locationId = String(getRecordId(selectedWarehouse?.location_id));
+    return locationById.get(locationId)?.name || selectedManualLocation?.name || selectedWarehouse?.location || selectedWarehouse?.address || "";
+  }, [locationById, selectedManualLocation, selectedWarehouse]);
+  const selectedEmployee = employeeById.get(String(formData.employee_id)) || null;
+  const selectedFarmer = farmerById.get(String(formData.farmer_id)) || null;
+  const selectedBuyer = buyerById.get(String(formData.buyer_id || formData.company_id)) || null;
+  const selectedConsignee = consigneeById.get(String(formData.consignee_id)) || null;
   const selectedEmployeeMobile = selectedEmployee?.mobile || selectedEmployee?.phone || selectedEmployee?.mobile_no || "";
   const selectedFarmerMobile = selectedFarmer?.mobile || selectedFarmer?.phone || selectedFarmer?.mobile_no || "";
   const selectedFarmerGst = selectedFarmer?.gst_no || selectedFarmer?.gst || "";
@@ -247,23 +264,23 @@ export default function WarehouseTradingPage() {
   const selectedLocationName = selectedWarehouseLocation || selectedManualLocation?.name || "";
   const getProductName = (item) =>
     item?.product_name ||
-    products.find((p) => String(p.id || p._id) === String(item?.product_id))?.name ||
+    productById.get(String(item?.product_id))?.name ||
     item?.product ||
     "-";
   const getWarehouseName = (item) =>
     item?.warehouse_name ||
-    warehouses.find((w) => String(w.id || w._id) === String(item?.warehouse_id))?.name ||
+    warehouseById.get(String(item?.warehouse_id))?.name ||
     "-";
   const getFarmerName = (item) =>
     item?.farmer_name ||
-    farmers.find((f) => String(f.id || f._id) === String(item?.farmer_id))?.name ||
+    farmerById.get(String(item?.farmer_id))?.name ||
     "-";
   const getBuyerId = (item) => item?.buyer_id || item?.company_id || "";
   const getBuyerName = (item) =>
     item?.buyer_name ||
-    buyerNames.find((b) => String(b.id || b._id) === String(getBuyerId(item)))?.name ||
+    buyerById.get(String(getBuyerId(item)))?.name ||
     item?.company_name ||
-    companies.find((c) => String(c.id || c._id) === String(item?.company_id))?.name ||
+    companyById.get(String(item?.company_id))?.name ||
     "-";
   const saleQtyFromData = (data) => {
     const newWeight = Math.max(toNumber(data.gross_weight) - toNumber(data.tare_weight), 0);
