@@ -98,7 +98,7 @@ export default function WarehouseRentLedgerPage() {
 
   const exportCSV = () => {
     let csv =
-      "Inward Date,Dispatch Date,Party,Warehouse,Voucher,Lorry,Weight,Shortage Qty,Days,Month Slab,Rent Rate,Rent Amount,Adjusted Qty,Balance Qty\n";
+      "Inward Date,Dispatch Date,Party,Warehouse,Voucher,Lorry,Weight,Shortage Qty,Days,Month Slab,Rent Rate,Rent Amount,Adjusted Qty,Stock Qty\n";
     records.forEach((r) => {
       csv += `${formatDisplayDate(r.inward_date)},${formatDisplayDate(r.reference_date)},${r.party_name},${r.warehouse_name},${r.voucher_no},${r.lorry_no},${r.original_weight},${r.shortage_qty},${r.days_diff},${r.month_slab},${r.rent_rate},${r.rent_amount},${r.adjusted_qty},${r.balance_qty}\n`;
     });
@@ -189,7 +189,7 @@ export default function WarehouseRentLedgerPage() {
         <div style={card}><div>Total Weight</div><div style={{ fontSize: 24, fontWeight: 700 }}>{num(totals.weight)}</div></div>
         <div style={card}><div>Shortage Qty</div><div style={{ fontSize: 24, fontWeight: 700 }}>{num(totals.shortage)}</div></div>
         <div style={card}><div>Adjusted Qty</div><div style={{ fontSize: 24, fontWeight: 700 }}>{num(totals.adjusted)}</div></div>
-        <div style={card}><div>Balance Qty</div><div style={{ fontSize: 24, fontWeight: 700 }}>{num(totals.balance)}</div></div>
+        <div style={card}><div>Stock Qty</div><div style={{ fontSize: 24, fontWeight: 700 }}>{num(totals.balance)}</div></div>
         <div style={card}><div>Total Rent</div><div style={{ fontSize: 24, fontWeight: 700 }}>{num(totals.rent)}</div></div>
       </div>
       ) : null}
@@ -213,7 +213,7 @@ export default function WarehouseRentLedgerPage() {
                 <th style={th}>Rent Rate</th>
                 <th style={th}>Rent Amount</th>
                 <th style={th}>Adjusted Qty</th>
-                <th style={th}>Balance Qty</th>
+                <th style={th}>Stock Qty</th>
               </tr>
             </thead>
             <tbody>
