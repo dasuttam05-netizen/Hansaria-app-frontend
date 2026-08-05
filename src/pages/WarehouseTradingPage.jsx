@@ -965,7 +965,7 @@ export default function WarehouseTradingPage() {
       if (reportFilters.company_account_id || reportFilters.sale_company_account_id) {
         params.company_account_id = reportFilters.company_account_id || reportFilters.sale_company_account_id;
       }
-      const serverPagedReport = activeReport === "sale" || activeReport === "purchase" || activeReport === "warehouse-stock";
+      const serverPagedReport = activeReport === "sale" || activeReport === "purchase";
       if (serverPagedReport) {
         params.page = reportPage;
         params.page_size = PAGE_SIZE;
