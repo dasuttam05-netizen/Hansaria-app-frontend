@@ -293,6 +293,7 @@ export default function WarehouseTradingPage() {
   const [salePurchaseLinks, setSalePurchaseLinks] = useState([]);
   const [showPurchasePreview, setShowPurchasePreview] = useState(false);
   const [purchasePreviewRow, setPurchasePreviewRow] = useState(null);
+  const [purchasePreviewLoading, setPurchasePreviewLoading] = useState(false);
   const [purchaseBaseline, setPurchaseBaseline] = useState(null);
   const [showSalePreview, setShowSalePreview] = useState(false);
   const [salePreviewRow, setSalePreviewRow] = useState(null);
@@ -1726,9 +1727,23 @@ export default function WarehouseTradingPage() {
     }
   };
 
-  const showPurchaseReportPreview = (voucher) => {
+  const showPurchaseReportPreview = async (voucher) => {
+    const recordId = getRecordId(voucher);
     setPurchasePreviewRow(voucher);
     setShowPurchasePreview(true);
+    if (!recordId) return;
+
+    setPurchasePreviewLoading(true);
+    try {
+      const res = await axios.get(`/api/wh-vouchers/purchase/${recordId}`);
+      if (res?.data) {
+        setPurchasePreviewRow(res.data);
+      }
+    } catch (err) {
+      console.error("Failed to load full purchase voucher preview:", err);
+    } finally {
+      setPurchasePreviewLoading(false);
+    }
   };
 
   const showSaleReportPreview = (voucher) => {
@@ -2531,9 +2546,9 @@ export default function WarehouseTradingPage() {
           <span style={{ color: "#64748b" }}>Old Entry</span>
         ) : (
           <div style={{ display: "flex", gap: 6 }}>
-            <button onClick={() => showPurchaseReportPreview(item)} style={{ ...btnAction, background: "#315f7d" }} title="View">View</button>
-            <button onClick={() => handleEditPurchaseReport(item)} style={btnAction} title="Edit">Edit</button>
-            <button onClick={() => handlePurchaseReportPDF(item.id || item._id)} style={{ ...btnAction, background: "#ea580c" }} title="Download PDF">PDF</button>
+            <button type="button" onClick={() => showPurchaseReportPreview(item)} style={{ ...btnAction, background: "#315f7d" }} title="View">View</button>
+            <button type="button" onClick={() => handleEditPurchaseReport(item)} style={btnAction} title="Edit">Edit</button>
+            <button type="button" onClick={() => handlePurchaseReportPDF(item.id || item._id)} style={{ ...btnAction, background: "#ea580c" }} title="Download PDF">PDF</button>
           </div>
         )
       ],
