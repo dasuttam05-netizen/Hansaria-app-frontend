@@ -8,6 +8,7 @@ export default function WarehouseRentLedgerPage() {
   const API_BASE = "/api";
 
   const [records, setRecords] = useState([]);
+  const [pagination, setPagination] = useState({ page: 1, pageSize: 100, totalCount: 0, totalPages: 0 });
   const [companies, setCompanies] = useState([]);
   const [locations, setLocations] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
@@ -73,19 +74,30 @@ export default function WarehouseRentLedgerPage() {
     axios.get(`${API_BASE}/companies`).then((res) => setCompanies(res.data || []));
     axios.get(`${API_BASE}/locations`).then((res) => setLocations(res.data || []));
     axios.get(`${API_BASE}/warehouses`).then((res) => setWarehouses(res.data || []));
-    fetchReport();
   }, []);
 
-  const fetchReport = async () => {
+  const fetchReport = async (overridePage = pagination.page, overridePageSize = pagination.pageSize) => {
     try {
       const res = await axios.get(`${API_BASE}/reports/warehouse-rent-ledger`, {
         params: {
           ...filters,
           location_ids: (filters.location_ids || []).join(","),
           warehouse_ids: (filters.warehouse_ids || []).join(","),
+          page: overridePage,
+          page_size: overridePageSize,
         },
       });
-      setRecords(res.data || []);
+      const payload = res.data || [];
+      if (Array.isArray(payload)) {
+        setRecords(payload);
+        setPagination((prev) => ({ ...prev, totalCount: payload.length, totalPages: payload.length ? 1 : 0 }));
+      } else {
+        setRecords(payload.data || []);
+        setPagination((prev) => ({
+          ...prev,
+          ...(payload.pagination || {}),
+        }));
+      }
     } catch (err) {
       console.error(err);
       setRecords([]);
@@ -109,6 +121,10 @@ export default function WarehouseRentLedgerPage() {
     a.download = "Warehouse_Rent_Ledger.csv";
     a.click();
   };
+
+  useEffect(() => {
+    fetchReport(1, pagination.pageSize);
+  }, [pagination.page, pagination.pageSize]);
 
   const totals = useMemo(
     () =>
@@ -163,13 +179,55 @@ export default function WarehouseRentLedgerPage() {
             placeholder="All Warehouses"
           />
 
-          <button onClick={fetchReport} style={{ ...button, background: "#0f766e" }}>
+          <button
+            onClick={() => {
+              setPagination((prev) => ({ ...prev, page: 1 }));
+              fetchReport(1, pagination.pageSize);
+            }}
+            style={{ ...button, background: "#0f766e" }}
+          >
             Apply
           </button>
 
           <button onClick={exportCSV} style={{ ...button, background: "#2563eb" }}>
             Export CSV
           </button>
+        </div>
+        <div style={{ display: "flex", gap: 10, alignItems: "center", justifyContent: "space-between", marginTop: 12, flexWrap: "wrap" }}>
+          <div style={{ color: "#475569", fontSize: 13 }}>
+            Showing page {pagination.page} of {pagination.totalPages || 1} | Rows: {records.length} / {pagination.totalCount || records.length}
+          </div>
+          <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+            <select
+              value={pagination.pageSize}
+              onChange={(e) => setPagination((prev) => ({ ...prev, pageSize: Number(e.target.value) || 100, page: 1 }))}
+              style={input}
+            >
+              <option value={25}>25 / page</option>
+              <option value={50}>50 / page</option>
+              <option value={100}>100 / page</option>
+              <option value={200}>200 / page</option>
+            </select>
+            <button
+              onClick={() => setPagination((prev) => ({ ...prev, page: Math.max(prev.page - 1, 1) }))}
+              disabled={pagination.page <= 1}
+              style={{ ...button, background: pagination.page <= 1 ? "#94a3b8" : "#0f766e" }}
+            >
+              Prev
+            </button>
+            <button
+              onClick={() =>
+                setPagination((prev) => ({
+                  ...prev,
+                  page: prev.totalPages ? Math.min(prev.page + 1, prev.totalPages) : prev.page + 1,
+                }))
+              }
+              disabled={pagination.totalPages > 0 && pagination.page >= pagination.totalPages}
+              style={{ ...button, background: pagination.totalPages > 0 && pagination.page >= pagination.totalPages ? "#94a3b8" : "#0f766e" }}
+            >
+              Next
+            </button>
+          </div>
         </div>
         <div style={{ marginTop: 14 }}>
           <ReportSectionToggles
