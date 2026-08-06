@@ -1167,8 +1167,13 @@ export default function WarehouseTradingPage() {
     }
   };
 
-  const handlePaymentModeChange = async (nextMode) => {
+  const handlePaymentModeChange = async (nextMode, opts = {}) => {
     const normalizedMode = normalizePaymentMode(nextMode);
+    const amountVal = opts.amount !== undefined ? opts.amount : formData.amount;
+    const farmerVal = opts.farmer_id !== undefined ? opts.farmer_id : formData.farmer_id;
+    const warehouseVal = opts.warehouse_id !== undefined ? opts.warehouse_id : formData.warehouse_id;
+    const companyAccountVal = opts.company_account_id !== undefined ? opts.company_account_id : formData.company_account_id;
+
     setFormData((prev) => ({
       ...prev,
       payment_mode: normalizedMode,
@@ -1177,8 +1182,9 @@ export default function WarehouseTradingPage() {
     }));
     setPaymentAdjustments([]);
     setShowPaymentAdjustPopup(false);
-    if (normalizedMode === "against" && toNumber(formData.amount) > 0 && formData.farmer_id) {
-      await loadOutstanding("farmer", formData.farmer_id, formData.warehouse_id, editId, formData.company_account_id);
+
+    if (normalizedMode === "against" && toNumber(amountVal) > 0 && farmerVal) {
+      await loadOutstanding("farmer", farmerVal, warehouseVal, editId, companyAccountVal);
       setShowPaymentAdjustPopup(true);
     }
   };
@@ -1188,7 +1194,7 @@ export default function WarehouseTradingPage() {
     const fieldValue = type === "checkbox" ? checked : value;
 
     if (activeVoucherType === "payment" && name === "payment_mode") {
-      handlePaymentModeChange(value);
+      handlePaymentModeChange(value, { amount: formData.amount, farmer_id: formData.farmer_id, warehouse_id: formData.warehouse_id, company_account_id: formData.company_account_id });
       return;
     }
 
@@ -4041,10 +4047,10 @@ export default function WarehouseTradingPage() {
                           {paymentModeOptions.map((option) => {
                             const isActive = activePaymentMode === option.value;
                             return (
-                              <button
-                                key={option.value}
-                                type="button"
-                                onClick={() => handlePaymentModeChange(option.value)}
+                                <button
+                                  key={option.value}
+                                  type="button"
+                                  onClick={() => handlePaymentModeChange(option.value, { amount: formData.amount, farmer_id: formData.farmer_id, warehouse_id: formData.warehouse_id, company_account_id: formData.company_account_id })}
                                 style={{
                                   border: isActive ? "1px solid #2563eb" : "1px solid #dbe4f0",
                                   background: isActive ? "#eff6ff" : "#fff",
