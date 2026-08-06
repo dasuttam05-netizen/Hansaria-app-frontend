@@ -1100,6 +1100,11 @@ export default function WarehouseTradingPage() {
         if (filters.farmer_id) params.farmer_id = filters.farmer_id;
         if (filters.warehouse_id) params.warehouse_id = filters.warehouse_id;
       }
+      if (reportType === "purchase") {
+        if (filters.farmer_id) params.farmer_id = filters.farmer_id;
+        if (filters.warehouse_id) params.warehouse_id = filters.warehouse_id;
+        if (filters.company_account_id) params.company_account_id = filters.company_account_id;
+      }
       if (reportType === "sale-party-ledger" && filters.sale_buyer_id) {
         params.buyer_id = filters.sale_buyer_id;
       }
@@ -4743,6 +4748,61 @@ export default function WarehouseTradingPage() {
             onSharePurchaseLedgerWhatsapp={sharePurchaseLedgerWhatsapp}
             onShareSaleLedgerWhatsapp={shareSaleLedgerWhatsapp}
           >
+            {activeReport === "purchase" && (
+              <div style={{ display: "flex", gap: 12, alignItems: "end", flexWrap: "wrap", marginBottom: 14 }}>
+                <Field label="Farmer Filter">
+                  <select
+                    value={reportFilters.farmer_id}
+                    onChange={(event) => setReportFilters((prev) => ({ ...prev, farmer_id: event.target.value }))}
+                    style={{ ...inp, minWidth: 260 }}
+                  >
+                    <option value="">All Farmers</option>
+                    {farmers.map((farmer) => (
+                      <option key={farmer.id || farmer._id} value={farmer.id || farmer._id}>
+                        {farmer.name}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Warehouse Filter">
+                  <select
+                    value={reportFilters.warehouse_id}
+                    onChange={(event) => setReportFilters((prev) => ({ ...prev, warehouse_id: event.target.value }))}
+                    style={{ ...inp, minWidth: 260 }}
+                  >
+                    <option value="">All Warehouses</option>
+                    {warehouses.map((warehouse) => (
+                      <option key={warehouse.id || warehouse._id} value={warehouse.id || warehouse._id}>
+                        {warehouse.name}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Account Filter">
+                  <select
+                    value={reportFilters.company_account_id}
+                    onChange={(event) => setReportFilters((prev) => ({ ...prev, company_account_id: event.target.value }))}
+                    style={{ ...inp, minWidth: 260 }}
+                  >
+                    <option value="">All Accounts</option>
+                    {companyAccounts.map((account) => (
+                      <option key={account.id || account._id} value={account.id || account._id}>
+                        {account.account_name || account.name}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
+                {(reportFilters.farmer_id || reportFilters.warehouse_id || reportFilters.company_account_id) && (
+                  <button
+                    type="button"
+                    onClick={() => setReportFilters({ farmer_id: "", warehouse_id: "", company_account_id: "", sale_buyer_id: "", sale_company_account_id: "", sale_journey_token: "", sale_lorry_no: "", sale_bill_no: "" })}
+                    style={{ ...btnAction, background: "#64748b", marginBottom: 1 }}
+                  >
+                    Clear Filters
+                  </button>
+                )}
+              </div>
+            )}
             {activeReport === "purchase-party-ledger" && (
               <div style={{ display: "flex", gap: 12, alignItems: "end", flexWrap: "wrap", marginBottom: 14 }}>
                 <Field label="Farmer Filter">
