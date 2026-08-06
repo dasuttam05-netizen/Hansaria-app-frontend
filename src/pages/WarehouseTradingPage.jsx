@@ -1621,7 +1621,8 @@ export default function WarehouseTradingPage() {
       setShowPaymentAdjustPopup(false);
       setShowReceiptAdjustPopup(false);
       setEditId(null);
-      loadVouchers();
+      setVoucherPage(1);
+      await loadVouchers();
       fetchNextVoucherNo(activeVoucherType);
 
       if (activeVoucherType === "purchase") {
