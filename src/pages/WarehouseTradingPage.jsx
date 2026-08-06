@@ -21,6 +21,7 @@ const defaultForm = () => ({
   voucher_no: "",
   bill_no: "",
   date: new Date().toISOString().slice(0, 10),
+  payment_mode: "on_account",
   bill_date: new Date().toISOString().slice(0, 10),
   unloading_date: "",
   due_days: "",
@@ -91,6 +92,37 @@ const toNumber = (value) => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
+const normalizePaymentMode = (value) => {
+  const normalized = String(value || "").trim().toLowerCase();
+  if (["advance", "advance_payment"].includes(normalized)) return "advance";
+  if (["new_reference", "new reference", "newref", "new-ref", "reference"].includes(normalized)) return "new_reference";
+  if (["against", "against_purchase", "purchase", "bill", "billwise"].includes(normalized)) return "against";
+  if (["on_account", "on-account", "account"].includes(normalized)) return "on_account";
+  return "on_account";
+};
+
+const getPaymentReferenceType = (mode) => {
+  switch (mode) {
+    case "advance":
+      return "advance";
+    case "new_reference":
+      return "new_reference";
+    case "against":
+      return "purchase";
+    default:
+      return "on_account";
+  }
+};
+
+const inferPaymentMode = (voucher) => {
+  const explicitMode = String(voucher?.payment_mode || voucher?.mode || voucher?.reference_type || "").trim().toLowerCase();
+  if (["advance", "advance_payment"].includes(explicitMode)) return "advance";
+  if (["new_reference", "new reference", "newref", "new-ref", "reference"].includes(explicitMode)) return "new_reference";
+  if (["against", "against_purchase", "purchase", "bill", "billwise"].includes(explicitMode)) return "against";
+  if (Array.isArray(voucher?.adjustments) && voucher.adjustments.length > 0) return "against";
+  return "on_account";
+};
+
 const getRecordId = (value) => value?._id || value?.id || value || "";
 const formatDecimal4 = (value) => toNumber(value).toFixed(4);
 const formatMoney = (value) => toNumber(value).toFixed(2);
@@ -159,6 +191,13 @@ const purchaseParticulars = [
   { key: "dhalta", label: "Dhalta" },
   ...purchaseDeductionFields,
   { key: "net_weight", label: "Net Weight", readOnly: true },
+];
+
+const paymentModeOptions = [
+  { value: "on_account", label: "On Account", description: "Post as a normal party account entry with no purchase bill adjustment." },
+  { value: "advance", label: "Advance", description: "Record an advance payment without linking it to purchase bills." },
+  { value: "new_reference", label: "New Reference", description: "Save a reference note for special-purpose payments." },
+  { value: "against", label: "Against Purchase Bills", description: "Match the payment against outstanding purchase bills exactly." },
 ];
 
 function formReducer(state, action) {
@@ -1128,9 +1167,30 @@ export default function WarehouseTradingPage() {
     }
   };
 
+  const handlePaymentModeChange = (nextMode) => {
+    const normalizedMode = normalizePaymentMode(nextMode);
+    setFormData((prev) => ({
+      ...prev,
+      payment_mode: normalizedMode,
+      reference_type: getPaymentReferenceType(normalizedMode),
+      reference_id: normalizedMode === "new_reference" ? prev.reference_id : "",
+    }));
+    setPaymentAdjustments([]);
+    setShowPaymentAdjustPopup(false);
+    if (normalizedMode === "against" && toNumber(formData.amount) > 0 && formData.farmer_id) {
+      setShowPaymentAdjustPopup(true);
+    }
+  };
+
   const handleChange = (e) => {
     const { name, type, checked, value } = e.target;
     const fieldValue = type === "checkbox" ? checked : value;
+
+    if (activeVoucherType === "payment" && name === "payment_mode") {
+      handlePaymentModeChange(value);
+      return;
+    }
+
     setFormData((prev) => {
       const next = { ...prev, [name]: fieldValue };
       if (name === "warehouse_id") {
@@ -1247,7 +1307,7 @@ export default function WarehouseTradingPage() {
     if (activeVoucherType === "payment" && name === "farmer_id") {
       if (value) {
         loadOutstanding("farmer", value, formData.warehouse_id, editId, formData.company_account_id).then(() => {
-          if (toNumber(formData.amount) > 0) {
+          if (toNumber(formData.amount) > 0 && activePaymentMode === "against") {
             setShowPaymentAdjustPopup(true);
           }
         });
@@ -1293,6 +1353,14 @@ export default function WarehouseTradingPage() {
     if ((activeVoucherType === "receipt" || activeVoucherType === "sale") && name === "company_account_id" && (formData.company_id || formData.buyer_id)) {
       loadOutstanding("company", formData.company_id || formData.buyer_id, formData.warehouse_id, null, value);
     }
+    if (activeVoucherType === "payment" && name === "amount") {
+      if (toNumber(value) > 0 && formData.farmer_id && activePaymentMode === "against") {
+        setShowPaymentAdjustPopup(true);
+      } else {
+        setPaymentAdjustments([]);
+        setShowPaymentAdjustPopup(false);
+      }
+    }
     if (activeVoucherType === "receipt" && name === "amount") {
       if (toNumber(value) > 0 && formData.company_id) {
         setShowReceiptAdjustPopup(true);
@@ -1336,6 +1404,7 @@ export default function WarehouseTradingPage() {
     }
     if (activeVoucherType === "payment") {
       const paymentAmount = toNumber(formData.amount);
+      const paymentMode = normalizePaymentMode(formData.payment_mode);
       if (!formData.farmer_id) {
         alert("Please select farmer");
         return;
@@ -1344,7 +1413,7 @@ export default function WarehouseTradingPage() {
         alert("Please enter payment amount first");
         return;
       }
-      if (Math.abs(paymentAdjustmentTotal - paymentAmount) > 0.0001) {
+      if (paymentMode === "against" && Math.abs(paymentAdjustmentTotal - paymentAmount) > 0.0001) {
         setShowPaymentAdjustPopup(true);
         alert("Payment amount and adjustment amount must match before saving");
         return;
@@ -1493,18 +1562,25 @@ export default function WarehouseTradingPage() {
         if (payload.sale_type === "direct") payload.warehouse_id = "";
       }
       if (activeVoucherType === "payment") {
-        payload.adjustments = paymentAdjustments
+        const paymentMode = normalizePaymentMode(formData.payment_mode);
+        const paymentAdjustmentsPayload = paymentAdjustments
           .filter((item) => toNumber(item.adjusted_amount) > 0)
           .map((item) => ({
             purchase_id: item.purchase_id,
             voucher_no: item.voucher_no || item.purchase_voucher_no || "",
             adjusted_amount: toNumber(item.adjusted_amount),
           }));
-        payload.reference_type = "purchase";
-        payload.reference_id = paymentAdjustments
-          .map((item) => item.voucher_no || item.purchase_voucher_no || item.purchase_id)
-          .filter(Boolean)
-          .join(", ");
+        payload.payment_mode = paymentMode;
+        payload.adjustments = paymentMode === "against" ? paymentAdjustmentsPayload : [];
+        payload.reference_type = getPaymentReferenceType(paymentMode);
+        payload.reference_id = paymentMode === "against"
+          ? paymentAdjustments
+            .map((item) => item.voucher_no || item.purchase_voucher_no || item.purchase_id)
+            .filter(Boolean)
+            .join(", ")
+          : paymentMode === "new_reference"
+            ? formData.reference_id || ""
+            : "";
       }
       if (activeVoucherType === "receipt") {
         payload.adjustments = receiptAdjustments
@@ -1595,6 +1671,7 @@ export default function WarehouseTradingPage() {
   const isPaymentVoucher = activeVoucherType === "payment";
   const isReceiptVoucher = activeVoucherType === "receipt";
   const isSaleVoucher = activeVoucherType === "sale";
+  const activePaymentMode = normalizePaymentMode(formData.payment_mode);
 
   const handleDeleteVoucher = async (voucherId) => {
     if (!window.confirm("Are you sure you want to delete this voucher?")) return;
@@ -1649,6 +1726,7 @@ export default function WarehouseTradingPage() {
           setSalePurchaseLinks(existingLinks);
         }
         if (activeVoucherType === "payment") {
+          const paymentMode = inferPaymentMode(voucher);
           const existingAdjustments = Array.isArray(voucher.adjustments)
             ? voucher.adjustments.map((item) => ({
                 purchase_id: String(item.purchase_id || item.id || ""),
@@ -1656,7 +1734,14 @@ export default function WarehouseTradingPage() {
                 adjusted_amount: toNumber(item.adjusted_amount),
               })).filter((item) => item.purchase_id && item.adjusted_amount > 0)
             : [];
-          setPaymentAdjustments(existingAdjustments);
+          setFormData({
+            ...defaultForm(),
+            ...voucher,
+            payment_mode: paymentMode,
+            reference_type: getPaymentReferenceType(paymentMode),
+            reference_id: paymentMode === "new_reference" ? voucher.reference_id || "" : "",
+          });
+          setPaymentAdjustments(paymentMode === "against" ? existingAdjustments : []);
           if (voucher.farmer_id) {
             loadOutstanding("farmer", voucher.farmer_id, voucher.warehouse_id, voucherId, voucher.company_account_id);
           }
@@ -3933,6 +4018,33 @@ export default function WarehouseTradingPage() {
                         </div>
                         <div style={paymentBadge}>⚡ Smart Payment Entry</div>
                       </div>
+                        <div style={{ marginTop: 14, display: "grid", gap: 10 }}>
+                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                          {paymentModeOptions.map((option) => {
+                            const isActive = activePaymentMode === option.value;
+                            return (
+                              <button
+                                key={option.value}
+                                type="button"
+                                onClick={() => handlePaymentModeChange(option.value)}
+                                style={{
+                                  border: isActive ? "1px solid #2563eb" : "1px solid #dbe4f0",
+                                  background: isActive ? "#eff6ff" : "#fff",
+                                  color: isActive ? "#1d4ed8" : "#334155",
+                                  borderRadius: 999,
+                                  padding: "8px 12px",
+                                  fontWeight: 700,
+                                  fontSize: 13,
+                                  cursor: "pointer",
+                                }}
+                              >
+                                {option.label}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <div style={{ fontSize: 13, color: "#475569" }}>{paymentModeOptions.find((option) => option.value === activePaymentMode)?.description}</div>
+                      </div>
                       <div style={paymentQuickGrid}>
                         <div style={paymentQuickBox}>
                           <div style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>Account</div>
@@ -4273,15 +4385,30 @@ export default function WarehouseTradingPage() {
                   </>
                 )}
 
-                {(activeVoucherType === "payment" || activeVoucherType === "receipt") && (
+                {activeVoucherType === "payment" && (
+                  <>
+                    <Field label={activePaymentMode === "against" ? "Reference Bills" : activePaymentMode === "new_reference" ? "Reference / Note" : "Reference Note"}>
+                      <input
+                        name="reference_id"
+                        value={activePaymentMode === "against"
+                          ? paymentAdjustments.map((item) => item.voucher_no || item.purchase_voucher_no || item.purchase_id).filter(Boolean).join(", ")
+                          : formData.reference_id}
+                        onChange={handleChange}
+                        style={activePaymentMode === "against" ? readOnlyInp : inp}
+                        placeholder={activePaymentMode === "against" ? "Auto from adjusted purchase bill" : activePaymentMode === "new_reference" ? "Optional reference note" : "Optional note"}
+                        readOnly={activePaymentMode === "against"}
+                      />
+                    </Field>
+                  </>
+                )}
+                {activeVoucherType === "receipt" && (
                   <>
                     <Field label="Reference Type">
                       <select
                         name="reference_type"
-                        value={activeVoucherType === "payment" ? "purchase" : formData.reference_type}
+                        value={formData.reference_type}
                         onChange={handleChange}
-                        style={activeVoucherType === "payment" ? readOnlyInp : inp}
-                        disabled={activeVoucherType === "payment"}
+                        style={inp}
                       >
                         <option value="">Select Reference</option>
                         <option value="purchase">Purchase Bill</option>
@@ -4292,18 +4419,15 @@ export default function WarehouseTradingPage() {
                     <Field label="Reference ID">
                       <input
                         name="reference_id"
-                        value={activeVoucherType === "payment" ? paymentAdjustments.map((item) => item.voucher_no || item.purchase_voucher_no || item.purchase_id).filter(Boolean).join(", ") : formData.reference_id}
+                        value={formData.reference_id}
                         onChange={handleChange}
-                        style={activeVoucherType === "payment" ? readOnlyInp : inp}
-                        placeholder={activeVoucherType === "payment" ? "Auto from adjusted purchase bill" : "Optional bill ID"}
-                        readOnly={activeVoucherType === "payment"}
+                        style={inp}
+                        placeholder="Optional bill ID"
                       />
                     </Field>
-                    {activeVoucherType === "receipt" && (
-                      <Field label="Amount">
-                        <input name="amount" type="number" step="0.0001" value={formData.amount} onChange={handleChange} style={inp} required />
-                      </Field>
-                    )}
+                    <Field label="Amount">
+                      <input name="amount" type="number" step="0.0001" value={formData.amount} onChange={handleChange} style={inp} required />
+                    </Field>
                   </>
                 )}
 
