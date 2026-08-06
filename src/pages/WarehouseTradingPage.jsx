@@ -456,6 +456,7 @@ export default function WarehouseTradingPage() {
   const reportPermissionMap = {
     sale: "warehouse.trading.report.sale",
     purchase: "warehouse.trading.report.purchase",
+    payment: "warehouse.trading.payment.view",
     "purchase-party-ledger": "warehouse.trading.report.purchase",
     "sale-party-ledger": "warehouse.trading.report.sale",
     "sale-followup": "warehouse.trading.report.sale",
@@ -467,6 +468,7 @@ export default function WarehouseTradingPage() {
   const reportEndpointMap = {
     sale: "sale-summary",
     purchase: "purchase-summary",
+    payment: "payment",
     "purchase-party-ledger": "purchase-party-ledger",
     "sale-party-ledger": "sale-party-ledger",
     "sale-followup": "sale-followup",
@@ -478,6 +480,7 @@ export default function WarehouseTradingPage() {
   const reportLabels = {
     sale: "Sale Summary",
     purchase: "Purchase Detail",
+    payment: "Payment Report",
     "purchase-party-ledger": "Purchase Party Ledger",
     "sale-party-ledger": "Sale Party Ledger",
     "sale-followup": "Sale Follow-up",
@@ -506,6 +509,9 @@ export default function WarehouseTradingPage() {
     }
     if (type === "purchase" || type === "purchase-party-ledger" || type === "warehouse-stock" || type === "fifo-stock") {
       return hasPermission(user, "warehouse.trading.report.purchase");
+    }
+    if (type === "payment") {
+      return canUsePayment;
     }
     if (type === "profit-loss") {
       return hasPermission(user, "warehouse.trading.report.profitLoss");
@@ -2567,6 +2573,17 @@ export default function WarehouseTradingPage() {
       ["total_quantity", "Total Quantity", (item) => formatDecimal4(item.total_quantity || 0)],
       ["total_amount", "Total Amount", (item) => formatMoney(item.total_amount || 0)],
     ],
+    payment: [
+      ["date", "Date", (item) => formatLedgerDate(item.date)],
+      ["voucher_no", "Voucher No", (item) => item.voucher_no || "-"],
+      ["party", "Party", (item) => item.party_name || item.farmer_name || "-"],
+      ["account", "Account", (item) => item.company_account_name || getAccountName(item)],
+      ["warehouse", "Warehouse", (item) => item.warehouse_name || getWarehouseName(item)],
+      ["amount", "Amount", (item) => formatMoney(item.amount || 0)],
+      ["adjusted", "Adjusted", (item) => formatMoney((item.adjustments || []).reduce((sum, entry) => sum + toNumber(entry.adjusted_amount), 0))],
+      ["reference", "Reference", (item) => item.reference_id || item.reference_type || "-"],
+      ["description", "Narration", (item) => item.description || "-"],
+    ],
     "purchase-party-ledger": [
       ["date", "Date", (item) => (item.row_type === "closing" ? "" : formatLedgerDate(item.date))],
       ["farmer", "Farmer", (item) => (item.row_type === "closing" ? `Closing Balance (${item.closing_side})` : (item.farmer_name || getFarmerName(item) || "-"))],
@@ -3905,7 +3922,34 @@ export default function WarehouseTradingPage() {
                   </div>
                 </div>
               ) : (
-                <div style={formGrid}>
+                <div>
+                  {activeVoucherType === "payment" && (
+                    <div style={paymentHeroCard}>
+                      <div style={paymentHeroHeader}>
+                        <div>
+                          <div style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.16em", color: "#2563eb", fontWeight: 800, marginBottom: 4 }}>Payment voucher</div>
+                          <h3 style={{ margin: "0 0 6px", fontSize: 18, color: "#0f172a" }}>Fast payment entry with bill adjustment tracking</h3>
+                          <p style={{ margin: 0, fontSize: 13, color: "#475569" }}>Select the account, choose the farmer, and adjust purchase bills directly from this polished form.</p>
+                        </div>
+                        <div style={paymentBadge}>⚡ Smart Payment Entry</div>
+                      </div>
+                      <div style={paymentQuickGrid}>
+                        <div style={paymentQuickBox}>
+                          <div style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>Account</div>
+                          <strong>{formData.company_account_id ? "Ready for payment" : "Choose account"}</strong>
+                        </div>
+                        <div style={paymentQuickBox}>
+                          <div style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>Farmer</div>
+                          <strong>{formData.farmer_id ? "Farmer selected" : "Pick the creditor"}</strong>
+                        </div>
+                        <div style={paymentQuickBox}>
+                          <div style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>Adjustments</div>
+                          <strong>{paymentAdjustments.length ? `${paymentAdjustments.length} bill(s)` : "No bill adjustments"}</strong>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  <div style={formGrid}>
                 <Field label="Voucher No">
                   <input name="voucher_no" value={formData.voucher_no} onChange={handleChange} placeholder="Voucher No *" style={inp} required />
                 </Field>
@@ -4379,8 +4423,9 @@ export default function WarehouseTradingPage() {
                     </div>
                   </div>
                 )}
-              </div>
-            )}
+                </div>
+                </div>
+              )}
             <div style={{ marginTop: 16, display: "flex", gap: 10 }}>
                 <button type="submit" disabled={loading} style={btnPrimary}>
                   {loading ? "Saving..." : editId ? (activeVoucherType === "sale" ? "Save Deductions" : "Update Voucher") : "Save Voucher"}
@@ -5467,6 +5512,11 @@ const voucherButtonStyle = { background: "#e2e8f0", color: "#0f172a", border: "n
 const activeVoucherButtonStyle = { ...voucherButtonStyle, background: "#087a73", color: "#fff" };
 const card = { background: "#fff", border: "1px solid #e2e8f0", borderRadius: 12, padding: 20, marginBottom: 18, boxShadow: "0 4px 14px rgba(15,23,42,0.06)" };
 const formGrid = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 16 };
+const paymentHeroCard = { border: "1px solid #dbeafe", borderRadius: 16, padding: 16, background: "linear-gradient(135deg, #eef7ff 0%, #ffffff 100%)", boxShadow: "0 10px 24px rgba(37,99,235,0.08)", marginBottom: 16 };
+const paymentHeroHeader = { display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", flexWrap: "wrap" };
+const paymentBadge = { display: "inline-flex", alignItems: "center", gap: 8, padding: "7px 11px", borderRadius: 999, background: "#2563eb", color: "#fff", fontWeight: 700, fontSize: 12 };
+const paymentQuickGrid = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10, marginTop: 12 };
+const paymentQuickBox = { background: "#fff", border: "1px solid #dbeafe", borderRadius: 10, padding: 10 };
 const inp = { width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #cbd5e1", fontSize: 14, boxSizing: "border-box" };
 const readOnlyInp = { ...inp, background: "#f8fafc", color: "#475569" };
 const btnPrimary = { background: "#2563eb", color: "#fff", border: "none", padding: "10px 18px", borderRadius: 8, cursor: "pointer", fontWeight: 600, fontSize: 14 };
