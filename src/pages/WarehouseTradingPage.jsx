@@ -221,6 +221,7 @@ const reportUiInitialState = {
   reportFilters: {
     farmer_id: "",
     company_account_id: "",
+    warehouse_id: "",
     sale_buyer_id: "",
     sale_company_account_id: "",
     sale_journey_token: "",
@@ -1095,8 +1096,9 @@ export default function WarehouseTradingPage() {
       }
       const endpoint = reportEndpointMap[reportType] || reportType;
       const params = {};
-      if (reportType === "purchase-party-ledger" && filters.farmer_id) {
-        params.farmer_id = filters.farmer_id;
+      if (reportType === "purchase-party-ledger") {
+        if (filters.farmer_id) params.farmer_id = filters.farmer_id;
+        if (filters.warehouse_id) params.warehouse_id = filters.warehouse_id;
       }
       if (reportType === "sale-party-ledger" && filters.sale_buyer_id) {
         params.buyer_id = filters.sale_buyer_id;
@@ -4757,6 +4759,20 @@ export default function WarehouseTradingPage() {
                     ))}
                   </select>
                 </Field>
+                <Field label="Warehouse Filter">
+                  <select
+                    value={reportFilters.warehouse_id}
+                    onChange={(event) => setReportFilters((prev) => ({ ...prev, warehouse_id: event.target.value }))}
+                    style={{ ...inp, minWidth: 260 }}
+                  >
+                    <option value="">All Warehouses</option>
+                    {warehouses.map((warehouse) => (
+                      <option key={warehouse.id || warehouse._id} value={warehouse.id || warehouse._id}>
+                        {warehouse.name}
+                      </option>
+                    ))}
+                  </select>
+                </Field>
                 <Field label="Account Filter">
                   <select
                     value={reportFilters.company_account_id}
@@ -4771,10 +4787,10 @@ export default function WarehouseTradingPage() {
                     ))}
                   </select>
                 </Field>
-                {(reportFilters.farmer_id || reportFilters.company_account_id) && (
+                {(reportFilters.farmer_id || reportFilters.warehouse_id || reportFilters.company_account_id) && (
                   <button
                     type="button"
-                    onClick={() => setReportFilters({ farmer_id: "", company_account_id: "", sale_buyer_id: "", sale_company_account_id: "", sale_journey_token: "", sale_lorry_no: "", sale_bill_no: "" })}
+                    onClick={() => setReportFilters({ farmer_id: "", warehouse_id: "", company_account_id: "", sale_buyer_id: "", sale_company_account_id: "", sale_journey_token: "", sale_lorry_no: "", sale_bill_no: "" })}
                     style={{ ...btnAction, background: "#64748b", marginBottom: 1 }}
                   >
                     Clear Filters
