@@ -793,7 +793,7 @@ export default function WarehouseTradingPage() {
       loadReport();
     }, 80);
     return () => window.clearTimeout(timer);
-  }, [activeTab, activeReport, reportPage, reportFilters.farmer_id, reportFilters.company_account_id, reportFilters.sale_buyer_id, reportFilters.sale_company_account_id, reportFilters.sale_journey_token, reportFilters.sale_lorry_no, reportFilters.sale_bill_no]);
+  }, [activeTab, activeReport, reportPage, reportFilters.farmer_id, reportFilters.company_account_id, reportFilters.warehouse_id, reportFilters.sale_buyer_id, reportFilters.sale_company_account_id, reportFilters.sale_journey_token, reportFilters.sale_lorry_no, reportFilters.sale_bill_no]);
 
   useEffect(() => {
     if (activeReport !== "purchase-party-ledger") setShowPurchaseBillWise(false);
@@ -1099,6 +1099,7 @@ export default function WarehouseTradingPage() {
       if (reportType === "purchase-party-ledger") {
         if (filters.farmer_id) params.farmer_id = filters.farmer_id;
         if (filters.warehouse_id) params.warehouse_id = filters.warehouse_id;
+        if (filters.company_account_id) params.company_account_id = filters.company_account_id;
       }
       if (reportType === "purchase") {
         if (filters.farmer_id) params.farmer_id = filters.farmer_id;
