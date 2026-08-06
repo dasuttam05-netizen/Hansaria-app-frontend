@@ -1167,7 +1167,7 @@ export default function WarehouseTradingPage() {
     }
   };
 
-  const handlePaymentModeChange = (nextMode) => {
+  const handlePaymentModeChange = async (nextMode) => {
     const normalizedMode = normalizePaymentMode(nextMode);
     setFormData((prev) => ({
       ...prev,
@@ -1178,6 +1178,7 @@ export default function WarehouseTradingPage() {
     setPaymentAdjustments([]);
     setShowPaymentAdjustPopup(false);
     if (normalizedMode === "against" && toNumber(formData.amount) > 0 && formData.farmer_id) {
+      await loadOutstanding("farmer", formData.farmer_id, formData.warehouse_id, editId, formData.company_account_id);
       setShowPaymentAdjustPopup(true);
     }
   };
@@ -1743,7 +1744,10 @@ export default function WarehouseTradingPage() {
           });
           setPaymentAdjustments(paymentMode === "against" ? existingAdjustments : []);
           if (voucher.farmer_id) {
-            loadOutstanding("farmer", voucher.farmer_id, voucher.warehouse_id, voucherId, voucher.company_account_id);
+            await loadOutstanding("farmer", voucher.farmer_id, voucher.warehouse_id, voucherId, voucher.company_account_id);
+            if (paymentMode === "against") {
+              setShowPaymentAdjustPopup(true);
+            }
           }
         }
       }
