@@ -1743,6 +1743,20 @@ export default function WarehouseTradingPage() {
             reference_id: paymentMode === "new_reference" ? voucher.reference_id || "" : "",
           });
           setPaymentAdjustments(paymentMode === "against" ? existingAdjustments : []);
+          // Ensure farmer appears in account-specific farmer list so dropdown shows it
+          if (voucher.company_account_id && voucher.farmer_id) {
+            const fid = String(voucher.farmer_id || "");
+            const existsInAccount = (accountFarmers || []).some((f) => String(f.id || f._id) === fid);
+            if (!existsInAccount) {
+              const farmerFromAll = (farmers || []).find((f) => String(f.id || f._id) === fid);
+              if (farmerFromAll) {
+                setAccountFarmers((prev) => (Array.isArray(prev) ? [...prev, farmerFromAll] : [farmerFromAll]));
+              } else {
+                setAccountFarmers((prev) => (Array.isArray(prev) ? [...prev, { id: fid, name: voucher.farmer_name || "Unknown farmer" }] : [{ id: fid, name: voucher.farmer_name || "Unknown farmer" }]));
+              }
+            }
+          }
+
           if (voucher.farmer_id) {
             await loadOutstanding("farmer", voucher.farmer_id, voucher.warehouse_id, voucherId, voucher.company_account_id);
             if (paymentMode === "against") {
