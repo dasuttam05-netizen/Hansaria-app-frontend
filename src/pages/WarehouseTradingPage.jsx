@@ -359,6 +359,7 @@ export default function WarehouseTradingPage() {
   const [showPurchasePreview, setShowPurchasePreview] = useState(false);
   const [purchasePreviewRow, setPurchasePreviewRow] = useState(null);
   const [purchasePreviewLoading, setPurchasePreviewLoading] = useState(false);
+  const [purchasePreviewOpenedFromLedger, setPurchasePreviewOpenedFromLedger] = useState(false);
   const [purchaseBaseline, setPurchaseBaseline] = useState(null);
   const [showSalePreview, setShowSalePreview] = useState(false);
   const [salePreviewRow, setSalePreviewRow] = useState(null);
@@ -1672,11 +1673,26 @@ export default function WarehouseTradingPage() {
           }
         }
         if (purchasePreviewRow) {
+          const nextFilters = {
+            ...reportFilters,
+            farmer_id: purchasePreviewRow.farmer_id || reportFilters.farmer_id,
+            warehouse_id: purchasePreviewRow.warehouse_id || reportFilters.warehouse_id,
+            company_account_id:
+              purchasePreviewRow.company_account_id || purchasePreviewRow.account_id || reportFilters.company_account_id,
+          };
           setShowPurchasePreview(false);
           setPurchasePreviewRow(null);
+          setPurchasePreviewOpenedFromLedger(false);
           setActiveTab("reports");
-          setActiveReport("purchase");
-          await loadReport();
+          if (purchasePreviewOpenedFromLedger) {
+            setActiveReport("purchase-party-ledger");
+            setReportPage(1);
+            setReportFilters(nextFilters);
+            await loadReport("purchase-party-ledger", 1, nextFilters);
+          } else {
+            setActiveReport("purchase");
+            await loadReport("purchase", 1, nextFilters);
+          }
           return;
         }
       }
@@ -1879,10 +1895,17 @@ export default function WarehouseTradingPage() {
     }
   };
 
-  const showPurchaseReportPreview = async (voucher) => {
+  const handleDownloadPurchasePdfFromPreview = async () => {
+    const voucherId = purchasePreviewRow?.purchase_id || purchasePreviewRow?.id || purchasePreviewRow?._id;
+    if (!voucherId) return;
+    await handlePurchaseReportPDF(voucherId);
+  };
+
+  const showPurchaseReportPreview = async (voucher, fromLedger = false) => {
     const recordId = getRecordId(voucher);
     const baseRow = voucher || null;
     setPurchasePreviewRow(baseRow);
+    setPurchasePreviewOpenedFromLedger(fromLedger);
     setShowPurchasePreview(true);
     setPurchasePreviewLoading(Boolean(recordId));
 
@@ -2743,7 +2766,33 @@ export default function WarehouseTradingPage() {
       ["adjustment_details", "Adjustment Details", (item) => (item.row_type === "closing" ? "" : (item.adjustment_details || "-"))],
       ["warehouse", "Warehouse", (item) => (item.row_type === "closing" ? "" : getWarehouseName(item))],
       ["debit", "Debit", (item) => formatMoney(item.debit || 0)],
-      ["credit", "Credit", (item) => formatMoney(item.credit || 0)],
+      ["credit", "Credit", (item) => {
+        if (item.row_type === "closing") {
+          return formatMoney(item.credit || 0);
+        }
+        const amount = formatMoney(item.credit || 0);
+        if (item.voucher_type !== "Purchase") {
+          return amount;
+        }
+        return (
+          <button
+            type="button"
+            onClick={() => showPurchaseReportPreview(item, true)}
+            style={{
+              border: "none",
+              background: "transparent",
+              color: "#0f766e",
+              cursor: "pointer",
+              textDecoration: "underline",
+              padding: 0,
+              font: "inherit",
+            }}
+            title="Open purchase details"
+          >
+            {amount}
+          </button>
+        );
+      }],
       ["balance", "Balance", (item) => {
         return formatMoney(Math.abs(item.balance || 0));
       }],
@@ -5718,8 +5767,10 @@ export default function WarehouseTradingPage() {
           currentPurchasePreviewIndex={currentPurchasePreviewIndex}
           navigatePurchasePreview={navigatePurchasePreview}
           handleEditPurchaseReport={handleEditPurchaseReport}
+          handleDownloadPurchasePdf={handleDownloadPurchasePdfFromPreview}
           setShowPurchasePreview={setShowPurchasePreview}
           setPurchasePreviewRow={setPurchasePreviewRow}
+          setPurchasePreviewOpenedFromLedger={setPurchasePreviewOpenedFromLedger}
           loading={loading}
           saveVoucher={saveVoucher}
           getPurchasePreviewData={getPurchasePreviewData}
