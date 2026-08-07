@@ -372,6 +372,7 @@ export default function WarehouseTradingPage() {
   const [showMobileTradingTabs, setShowMobileTradingTabs] = useState(false);
   const [globalSearch, setGlobalSearch] = useState("");
   const [voucherPage, setVoucherPage] = useState(1);
+  const [voucherSortAsc, setVoucherSortAsc] = useState(false);
   const masterLoadTokenRef = useRef(0);
   const arrowNavRootRef = useRef(null);
   const voucherPanelRef = useRef(null);
@@ -793,7 +794,7 @@ export default function WarehouseTradingPage() {
       loadVouchers();
     }, 80);
     return () => window.clearTimeout(timer);
-  }, [activeTab, activeVoucherType]);
+  }, [activeTab, activeVoucherType, voucherSortAsc]);
 
   useEffect(() => {
     if (activeTab === "vouchers" && activeVoucherType === "sale") {
@@ -842,8 +843,11 @@ export default function WarehouseTradingPage() {
   }, [activeTab]);
 
   useEffect(() => {
-    if (activeReport !== "purchase-party-ledger") setShowPurchaseBillWise(false);
-    if (activeReport !== "sale-party-ledger") setShowSaleBillWise(false);
+    if (activeReport === "purchase-party-ledger") setShowPurchaseBillWise(true);
+    else setShowPurchaseBillWise(false);
+    
+    if (activeReport === "sale-party-ledger") setShowSaleBillWise(true);
+    else setShowSaleBillWise(false);
   }, [activeReport]);
 
   useEffect(() => {
@@ -1106,7 +1110,8 @@ export default function WarehouseTradingPage() {
       setList(
         rows.slice().sort((a, b) => {
           const dateSort = String(b.date || "").localeCompare(String(a.date || ""));
-          if (dateSort) return dateSort;
+          const baseSortValue = voucherSortAsc ? -dateSort : dateSort;
+          if (baseSortValue) return baseSortValue;
           return Number(b.id || b._id || 0) - Number(a.id || a._id || 0);
         })
       );
@@ -4738,11 +4743,16 @@ export default function WarehouseTradingPage() {
           <div style={card}>
             <div className={`mobile-collapsible-header ${showMobileVoucherHeader ? "" : "is-mobile-hidden"}`} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
               <h3 style={{ marginTop: 0 }}>{activeVoucherType.charAt(0).toUpperCase() + activeVoucherType.slice(1)} Vouchers</h3>
-              {activeVoucherType === "sale" && (
-                <button type="button" onClick={() => setShowSaleAdjustedModal(true)} style={{ ...btnAction, background: "#0f766e" }}>
-                  F5 Adjusted Sales
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                <button type="button" onClick={() => setVoucherSortAsc((prev) => !prev)} style={{ ...btnAction, background: voucherSortAsc ? "#0f766e" : "#64748b", padding: "6px 12px", fontSize: 12 }}>
+                  📅 {voucherSortAsc ? "Oldest First" : "Newest First"}
                 </button>
-              )}
+                {activeVoucherType === "sale" && (
+                  <button type="button" onClick={() => setShowSaleAdjustedModal(true)} style={{ ...btnAction, background: "#0f766e" }}>
+                    F5 Adjusted Sales
+                  </button>
+                )}
+              </div>
             </div>
             <button
               type="button"
