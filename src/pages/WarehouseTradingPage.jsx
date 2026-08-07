@@ -560,6 +560,7 @@ export default function WarehouseTradingPage() {
   const canUsePayment = hasPermission(user, "warehouse.trading.payment.view") || hasPermission(user, "warehouse.trading.payment.create") || hasPermission(user, "warehouse.trading.payment.edit") || hasPermission(user, "warehouse.trading.payment.delete");
   const canUseReceipt = hasPermission(user, "warehouse.trading.receipt.view") || hasPermission(user, "warehouse.trading.receipt.create") || hasPermission(user, "warehouse.trading.receipt.edit") || hasPermission(user, "warehouse.trading.receipt.delete");
   const canUseJournal = hasPermission(user, "warehouse.trading.journal.view") || hasPermission(user, "warehouse.trading.journal.create") || hasPermission(user, "warehouse.trading.journal.edit") || hasPermission(user, "warehouse.trading.journal.delete");
+  const canUseWarehouseStockReport = hasPermission(user, "warehouse.trading.report.purchase") || hasPermission(user, "warehouse.trading.report.sale");
   const allowedVoucherTypes = Object.keys(voucherPermissionMap).filter((type) => {
     if (type === "purchase") return canUsePurchase;
     if (type === "sale") return canUseSale;
@@ -572,7 +573,10 @@ export default function WarehouseTradingPage() {
     if (type === "sale" || type === "sale-party-ledger" || type === "sale-followup" || type === "sale-journey") {
       return hasPermission(user, "warehouse.trading.report.sale");
     }
-    if (type === "purchase" || type === "purchase-party-ledger" || type === "warehouse-stock" || type === "fifo-stock") {
+    if (type === "warehouse-stock") {
+      return canUseWarehouseStockReport;
+    }
+    if (type === "purchase" || type === "purchase-party-ledger" || type === "fifo-stock") {
       return hasPermission(user, "warehouse.trading.report.purchase");
     }
     if (type === "payment") {
