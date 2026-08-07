@@ -3185,19 +3185,19 @@ export default function WarehouseTradingPage() {
     const start = totalItems === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
     const end = Math.min(page * PAGE_SIZE, totalItems);
     return (
-      <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center", flexWrap: "wrap", marginTop: 12, fontSize: 13, color: "#475569" }}>
-        <div>
-          Showing {totalItems === 0 ? 0 : `${start}-${end}`} of {totalItems} {label}
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center", flexWrap: "wrap", marginTop: 12, fontSize: 13, color: "#475569", padding: "12px", background: "#f8fafc", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+        <div style={{ fontWeight: 600, color: "#0f172a" }}>
+          Total: <span style={{ fontWeight: 700, color: "#1e40af" }}>{totalItems}</span> {label} | Pages: <span style={{ fontWeight: 700, color: "#1e40af" }}>{totalPages}</span>
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
-          <button type="button" onClick={onPrev} disabled={page <= 1} style={{ ...btnAction, background: page <= 1 ? "#cbd5e1" : "#64748b", color: page <= 1 ? "#64748b" : "#fff", cursor: page <= 1 ? "not-allowed" : "pointer" }}>
-            Prev
+        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+          <button type="button" onClick={onPrev} disabled={page <= 1} style={{ ...btnAction, background: page <= 1 ? "#cbd5e1" : "#64748b", color: page <= 1 ? "#64748b" : "#fff", cursor: page <= 1 ? "not-allowed" : "pointer", padding: "6px 12px" }}>
+            ← Prev
           </button>
-          <div style={{ alignSelf: "center", padding: "0 8px", fontWeight: 700, color: "#0f172a" }}>
-            Page {page} / {totalPages}
+          <div style={{ alignSelf: "center", padding: "0 12px", fontWeight: 700, color: "#0f172a", whiteSpace: "nowrap", background: "#fff", border: "1px solid #cbd5e1", borderRadius: "6px", padding: "6px 12px" }}>
+            Showing {totalItems === 0 ? 0 : `${start}-${end}`} | Page {page} / {totalPages}
           </div>
-          <button type="button" onClick={onNext} disabled={page >= totalPages} style={{ ...btnAction, background: page >= totalPages ? "#cbd5e1" : "#0f766e", color: page >= totalPages ? "#64748b" : "#fff", cursor: page >= totalPages ? "not-allowed" : "pointer" }}>
-            Next
+          <button type="button" onClick={onNext} disabled={page >= totalPages} style={{ ...btnAction, background: page >= totalPages ? "#cbd5e1" : "#0f766e", color: page >= totalPages ? "#64748b" : "#fff", cursor: page >= totalPages ? "not-allowed" : "pointer", padding: "6px 12px" }}>
+            Next →
           </button>
         </div>
       </div>
