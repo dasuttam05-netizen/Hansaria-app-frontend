@@ -825,6 +825,22 @@ export default function WarehouseTradingPage() {
     return () => window.clearTimeout(timer);
   }, [activeTab, activeReport, reportPage, reportFilters.farmer_id, reportFilters.company_account_id, reportFilters.warehouse_id, reportFilters.sale_buyer_id, reportFilters.sale_company_account_id, reportFilters.sale_journey_token, reportFilters.sale_lorry_no, reportFilters.sale_bill_no]);
 
+  // Refresh reports when page regains visibility/focus
+  useEffect(() => {
+    if (activeTab !== "reports") return;
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        loadReport();
+      }
+    };
+    window.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("focus", loadReport);
+    return () => {
+      window.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("focus", loadReport);
+    };
+  }, [activeTab, loadReport]);
+
   useEffect(() => {
     if (activeReport !== "purchase-party-ledger") setShowPurchaseBillWise(false);
     if (activeReport !== "sale-party-ledger") setShowSaleBillWise(false);
@@ -1148,7 +1164,7 @@ export default function WarehouseTradingPage() {
       if (filters.company_account_id || filters.sale_company_account_id) {
         params.company_account_id = filters.company_account_id || filters.sale_company_account_id;
       }
-      const serverPagedReport = reportType === "sale" || reportType === "purchase";
+      const serverPagedReport = reportType === "sale" || reportType === "purchase" || reportType === "warehouse-stock";
       if (serverPagedReport) {
         params.page = page;
         params.page_size = PAGE_SIZE;
