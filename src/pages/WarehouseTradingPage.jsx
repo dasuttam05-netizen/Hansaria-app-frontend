@@ -11,6 +11,7 @@ import WarehouseBillWisePanel from "./WarehouseBillWisePanel";
 import WarehouseAdjustModal from "./WarehouseAdjustModal";
 import WarehouseSaleDeductionModal from "./WarehouseSaleDeductionModal";
 import WarehouseSalePreviewModal from "./WarehouseSalePreviewModal";
+import WarehousePurchasePreviewModal from "./WarehousePurchasePreviewModal";
 import WarehouseVoucherTable from "./WarehouseVoucherTable";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -123,7 +124,11 @@ const inferPaymentMode = (voucher) => {
   return "on_account";
 };
 
-const getRecordId = (value) => value?._id || value?.id || value || "";
+const getRecordId = (value) => {
+  if (value === undefined || value === null) return "";
+  if (typeof value === "string" || typeof value === "number") return String(value);
+  return String(value._id || value.id || value.purchase_id || "").trim();
+};
 const formatDecimal4 = (value) => toNumber(value).toFixed(4);
 const formatMoney = (value) => toNumber(value).toFixed(2);
 const titleCase = (value) =>
@@ -308,6 +313,26 @@ export default function WarehouseTradingPage() {
   const setReportFilters = (value) => reportUiDispatch({ type: "set_report_filters", value: typeof value === "function" ? value(reportUiState.reportFilters) : value });
   const setSaleFollowupFilter = (value) => reportUiDispatch({ type: "set_sale_followup_filter", value: typeof value === "function" ? value(reportUiState.saleFollowupFilter) : value });
   const setSelectedLedgerBillId = (value) => reportUiDispatch({ type: "set_selected_ledger_bill_id", value });
+  const updateReportFilter = (field, value) => {
+    setReportFilters((prev) => {
+      if (field === "company_account_id") {
+        return {
+          ...prev,
+          company_account_id: value,
+          warehouse_id: "",
+          farmer_id: "",
+        };
+      }
+      if (field === "warehouse_id") {
+        return {
+          ...prev,
+          warehouse_id: value,
+          farmer_id: "",
+        };
+      }
+      return { ...prev, [field]: value };
+    });
+  };
   const setSelectedSaleLedgerBillId = (value) => reportUiDispatch({ type: "set_selected_sale_ledger_bill_id", value });
   const setShowPurchaseBillWise = (value) => reportUiDispatch({ type: "set_show_purchase_bill_wise", value });
   const setShowSaleBillWise = (value) => reportUiDispatch({ type: "set_show_sale_bill_wise", value });
@@ -334,7 +359,6 @@ export default function WarehouseTradingPage() {
   const [showPurchasePreview, setShowPurchasePreview] = useState(false);
   const [purchasePreviewRow, setPurchasePreviewRow] = useState(null);
   const [purchasePreviewLoading, setPurchasePreviewLoading] = useState(false);
-  const [purchaseLedgerActionRow, setPurchaseLedgerActionRow] = useState(null);
   const [purchaseBaseline, setPurchaseBaseline] = useState(null);
   const [showSalePreview, setShowSalePreview] = useState(false);
   const [salePreviewRow, setSalePreviewRow] = useState(null);
@@ -536,6 +560,7 @@ export default function WarehouseTradingPage() {
   const canUsePayment = hasPermission(user, "warehouse.trading.payment.view") || hasPermission(user, "warehouse.trading.payment.create") || hasPermission(user, "warehouse.trading.payment.edit") || hasPermission(user, "warehouse.trading.payment.delete");
   const canUseReceipt = hasPermission(user, "warehouse.trading.receipt.view") || hasPermission(user, "warehouse.trading.receipt.create") || hasPermission(user, "warehouse.trading.receipt.edit") || hasPermission(user, "warehouse.trading.receipt.delete");
   const canUseJournal = hasPermission(user, "warehouse.trading.journal.view") || hasPermission(user, "warehouse.trading.journal.create") || hasPermission(user, "warehouse.trading.journal.edit") || hasPermission(user, "warehouse.trading.journal.delete");
+  const canUseWarehouseStockReport = hasPermission(user, "warehouse.trading.report.purchase") || hasPermission(user, "warehouse.trading.report.sale");
   const allowedVoucherTypes = Object.keys(voucherPermissionMap).filter((type) => {
     if (type === "purchase") return canUsePurchase;
     if (type === "sale") return canUseSale;
@@ -548,7 +573,10 @@ export default function WarehouseTradingPage() {
     if (type === "sale" || type === "sale-party-ledger" || type === "sale-followup" || type === "sale-journey") {
       return hasPermission(user, "warehouse.trading.report.sale");
     }
-    if (type === "purchase" || type === "purchase-party-ledger" || type === "warehouse-stock" || type === "fifo-stock") {
+    if (type === "warehouse-stock") {
+      return canUseWarehouseStockReport;
+    }
+    if (type === "purchase" || type === "purchase-party-ledger" || type === "fifo-stock") {
       return hasPermission(user, "warehouse.trading.report.purchase");
     }
     if (type === "payment") {
@@ -1097,6 +1125,7 @@ export default function WarehouseTradingPage() {
       }
       const endpoint = reportEndpointMap[reportType] || reportType;
       const params = {};
+      const hasActivePurchaseFilters = Boolean(filters.farmer_id || filters.warehouse_id || filters.company_account_id);
       if (reportType === "purchase-party-ledger") {
         if (filters.farmer_id) params.farmer_id = filters.farmer_id;
         if (filters.warehouse_id) params.warehouse_id = filters.warehouse_id;
@@ -1139,10 +1168,8 @@ export default function WarehouseTradingPage() {
         });
         return;
       }
-      if (reportType === "purchase" && rows.length === 0 && hasPermission(user, voucherPermissionMap.purchase)) {
-        const fallbackRes = await axios.get("/api/wh-vouchers/purchase");
-        if (token !== reportLoadTokenRef.current) return;
-        setReportData(Array.isArray(fallbackRes.data) ? fallbackRes.data : []);
+      if (reportType === "purchase" && rows.length === 0 && hasActivePurchaseFilters && hasPermission(user, voucherPermissionMap.purchase)) {
+        setReportData([]);
         return;
       }
       setReportData(rows);
@@ -1162,7 +1189,7 @@ export default function WarehouseTradingPage() {
         setReportData([]);
         return;
       }
-      if (reportType === "purchase" && hasPermission(user, voucherPermissionMap.purchase)) {
+      if (reportType === "purchase" && hasPermission(user, voucherPermissionMap.purchase) && !hasActivePurchaseFilters) {
         try {
           const fallbackRes = await axios.get("/api/wh-vouchers/purchase");
           if (token !== reportLoadTokenRef.current) return;
@@ -1792,7 +1819,7 @@ export default function WarehouseTradingPage() {
   };
 
   const handleEditPurchaseReport = (voucher) => {
-    const voucherId = voucher?.id || voucher?._id;
+    const voucherId = voucher?.purchase_id || voucher?.id || voucher?._id;
     if (!voucherId) return;
     setActiveTab("vouchers");
     setActiveVoucherType("purchase");
@@ -1854,11 +1881,13 @@ export default function WarehouseTradingPage() {
 
   const showPurchaseReportPreview = async (voucher) => {
     const recordId = getRecordId(voucher);
-    setPurchasePreviewRow(voucher);
+    const baseRow = voucher || null;
+    setPurchasePreviewRow(baseRow);
     setShowPurchasePreview(true);
+    setPurchasePreviewLoading(Boolean(recordId));
+
     if (!recordId) return;
 
-    setPurchasePreviewLoading(true);
     try {
       const res = await axios.get(`/api/wh-vouchers/purchase/${recordId}`);
       if (res?.data) {
@@ -1866,6 +1895,7 @@ export default function WarehouseTradingPage() {
       }
     } catch (err) {
       console.error("Failed to load full purchase voucher preview:", err);
+      setPurchasePreviewRow(baseRow);
     } finally {
       setPurchasePreviewLoading(false);
     }
@@ -2713,33 +2743,7 @@ export default function WarehouseTradingPage() {
       ["adjustment_details", "Adjustment Details", (item) => (item.row_type === "closing" ? "" : (item.adjustment_details || "-"))],
       ["warehouse", "Warehouse", (item) => (item.row_type === "closing" ? "" : getWarehouseName(item))],
       ["debit", "Debit", (item) => formatMoney(item.debit || 0)],
-      ["credit", "Credit", (item) => {
-        if (item.row_type === "closing") {
-          return formatMoney(item.credit || 0);
-        }
-        const amount = formatMoney(item.credit || 0);
-        if (item.voucher_type !== "Purchase") {
-          return amount;
-        }
-        return (
-          <button
-            type="button"
-            onClick={() => setPurchaseLedgerActionRow(item)}
-            style={{
-              border: "none",
-              background: "transparent",
-              color: "#0f766e",
-              cursor: "pointer",
-              textDecoration: "underline",
-              padding: 0,
-              font: "inherit",
-            }}
-            title="Open purchase actions"
-          >
-            {amount}
-          </button>
-        );
-      }],
+      ["credit", "Credit", (item) => formatMoney(item.credit || 0)],
       ["balance", "Balance", (item) => {
         return formatMoney(Math.abs(item.balance || 0));
       }],
@@ -2958,6 +2962,48 @@ export default function WarehouseTradingPage() {
     return grouped;
   }, [activeReport, currentReportRows, reportData, farmers, buyerNames, companyAccounts, saleFollowupFilter]);
   const saleFollowupRows = activeReport === "sale-followup" ? displayReportData : [];
+  const purchasePartyLedgerCompanyAccounts = useMemo(() => {
+    const ids = new Set(
+      (Array.isArray(reportData) ? reportData : [])
+        .map((row) => String(row.company_account_id || row.account_id || "").trim())
+        .filter(Boolean)
+    );
+    return companyAccounts.filter((account) => ids.has(String(account.id || account._id || "").trim()));
+  }, [companyAccounts, reportData]);
+
+  const purchasePartyLedgerWarehouses = useMemo(() => {
+    if (!reportFilters.company_account_id) return [];
+    const ids = new Set(
+      (Array.isArray(reportData) ? reportData : [])
+        .filter((row) => String(row.company_account_id || row.account_id || "") === String(reportFilters.company_account_id))
+        .map((row) => String(row.warehouse_id || row.warehouse || "").trim())
+        .filter(Boolean)
+    );
+    return warehouses.filter((warehouse) => ids.has(String(warehouse.id || warehouse._id || "").trim()));
+  }, [warehouses, reportData, reportFilters.company_account_id]);
+
+  const purchasePartyLedgerFarmers = useMemo(() => {
+    const rows = Array.isArray(reportData) ? reportData : [];
+    const accountFilter = String(reportFilters.company_account_id || "").trim();
+    const warehouseFilter = String(reportFilters.warehouse_id || "").trim();
+
+    if (!accountFilter && !warehouseFilter) {
+      return farmers;
+    }
+
+    const ids = new Set(
+      rows
+        .filter((row) => {
+          if (accountFilter && String(row.company_account_id || row.account_id || "") !== accountFilter) return false;
+          if (warehouseFilter && String(row.warehouse_id || row.warehouse || "") !== warehouseFilter) return false;
+          return true;
+        })
+        .map((row) => String(row.farmer_id || row.farmer || "").trim())
+        .filter(Boolean)
+    );
+    return farmers.filter((farmer) => ids.has(String(farmer.id || farmer._id || "").trim()));
+  }, [farmers, reportData, reportFilters.company_account_id, reportFilters.warehouse_id]);
+
   const normalizedGlobalSearch = String(globalSearch || "").trim().toLowerCase();
   const matchesGlobalSearch = (value) =>
     !normalizedGlobalSearch || String(value ?? "").toLowerCase().includes(normalizedGlobalSearch);
@@ -4778,48 +4824,38 @@ export default function WarehouseTradingPage() {
           >
             {activeReport === "purchase" && (
               <div style={{ display: "flex", gap: 12, alignItems: "end", flexWrap: "wrap", marginBottom: 14 }}>
-                <Field label="Farmer Filter">
-                  <select
-                    value={reportFilters.farmer_id}
-                    onChange={(event) => setReportFilters((prev) => ({ ...prev, farmer_id: event.target.value }))}
-                    style={{ ...inp, minWidth: 260 }}
-                  >
-                    <option value="">All Farmers</option>
-                    {farmers.map((farmer) => (
-                      <option key={farmer.id || farmer._id} value={farmer.id || farmer._id}>
-                        {farmer.name}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                <Field label="Warehouse Filter">
-                  <select
-                    value={reportFilters.warehouse_id}
-                    onChange={(event) => setReportFilters((prev) => ({ ...prev, warehouse_id: event.target.value }))}
-                    style={{ ...inp, minWidth: 260 }}
-                  >
-                    <option value="">All Warehouses</option>
-                    {warehouses.map((warehouse) => (
-                      <option key={warehouse.id || warehouse._id} value={warehouse.id || warehouse._id}>
-                        {warehouse.name}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                <Field label="Account Filter">
-                  <select
-                    value={reportFilters.company_account_id}
-                    onChange={(event) => setReportFilters((prev) => ({ ...prev, company_account_id: event.target.value }))}
-                    style={{ ...inp, minWidth: 260 }}
-                  >
-                    <option value="">All Accounts</option>
-                    {companyAccounts.map((account) => (
-                      <option key={account.id || account._id} value={account.id || account._id}>
-                        {account.account_name || account.name}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
+                <SearchableSelect
+                  label="Account Filter"
+                  value={reportFilters.company_account_id}
+                  options={purchasePartyLedgerCompanyAccounts.map((account) => ({
+                    value: account.id || account._id,
+                    label: account.account_name || account.name,
+                  }))}
+                  onChange={(value) => updateReportFilter("company_account_id", value)}
+                  placeholder="Select Account"
+                />
+                <SearchableSelect
+                  label="Warehouse Filter"
+                  value={reportFilters.warehouse_id}
+                  options={purchasePartyLedgerWarehouses.map((warehouse) => ({
+                    value: warehouse.id || warehouse._id,
+                    label: warehouse.name,
+                  }))}
+                  onChange={(value) => updateReportFilter("warehouse_id", value)}
+                  placeholder={reportFilters.company_account_id ? "Select Warehouse" : "Select Account First"}
+                  disabled={!reportFilters.company_account_id}
+                />
+                <SearchableSelect
+                  label="Farmer Filter"
+                  value={reportFilters.farmer_id}
+                  options={purchasePartyLedgerFarmers.map((farmer) => ({
+                    value: farmer.id || farmer._id,
+                    label: farmer.name,
+                  }))}
+                  onChange={(value) => updateReportFilter("farmer_id", value)}
+                  placeholder={reportFilters.warehouse_id ? "Select Farmer" : "Select Warehouse First"}
+                  disabled={!reportFilters.company_account_id || !reportFilters.warehouse_id}
+                />
                 {(reportFilters.farmer_id || reportFilters.warehouse_id || reportFilters.company_account_id) && (
                   <button
                     type="button"
@@ -4833,48 +4869,38 @@ export default function WarehouseTradingPage() {
             )}
             {activeReport === "purchase-party-ledger" && (
               <div style={{ display: "flex", gap: 12, alignItems: "end", flexWrap: "wrap", marginBottom: 14 }}>
-                <Field label="Farmer Filter">
-                  <select
-                    value={reportFilters.farmer_id}
-                    onChange={(event) => setReportFilters((prev) => ({ ...prev, farmer_id: event.target.value }))}
-                    style={{ ...inp, minWidth: 260 }}
-                  >
-                    <option value="">All Farmers</option>
-                    {farmers.map((farmer) => (
-                      <option key={farmer.id || farmer._id} value={farmer.id || farmer._id}>
-                        {farmer.name}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                <Field label="Warehouse Filter">
-                  <select
-                    value={reportFilters.warehouse_id}
-                    onChange={(event) => setReportFilters((prev) => ({ ...prev, warehouse_id: event.target.value }))}
-                    style={{ ...inp, minWidth: 260 }}
-                  >
-                    <option value="">All Warehouses</option>
-                    {warehouses.map((warehouse) => (
-                      <option key={warehouse.id || warehouse._id} value={warehouse.id || warehouse._id}>
-                        {warehouse.name}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                <Field label="Account Filter">
-                  <select
-                    value={reportFilters.company_account_id}
-                    onChange={(event) => setReportFilters((prev) => ({ ...prev, company_account_id: event.target.value }))}
-                    style={{ ...inp, minWidth: 260 }}
-                  >
-                    <option value="">All Accounts</option>
-                    {companyAccounts.map((account) => (
-                      <option key={account.id || account._id} value={account.id || account._id}>
-                        {account.account_name || account.name}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
+                <SearchableSelect
+                  label="Account Filter"
+                  value={reportFilters.company_account_id}
+                  options={purchasePartyLedgerCompanyAccounts.map((account) => ({
+                    value: account.id || account._id,
+                    label: account.account_name || account.name,
+                  }))}
+                  onChange={(value) => updateReportFilter("company_account_id", value)}
+                  placeholder="Select Account"
+                />
+                <SearchableSelect
+                  label="Warehouse Filter"
+                  value={reportFilters.warehouse_id}
+                  options={purchasePartyLedgerWarehouses.map((warehouse) => ({
+                    value: warehouse.id || warehouse._id,
+                    label: warehouse.name,
+                  }))}
+                  onChange={(value) => updateReportFilter("warehouse_id", value)}
+                  placeholder={reportFilters.company_account_id ? "Select Warehouse" : "Select Account First"}
+                  disabled={!reportFilters.company_account_id}
+                />
+                <SearchableSelect
+                  label="Farmer Filter"
+                  value={reportFilters.farmer_id}
+                  options={purchasePartyLedgerFarmers.map((farmer) => ({
+                    value: farmer.id || farmer._id,
+                    label: farmer.name,
+                  }))}
+                  onChange={(value) => updateReportFilter("farmer_id", value)}
+                  placeholder={reportFilters.warehouse_id ? "Select Farmer" : "Select Warehouse First"}
+                  disabled={!reportFilters.company_account_id || !reportFilters.warehouse_id}
+                />
                 {(reportFilters.farmer_id || reportFilters.warehouse_id || reportFilters.company_account_id) && (
                   <button
                     type="button"
@@ -5702,77 +5728,6 @@ export default function WarehouseTradingPage() {
           formatMoney={formatMoney}
         />
       )}
-      {purchaseLedgerActionRow && (
-        <div style={modalOverlayStyle} onClick={() => setPurchaseLedgerActionRow(null)}>
-          <div
-            style={{
-              width: "min(420px, 100%)",
-              background: "#fff",
-              borderRadius: 16,
-              padding: 24,
-              boxShadow: "0 24px 60px rgba(15, 23, 42, 0.18)",
-              position: "relative",
-            }}
-            onClick={(event) => event.stopPropagation()}
-          >
-            <button
-              type="button"
-              onClick={() => setPurchaseLedgerActionRow(null)}
-              style={{
-                position: "absolute",
-                top: 14,
-                right: 14,
-                border: "none",
-                background: "transparent",
-                color: "#64748b",
-                fontSize: 18,
-                cursor: "pointer",
-              }}
-              aria-label="Close"
-            >
-              ×
-            </button>
-            <h3 style={{ margin: 0, marginBottom: 8, fontSize: 20, color: "#0f172a" }}>
-              Purchase Actions
-            </h3>
-            <p style={{ margin: 0, marginBottom: 18, color: "#475569", fontSize: 14 }}>
-              Purchase bill: {purchaseLedgerActionRow.voucher_no || purchaseLedgerActionRow.purchase_id || "-"}
-            </p>
-            <div style={{ display: "grid", gap: 10 }}>
-              <button
-                type="button"
-                onClick={async () => {
-                  setPurchaseLedgerActionRow(null);
-                  await showPurchaseReportPreview(purchaseLedgerActionRow);
-                }}
-                style={{ ...btnAction, width: "100%", background: "#0f766e" }}
-              >
-                View
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setPurchaseLedgerActionRow(null);
-                  handleEditPurchaseReport(purchaseLedgerActionRow);
-                }}
-                style={{ ...btnAction, width: "100%", background: "#2563eb" }}
-              >
-                Edit
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setPurchaseLedgerActionRow(null);
-                  handlePurchaseReportPDF(purchaseLedgerActionRow.purchase_id || purchaseLedgerActionRow.id || purchaseLedgerActionRow._id);
-                }}
-                style={{ ...btnAction, width: "100%", background: "#ef4444" }}
-              >
-                PDF
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
       {showSalePreview && salePreviewRow && (
         <WarehouseSalePreviewModal
           modalOverlayStyle={modalOverlayStyle}
@@ -5803,6 +5758,132 @@ export default function WarehouseTradingPage() {
           axios={axios}
         />
       )}
+    </div>
+  );
+}
+
+function SearchableSelect({ label, value, options, onChange, placeholder = "Select", disabled = false }) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const rootRef = useRef(null);
+
+  const normalizedOptions = useMemo(
+    () =>
+      (options || []).map((option) => ({
+        ...option,
+        value: String(option?.value ?? "").trim(),
+        label: String(option?.label ?? "").trim(),
+      })),
+    [options]
+  );
+
+  const selectedOption = useMemo(
+    () => normalizedOptions.find((option) => String(option.value) === String(value)),
+    [normalizedOptions, value]
+  );
+
+  const filteredOptions = useMemo(() => {
+    const query = String(search || "").trim().toLowerCase();
+    if (!query) return normalizedOptions;
+    return normalizedOptions.filter((option) => option.label.toLowerCase().includes(query));
+  }, [normalizedOptions, search]);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (!rootRef.current?.contains(event.target)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const handleSelect = (nextValue) => {
+    onChange(nextValue);
+    setOpen(false);
+    setSearch("");
+  };
+
+  return (
+    <div ref={rootRef} style={{ position: "relative", minWidth: 260, flex: "1 1 260px" }}>
+      <label style={{ marginBottom: 6, display: "block", fontSize: 12, fontWeight: 700, color: "#475569" }}>{label}</label>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => !disabled && setOpen((prev) => !prev)}
+        style={{
+          width: "100%",
+          padding: "10px 12px",
+          borderRadius: 8,
+          border: "1px solid #cbd5e1",
+          background: disabled ? "#f8fafc" : "#fff",
+          textAlign: "left",
+          cursor: disabled ? "not-allowed" : "pointer",
+          color: selectedOption ? "#0f172a" : "#64748b",
+          fontSize: 14,
+          boxSizing: "border-box",
+        }}
+      >
+        {selectedOption ? selectedOption.label : placeholder}
+      </button>
+      {open && !disabled ? (
+        <div
+          style={{
+            position: "absolute",
+            top: "calc(100% + 6px)",
+            left: 0,
+            right: 0,
+            zIndex: 30,
+            background: "#fff",
+            border: "1px solid #dbe4ea",
+            borderRadius: 12,
+            boxShadow: "0 18px 40px rgba(15, 23, 42, 0.14)",
+            overflow: "hidden",
+          }}
+        >
+          <div style={{ padding: 10, borderBottom: "1px solid #e2e8f0", background: "#f8fafc" }}>
+            <input
+              type="text"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Type to filter"
+              style={{
+                width: "100%",
+                padding: "9px 10px",
+                border: "1px solid #cbd5e1",
+                borderRadius: 8,
+                fontSize: 13,
+                boxSizing: "border-box",
+              }}
+            />
+          </div>
+          <div style={{ maxHeight: 240, overflowY: "auto" }}>
+            {filteredOptions.length ? (
+              filteredOptions.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => handleSelect(option.value)}
+                  style={{
+                    width: "100%",
+                    display: "block",
+                    textAlign: "left",
+                    padding: "10px 12px",
+                    border: "none",
+                    background: "transparent",
+                    cursor: "pointer",
+                    color: "#0f172a",
+                  }}
+                >
+                  {option.label}
+                </button>
+              ))
+            ) : (
+              <div style={{ padding: "10px 12px", color: "#64748b", fontSize: 13 }}>No items found</div>
+            )}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
