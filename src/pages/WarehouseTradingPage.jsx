@@ -124,7 +124,11 @@ const inferPaymentMode = (voucher) => {
   return "on_account";
 };
 
-const getRecordId = (value) => value?._id || value?.id || value || "";
+const getRecordId = (value) => {
+  if (value === undefined || value === null) return "";
+  if (typeof value === "string" || typeof value === "number") return String(value);
+  return String(value._id || value.id || value.purchase_id || "").trim();
+};
 const formatDecimal4 = (value) => toNumber(value).toFixed(4);
 const formatMoney = (value) => toNumber(value).toFixed(2);
 const titleCase = (value) =>
@@ -1811,7 +1815,7 @@ export default function WarehouseTradingPage() {
   };
 
   const handleEditPurchaseReport = (voucher) => {
-    const voucherId = voucher?.id || voucher?._id;
+    const voucherId = voucher?.purchase_id || voucher?.id || voucher?._id;
     if (!voucherId) return;
     setActiveTab("vouchers");
     setActiveVoucherType("purchase");
@@ -2975,14 +2979,21 @@ export default function WarehouseTradingPage() {
   }, [warehouses, reportData, reportFilters.company_account_id]);
 
   const purchasePartyLedgerFarmers = useMemo(() => {
-    if (!reportFilters.company_account_id || !reportFilters.warehouse_id) return [];
+    const rows = Array.isArray(reportData) ? reportData : [];
+    const accountFilter = String(reportFilters.company_account_id || "").trim();
+    const warehouseFilter = String(reportFilters.warehouse_id || "").trim();
+
+    if (!accountFilter && !warehouseFilter) {
+      return farmers;
+    }
+
     const ids = new Set(
-      (Array.isArray(reportData) ? reportData : [])
-        .filter(
-          (row) =>
-            String(row.company_account_id || row.account_id || "") === String(reportFilters.company_account_id) &&
-            String(row.warehouse_id || row.warehouse || "") === String(reportFilters.warehouse_id)
-        )
+      rows
+        .filter((row) => {
+          if (accountFilter && String(row.company_account_id || row.account_id || "") !== accountFilter) return false;
+          if (warehouseFilter && String(row.warehouse_id || row.warehouse || "") !== warehouseFilter) return false;
+          return true;
+        })
         .map((row) => String(row.farmer_id || row.farmer || "").trim())
         .filter(Boolean)
     );
