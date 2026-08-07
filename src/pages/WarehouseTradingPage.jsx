@@ -2338,6 +2338,19 @@ export default function WarehouseTradingPage() {
       : rawDueDate;
     const derivedDueDays = existingDueDays !== "" ? existingDueDays : (computedDueDate && existingUnloadingDate ? diffDays(existingUnloadingDate, computedDueDate) : "");
 
+    const selectedDispatchQty = saleDispatchQtyFromData(voucher);
+    const selectedAmount = (voucher.amount !== undefined && voucher.amount !== null && String(voucher.amount).trim() !== "")
+      ? voucher.amount
+      : (voucher.total_amount !== undefined && voucher.total_amount !== null && String(voucher.total_amount).trim() !== "")
+        ? voucher.total_amount
+        : saleGrossAmountFromData(voucher).toFixed(2);
+    const cdPercent = voucher.cd_percent || "";
+    const cdAmount = voucher.cd_amount !== undefined && voucher.cd_amount !== null && String(voucher.cd_amount).trim() !== ""
+      ? voucher.cd_amount
+      : cdPercent
+        ? Number((Number(selectedAmount) * toNumber(cdPercent) / 100).toFixed(2))
+        : "";
+
     setFormData({
       ...defaultForm(),
       ...voucher,
@@ -2349,8 +2362,9 @@ export default function WarehouseTradingPage() {
       buyer_id: voucher.buyer_id || voucher.company_id || "",
       company_id: voucher.company_id || voucher.buyer_id || "",
       lorry_no: voucher.lorry_no || voucher.reference_id || "",
-      dispatch_qty: formatDecimal4(toNumber(voucher.dispatch_qty || voucher.quantity || voucher.total_quantity || voucher.unloading_qty || 0)),
-      unloading_qty: "",
+      dispatch_qty: formatDecimal4(selectedDispatchQty),
+      amount: selectedAmount,
+      unloading_qty: voucher.unloading_qty !== undefined && voucher.unloading_qty !== null ? voucher.unloading_qty : "",
       unloading_date: existingUnloadingDate || "",
       due_days: derivedDueDays,
       due_date: computedDueDate || "",
@@ -2359,11 +2373,20 @@ export default function WarehouseTradingPage() {
       fungus: voucher.fungus || "",
       discolour: voucher.discolour || "",
       others: voucher.others || "",
-      claim_amount: voucher.claim_amount || "",
-      other_deduction: voucher.other_deduction || "",
-      cd_percent: voucher.cd_percent || "",
-      cd_amount: voucher.cd_amount || "",
-      tds_amount: voucher.tds_amount || "",
+      claim_amount: voucher.claim_amount !== undefined && voucher.claim_amount !== null && String(voucher.claim_amount).trim() !== ""
+        ? voucher.claim_amount
+        : voucher.shortage_amount !== undefined && voucher.shortage_amount !== null && String(voucher.shortage_amount).trim() !== ""
+          ? voucher.shortage_amount
+          : "",
+      other_deduction: voucher.other_deduction !== undefined && voucher.other_deduction !== null && String(voucher.other_deduction).trim() !== ""
+        ? voucher.other_deduction
+        : voucher.adjustment_amount !== undefined && voucher.adjustment_amount !== null && String(voucher.adjustment_amount).trim() !== ""
+          ? voucher.adjustment_amount
+          : "",
+      cd_percent: cdPercent,
+      cd_amount: cdAmount,
+      tds_amount: voucher.tds_amount !== undefined && voucher.tds_amount !== null && String(voucher.tds_amount).trim() !== "" ? voucher.tds_amount : "",
+      transport_charge: voucher.transport_charge !== undefined && voucher.transport_charge !== null && String(voucher.transport_charge).trim() !== "" ? voucher.transport_charge : "",
       journey_note: voucher.journey_note || voucher.description || "",
     });
     setEditId(voucher.id || voucher._id);
