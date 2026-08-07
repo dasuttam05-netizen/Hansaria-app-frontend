@@ -14,8 +14,10 @@ function WarehousePurchasePreviewModal({
   currentPurchasePreviewIndex,
   navigatePurchasePreview,
   handleEditPurchaseReport,
+  handleDownloadPurchasePdf,
   setShowPurchasePreview,
   setPurchasePreviewRow,
+  setPurchasePreviewOpenedFromLedger,
   loading,
   saveVoucher,
   getPurchasePreviewData,
@@ -60,7 +62,22 @@ function WarehousePurchasePreviewModal({
                 Edit
               </button>
             )}
-            <button type="button" onClick={() => { setShowPurchasePreview(false); setPurchasePreviewRow(null); }} style={{ ...btnAction, background: "#64748b" }}>
+            {purchasePreviewRow && (
+              <button type="button" onClick={handleDownloadPurchasePdf} style={{ ...btnAction, background: "#ea580c" }}>
+                PDF
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                setShowPurchasePreview(false);
+                setPurchasePreviewRow(null);
+                if (setPurchasePreviewOpenedFromLedger) {
+                  setPurchasePreviewOpenedFromLedger(false);
+                }
+              }}
+              style={{ ...btnAction, background: "#64748b" }}
+            >
               Close
             </button>
           </div>
@@ -130,7 +147,22 @@ function WarehousePurchasePreviewModal({
               Edit
             </button>
           )}
-          <button type="button" onClick={() => { setShowPurchasePreview(false); setPurchasePreviewRow(null); }} style={{ ...btnPrimary, background: "#64748b" }}>
+          {purchasePreviewRow && (
+            <button type="button" onClick={handleDownloadPurchasePdf} style={{ ...btnPrimary, background: "#ea580c" }}>
+              PDF
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() => {
+              setShowPurchasePreview(false);
+              setPurchasePreviewRow(null);
+              if (setPurchasePreviewOpenedFromLedger) {
+                setPurchasePreviewOpenedFromLedger(false);
+              }
+            }}
+            style={{ ...btnPrimary, background: "#64748b" }}
+          >
             {purchasePreviewRow ? "Close" : "Back to Edit"}
           </button>
           {!purchasePreviewRow && (
