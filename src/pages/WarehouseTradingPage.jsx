@@ -839,7 +839,7 @@ export default function WarehouseTradingPage() {
       window.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("focus", loadReport);
     };
-  }, [activeTab, loadReport]);
+  }, [activeTab]);
 
   useEffect(() => {
     if (activeReport !== "purchase-party-ledger") setShowPurchaseBillWise(false);
