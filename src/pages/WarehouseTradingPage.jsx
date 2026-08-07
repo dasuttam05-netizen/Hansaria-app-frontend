@@ -1664,8 +1664,12 @@ export default function WarehouseTradingPage() {
       
       const isEdit = editId && String(editId).trim();
       const url = isEdit ? `/api/wh-vouchers/${activeVoucherType}/${editId}` : `/api/wh-vouchers/${activeVoucherType}`;
-      const method = isEdit ? "put" : "post";
-      const res = isEdit ? await axios.put(url, payload) : await axios.post(url, payload);
+      const requestHeaders = typeof window !== "undefined" && localStorage.getItem("token")
+        ? { Authorization: `Bearer ${localStorage.getItem("token")}` }
+        : {};
+      const res = isEdit
+        ? await axios.put(url, payload, { headers: requestHeaders })
+        : await axios.post(url, payload, { headers: requestHeaders });
       
       alert(`Voucher ${isEdit ? "updated" : "saved"} successfully`);
       if (res.data?.stats) {
