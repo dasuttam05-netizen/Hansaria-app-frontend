@@ -4806,48 +4806,38 @@ export default function WarehouseTradingPage() {
           >
             {activeReport === "purchase" && (
               <div style={{ display: "flex", gap: 12, alignItems: "end", flexWrap: "wrap", marginBottom: 14 }}>
-                <Field label="Account Filter">
-                  <select
-                    value={reportFilters.company_account_id}
-                    onChange={(event) => updateReportFilter("company_account_id", event.target.value)}
-                    style={{ ...inp, minWidth: 260 }}
-                  >
-                    <option value="">All Accounts</option>
-                    {companyAccounts.map((account) => (
-                      <option key={account.id || account._id} value={account.id || account._id}>
-                        {account.account_name || account.name}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                <Field label="Warehouse Filter">
-                  <select
-                    value={reportFilters.warehouse_id}
-                    onChange={(event) => updateReportFilter("warehouse_id", event.target.value)}
-                    style={{ ...inp, minWidth: 260 }}
-                  >
-                    <option value="">All Warehouses</option>
-                    {warehouses.map((warehouse) => (
-                      <option key={warehouse.id || warehouse._id} value={warehouse.id || warehouse._id}>
-                        {warehouse.name}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                <Field label="Farmer Filter">
-                  <select
-                    value={reportFilters.farmer_id}
-                    onChange={(event) => updateReportFilter("farmer_id", event.target.value)}
-                    style={{ ...inp, minWidth: 260 }}
-                  >
-                    <option value="">All Farmers</option>
-                    {farmers.map((farmer) => (
-                      <option key={farmer.id || farmer._id} value={farmer.id || farmer._id}>
-                        {farmer.name}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
+                <SearchableSelect
+                  label="Account Filter"
+                  value={reportFilters.company_account_id}
+                  options={purchasePartyLedgerCompanyAccounts.map((account) => ({
+                    value: account.id || account._id,
+                    label: account.account_name || account.name,
+                  }))}
+                  onChange={(value) => updateReportFilter("company_account_id", value)}
+                  placeholder="Select Account"
+                />
+                <SearchableSelect
+                  label="Warehouse Filter"
+                  value={reportFilters.warehouse_id}
+                  options={purchasePartyLedgerWarehouses.map((warehouse) => ({
+                    value: warehouse.id || warehouse._id,
+                    label: warehouse.name,
+                  }))}
+                  onChange={(value) => updateReportFilter("warehouse_id", value)}
+                  placeholder={reportFilters.company_account_id ? "Select Warehouse" : "Select Account First"}
+                  disabled={!reportFilters.company_account_id}
+                />
+                <SearchableSelect
+                  label="Farmer Filter"
+                  value={reportFilters.farmer_id}
+                  options={purchasePartyLedgerFarmers.map((farmer) => ({
+                    value: farmer.id || farmer._id,
+                    label: farmer.name,
+                  }))}
+                  onChange={(value) => updateReportFilter("farmer_id", value)}
+                  placeholder={reportFilters.warehouse_id ? "Select Farmer" : "Select Warehouse First"}
+                  disabled={!reportFilters.company_account_id || !reportFilters.warehouse_id}
+                />
                 {(reportFilters.farmer_id || reportFilters.warehouse_id || reportFilters.company_account_id) && (
                   <button
                     type="button"
@@ -4861,54 +4851,38 @@ export default function WarehouseTradingPage() {
             )}
             {activeReport === "purchase-party-ledger" && (
               <div style={{ display: "flex", gap: 12, alignItems: "end", flexWrap: "wrap", marginBottom: 14 }}>
-                <Field label="Account Filter">
-                  <select
-                    value={reportFilters.company_account_id}
-                    onChange={(event) => updateReportFilter("company_account_id", event.target.value)}
-                    style={{ ...inp, minWidth: 260 }}
-                  >
-                    <option value="">Select Account</option>
-                    {purchasePartyLedgerCompanyAccounts.map((account) => (
-                      <option key={account.id || account._id} value={account.id || account._id}>
-                        {account.account_name || account.name}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                <Field label="Warehouse Filter">
-                  <select
-                    value={reportFilters.warehouse_id}
-                    disabled={!reportFilters.company_account_id}
-                    onChange={(event) => updateReportFilter("warehouse_id", event.target.value)}
-                    style={{ ...inp, minWidth: 260 }}
-                  >
-                    <option value="">
-                      {reportFilters.company_account_id ? "Select Warehouse" : "Select Account First"}
-                    </option>
-                    {purchasePartyLedgerWarehouses.map((warehouse) => (
-                      <option key={warehouse.id || warehouse._id} value={warehouse.id || warehouse._id}>
-                        {warehouse.name}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                <Field label="Farmer Filter">
-                  <select
-                    value={reportFilters.farmer_id}
-                    disabled={!reportFilters.company_account_id || !reportFilters.warehouse_id}
-                    onChange={(event) => updateReportFilter("farmer_id", event.target.value)}
-                    style={{ ...inp, minWidth: 260 }}
-                  >
-                    <option value="">
-                      {reportFilters.warehouse_id ? "Select Farmer" : "Select Warehouse First"}
-                    </option>
-                    {purchasePartyLedgerFarmers.map((farmer) => (
-                      <option key={farmer.id || farmer._id} value={farmer.id || farmer._id}>
-                        {farmer.name}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
+                <SearchableSelect
+                  label="Account Filter"
+                  value={reportFilters.company_account_id}
+                  options={purchasePartyLedgerCompanyAccounts.map((account) => ({
+                    value: account.id || account._id,
+                    label: account.account_name || account.name,
+                  }))}
+                  onChange={(value) => updateReportFilter("company_account_id", value)}
+                  placeholder="Select Account"
+                />
+                <SearchableSelect
+                  label="Warehouse Filter"
+                  value={reportFilters.warehouse_id}
+                  options={purchasePartyLedgerWarehouses.map((warehouse) => ({
+                    value: warehouse.id || warehouse._id,
+                    label: warehouse.name,
+                  }))}
+                  onChange={(value) => updateReportFilter("warehouse_id", value)}
+                  placeholder={reportFilters.company_account_id ? "Select Warehouse" : "Select Account First"}
+                  disabled={!reportFilters.company_account_id}
+                />
+                <SearchableSelect
+                  label="Farmer Filter"
+                  value={reportFilters.farmer_id}
+                  options={purchasePartyLedgerFarmers.map((farmer) => ({
+                    value: farmer.id || farmer._id,
+                    label: farmer.name,
+                  }))}
+                  onChange={(value) => updateReportFilter("farmer_id", value)}
+                  placeholder={reportFilters.warehouse_id ? "Select Farmer" : "Select Warehouse First"}
+                  disabled={!reportFilters.company_account_id || !reportFilters.warehouse_id}
+                />
                 {(reportFilters.farmer_id || reportFilters.warehouse_id || reportFilters.company_account_id) && (
                   <button
                     type="button"
@@ -5766,6 +5740,132 @@ export default function WarehouseTradingPage() {
           axios={axios}
         />
       )}
+    </div>
+  );
+}
+
+function SearchableSelect({ label, value, options, onChange, placeholder = "Select", disabled = false }) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const rootRef = useRef(null);
+
+  const normalizedOptions = useMemo(
+    () =>
+      (options || []).map((option) => ({
+        ...option,
+        value: String(option?.value ?? "").trim(),
+        label: String(option?.label ?? "").trim(),
+      })),
+    [options]
+  );
+
+  const selectedOption = useMemo(
+    () => normalizedOptions.find((option) => String(option.value) === String(value)),
+    [normalizedOptions, value]
+  );
+
+  const filteredOptions = useMemo(() => {
+    const query = String(search || "").trim().toLowerCase();
+    if (!query) return normalizedOptions;
+    return normalizedOptions.filter((option) => option.label.toLowerCase().includes(query));
+  }, [normalizedOptions, search]);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (!rootRef.current?.contains(event.target)) {
+        setOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const handleSelect = (nextValue) => {
+    onChange(nextValue);
+    setOpen(false);
+    setSearch("");
+  };
+
+  return (
+    <div ref={rootRef} style={{ position: "relative", minWidth: 260, flex: "1 1 260px" }}>
+      <label style={{ marginBottom: 6, display: "block", fontSize: 12, fontWeight: 700, color: "#475569" }}>{label}</label>
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => !disabled && setOpen((prev) => !prev)}
+        style={{
+          width: "100%",
+          padding: "10px 12px",
+          borderRadius: 8,
+          border: "1px solid #cbd5e1",
+          background: disabled ? "#f8fafc" : "#fff",
+          textAlign: "left",
+          cursor: disabled ? "not-allowed" : "pointer",
+          color: selectedOption ? "#0f172a" : "#64748b",
+          fontSize: 14,
+          boxSizing: "border-box",
+        }}
+      >
+        {selectedOption ? selectedOption.label : placeholder}
+      </button>
+      {open && !disabled ? (
+        <div
+          style={{
+            position: "absolute",
+            top: "calc(100% + 6px)",
+            left: 0,
+            right: 0,
+            zIndex: 30,
+            background: "#fff",
+            border: "1px solid #dbe4ea",
+            borderRadius: 12,
+            boxShadow: "0 18px 40px rgba(15, 23, 42, 0.14)",
+            overflow: "hidden",
+          }}
+        >
+          <div style={{ padding: 10, borderBottom: "1px solid #e2e8f0", background: "#f8fafc" }}>
+            <input
+              type="text"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Type to filter"
+              style={{
+                width: "100%",
+                padding: "9px 10px",
+                border: "1px solid #cbd5e1",
+                borderRadius: 8,
+                fontSize: 13,
+                boxSizing: "border-box",
+              }}
+            />
+          </div>
+          <div style={{ maxHeight: 240, overflowY: "auto" }}>
+            {filteredOptions.length ? (
+              filteredOptions.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  onClick={() => handleSelect(option.value)}
+                  style={{
+                    width: "100%",
+                    display: "block",
+                    textAlign: "left",
+                    padding: "10px 12px",
+                    border: "none",
+                    background: "transparent",
+                    cursor: "pointer",
+                    color: "#0f172a",
+                  }}
+                >
+                  {option.label}
+                </button>
+              ))
+            ) : (
+              <div style={{ padding: "10px 12px", color: "#64748b", fontSize: 13 }}>No items found</div>
+            )}
+          </div>
+        </div>
+      ) : null}
     </div>
   );
 }
