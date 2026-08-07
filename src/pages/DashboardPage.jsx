@@ -1,4 +1,4 @@
-import React, { Component, useState, useEffect, useRef, lazy, Suspense } from "react";
+import React, { Component, useState, useEffect, useRef, lazy, Suspense, useCallback } from "react";
 import API from "./axiosInstance";
 import { useNavigate } from "react-router-dom";
 import logo from "./logo.png";
@@ -147,6 +147,18 @@ export default function DashboardPage() {
     }
   };
 
+  const refreshDashboard = useCallback(async () => {
+    const { user: sessionUser } = loadSession();
+    if (!sessionUser) {
+      navigate("/");
+      return;
+    }
+
+    setUser(sessionUser);
+    setUsername(sessionUser.name || sessionUser.username || "User");
+    await fetchData(sessionUser, () => true);
+  }, [navigate]);
+
   useEffect(() => {
     let alive = true;
 
@@ -174,10 +186,21 @@ export default function DashboardPage() {
 
     initDashboard();
 
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        refreshDashboard();
+      }
+    };
+
+    window.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("focus", refreshDashboard);
+
     return () => {
       alive = false;
+      window.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("focus", refreshDashboard);
     };
-  }, [navigate]);
+  }, [navigate, refreshDashboard]);
 
   const canViewFullCashBook = hasAnyPermission(user, [
     "cash.view",
