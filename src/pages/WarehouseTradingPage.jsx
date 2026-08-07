@@ -1807,41 +1807,53 @@ export default function WarehouseTradingPage() {
           setSalePurchaseLinks(existingLinks);
         }
         if (activeVoucherType === "payment") {
-          const paymentMode = inferPaymentMode(voucher);
-          const existingAdjustments = Array.isArray(voucher.adjustments)
-            ? voucher.adjustments.map((item) => ({
-                purchase_id: String(item.purchase_id || item.id || ""),
-                voucher_no: item.purchase_voucher_no || item.voucher_no || "",
-                adjusted_amount: toNumber(item.adjusted_amount),
-              })).filter((item) => item.purchase_id && item.adjusted_amount > 0)
-            : [];
-          setFormData({
-            ...defaultForm(),
-            ...voucher,
-            payment_mode: paymentMode,
-            reference_type: getPaymentReferenceType(paymentMode),
-            reference_id: paymentMode === "new_reference" ? voucher.reference_id || "" : "",
-          });
-          setPaymentAdjustments(paymentMode === "against" ? existingAdjustments : []);
-          // Ensure farmer appears in account-specific farmer list so dropdown shows it
-          if (voucher.company_account_id && voucher.farmer_id) {
-            const fid = String(voucher.farmer_id || "");
-            const existsInAccount = (accountFarmers || []).some((f) => String(f.id || f._id) === fid);
-            if (!existsInAccount) {
-              const farmerFromAll = (farmers || []).find((f) => String(f.id || f._id) === fid);
-              if (farmerFromAll) {
-                setAccountFarmers((prev) => (Array.isArray(prev) ? [...prev, farmerFromAll] : [farmerFromAll]));
-              } else {
-                setAccountFarmers((prev) => (Array.isArray(prev) ? [...prev, { id: fid, name: voucher.farmer_name || "Unknown farmer" }] : [{ id: fid, name: voucher.farmer_name || "Unknown farmer" }]));
+          setLoading(true);
+          try {
+            const res = await axios.get(`/api/wh-vouchers/payment/${voucherId}`);
+            const payment = res.data;
+            const paymentMode = inferPaymentMode(payment);
+            const existingAdjustments = Array.isArray(payment.adjustments)
+              ? payment.adjustments.map((item) => ({
+                  purchase_id: String(item.purchase_id || item.id || ""),
+                  voucher_no: item.purchase_voucher_no || item.voucher_no || item.purchase_voucher_no || "",
+                  adjusted_amount: toNumber(item.adjusted_amount),
+                })).filter((item) => item.purchase_id && item.adjusted_amount > 0)
+              : [];
+            setFormData({
+              ...defaultForm(),
+              ...payment,
+              payment_mode: paymentMode,
+              reference_type: getPaymentReferenceType(paymentMode),
+              reference_id: paymentMode === "new_reference" ? payment.reference_id || "" : "",
+            });
+            setPaymentAdjustments(paymentMode === "against" ? existingAdjustments : []);
+            // Ensure farmer appears in account-specific farmer list so dropdown shows it
+            if (payment.company_account_id && payment.farmer_id) {
+              const fid = String(payment.farmer_id || "");
+              const existsInAccount = (accountFarmers || []).some((f) => String(f.id || f._id) === fid);
+              if (!existsInAccount) {
+                const farmerFromAll = (farmers || []).find((f) => String(f.id || f._id) === fid);
+                if (farmerFromAll) {
+                  setAccountFarmers((prev) => (Array.isArray(prev) ? [...prev, farmerFromAll] : [farmerFromAll]));
+                } else {
+                  setAccountFarmers((prev) => (Array.isArray(prev) ? [...prev, { id: fid, name: payment.farmer_name || "Unknown farmer" }] : [{ id: fid, name: payment.farmer_name || "Unknown farmer" }]));
+                }
               }
             }
-          }
 
-          if (voucher.farmer_id) {
-            await loadOutstanding("farmer", voucher.farmer_id, voucher.warehouse_id, voucherId, voucher.company_account_id);
-            if (paymentMode === "against") {
-              setShowPaymentAdjustPopup(true);
+            if (payment.farmer_id) {
+              await loadOutstanding("farmer", payment.farmer_id, payment.warehouse_id, voucherId, payment.company_account_id);
+              if (paymentMode === "against") {
+                setShowPaymentAdjustPopup(true);
+              }
             }
+          } catch (err) {
+            console.error(err);
+            alert(err?.response?.data?.error || "Failed to load payment voucher for edit");
+            setLoading(false);
+            return;
+          } finally {
+            setLoading(false);
           }
         }
       }
