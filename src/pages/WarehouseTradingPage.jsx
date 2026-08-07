@@ -11,6 +11,7 @@ import WarehouseBillWisePanel from "./WarehouseBillWisePanel";
 import WarehouseAdjustModal from "./WarehouseAdjustModal";
 import WarehouseSaleDeductionModal from "./WarehouseSaleDeductionModal";
 import WarehouseSalePreviewModal from "./WarehouseSalePreviewModal";
+import WarehousePurchasePreviewModal from "./WarehousePurchasePreviewModal";
 import WarehouseVoucherTable from "./WarehouseVoucherTable";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -1116,6 +1117,7 @@ export default function WarehouseTradingPage() {
       }
       const endpoint = reportEndpointMap[reportType] || reportType;
       const params = {};
+      const hasActivePurchaseFilters = Boolean(filters.farmer_id || filters.warehouse_id || filters.company_account_id);
       if (reportType === "purchase-party-ledger") {
         if (filters.farmer_id) params.farmer_id = filters.farmer_id;
         if (filters.warehouse_id) params.warehouse_id = filters.warehouse_id;
@@ -1158,10 +1160,8 @@ export default function WarehouseTradingPage() {
         });
         return;
       }
-      if (reportType === "purchase" && rows.length === 0 && hasPermission(user, voucherPermissionMap.purchase)) {
-        const fallbackRes = await axios.get("/api/wh-vouchers/purchase");
-        if (token !== reportLoadTokenRef.current) return;
-        setReportData(Array.isArray(fallbackRes.data) ? fallbackRes.data : []);
+      if (reportType === "purchase" && rows.length === 0 && hasActivePurchaseFilters && hasPermission(user, voucherPermissionMap.purchase)) {
+        setReportData([]);
         return;
       }
       setReportData(rows);
@@ -1181,7 +1181,7 @@ export default function WarehouseTradingPage() {
         setReportData([]);
         return;
       }
-      if (reportType === "purchase" && hasPermission(user, voucherPermissionMap.purchase)) {
+      if (reportType === "purchase" && hasPermission(user, voucherPermissionMap.purchase) && !hasActivePurchaseFilters) {
         try {
           const fallbackRes = await axios.get("/api/wh-vouchers/purchase");
           if (token !== reportLoadTokenRef.current) return;
@@ -1873,11 +1873,13 @@ export default function WarehouseTradingPage() {
 
   const showPurchaseReportPreview = async (voucher) => {
     const recordId = getRecordId(voucher);
-    setPurchasePreviewRow(voucher);
+    const baseRow = voucher || null;
+    setPurchasePreviewRow(baseRow);
     setShowPurchasePreview(true);
+    setPurchasePreviewLoading(Boolean(recordId));
+
     if (!recordId) return;
 
-    setPurchasePreviewLoading(true);
     try {
       const res = await axios.get(`/api/wh-vouchers/purchase/${recordId}`);
       if (res?.data) {
@@ -1885,6 +1887,7 @@ export default function WarehouseTradingPage() {
       }
     } catch (err) {
       console.error("Failed to load full purchase voucher preview:", err);
+      setPurchasePreviewRow(baseRow);
     } finally {
       setPurchasePreviewLoading(false);
     }
