@@ -1686,7 +1686,7 @@ export default function WarehouseTradingPage() {
       setVoucherPage(1);
       // Refresh the list without blocking the save success flow.
       // A slow list/report query must never leave the voucher stuck on Saving.
-      loadVouchers().catch((refreshErr) => console.error("Voucher list refresh failed:", refreshErr));
+      void loadVouchers().catch((refreshErr) => console.error("Voucher list refresh failed:", refreshErr));
       fetchNextVoucherNo(activeVoucherType);
 
       if (activeVoucherType === "purchase") {
