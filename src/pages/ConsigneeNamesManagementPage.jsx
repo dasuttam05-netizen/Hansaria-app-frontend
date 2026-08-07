@@ -48,6 +48,22 @@ export default function ConsigneeNamesManagementPage() {
     fetchRows();
   }, [fetchRows]);
 
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        fetchRows();
+      }
+    };
+
+    window.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("focus", fetchRows);
+
+    return () => {
+      window.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("focus", fetchRows);
+    };
+  }, [fetchRows]);
+
   const handleChange = (e) => {
     setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
   };
