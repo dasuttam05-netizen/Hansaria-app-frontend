@@ -63,7 +63,9 @@ function WarehouseReportTable({
     );
   }
 
-  if (isPurchaseOrSaleTable) {
+  const isReportTable = !isLedgerReport;
+
+  if (isPurchaseOrSaleTable || isReportTable) {
     return (
       <div>
         <div className={tableClassName} style={tableCard}>
@@ -78,7 +80,7 @@ function WarehouseReportTable({
             <tbody>
               {filteredReportData.map((item, i) => (
                 <tr
-                  key={item.id || i}
+                  key={item.id || item._id || i}
                   style={{ background: i % 2 ? "#f8fafc" : "#fff", cursor: activeReport === "sale" ? "pointer" : "default" }}
                   onClick={activeReport === "sale" ? () => onSaleRowClick?.(item) : undefined}
                 >
