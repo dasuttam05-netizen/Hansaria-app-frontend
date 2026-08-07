@@ -1668,13 +1668,14 @@ export default function WarehouseTradingPage() {
         ? { Authorization: `Bearer ${localStorage.getItem("token")}` }
         : {};
       const res = isEdit
-        ? await axios.put(url, payload, { headers: requestHeaders })
-        : await axios.post(url, payload, { headers: requestHeaders });
+        ? await axios.put(url, payload, { headers: requestHeaders, timeout: 30000 })
+        : await axios.post(url, payload, { headers: requestHeaders, timeout: 30000 });
       
+      console.log("Voucher save response:", res.status, res.data);
+      alert(`Voucher ${isEdit ? "updated" : "saved"} successfully`);
       if (res.data?.stats) {
         setPartyOutstanding(res.data.stats);
       }
-      alert(`Voucher ${isEdit ? "updated" : "saved"} successfully`);
       setFormData(defaultForm());
       setPaymentAdjustments([]);
       setReceiptAdjustments([]);
@@ -1684,9 +1685,9 @@ export default function WarehouseTradingPage() {
       setShowReceiptAdjustPopup(false);
       setEditId(null);
       setVoucherPage(1);
-      // Refresh the list without blocking the save success flow.
-      // A slow list/report query must never leave the voucher stuck on Saving.
-      void loadVouchers().catch((refreshErr) => console.error("Voucher list refresh failed:", refreshErr));
+      // Do not block the successful save on the voucher-list reload.
+      // A slow GET must never leave the Save button stuck on "Saving...".
+      loadVouchers().catch((refreshErr) => console.error("Voucher list refresh failed:", refreshErr));
       fetchNextVoucherNo(activeVoucherType);
 
       if (activeVoucherType === "purchase") {
