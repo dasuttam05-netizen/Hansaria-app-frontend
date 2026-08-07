@@ -308,6 +308,26 @@ export default function WarehouseTradingPage() {
   const setReportFilters = (value) => reportUiDispatch({ type: "set_report_filters", value: typeof value === "function" ? value(reportUiState.reportFilters) : value });
   const setSaleFollowupFilter = (value) => reportUiDispatch({ type: "set_sale_followup_filter", value: typeof value === "function" ? value(reportUiState.saleFollowupFilter) : value });
   const setSelectedLedgerBillId = (value) => reportUiDispatch({ type: "set_selected_ledger_bill_id", value });
+  const updateReportFilter = (field, value) => {
+    setReportFilters((prev) => {
+      if (field === "company_account_id") {
+        return {
+          ...prev,
+          company_account_id: value,
+          warehouse_id: "",
+          farmer_id: "",
+        };
+      }
+      if (field === "warehouse_id") {
+        return {
+          ...prev,
+          warehouse_id: value,
+          farmer_id: "",
+        };
+      }
+      return { ...prev, [field]: value };
+    });
+  };
   const setSelectedSaleLedgerBillId = (value) => reportUiDispatch({ type: "set_selected_sale_ledger_bill_id", value });
   const setShowPurchaseBillWise = (value) => reportUiDispatch({ type: "set_show_purchase_bill_wise", value });
   const setShowSaleBillWise = (value) => reportUiDispatch({ type: "set_show_sale_bill_wise", value });
@@ -2931,6 +2951,41 @@ export default function WarehouseTradingPage() {
     return grouped;
   }, [activeReport, currentReportRows, reportData, farmers, buyerNames, companyAccounts, saleFollowupFilter]);
   const saleFollowupRows = activeReport === "sale-followup" ? displayReportData : [];
+  const purchasePartyLedgerCompanyAccounts = useMemo(() => {
+    const ids = new Set(
+      (Array.isArray(reportData) ? reportData : [])
+        .map((row) => String(row.company_account_id || row.account_id || "").trim())
+        .filter(Boolean)
+    );
+    return companyAccounts.filter((account) => ids.has(String(account.id || account._id || "").trim()));
+  }, [companyAccounts, reportData]);
+
+  const purchasePartyLedgerWarehouses = useMemo(() => {
+    if (!reportFilters.company_account_id) return [];
+    const ids = new Set(
+      (Array.isArray(reportData) ? reportData : [])
+        .filter((row) => String(row.company_account_id || row.account_id || "") === String(reportFilters.company_account_id))
+        .map((row) => String(row.warehouse_id || row.warehouse || "").trim())
+        .filter(Boolean)
+    );
+    return warehouses.filter((warehouse) => ids.has(String(warehouse.id || warehouse._id || "").trim()));
+  }, [warehouses, reportData, reportFilters.company_account_id]);
+
+  const purchasePartyLedgerFarmers = useMemo(() => {
+    if (!reportFilters.company_account_id || !reportFilters.warehouse_id) return [];
+    const ids = new Set(
+      (Array.isArray(reportData) ? reportData : [])
+        .filter(
+          (row) =>
+            String(row.company_account_id || row.account_id || "") === String(reportFilters.company_account_id) &&
+            String(row.warehouse_id || row.warehouse || "") === String(reportFilters.warehouse_id)
+        )
+        .map((row) => String(row.farmer_id || row.farmer || "").trim())
+        .filter(Boolean)
+    );
+    return farmers.filter((farmer) => ids.has(String(farmer.id || farmer._id || "").trim()));
+  }, [farmers, reportData, reportFilters.company_account_id, reportFilters.warehouse_id]);
+
   const normalizedGlobalSearch = String(globalSearch || "").trim().toLowerCase();
   const matchesGlobalSearch = (value) =>
     !normalizedGlobalSearch || String(value ?? "").toLowerCase().includes(normalizedGlobalSearch);
@@ -4751,16 +4806,16 @@ export default function WarehouseTradingPage() {
           >
             {activeReport === "purchase" && (
               <div style={{ display: "flex", gap: 12, alignItems: "end", flexWrap: "wrap", marginBottom: 14 }}>
-                <Field label="Farmer Filter">
+                <Field label="Account Filter">
                   <select
-                    value={reportFilters.farmer_id}
-                    onChange={(event) => setReportFilters((prev) => ({ ...prev, farmer_id: event.target.value }))}
+                    value={reportFilters.company_account_id}
+                    onChange={(event) => updateReportFilter("company_account_id", event.target.value)}
                     style={{ ...inp, minWidth: 260 }}
                   >
-                    <option value="">All Farmers</option>
-                    {farmers.map((farmer) => (
-                      <option key={farmer.id || farmer._id} value={farmer.id || farmer._id}>
-                        {farmer.name}
+                    <option value="">All Accounts</option>
+                    {companyAccounts.map((account) => (
+                      <option key={account.id || account._id} value={account.id || account._id}>
+                        {account.account_name || account.name}
                       </option>
                     ))}
                   </select>
@@ -4768,7 +4823,7 @@ export default function WarehouseTradingPage() {
                 <Field label="Warehouse Filter">
                   <select
                     value={reportFilters.warehouse_id}
-                    onChange={(event) => setReportFilters((prev) => ({ ...prev, warehouse_id: event.target.value }))}
+                    onChange={(event) => updateReportFilter("warehouse_id", event.target.value)}
                     style={{ ...inp, minWidth: 260 }}
                   >
                     <option value="">All Warehouses</option>
@@ -4779,16 +4834,16 @@ export default function WarehouseTradingPage() {
                     ))}
                   </select>
                 </Field>
-                <Field label="Account Filter">
+                <Field label="Farmer Filter">
                   <select
-                    value={reportFilters.company_account_id}
-                    onChange={(event) => setReportFilters((prev) => ({ ...prev, company_account_id: event.target.value }))}
+                    value={reportFilters.farmer_id}
+                    onChange={(event) => updateReportFilter("farmer_id", event.target.value)}
                     style={{ ...inp, minWidth: 260 }}
                   >
-                    <option value="">All Accounts</option>
-                    {companyAccounts.map((account) => (
-                      <option key={account.id || account._id} value={account.id || account._id}>
-                        {account.account_name || account.name}
+                    <option value="">All Farmers</option>
+                    {farmers.map((farmer) => (
+                      <option key={farmer.id || farmer._id} value={farmer.id || farmer._id}>
+                        {farmer.name}
                       </option>
                     ))}
                   </select>
@@ -4806,16 +4861,16 @@ export default function WarehouseTradingPage() {
             )}
             {activeReport === "purchase-party-ledger" && (
               <div style={{ display: "flex", gap: 12, alignItems: "end", flexWrap: "wrap", marginBottom: 14 }}>
-                <Field label="Farmer Filter">
+                <Field label="Account Filter">
                   <select
-                    value={reportFilters.farmer_id}
-                    onChange={(event) => setReportFilters((prev) => ({ ...prev, farmer_id: event.target.value }))}
+                    value={reportFilters.company_account_id}
+                    onChange={(event) => updateReportFilter("company_account_id", event.target.value)}
                     style={{ ...inp, minWidth: 260 }}
                   >
-                    <option value="">All Farmers</option>
-                    {farmers.map((farmer) => (
-                      <option key={farmer.id || farmer._id} value={farmer.id || farmer._id}>
-                        {farmer.name}
+                    <option value="">Select Account</option>
+                    {purchasePartyLedgerCompanyAccounts.map((account) => (
+                      <option key={account.id || account._id} value={account.id || account._id}>
+                        {account.account_name || account.name}
                       </option>
                     ))}
                   </select>
@@ -4823,27 +4878,33 @@ export default function WarehouseTradingPage() {
                 <Field label="Warehouse Filter">
                   <select
                     value={reportFilters.warehouse_id}
-                    onChange={(event) => setReportFilters((prev) => ({ ...prev, warehouse_id: event.target.value }))}
+                    disabled={!reportFilters.company_account_id}
+                    onChange={(event) => updateReportFilter("warehouse_id", event.target.value)}
                     style={{ ...inp, minWidth: 260 }}
                   >
-                    <option value="">All Warehouses</option>
-                    {warehouses.map((warehouse) => (
+                    <option value="">
+                      {reportFilters.company_account_id ? "Select Warehouse" : "Select Account First"}
+                    </option>
+                    {purchasePartyLedgerWarehouses.map((warehouse) => (
                       <option key={warehouse.id || warehouse._id} value={warehouse.id || warehouse._id}>
                         {warehouse.name}
                       </option>
                     ))}
                   </select>
                 </Field>
-                <Field label="Account Filter">
+                <Field label="Farmer Filter">
                   <select
-                    value={reportFilters.company_account_id}
-                    onChange={(event) => setReportFilters((prev) => ({ ...prev, company_account_id: event.target.value }))}
+                    value={reportFilters.farmer_id}
+                    disabled={!reportFilters.company_account_id || !reportFilters.warehouse_id}
+                    onChange={(event) => updateReportFilter("farmer_id", event.target.value)}
                     style={{ ...inp, minWidth: 260 }}
                   >
-                    <option value="">All Accounts</option>
-                    {companyAccounts.map((account) => (
-                      <option key={account.id || account._id} value={account.id || account._id}>
-                        {account.account_name || account.name}
+                    <option value="">
+                      {reportFilters.warehouse_id ? "Select Farmer" : "Select Warehouse First"}
+                    </option>
+                    {purchasePartyLedgerFarmers.map((farmer) => (
+                      <option key={farmer.id || farmer._id} value={farmer.id || farmer._id}>
+                        {farmer.name}
                       </option>
                     ))}
                   </select>
