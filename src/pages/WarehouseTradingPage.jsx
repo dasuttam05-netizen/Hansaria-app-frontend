@@ -1671,10 +1671,10 @@ export default function WarehouseTradingPage() {
         ? await axios.put(url, payload, { headers: requestHeaders })
         : await axios.post(url, payload, { headers: requestHeaders });
       
-      alert(`Voucher ${isEdit ? "updated" : "saved"} successfully`);
       if (res.data?.stats) {
         setPartyOutstanding(res.data.stats);
       }
+      alert(`Voucher ${isEdit ? "updated" : "saved"} successfully`);
       setFormData(defaultForm());
       setPaymentAdjustments([]);
       setReceiptAdjustments([]);
@@ -1684,7 +1684,9 @@ export default function WarehouseTradingPage() {
       setShowReceiptAdjustPopup(false);
       setEditId(null);
       setVoucherPage(1);
-      await loadVouchers();
+      // Refresh the list without blocking the save success flow.
+      // A slow list/report query must never leave the voucher stuck on Saving.
+      loadVouchers().catch((refreshErr) => console.error("Voucher list refresh failed:", refreshErr));
       fetchNextVoucherNo(activeVoucherType);
 
       if (activeVoucherType === "purchase") {
