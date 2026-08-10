@@ -296,6 +296,7 @@ export default function WarehouseTradingPage() {
   const [loading, setLoading] = useState(false);
   const [list, setList] = useState([]);
   const [reportData, setReportData] = useState([]);
+  const [reportFilterOptions, setReportFilterOptions] = useState({ account_ids: [], warehouse_ids: [], farmer_ids: [], buyer_ids: [] });
   const [warehouseStockReport, setWarehouseStockReport] = useState([]);
   const [reportPageInfo, setReportPageInfo] = useState({ page: 1, pageSize: PAGE_SIZE, hasMore: false });
   const [availableSaleStock, setAvailableSaleStock] = useState(null);
@@ -799,18 +800,9 @@ export default function WarehouseTradingPage() {
 
   useEffect(() => {
     if (activeTab === "vouchers" && activeVoucherType === "sale") {
-      const timer = window.setTimeout(() => loadSalePurchaseRows(), 120);
-      return () => window.clearTimeout(timer);
+      loadSalePurchaseRows();
     }
-  }, [
-    activeTab,
-    activeVoucherType,
-    formData.warehouse_id,
-    formData.farmer_id,
-    formData.against_purchase_farmer_id,
-    formData.company_account_id,
-    formData.product_id,
-  ]);
+  }, [activeTab, activeVoucherType]);
 
   useEffect(() => {
     if (activeTab === "vouchers") {
@@ -832,12 +824,10 @@ export default function WarehouseTradingPage() {
     if (activeTab !== "reports") return;
     const timer = window.setTimeout(() => {
       loadReport();
+      loadReportFilterOptions();
     }, 80);
     return () => window.clearTimeout(timer);
-  }, [activeTab, activeReport, reportPage, globalSearch, reportFilters.farmer_id, reportFilters.company_account_id, reportFilters.warehouse_id, reportFilters.sale_buyer_id, reportFilters.sale_company_account_id, reportFilters.sale_journey_token, reportFilters.sale_lorry_no, reportFilters.sale_bill_no]);
-
-  // Reports are refreshed by their explicit filters/page changes.
-  // Do not reload them merely because the browser tab regains focus.
+  }, [activeTab, activeReport, reportPage, reportFilters.farmer_id, reportFilters.company_account_id, reportFilters.warehouse_id, reportFilters.sale_buyer_id, reportFilters.sale_company_account_id, reportFilters.sale_journey_token, reportFilters.sale_lorry_no, reportFilters.sale_bill_no]);
 
   useEffect(() => {
     if (activeReport === "purchase-party-ledger") setShowPurchaseBillWise(true);
@@ -1139,23 +1129,40 @@ export default function WarehouseTradingPage() {
         setSalePurchaseRows([]);
         return;
       }
-      const params = {
-        page: 1,
-        limit: 100,
-        lookup: 1,
-        order: "asc",
-        warehouse_id: formData.warehouse_id || undefined,
-        farmer_id: formData.against_purchase_farmer_id || formData.farmer_id || undefined,
-        company_account_id: formData.company_account_id || undefined,
-        product_id: formData.product_id || undefined,
-      };
-      const res = await axios.get("/api/wh-vouchers/purchase", { params });
+      // This is a form lookup, not the main voucher table. Keep it explicit so
+      // the table itself remains strictly paginated.
+      const res = await axios.get("/api/wh-vouchers/purchase", { params: { all: 1, limit: 5000 } });
       const payload = res.data || {};
       const rows = Array.isArray(payload) ? payload : (Array.isArray(payload.data) ? payload.data : []);
       setSalePurchaseRows(rows);
     } catch (err) {
       console.error(err);
       setSalePurchaseRows([]);
+    }
+  };
+
+  const loadReportFilterOptions = async (reportType = activeReport, filters = reportFilters) => {
+    const supported = ["purchase", "purchase-party-ledger", "sale", "sale-party-ledger", "sale-followup", "sale-journey"].includes(reportType);
+    if (!supported) {
+      setReportFilterOptions({ account_ids: [], warehouse_ids: [], farmer_ids: [], buyer_ids: [] });
+      return;
+    }
+    try {
+      const params = {};
+      if (filters.company_account_id) params.company_account_id = filters.company_account_id;
+      if (filters.warehouse_id) params.warehouse_id = filters.warehouse_id;
+      if (filters.farmer_id) params.farmer_id = filters.farmer_id;
+      if (filters.sale_buyer_id) params.buyer_id = filters.sale_buyer_id;
+      const res = await axios.get("/api/wh-vouchers/report/filter-options", { params: { ...params, type: reportType } });
+      setReportFilterOptions({
+        account_ids: Array.isArray(res.data?.account_ids) ? res.data.account_ids : [],
+        warehouse_ids: Array.isArray(res.data?.warehouse_ids) ? res.data.warehouse_ids : [],
+        farmer_ids: Array.isArray(res.data?.farmer_ids) ? res.data.farmer_ids : [],
+        buyer_ids: Array.isArray(res.data?.buyer_ids) ? res.data.buyer_ids : [],
+      });
+    } catch (err) {
+      console.error("Failed to load Trading report filters:", err);
+      setReportFilterOptions({ account_ids: [], warehouse_ids: [], farmer_ids: [], buyer_ids: [] });
     }
   };
 
@@ -1171,17 +1178,14 @@ export default function WarehouseTradingPage() {
       const endpoint = reportEndpointMap[reportType] || reportType;
       const params = {};
       const hasActivePurchaseFilters = Boolean(filters.farmer_id || filters.warehouse_id || filters.company_account_id);
-      if (reportType === "purchase-party-ledger") {
+      const isPurchaseReport = ["purchase", "purchase-party-ledger"].includes(reportType);
+      const isSaleReport = ["sale", "sale-party-ledger", "sale-followup", "sale-journey"].includes(reportType);
+      if (isPurchaseReport || isSaleReport) {
         if (filters.farmer_id) params.farmer_id = filters.farmer_id;
         if (filters.warehouse_id) params.warehouse_id = filters.warehouse_id;
         if (filters.company_account_id) params.company_account_id = filters.company_account_id;
       }
-      if (reportType === "purchase") {
-        if (filters.farmer_id) params.farmer_id = filters.farmer_id;
-        if (filters.warehouse_id) params.warehouse_id = filters.warehouse_id;
-        if (filters.company_account_id) params.company_account_id = filters.company_account_id;
-      }
-      if (reportType === "sale-party-ledger" && filters.sale_buyer_id) {
+      if (isSaleReport && filters.sale_buyer_id) {
         params.buyer_id = filters.sale_buyer_id;
       }
       if (reportType === "sale-journey") {
@@ -1189,17 +1193,10 @@ export default function WarehouseTradingPage() {
         if (filters.sale_lorry_no) params.lorry_no = filters.sale_lorry_no;
         if (filters.sale_bill_no) params.bill_no = filters.sale_bill_no;
       }
-      if (filters.company_account_id || filters.sale_company_account_id) {
-        params.company_account_id = filters.company_account_id || filters.sale_company_account_id;
+      if (!params.company_account_id && filters.sale_company_account_id) {
+        params.company_account_id = filters.sale_company_account_id;
       }
-      const reportSearch = String(globalSearch || "").trim();
-      if (reportSearch) params.search = reportSearch;
-
-      const serverPagedReport =
-        reportType === "sale" ||
-        reportType === "purchase" ||
-        reportType === "payment" ||
-        reportType === "warehouse-stock";
+      const serverPagedReport = reportType === "sale" || reportType === "purchase" || reportType === "warehouse-stock";
       if (serverPagedReport) {
         params.page = page;
         params.page_size = PAGE_SIZE;
@@ -1222,12 +1219,6 @@ export default function WarehouseTradingPage() {
       }
       if (reportType === "purchase" && rows.length === 0 && hasActivePurchaseFilters && hasPermission(user, voucherPermissionMap.purchase)) {
         setReportData([]);
-        setReportPageInfo({
-          page: pagination?.page || page,
-          pageSize: pagination?.pageSize || PAGE_SIZE,
-          total: pagination?.total ?? 0,
-          hasMore: Boolean(pagination?.hasMore),
-        });
         return;
       }
       setReportData(rows);
@@ -1249,28 +1240,9 @@ export default function WarehouseTradingPage() {
       }
       if (reportType === "purchase" && hasPermission(user, voucherPermissionMap.purchase) && !hasActivePurchaseFilters) {
         try {
-          const fallbackRes = await axios.get("/api/wh-vouchers/report/purchase-summary", {
-            params: {
-              page,
-              page_size: PAGE_SIZE,
-              farmer_id: filters.farmer_id || undefined,
-              warehouse_id: filters.warehouse_id || undefined,
-              company_account_id: filters.company_account_id || undefined,
-              search: String(globalSearch || "").trim() || undefined,
-            },
-          });
+          const fallbackRes = await axios.get("/api/wh-vouchers/purchase");
           if (token !== reportLoadTokenRef.current) return;
-          const fallbackPayload = fallbackRes.data || {};
-          const fallbackRows = Array.isArray(fallbackPayload)
-            ? fallbackPayload
-            : (Array.isArray(fallbackPayload.data) ? fallbackPayload.data : []);
-          setReportData(fallbackRows);
-          setReportPageInfo({
-            page: fallbackPayload.pagination?.page || page,
-            pageSize: fallbackPayload.pagination?.pageSize || PAGE_SIZE,
-            total: fallbackPayload.pagination?.total ?? fallbackRows.length,
-            hasMore: Boolean(fallbackPayload.pagination?.hasMore),
-          });
+          setReportData(Array.isArray(fallbackRes.data) ? fallbackRes.data : []);
           return;
         } catch (fallbackErr) {
           console.error(fallbackErr);
@@ -3127,16 +3099,27 @@ export default function WarehouseTradingPage() {
   }, [activeReport, currentReportRows, reportData, farmers, buyerNames, companyAccounts, saleFollowupFilter]);
   const saleFollowupRows = activeReport === "sale-followup" ? displayReportData : [];
   const purchasePartyLedgerCompanyAccounts = useMemo(() => {
-    return Array.isArray(companyAccounts) ? companyAccounts : [];
-  }, [companyAccounts]);
+    const ids = new Set((reportFilterOptions.account_ids || []).map(String));
+    return companyAccounts.filter((account) => ids.has(String(account.id || account._id || "")));
+  }, [companyAccounts, reportFilterOptions.account_ids]);
 
   const purchasePartyLedgerWarehouses = useMemo(() => {
-    return Array.isArray(warehouses) ? warehouses : [];
-  }, [warehouses]);
+    const ids = new Set((reportFilterOptions.warehouse_ids || []).map(String));
+    return warehouses.filter((warehouse) => ids.has(String(warehouse.id || warehouse._id || "")));
+  }, [warehouses, reportFilterOptions.warehouse_ids]);
 
   const purchasePartyLedgerFarmers = useMemo(() => {
-    return Array.isArray(farmers) ? farmers : [];
-  }, [farmers]);
+    const ids = new Set((reportFilterOptions.farmer_ids || []).map(String));
+    return farmers.filter((farmer) => ids.has(String(farmer.id || farmer._id || "")));
+  }, [farmers, reportFilterOptions.farmer_ids]);
+
+  const saleReportAccounts = purchasePartyLedgerCompanyAccounts;
+  const saleReportWarehouses = purchasePartyLedgerWarehouses;
+  const saleReportFarmers = purchasePartyLedgerFarmers;
+  const saleReportBuyers = useMemo(() => {
+    const ids = new Set((reportFilterOptions.buyer_ids || []).map(String));
+    return buyerNames.filter((buyer) => ids.has(String(buyer.id || buyer._id || "")));
+  }, [buyerNames, reportFilterOptions.buyer_ids]);
 
   const normalizedGlobalSearch = String(globalSearch || "").trim().toLowerCase();
   const matchesGlobalSearch = (value) =>
@@ -3179,15 +3162,11 @@ export default function WarehouseTradingPage() {
     );
   }, [displayReportData, normalizedGlobalSearch]);
   const filteredReportData = useMemo(() => {
-    const serverPagedReport =
-      activeReport === "sale" ||
-      activeReport === "purchase" ||
-      activeReport === "payment" ||
-      activeReport === "warehouse-stock";
-    if (serverPagedReport) return displayReportData;
+    const serverPagedReport = activeReport === "sale" || activeReport === "purchase" || activeReport === "warehouse-stock";
+    if (serverPagedReport) return filteredReportDataAll;
     const start = (reportPage - 1) * PAGE_SIZE;
     return filteredReportDataAll.slice(start, start + PAGE_SIZE);
-  }, [filteredReportDataAll, displayReportData, reportPage, activeReport]);
+  }, [filteredReportDataAll, reportPage]);
   useEffect(() => {
     setVoucherPage(1);
   }, [activeVoucherType, normalizedGlobalSearch]);
@@ -3198,14 +3177,8 @@ export default function WarehouseTradingPage() {
     setVoucherPage((current) => Math.min(current, Math.max(1, Number(voucherPageInfo.totalPages || 1))));
   }, [voucherPageInfo.totalPages]);
   useEffect(() => {
-    const serverPagedReport =
-      activeReport === "sale" ||
-      activeReport === "purchase" ||
-      activeReport === "payment" ||
-      activeReport === "warehouse-stock";
-    if (serverPagedReport) return;
     setReportPage((current) => Math.min(current, Math.max(1, Math.ceil(filteredReportDataAll.length / PAGE_SIZE))));
-  }, [filteredReportDataAll.length, activeReport]);
+  }, [filteredReportDataAll.length]);
   const saleFollowupCounts = useMemo(() => {
     const counts = { all: filteredReportDataAll.length, payment_done: 0, unloading_pending: 0, pending: 0, overdue: 0 };
     filteredReportDataAll.forEach((row) => {
@@ -3233,13 +3206,9 @@ export default function WarehouseTradingPage() {
     }
   };
   const totalVoucherPages = Math.max(1, Number(voucherPageInfo.totalPages || 1));
-  const totalReportPages =
-    activeReport === "sale" ||
-    activeReport === "purchase" ||
-    activeReport === "payment" ||
-    activeReport === "warehouse-stock"
-      ? Math.max(1, Math.ceil(Number(reportPageInfo.total || 0) / PAGE_SIZE))
-      : Math.max(1, Math.ceil(filteredReportDataAll.length / PAGE_SIZE));
+  const totalReportPages = activeReport === "sale" || activeReport === "purchase" || activeReport === "warehouse-stock"
+    ? (reportPageInfo.hasMore ? reportPage + 1 : reportPage)
+    : Math.max(1, Math.ceil(filteredReportDataAll.length / PAGE_SIZE));
   const renderPaginationBar = (page, totalPages, onPrev, onNext, totalItems, label = "rows") => {
     if (totalPages <= 1) return null;
     const start = totalItems === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
@@ -5042,40 +5011,54 @@ export default function WarehouseTradingPage() {
                 )}
               </div>
             )}
-            {activeReport === "sale-party-ledger" && (
+            {(activeReport === "sale" || activeReport === "sale-party-ledger") && (
               <div style={{ display: "flex", gap: 12, alignItems: "end", flexWrap: "wrap", marginBottom: 14 }}>
-                <Field label="Buyer Filter">
-                  <select
-                    value={reportFilters.sale_buyer_id}
-                    onChange={(event) => setReportFilters((prev) => ({ ...prev, sale_buyer_id: event.target.value }))}
-                    style={{ ...inp, minWidth: 260 }}
-                  >
-                    <option value="">All Buyers</option>
-                    {buyerNames.map((buyer) => (
-                      <option key={buyer.id || buyer._id} value={buyer.id || buyer._id}>
-                        {buyer.name}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                <Field label="Account Filter">
-                  <select
-                    value={reportFilters.sale_company_account_id}
-                    onChange={(event) => setReportFilters((prev) => ({ ...prev, sale_company_account_id: event.target.value }))}
-                    style={{ ...inp, minWidth: 260 }}
-                  >
-                    <option value="">All Accounts</option>
-                    {companyAccounts.map((account) => (
-                      <option key={account.id || account._id} value={account.id || account._id}>
-                        {account.account_name || account.name}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-                {(reportFilters.sale_buyer_id || reportFilters.sale_company_account_id) && (
+                <SearchableSelect
+                  label="Account Filter"
+                  value={reportFilters.company_account_id}
+                  options={saleReportAccounts.map((account) => ({
+                    value: account.id || account._id,
+                    label: account.account_name || account.name,
+                  }))}
+                  onChange={(value) => updateReportFilter("company_account_id", value)}
+                  placeholder="All Accounts"
+                />
+                <SearchableSelect
+                  label="Warehouse Filter"
+                  value={reportFilters.warehouse_id}
+                  options={saleReportWarehouses.map((warehouse) => ({
+                    value: warehouse.id || warehouse._id,
+                    label: warehouse.name,
+                  }))}
+                  onChange={(value) => updateReportFilter("warehouse_id", value)}
+                  placeholder="All Warehouses"
+                  disabled={!reportFilters.company_account_id && saleReportWarehouses.length === 0}
+                />
+                <SearchableSelect
+                  label="Farmer Filter"
+                  value={reportFilters.farmer_id}
+                  options={saleReportFarmers.map((farmer) => ({
+                    value: farmer.id || farmer._id,
+                    label: farmer.name,
+                  }))}
+                  onChange={(value) => updateReportFilter("farmer_id", value)}
+                  placeholder="All Farmers"
+                  disabled={!reportFilters.company_account_id && !reportFilters.warehouse_id && saleReportFarmers.length === 0}
+                />
+                <SearchableSelect
+                  label="Buyer Filter"
+                  value={reportFilters.sale_buyer_id}
+                  options={saleReportBuyers.map((buyer) => ({
+                    value: buyer.id || buyer._id,
+                    label: buyer.name,
+                  }))}
+                  onChange={(value) => setReportFilters((prev) => ({ ...prev, sale_buyer_id: value }))}
+                  placeholder="All Buyers"
+                />
+                {(reportFilters.farmer_id || reportFilters.warehouse_id || reportFilters.company_account_id || reportFilters.sale_buyer_id) && (
                   <button
                     type="button"
-                    onClick={() => setReportFilters((prev) => ({ ...prev, sale_buyer_id: "", sale_company_account_id: "", sale_journey_token: "", sale_lorry_no: "", sale_bill_no: "" }))}
+                    onClick={() => setReportFilters((prev) => ({ ...prev, farmer_id: "", warehouse_id: "", company_account_id: "", sale_buyer_id: "" }))}
                     style={{ ...btnAction, background: "#64748b", marginBottom: 1 }}
                   >
                     Clear Filters
@@ -5452,16 +5435,7 @@ export default function WarehouseTradingPage() {
                 )}
               </>
             )}
-            {renderPaginationBar(
-              reportPage,
-              totalReportPages,
-              () => setReportPage((prev) => Math.max(1, prev - 1)),
-              () => setReportPage((prev) => Math.min(totalReportPages, prev + 1)),
-              (activeReport === "sale" || activeReport === "purchase" || activeReport === "payment" || activeReport === "warehouse-stock")
-                ? Number(reportPageInfo.total || 0)
-                : filteredReportDataAll.length,
-              "rows"
-            )}
+            {renderPaginationBar(reportPage, totalReportPages, () => setReportPage((prev) => Math.max(1, prev - 1)), () => setReportPage((prev) => Math.min(totalReportPages, prev + 1)), filteredReportDataAll.length, "rows")}
           </WarehouseReportPanel>
         </div>
       )}
