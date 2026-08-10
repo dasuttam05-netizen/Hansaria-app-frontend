@@ -379,9 +379,7 @@ export default function WarehouseTradingPage() {
   const voucherPanelRef = useRef(null);
   const reportPanelRef = useRef(null);
   const voucherLoadTokenRef = useRef(0);
-  const voucherRequestKeyRef = useRef("");
   const reportLoadTokenRef = useRef(0);
-  const reportCacheRef = useRef(new Map());
   const warehouseById = useMemo(() => buildLookupMap(warehouses), [warehouses]);
   const farmerById = useMemo(() => buildLookupMap(farmers), [farmers]);
   const buyerById = useMemo(() => buildLookupMap(buyerNames), [buyerNames]);
@@ -801,9 +799,18 @@ export default function WarehouseTradingPage() {
 
   useEffect(() => {
     if (activeTab === "vouchers" && activeVoucherType === "sale") {
-      loadSalePurchaseRows();
+      const timer = window.setTimeout(() => loadSalePurchaseRows(), 120);
+      return () => window.clearTimeout(timer);
     }
-  }, [activeTab, activeVoucherType]);
+  }, [
+    activeTab,
+    activeVoucherType,
+    formData.warehouse_id,
+    formData.farmer_id,
+    formData.against_purchase_farmer_id,
+    formData.company_account_id,
+    formData.product_id,
+  ]);
 
   useEffect(() => {
     if (activeTab === "vouchers") {
@@ -827,10 +834,10 @@ export default function WarehouseTradingPage() {
       loadReport();
     }, 80);
     return () => window.clearTimeout(timer);
-  }, [activeTab, activeReport, reportPage, reportFilters.farmer_id, reportFilters.company_account_id, reportFilters.warehouse_id, reportFilters.sale_buyer_id, reportFilters.sale_company_account_id, reportFilters.sale_journey_token, reportFilters.sale_lorry_no, reportFilters.sale_bill_no]);
+  }, [activeTab, activeReport, reportPage, globalSearch, reportFilters.farmer_id, reportFilters.company_account_id, reportFilters.warehouse_id, reportFilters.sale_buyer_id, reportFilters.sale_company_account_id, reportFilters.sale_journey_token, reportFilters.sale_lorry_no, reportFilters.sale_bill_no]);
 
-  // Do not auto-refresh reports on browser focus/visibility.
-  // Those events were causing the same 3-4s ledger request to fire repeatedly.
+  // Reports are refreshed by their explicit filters/page changes.
+  // Do not reload them merely because the browser tab regains focus.
 
   useEffect(() => {
     if (activeReport === "purchase-party-ledger") setShowPurchaseBillWise(true);
@@ -1087,18 +1094,6 @@ export default function WarehouseTradingPage() {
   };
 
   const loadVouchers = async () => {
-    const requestKey = JSON.stringify({
-      tab: activeTab,
-      type: activeVoucherType,
-      page: voucherPage,
-      limit: PAGE_SIZE,
-      order: voucherSortAsc ? "asc" : "desc",
-      search: String(globalSearch || "").trim(),
-    });
-    // Prevent duplicate requests caused by overlapping effects/remounts.
-    if (voucherRequestKeyRef.current === requestKey) return;
-    voucherRequestKeyRef.current = requestKey;
-
     const token = ++voucherLoadTokenRef.current;
     try {
       if (!hasPermission(user, voucherPermissionMap[activeVoucherType])) {
@@ -1144,18 +1139,16 @@ export default function WarehouseTradingPage() {
         setSalePurchaseRows([]);
         return;
       }
-      // This is a form lookup, not the main voucher table. Keep it explicit so
-      // the table itself remains strictly paginated.
       const params = {
         page: 1,
         limit: 100,
         lookup: 1,
         order: "asc",
+        warehouse_id: formData.warehouse_id || undefined,
+        farmer_id: formData.against_purchase_farmer_id || formData.farmer_id || undefined,
+        company_account_id: formData.company_account_id || undefined,
+        product_id: formData.product_id || undefined,
       };
-      if (formData.warehouse_id) params.warehouse_id = formData.warehouse_id;
-      if (formData.product_id) params.product_id = formData.product_id;
-      if (formData.company_account_id) params.company_account_id = formData.company_account_id;
-      if (formData.against_purchase_farmer_id) params.farmer_id = formData.against_purchase_farmer_id;
       const res = await axios.get("/api/wh-vouchers/purchase", { params });
       const payload = res.data || {};
       const rows = Array.isArray(payload) ? payload : (Array.isArray(payload.data) ? payload.data : []);
@@ -1168,16 +1161,6 @@ export default function WarehouseTradingPage() {
 
   const loadReport = async (reportType = activeReport, page = reportPage, filters = reportFilters) => {
     const token = ++reportLoadTokenRef.current;
-    const cacheKey = JSON.stringify({ reportType, page, filters });
-    const cached = reportCacheRef.current.get(cacheKey);
-    if (cached && Date.now() - cached.ts < 5000) {
-      if (reportType === "warehouse-stock") {
-        setWarehouseStockReport(cached.rows);
-      }
-      setReportData(cached.rows);
-      if (cached.pagination) setReportPageInfo(cached.pagination);
-      return;
-    }
     try {
       if (!hasPermission(user, reportPermissionMap[reportType])) {
         if (token !== reportLoadTokenRef.current) return;
@@ -1209,7 +1192,14 @@ export default function WarehouseTradingPage() {
       if (filters.company_account_id || filters.sale_company_account_id) {
         params.company_account_id = filters.company_account_id || filters.sale_company_account_id;
       }
-      const serverPagedReport = reportType === "sale" || reportType === "purchase" || reportType === "warehouse-stock";
+      const reportSearch = String(globalSearch || "").trim();
+      if (reportSearch) params.search = reportSearch;
+
+      const serverPagedReport =
+        reportType === "sale" ||
+        reportType === "purchase" ||
+        reportType === "payment" ||
+        reportType === "warehouse-stock";
       if (serverPagedReport) {
         params.page = page;
         params.page_size = PAGE_SIZE;
@@ -1219,16 +1209,6 @@ export default function WarehouseTradingPage() {
       const payload = res.data || [];
       const rows = Array.isArray(payload) ? payload : Array.isArray(payload.data) ? payload.data : [];
       const pagination = Array.isArray(payload) ? null : payload.pagination || null;
-      reportCacheRef.current.set(cacheKey, {
-        ts: Date.now(),
-        rows,
-        pagination: serverPagedReport ? {
-          page: pagination?.page || page,
-          pageSize: pagination?.pageSize || PAGE_SIZE,
-          total: pagination?.total ?? rows.length,
-          hasMore: Boolean(pagination?.hasMore),
-        } : null,
-      });
       if (reportType === "warehouse-stock") {
         setWarehouseStockReport(rows);
         setReportData(rows);
@@ -1242,6 +1222,12 @@ export default function WarehouseTradingPage() {
       }
       if (reportType === "purchase" && rows.length === 0 && hasActivePurchaseFilters && hasPermission(user, voucherPermissionMap.purchase)) {
         setReportData([]);
+        setReportPageInfo({
+          page: pagination?.page || page,
+          pageSize: pagination?.pageSize || PAGE_SIZE,
+          total: pagination?.total ?? 0,
+          hasMore: Boolean(pagination?.hasMore),
+        });
         return;
       }
       setReportData(rows);
@@ -1263,9 +1249,28 @@ export default function WarehouseTradingPage() {
       }
       if (reportType === "purchase" && hasPermission(user, voucherPermissionMap.purchase) && !hasActivePurchaseFilters) {
         try {
-          const fallbackRes = await axios.get("/api/wh-vouchers/purchase");
+          const fallbackRes = await axios.get("/api/wh-vouchers/report/purchase-summary", {
+            params: {
+              page,
+              page_size: PAGE_SIZE,
+              farmer_id: filters.farmer_id || undefined,
+              warehouse_id: filters.warehouse_id || undefined,
+              company_account_id: filters.company_account_id || undefined,
+              search: String(globalSearch || "").trim() || undefined,
+            },
+          });
           if (token !== reportLoadTokenRef.current) return;
-          setReportData(Array.isArray(fallbackRes.data) ? fallbackRes.data : []);
+          const fallbackPayload = fallbackRes.data || {};
+          const fallbackRows = Array.isArray(fallbackPayload)
+            ? fallbackPayload
+            : (Array.isArray(fallbackPayload.data) ? fallbackPayload.data : []);
+          setReportData(fallbackRows);
+          setReportPageInfo({
+            page: fallbackPayload.pagination?.page || page,
+            pageSize: fallbackPayload.pagination?.pageSize || PAGE_SIZE,
+            total: fallbackPayload.pagination?.total ?? fallbackRows.length,
+            hasMore: Boolean(fallbackPayload.pagination?.hasMore),
+          });
           return;
         } catch (fallbackErr) {
           console.error(fallbackErr);
@@ -3122,46 +3127,16 @@ export default function WarehouseTradingPage() {
   }, [activeReport, currentReportRows, reportData, farmers, buyerNames, companyAccounts, saleFollowupFilter]);
   const saleFollowupRows = activeReport === "sale-followup" ? displayReportData : [];
   const purchasePartyLedgerCompanyAccounts = useMemo(() => {
-    const ids = new Set(
-      (Array.isArray(reportData) ? reportData : [])
-        .map((row) => String(row.company_account_id || row.account_id || "").trim())
-        .filter(Boolean)
-    );
-    return companyAccounts.filter((account) => ids.has(String(account.id || account._id || "").trim()));
-  }, [companyAccounts, reportData]);
+    return Array.isArray(companyAccounts) ? companyAccounts : [];
+  }, [companyAccounts]);
 
   const purchasePartyLedgerWarehouses = useMemo(() => {
-    if (!reportFilters.company_account_id) return [];
-    const ids = new Set(
-      (Array.isArray(reportData) ? reportData : [])
-        .filter((row) => String(row.company_account_id || row.account_id || "") === String(reportFilters.company_account_id))
-        .map((row) => String(row.warehouse_id || row.warehouse || "").trim())
-        .filter(Boolean)
-    );
-    return warehouses.filter((warehouse) => ids.has(String(warehouse.id || warehouse._id || "").trim()));
-  }, [warehouses, reportData, reportFilters.company_account_id]);
+    return Array.isArray(warehouses) ? warehouses : [];
+  }, [warehouses]);
 
   const purchasePartyLedgerFarmers = useMemo(() => {
-    const rows = Array.isArray(reportData) ? reportData : [];
-    const accountFilter = String(reportFilters.company_account_id || "").trim();
-    const warehouseFilter = String(reportFilters.warehouse_id || "").trim();
-
-    if (!accountFilter && !warehouseFilter) {
-      return farmers;
-    }
-
-    const ids = new Set(
-      rows
-        .filter((row) => {
-          if (accountFilter && String(row.company_account_id || row.account_id || "") !== accountFilter) return false;
-          if (warehouseFilter && String(row.warehouse_id || row.warehouse || "") !== warehouseFilter) return false;
-          return true;
-        })
-        .map((row) => String(row.farmer_id || row.farmer || "").trim())
-        .filter(Boolean)
-    );
-    return farmers.filter((farmer) => ids.has(String(farmer.id || farmer._id || "").trim()));
-  }, [farmers, reportData, reportFilters.company_account_id, reportFilters.warehouse_id]);
+    return Array.isArray(farmers) ? farmers : [];
+  }, [farmers]);
 
   const normalizedGlobalSearch = String(globalSearch || "").trim().toLowerCase();
   const matchesGlobalSearch = (value) =>
@@ -3204,11 +3179,15 @@ export default function WarehouseTradingPage() {
     );
   }, [displayReportData, normalizedGlobalSearch]);
   const filteredReportData = useMemo(() => {
-    const serverPagedReport = activeReport === "sale" || activeReport === "purchase" || activeReport === "warehouse-stock";
-    if (serverPagedReport) return filteredReportDataAll;
+    const serverPagedReport =
+      activeReport === "sale" ||
+      activeReport === "purchase" ||
+      activeReport === "payment" ||
+      activeReport === "warehouse-stock";
+    if (serverPagedReport) return displayReportData;
     const start = (reportPage - 1) * PAGE_SIZE;
     return filteredReportDataAll.slice(start, start + PAGE_SIZE);
-  }, [filteredReportDataAll, reportPage]);
+  }, [filteredReportDataAll, displayReportData, reportPage, activeReport]);
   useEffect(() => {
     setVoucherPage(1);
   }, [activeVoucherType, normalizedGlobalSearch]);
@@ -3219,8 +3198,14 @@ export default function WarehouseTradingPage() {
     setVoucherPage((current) => Math.min(current, Math.max(1, Number(voucherPageInfo.totalPages || 1))));
   }, [voucherPageInfo.totalPages]);
   useEffect(() => {
+    const serverPagedReport =
+      activeReport === "sale" ||
+      activeReport === "purchase" ||
+      activeReport === "payment" ||
+      activeReport === "warehouse-stock";
+    if (serverPagedReport) return;
     setReportPage((current) => Math.min(current, Math.max(1, Math.ceil(filteredReportDataAll.length / PAGE_SIZE))));
-  }, [filteredReportDataAll.length]);
+  }, [filteredReportDataAll.length, activeReport]);
   const saleFollowupCounts = useMemo(() => {
     const counts = { all: filteredReportDataAll.length, payment_done: 0, unloading_pending: 0, pending: 0, overdue: 0 };
     filteredReportDataAll.forEach((row) => {
@@ -3248,9 +3233,13 @@ export default function WarehouseTradingPage() {
     }
   };
   const totalVoucherPages = Math.max(1, Number(voucherPageInfo.totalPages || 1));
-  const totalReportPages = activeReport === "sale" || activeReport === "purchase" || activeReport === "warehouse-stock"
-    ? (reportPageInfo.hasMore ? reportPage + 1 : reportPage)
-    : Math.max(1, Math.ceil(filteredReportDataAll.length / PAGE_SIZE));
+  const totalReportPages =
+    activeReport === "sale" ||
+    activeReport === "purchase" ||
+    activeReport === "payment" ||
+    activeReport === "warehouse-stock"
+      ? Math.max(1, Math.ceil(Number(reportPageInfo.total || 0) / PAGE_SIZE))
+      : Math.max(1, Math.ceil(filteredReportDataAll.length / PAGE_SIZE));
   const renderPaginationBar = (page, totalPages, onPrev, onNext, totalItems, label = "rows") => {
     if (totalPages <= 1) return null;
     const start = totalItems === 0 ? 0 : (page - 1) * PAGE_SIZE + 1;
@@ -5463,7 +5452,16 @@ export default function WarehouseTradingPage() {
                 )}
               </>
             )}
-            {renderPaginationBar(reportPage, totalReportPages, () => setReportPage((prev) => Math.max(1, prev - 1)), () => setReportPage((prev) => Math.min(totalReportPages, prev + 1)), filteredReportDataAll.length, "rows")}
+            {renderPaginationBar(
+              reportPage,
+              totalReportPages,
+              () => setReportPage((prev) => Math.max(1, prev - 1)),
+              () => setReportPage((prev) => Math.min(totalReportPages, prev + 1)),
+              (activeReport === "sale" || activeReport === "purchase" || activeReport === "payment" || activeReport === "warehouse-stock")
+                ? Number(reportPageInfo.total || 0)
+                : filteredReportDataAll.length,
+              "rows"
+            )}
           </WarehouseReportPanel>
         </div>
       )}
