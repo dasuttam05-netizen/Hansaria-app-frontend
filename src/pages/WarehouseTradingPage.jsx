@@ -381,6 +381,7 @@ export default function WarehouseTradingPage() {
   const voucherLoadTokenRef = useRef(0);
   const voucherRequestKeyRef = useRef("");
   const reportLoadTokenRef = useRef(0);
+  const reportCacheRef = useRef(new Map());
   const warehouseById = useMemo(() => buildLookupMap(warehouses), [warehouses]);
   const farmerById = useMemo(() => buildLookupMap(farmers), [farmers]);
   const buyerById = useMemo(() => buildLookupMap(buyerNames), [buyerNames]);
@@ -828,21 +829,8 @@ export default function WarehouseTradingPage() {
     return () => window.clearTimeout(timer);
   }, [activeTab, activeReport, reportPage, reportFilters.farmer_id, reportFilters.company_account_id, reportFilters.warehouse_id, reportFilters.sale_buyer_id, reportFilters.sale_company_account_id, reportFilters.sale_journey_token, reportFilters.sale_lorry_no, reportFilters.sale_bill_no]);
 
-  // Refresh reports when page regains visibility/focus
-  useEffect(() => {
-    if (activeTab !== "reports") return;
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        loadReport();
-      }
-    };
-    window.addEventListener("visibilitychange", handleVisibilityChange);
-    window.addEventListener("focus", loadReport);
-    return () => {
-      window.removeEventListener("visibilitychange", handleVisibilityChange);
-      window.removeEventListener("focus", loadReport);
-    };
-  }, [activeTab]);
+  // Do not auto-refresh reports on browser focus/visibility.
+  // Those events were causing the same 3-4s ledger request to fire repeatedly.
 
   useEffect(() => {
     if (activeReport === "purchase-party-ledger") setShowPurchaseBillWise(true);
@@ -1180,6 +1168,16 @@ export default function WarehouseTradingPage() {
 
   const loadReport = async (reportType = activeReport, page = reportPage, filters = reportFilters) => {
     const token = ++reportLoadTokenRef.current;
+    const cacheKey = JSON.stringify({ reportType, page, filters });
+    const cached = reportCacheRef.current.get(cacheKey);
+    if (cached && Date.now() - cached.ts < 5000) {
+      if (reportType === "warehouse-stock") {
+        setWarehouseStockReport(cached.rows);
+      }
+      setReportData(cached.rows);
+      if (cached.pagination) setReportPageInfo(cached.pagination);
+      return;
+    }
     try {
       if (!hasPermission(user, reportPermissionMap[reportType])) {
         if (token !== reportLoadTokenRef.current) return;
@@ -1221,6 +1219,16 @@ export default function WarehouseTradingPage() {
       const payload = res.data || [];
       const rows = Array.isArray(payload) ? payload : Array.isArray(payload.data) ? payload.data : [];
       const pagination = Array.isArray(payload) ? null : payload.pagination || null;
+      reportCacheRef.current.set(cacheKey, {
+        ts: Date.now(),
+        rows,
+        pagination: serverPagedReport ? {
+          page: pagination?.page || page,
+          pageSize: pagination?.pageSize || PAGE_SIZE,
+          total: pagination?.total ?? rows.length,
+          hasMore: Boolean(pagination?.hasMore),
+        } : null,
+      });
       if (reportType === "warehouse-stock") {
         setWarehouseStockReport(rows);
         setReportData(rows);
