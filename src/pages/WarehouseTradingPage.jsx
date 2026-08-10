@@ -379,6 +379,7 @@ export default function WarehouseTradingPage() {
   const voucherPanelRef = useRef(null);
   const reportPanelRef = useRef(null);
   const voucherLoadTokenRef = useRef(0);
+  const voucherRequestKeyRef = useRef("");
   const reportLoadTokenRef = useRef(0);
   const warehouseById = useMemo(() => buildLookupMap(warehouses), [warehouses]);
   const farmerById = useMemo(() => buildLookupMap(farmers), [farmers]);
@@ -798,29 +799,10 @@ export default function WarehouseTradingPage() {
   }, [activeTab, activeVoucherType, voucherSortAsc, voucherPage, globalSearch]);
 
   useEffect(() => {
-    if (
-      activeTab !== "vouchers" ||
-      activeVoucherType !== "sale" ||
-      !formData.against_purchase_enabled
-    ) {
-      setSalePurchaseRows([]);
-      return;
-    }
-
-    const timer = window.setTimeout(() => {
+    if (activeTab === "vouchers" && activeVoucherType === "sale") {
       loadSalePurchaseRows();
-    }, 180);
-
-    return () => window.clearTimeout(timer);
-  }, [
-    activeTab,
-    activeVoucherType,
-    formData.against_purchase_enabled,
-    formData.against_purchase_farmer_id,
-    formData.company_account_id,
-    formData.product_id,
-    formData.warehouse_id,
-  ]);
+    }
+  }, [activeTab, activeVoucherType]);
 
   useEffect(() => {
     if (activeTab === "vouchers") {
@@ -1117,6 +1099,18 @@ export default function WarehouseTradingPage() {
   };
 
   const loadVouchers = async () => {
+    const requestKey = JSON.stringify({
+      tab: activeTab,
+      type: activeVoucherType,
+      page: voucherPage,
+      limit: PAGE_SIZE,
+      order: voucherSortAsc ? "asc" : "desc",
+      search: String(globalSearch || "").trim(),
+    });
+    // Prevent duplicate requests caused by overlapping effects/remounts.
+    if (voucherRequestKeyRef.current === requestKey) return;
+    voucherRequestKeyRef.current = requestKey;
+
     const token = ++voucherLoadTokenRef.current;
     try {
       if (!hasPermission(user, voucherPermissionMap[activeVoucherType])) {
@@ -1158,62 +1152,28 @@ export default function WarehouseTradingPage() {
 
   const loadSalePurchaseRows = async () => {
     try {
-      if (
-        !hasPermission(user, voucherPermissionMap.purchase) ||
-        activeVoucherType !== "sale" ||
-        !formData.against_purchase_enabled
-      ) {
+      if (!hasPermission(user, voucherPermissionMap.purchase)) {
         setSalePurchaseRows([]);
         return;
       }
-
-      // Never load thousands of purchase vouchers into the browser.
-      // The purchase API performs the filtering and pagination in MongoDB.
+      // This is a form lookup, not the main voucher table. Keep it explicit so
+      // the table itself remains strictly paginated.
       const params = {
         page: 1,
         limit: 100,
-        order: "asc",
         lookup: 1,
+        order: "asc",
       };
-
-      if (formData.against_purchase_farmer_id) {
-        params.farmer_id = formData.against_purchase_farmer_id;
-      }
-      if (formData.company_account_id) {
-        params.company_account_id = formData.company_account_id;
-      }
-      if (formData.product_id) {
-        params.product_id = formData.product_id;
-      }
-      if (formData.warehouse_id) {
-        params.warehouse_id = formData.warehouse_id;
-      }
-
-      // Do not query an unfiltered purchase collection just because the
-      // checkbox was enabled. Ask the user to select at least one useful
-      // filter first.
-      const hasLookupFilter = Boolean(
-        params.farmer_id ||
-        params.company_account_id ||
-        params.product_id ||
-        params.warehouse_id
-      );
-      if (!hasLookupFilter) {
-        setSalePurchaseRows([]);
-        return;
-      }
-
+      if (formData.warehouse_id) params.warehouse_id = formData.warehouse_id;
+      if (formData.product_id) params.product_id = formData.product_id;
+      if (formData.company_account_id) params.company_account_id = formData.company_account_id;
+      if (formData.against_purchase_farmer_id) params.farmer_id = formData.against_purchase_farmer_id;
       const res = await axios.get("/api/wh-vouchers/purchase", { params });
       const payload = res.data || {};
-      const rows = Array.isArray(payload)
-        ? payload
-        : Array.isArray(payload.data)
-          ? payload.data
-          : [];
-
+      const rows = Array.isArray(payload) ? payload : (Array.isArray(payload.data) ? payload.data : []);
       setSalePurchaseRows(rows);
     } catch (err) {
-      console.error("Failed to load purchase bills for sale:", err);
+      console.error(err);
       setSalePurchaseRows([]);
     }
   };
