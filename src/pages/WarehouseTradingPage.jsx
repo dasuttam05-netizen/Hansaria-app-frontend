@@ -373,6 +373,7 @@ export default function WarehouseTradingPage() {
   const [globalSearch, setGlobalSearch] = useState("");
   const [voucherPage, setVoucherPage] = useState(1);
   const [voucherSortAsc, setVoucherSortAsc] = useState(false);
+  const [voucherPageInfo, setVoucherPageInfo] = useState({ page: 1, pageSize: PAGE_SIZE, total: 0, totalPages: 1, hasMore: false });
   const masterLoadTokenRef = useRef(0);
   const arrowNavRootRef = useRef(null);
   const voucherPanelRef = useRef(null);
@@ -792,9 +793,9 @@ export default function WarehouseTradingPage() {
     if (activeTab !== "vouchers") return;
     const timer = window.setTimeout(() => {
       loadVouchers();
-    }, 80);
+    }, 250);
     return () => window.clearTimeout(timer);
-  }, [activeTab, activeVoucherType, voucherSortAsc]);
+  }, [activeTab, activeVoucherType, voucherSortAsc, voucherPage, globalSearch]);
 
   useEffect(() => {
     if (activeTab === "vouchers" && activeVoucherType === "sale") {
@@ -1102,22 +1103,37 @@ export default function WarehouseTradingPage() {
       if (!hasPermission(user, voucherPermissionMap[activeVoucherType])) {
         if (token !== voucherLoadTokenRef.current) return;
         setList([]);
+        setVoucherPageInfo({ page: 1, pageSize: PAGE_SIZE, total: 0, totalPages: 1, hasMore: false });
         return;
       }
-      const res = await axios.get(`/api/wh-vouchers/${activeVoucherType}`);
+
+      const params = {
+        page: voucherPage,
+        limit: PAGE_SIZE,
+        order: voucherSortAsc ? "asc" : "desc",
+      };
+      const search = String(globalSearch || "").trim();
+      if (search) params.search = search;
+
+      const res = await axios.get(`/api/wh-vouchers/${activeVoucherType}`, { params });
       if (token !== voucherLoadTokenRef.current) return;
-      const rows = Array.isArray(res.data) ? res.data : [];
-      setList(
-        rows.slice().sort((a, b) => {
-          const dateSort = String(b.date || "").localeCompare(String(a.date || ""));
-          const baseSortValue = voucherSortAsc ? -dateSort : dateSort;
-          if (baseSortValue) return baseSortValue;
-          return Number(b.id || b._id || 0) - Number(a.id || a._id || 0);
-        })
-      );
+
+      const payload = res.data || {};
+      const rows = Array.isArray(payload) ? payload : (Array.isArray(payload.data) ? payload.data : []);
+      const pagination = Array.isArray(payload) ? null : payload.pagination;
+      setList(rows);
+      setVoucherPageInfo({
+        page: pagination?.page || voucherPage,
+        pageSize: pagination?.pageSize || PAGE_SIZE,
+        total: Number(pagination?.total ?? rows.length),
+        totalPages: Math.max(1, Number(pagination?.totalPages || Math.ceil(Number(pagination?.total ?? rows.length) / PAGE_SIZE))),
+        hasMore: Boolean(pagination?.hasMore),
+      });
     } catch (err) {
       if (token !== voucherLoadTokenRef.current) return;
       console.error(err);
+      setList([]);
+      setVoucherPageInfo({ page: voucherPage, pageSize: PAGE_SIZE, total: 0, totalPages: 1, hasMore: false });
     }
   };
 
@@ -1127,8 +1143,11 @@ export default function WarehouseTradingPage() {
         setSalePurchaseRows([]);
         return;
       }
-      const res = await axios.get("/api/wh-vouchers/purchase");
-      const rows = Array.isArray(res.data) ? res.data : [];
+      // This is a form lookup, not the main voucher table. Keep it explicit so
+      // the table itself remains strictly paginated.
+      const res = await axios.get("/api/wh-vouchers/purchase", { params: { all: 1, limit: 5000 } });
+      const payload = res.data || {};
+      const rows = Array.isArray(payload) ? payload : (Array.isArray(payload.data) ? payload.data : []);
       setSalePurchaseRows(rows);
     } catch (err) {
       console.error(err);
@@ -3117,34 +3136,11 @@ export default function WarehouseTradingPage() {
   const matchesGlobalSearch = (value) =>
     !normalizedGlobalSearch || String(value ?? "").toLowerCase().includes(normalizedGlobalSearch);
   const matchesAnyValue = (values) => values.some((value) => matchesGlobalSearch(value));
-  const filteredVoucherListAll = useMemo(() => {
-    if (!normalizedGlobalSearch) return list;
-    return list.filter((item) =>
-      matchesAnyValue([
-        item.voucher_no,
-        item.bill_no,
-        item.date,
-        getWarehouseName(item),
-        getAccountName(item),
-        getFarmerName(item),
-        getBuyerName(item),
-        item.consignee_name,
-        getProductName(item),
-        item.po_no,
-        item.reference_id,
-        item.lorry_no,
-        item.description,
-        item.amount,
-        item.quantity,
-        item.total_qty,
-        item.net_weight,
-      ])
-    );
-  }, [list, normalizedGlobalSearch, activeVoucherType, warehouses, companyAccounts, farmers, buyerNames, companies, products, consignees]);
-  const filteredVoucherList = useMemo(() => {
-    const start = (voucherPage - 1) * PAGE_SIZE;
-    return filteredVoucherListAll.slice(start, start + PAGE_SIZE);
-  }, [filteredVoucherListAll, voucherPage]);
+  // Voucher table data is already filtered, sorted and paginated by MongoDB.
+  // Do not run a second client-side filter/sort/slice over the complete dataset.
+  const filteredVoucherListAll = list;
+  const filteredVoucherList = list;
+
   const filteredReportDataAll = useMemo(() => {
     if (!normalizedGlobalSearch) return displayReportData;
     return displayReportData.filter((item) =>
@@ -3184,13 +3180,13 @@ export default function WarehouseTradingPage() {
   }, [filteredReportDataAll, reportPage]);
   useEffect(() => {
     setVoucherPage(1);
-  }, [activeVoucherType, normalizedGlobalSearch, list.length]);
+  }, [activeVoucherType, normalizedGlobalSearch]);
   useEffect(() => {
     setReportPage(1);
     }, [activeReport, normalizedGlobalSearch, saleFollowupFilter, reportFilters.farmer_id, reportFilters.company_account_id, reportFilters.sale_buyer_id, reportFilters.sale_company_account_id, reportFilters.sale_journey_token, reportFilters.sale_lorry_no, reportFilters.sale_bill_no]);
   useEffect(() => {
-    setVoucherPage((current) => Math.min(current, Math.max(1, Math.ceil(filteredVoucherListAll.length / PAGE_SIZE))));
-  }, [filteredVoucherListAll.length]);
+    setVoucherPage((current) => Math.min(current, Math.max(1, Number(voucherPageInfo.totalPages || 1))));
+  }, [voucherPageInfo.totalPages]);
   useEffect(() => {
     setReportPage((current) => Math.min(current, Math.max(1, Math.ceil(filteredReportDataAll.length / PAGE_SIZE))));
   }, [filteredReportDataAll.length]);
@@ -3220,7 +3216,7 @@ export default function WarehouseTradingPage() {
       setPurchasePreviewRow(targetRow);
     }
   };
-  const totalVoucherPages = Math.max(1, Math.ceil(filteredVoucherListAll.length / PAGE_SIZE));
+  const totalVoucherPages = Math.max(1, Number(voucherPageInfo.totalPages || 1));
   const totalReportPages = activeReport === "sale" || activeReport === "purchase" || activeReport === "warehouse-stock"
     ? (reportPageInfo.hasMore ? reportPage + 1 : reportPage)
     : Math.max(1, Math.ceil(filteredReportDataAll.length / PAGE_SIZE));
@@ -4914,7 +4910,7 @@ export default function WarehouseTradingPage() {
                 </div>
               </div>
             )}
-            {renderPaginationBar(voucherPage, totalVoucherPages, () => setVoucherPage((prev) => Math.max(1, prev - 1)), () => setVoucherPage((prev) => Math.min(totalVoucherPages, prev + 1)), filteredVoucherListAll.length, "vouchers")}
+            {renderPaginationBar(voucherPage, totalVoucherPages, () => setVoucherPage((prev) => Math.max(1, prev - 1)), () => setVoucherPage((prev) => Math.min(totalVoucherPages, prev + 1)), voucherPageInfo.total, "vouchers")}
           </div>
         </div>
       ) : (
