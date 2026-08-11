@@ -1162,7 +1162,7 @@ export default function WarehouseTradingPage() {
     }
   };
 
-  const loadPaymentFarmers = async (companyAccountId, warehouseId = "") => {
+  const loadPaymentFarmers = async (companyAccountId, warehouseId = "", excludePaymentId = "") => {
     const account = String(companyAccountId || "").trim();
     const warehouse = String(warehouseId || "").trim();
     if (!account) {
@@ -1170,7 +1170,8 @@ export default function WarehouseTradingPage() {
       setPaymentWarehouses([]);
       return [];
     }
-    const key = `${account}::${warehouse}`;
+    const excludePayment = String(excludePaymentId || "").trim();
+    const key = `${account}::${warehouse}::${excludePayment}`;
     const cached = paymentFarmersCacheRef.current.get(key);
     if (cached && Date.now() - cached.time < 60000) {
       setAccountFarmers(cached.farmers || []);
@@ -1182,7 +1183,12 @@ export default function WarehouseTradingPage() {
     }
     const inFlight = paymentFarmersInFlightRef.current.get(key);
     if (inFlight) return inFlight;
-    const request = axios.get(`/api/wh-vouchers/farmers-by-account/${account}`, { params: warehouse ? { warehouse_id: warehouse } : undefined })
+    const request = axios.get(`/api/wh-vouchers/farmers-by-account/${account}`, {
+      params: {
+        ...(warehouse ? { warehouse_id: warehouse } : {}),
+        ...(excludePayment ? { exclude_payment_id: excludePayment } : {}),
+      },
+    })
       .then((res) => {
         const farmersResult = Array.isArray(res.data) ? res.data : [];
         const warehouseIds = [...new Set(farmersResult.flatMap((f) => Array.isArray(f.warehouse_ids) ? f.warehouse_ids : []))];
@@ -1568,7 +1574,7 @@ export default function WarehouseTradingPage() {
 
     if (activeVoucherType === "payment" && name === "company_account_id") {
       if (value) {
-        loadPaymentFarmers(value).catch((err) => {
+        loadPaymentFarmers(value, "", editId).catch((err) => {
           console.error("Failed to load payment account filters:", err);
           setAccountFarmers([]);
           setPaymentWarehouses([]);
@@ -1596,7 +1602,7 @@ export default function WarehouseTradingPage() {
             farmer_id: "",
           }));
         }
-        loadPaymentFarmers(formData.company_account_id, value).catch(() => setAccountFarmers([]));
+        loadPaymentFarmers(formData.company_account_id, value, editId).catch(() => setAccountFarmers([]));
         setPartyOutstanding(null);
         setPaymentAdjustments([]);
         setShowPaymentAdjustPopup(false);
@@ -1916,7 +1922,7 @@ export default function WarehouseTradingPage() {
       setEditId(null);
       setVoucherPage(1);
       await loadVouchers();
-      fetchNextVoucherNo(activeVoucherType);
+      if (!isEdit) fetchNextVoucherNo(activeVoucherType);
 
       if (activeVoucherType === "purchase") {
         const shouldShare = window.confirm("Purchase voucher saved. Do you want to send the PDF on WhatsApp?");
@@ -2064,23 +2070,35 @@ export default function WarehouseTradingPage() {
             setPaymentAdjustments(paymentMode === "against" ? existingAdjustments : []);
             if (payment.company_account_id) {
               try {
-                const filterRes = await axios.get("/api/wh-vouchers/report/filter-options", { params: { type: "purchase", company_account_id: payment.company_account_id } });
-                const ids = Array.isArray(filterRes.data?.warehouse_ids) ? filterRes.data.warehouse_ids.map(String) : [];
-                setPaymentWarehouses(warehouses.filter((w) => ids.includes(String(w.id || w._id))));
-              } catch (filterErr) {
+                // Edit mode must use the same account + warehouse + exclude-current-payment
+                // lookup as the normal Pending Farmer selector. This prevents the old
+                // filter-options request from selecting the wrong farmer/balance.
+                await loadPaymentFarmers(
+                  payment.company_account_id,
+                  payment.warehouse_id || "",
+                  voucherId
+                );
+              } catch (farmerErr) {
+                console.error("Failed to load payment farmers for edit:", farmerErr);
+                setAccountFarmers([]);
                 setPaymentWarehouses([]);
               }
             }
             // Ensure farmer appears in account-specific farmer list so dropdown shows it
             if (payment.company_account_id && payment.farmer_id) {
               const fid = String(payment.farmer_id || "");
-              const existsInAccount = (accountFarmers || []).some((f) => String(f.id || f._id) === fid);
+              const loadedFarmers = await loadPaymentFarmers(
+                payment.company_account_id,
+                payment.warehouse_id || "",
+                voucherId
+              ).catch(() => []);
+              const existsInAccount = (loadedFarmers || []).some((f) => String(f.id || f._id) === fid);
               if (!existsInAccount) {
                 const farmerFromAll = (farmers || []).find((f) => String(f.id || f._id) === fid);
                 if (farmerFromAll) {
                   setAccountFarmers((prev) => (Array.isArray(prev) ? [...prev, farmerFromAll] : [farmerFromAll]));
                 } else {
-                  setAccountFarmers((prev) => (Array.isArray(prev) ? [...prev, { id: fid, name: payment.farmer_name || "Unknown farmer" }] : [{ id: fid, name: payment.farmer_name || "Unknown farmer" }]));
+                  setAccountFarmers((prev) => (Array.isArray(prev) ? [...prev, { id: fid, name: String(payment.farmer_name || "Unknown farmer").trim() }] : [{ id: fid, name: String(payment.farmer_name || "Unknown farmer").trim() }]));
                 }
               }
             }
@@ -2548,6 +2566,7 @@ export default function WarehouseTradingPage() {
       String(partyOutstanding?.party_id || partyOutstanding?.farmer_id || partyOutstanding?.id || "") === String(formData.farmer_id) &&
       String(partyOutstanding?.warehouse_id || "") === String(formData.warehouse_id || "") &&
       String(partyOutstanding?.company_account_id || "") === String(formData.company_account_id || "") &&
+      String(partyOutstanding?.exclude_payment_id || "") === String(editId || "") &&
       Array.isArray(partyOutstanding?.purchases);
     if (!outstandingMatchesSelection) {
       await loadOutstanding("farmer", formData.farmer_id, formData.warehouse_id, editId, formData.company_account_id);
