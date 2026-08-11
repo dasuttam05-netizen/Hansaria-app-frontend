@@ -378,7 +378,13 @@ export default function WarehouseTradingPage() {
   const [voucherPageInfo, setVoucherPageInfo] = useState({ page: 1, pageSize: PAGE_SIZE, total: 0, totalPages: 1, hasMore: false });
   const masterLoadTokenRef = useRef(0);
   const masterDataLoadedRef = useRef(false);
+  const masterLoadPromiseRef = useRef(null);
   const reportFilterCacheRef = useRef(new Map());
+  const reportFilterInFlightRef = useRef(new Map());
+  const outstandingCacheRef = useRef(new Map());
+  const outstandingInFlightRef = useRef(new Map());
+  const paymentFarmersCacheRef = useRef(new Map());
+  const paymentFarmersInFlightRef = useRef(new Map());
   const arrowNavRootRef = useRef(null);
   const voucherPanelRef = useRef(null);
   const reportPanelRef = useRef(null);
@@ -810,17 +816,16 @@ export default function WarehouseTradingPage() {
       setShowMobileTradingTabs(true);
     }
 
-    // Do not load the large master-data bundle while opening Reports.
-    // Reports receive their own filter options from the Trading API.
-    if (nextTab === "vouchers") {
-      loadData();
-    }
+    // Master data is loaded only by the dedicated Vouchers effect below.
+    // This prevents the URL/search-param effect from starting a duplicate bundle.
   }, [searchParams]);
 
-  // Load the master bundle only when the user actually enters Vouchers.
+  // Load master data once when Vouchers is actually visible. Delay it slightly
+  // so the first voucher table paint is not competing with nine master requests.
   useEffect(() => {
     if (activeTab !== "vouchers") return;
-    loadData();
+    const timer = window.setTimeout(() => { loadData(); }, 900);
+    return () => window.clearTimeout(timer);
   }, [activeTab]);
 
   // Load voucher list when type changes
@@ -1050,68 +1055,83 @@ export default function WarehouseTradingPage() {
 
   const loadData = async ({ force = false } = {}) => {
     if (!force && masterDataLoadedRef.current) return;
+    if (!force && masterLoadPromiseRef.current) return masterLoadPromiseRef.current;
 
-    // Reuse the master bundle between Trading page mounts. The previous
-    // version wrote this cache but never read it, so every modal/page mount
-    // still caused nine network requests.
-    if (!force) {
+    const run = (async () => {
+      // Reuse the master bundle between Trading page mounts. This is intentionally
+      // one in-flight request group so React effects cannot fire the same 9 calls twice.
+      if (!force) {
+        try {
+          const cached = JSON.parse(sessionStorage.getItem("warehouseTradingMasterData:v2") || "null");
+          if (cached?.data && Date.now() - Number(cached.time || 0) < 30 * 60 * 1000) {
+            const data = cached.data;
+            setWarehouses(Array.isArray(data.warehouses) ? data.warehouses : []);
+            setFarmers(Array.isArray(data.farmers) ? data.farmers : []);
+            setBuyerNames(Array.isArray(data.buyerNames) ? data.buyerNames : []);
+            setCompanies(Array.isArray(data.companies) ? data.companies : []);
+            setCompanyAccounts(Array.isArray(data.companyAccounts) ? data.companyAccounts : []);
+            setConsignees(Array.isArray(data.consignees) ? data.consignees : []);
+            setProducts(Array.isArray(data.products) ? data.products : []);
+            setEmployees(Array.isArray(data.employees) ? data.employees : []);
+            setLocations(Array.isArray(data.locations) ? data.locations : []);
+            masterDataLoadedRef.current = true;
+            return;
+          }
+        } catch {}
+      }
+
+      const token = ++masterLoadTokenRef.current;
       try {
-        const cached = JSON.parse(sessionStorage.getItem("warehouseTradingMasterData:v1") || "null");
-        if (cached?.data && Date.now() - Number(cached.time || 0) < 10 * 60 * 1000) {
-          const data = cached.data;
-          setWarehouses(Array.isArray(data.warehouses) ? data.warehouses : []);
-          setFarmers(Array.isArray(data.farmers) ? data.farmers : []);
-          setBuyerNames(Array.isArray(data.buyerNames) ? data.buyerNames : []);
-          setCompanies(Array.isArray(data.companies) ? data.companies : []);
-          setCompanyAccounts(Array.isArray(data.companyAccounts) ? data.companyAccounts : []);
-          setConsignees(Array.isArray(data.consignees) ? data.consignees : []);
-          setProducts(Array.isArray(data.products) ? data.products : []);
-          setEmployees(Array.isArray(data.employees) ? data.employees : []);
-          setLocations(Array.isArray(data.locations) ? data.locations : []);
-          masterDataLoadedRef.current = true;
-          return;
-        }
-      } catch {}
-    }
+        const [wRes, fRes, bRes, cRes, caRes, coRes, pRes, eRes, lRes] = await Promise.allSettled([
+          axios.get("/api/warehouses"),
+          axios.get("/api/farmers"),
+          axios.get("/api/buyer-names"),
+          axios.get("/api/companies"),
+          axios.get("/api/company-accounts"),
+          axios.get("/api/consignee-names"),
+          axios.get("/api/products"),
+          axios.get("/api/employees"),
+          axios.get("/api/locations"),
+        ]);
+        const dataOf = (result) => (result.status === "fulfilled" ? result.value.data : []);
+        if (token !== masterLoadTokenRef.current) return;
+        const data = {
+          warehouses: Array.isArray(dataOf(wRes)) ? dataOf(wRes) : [],
+          farmers: Array.isArray(dataOf(fRes)) ? dataOf(fRes) : [],
+          buyerNames: Array.isArray(dataOf(bRes)) ? dataOf(bRes) : [],
+          companies: Array.isArray(dataOf(cRes)) ? dataOf(cRes) : [],
+          companyAccounts: Array.isArray(dataOf(caRes)) ? dataOf(caRes) : [],
+          consignees: Array.isArray(dataOf(coRes)) ? dataOf(coRes) : [],
+          products: Array.isArray(dataOf(pRes)) ? dataOf(pRes) : [],
+          employees: Array.isArray(dataOf(eRes)) ? dataOf(eRes) : [],
+          locations: Array.isArray(dataOf(lRes)) ? dataOf(lRes) : [],
+        };
+        setWarehouses(data.warehouses);
+        setFarmers(data.farmers);
+        setBuyerNames(data.buyerNames);
+        setCompanies(data.companies);
+        setCompanyAccounts(data.companyAccounts);
+        setConsignees(data.consignees);
+        setProducts(data.products);
+        setEmployees(data.employees);
+        setLocations(data.locations);
+        masterDataLoadedRef.current = true;
+        try {
+          sessionStorage.setItem("warehouseTradingMasterData:v2", JSON.stringify({
+            time: Date.now(),
+            data,
+          }));
+        } catch {}
+      } catch (err) {
+        if (token === masterLoadTokenRef.current) console.error(err);
+      }
+    })();
 
-    const token = ++masterLoadTokenRef.current;
+    if (!force) masterLoadPromiseRef.current = run;
     try {
-      const [wRes, fRes, bRes, cRes, caRes, coRes, pRes, eRes, lRes] = await Promise.allSettled([
-        axios.get("/api/warehouses"),
-        axios.get("/api/farmers"),
-        axios.get("/api/buyer-names"),
-        axios.get("/api/companies"),
-        axios.get("/api/company-accounts"),
-        axios.get("/api/consignee-names"),
-        axios.get("/api/products"),
-        axios.get("/api/employees"),
-        axios.get("/api/locations"),
-      ]);
-      const dataOf = (result) => (result.status === "fulfilled" ? result.value.data : []);
-      if (token !== masterLoadTokenRef.current) return;
-      setWarehouses(Array.isArray(dataOf(wRes)) ? dataOf(wRes) : []);
-      setFarmers(Array.isArray(dataOf(fRes)) ? dataOf(fRes) : []);
-      setBuyerNames(Array.isArray(dataOf(bRes)) ? dataOf(bRes) : []);
-      setCompanies(Array.isArray(dataOf(cRes)) ? dataOf(cRes) : []);
-      setCompanyAccounts(Array.isArray(dataOf(caRes)) ? dataOf(caRes) : []);
-      setConsignees(Array.isArray(dataOf(coRes)) ? dataOf(coRes) : []);
-      setProducts(Array.isArray(dataOf(pRes)) ? dataOf(pRes) : []);
-      setEmployees(Array.isArray(dataOf(eRes)) ? dataOf(eRes) : []);
-      setLocations(Array.isArray(dataOf(lRes)) ? dataOf(lRes) : []);
-      masterDataLoadedRef.current = true;
-      try {
-        sessionStorage.setItem("warehouseTradingMasterData:v1", JSON.stringify({
-          time: Date.now(),
-          data: {
-            warehouses: dataOf(wRes), farmers: dataOf(fRes), buyerNames: dataOf(bRes),
-            companies: dataOf(cRes), companyAccounts: dataOf(caRes), consignees: dataOf(coRes),
-            products: dataOf(pRes), employees: dataOf(eRes), locations: dataOf(lRes),
-          },
-        }));
-      } catch {}
-    } catch (err) {
-      if (token !== masterLoadTokenRef.current) return;
-      console.error(err);
+      return await run;
+    } finally {
+      if (!force) masterLoadPromiseRef.current = null;
     }
   };
 
@@ -1142,23 +1162,90 @@ export default function WarehouseTradingPage() {
     }
   };
 
+  const loadPaymentFarmers = async (companyAccountId, warehouseId = "") => {
+    const account = String(companyAccountId || "").trim();
+    const warehouse = String(warehouseId || "").trim();
+    if (!account) {
+      setAccountFarmers([]);
+      setPaymentWarehouses([]);
+      return [];
+    }
+    const key = `${account}::${warehouse}`;
+    const cached = paymentFarmersCacheRef.current.get(key);
+    if (cached && Date.now() - cached.time < 60000) {
+      setAccountFarmers(cached.farmers || []);
+      if (!warehouse && Array.isArray(cached.warehouse_ids)) {
+        const ids = new Set(cached.warehouse_ids.map(String));
+        setPaymentWarehouses(warehouses.filter((w) => ids.has(String(w.id || w._id))));
+      }
+      return cached.farmers || [];
+    }
+    const inFlight = paymentFarmersInFlightRef.current.get(key);
+    if (inFlight) return inFlight;
+    const request = axios.get(`/api/wh-vouchers/farmers-by-account/${account}`, { params: warehouse ? { warehouse_id: warehouse } : undefined })
+      .then((res) => {
+        const farmersResult = Array.isArray(res.data) ? res.data : [];
+        const warehouseIds = [...new Set(farmersResult.flatMap((f) => Array.isArray(f.warehouse_ids) ? f.warehouse_ids : []))];
+        const data = { farmers: farmersResult, warehouse_ids: warehouseIds, time: Date.now() };
+        paymentFarmersCacheRef.current.set(key, data);
+        setAccountFarmers(farmersResult);
+        if (!warehouse) {
+          const ids = new Set(warehouseIds.map(String));
+          setPaymentWarehouses(warehouses.filter((w) => ids.has(String(w.id || w._id))));
+        }
+        return farmersResult;
+      })
+      .finally(() => paymentFarmersInFlightRef.current.delete(key));
+    paymentFarmersInFlightRef.current.set(key, request);
+    return request;
+  };
+
   const loadOutstanding = async (partyType, partyId, warehouseId = null, excludePaymentId = null, companyAccountId = null) => {
     if (!partyType || !partyId) {
       setPartyOutstanding(null);
-      return;
+      return null;
     }
-    try {
-      const params = { party_type: partyType, id: partyId };
-      const warehouse = warehouseId || formData.warehouse_id;
-      if (warehouse) params.warehouse_id = warehouse;
-      if (excludePaymentId) params.exclude_payment_id = excludePaymentId;
-      if (companyAccountId) params.company_account_id = companyAccountId;
-      const res = await axios.get(`/api/wh-vouchers/outstanding`, { params });
-      setPartyOutstanding(res.data || null);
-    } catch (err) {
-      console.error(err);
-      setPartyOutstanding(null);
+
+    const warehouse = warehouseId || formData.warehouse_id || "";
+    const key = JSON.stringify({
+      partyType,
+      partyId: String(partyId),
+      warehouse: String(warehouse),
+      excludePaymentId: String(excludePaymentId || ""),
+      companyAccountId: String(companyAccountId || ""),
+    });
+
+    const cached = outstandingCacheRef.current.get(key);
+    if (cached && Date.now() - cached.time < 10000) {
+      setPartyOutstanding(cached.data || null);
+      return cached.data || null;
     }
+
+    const inFlight = outstandingInFlightRef.current.get(key);
+    if (inFlight) return inFlight;
+
+    const request = (async () => {
+      try {
+        const params = { party_type: partyType, id: partyId };
+        if (warehouse) params.warehouse_id = warehouse;
+        if (excludePaymentId) params.exclude_payment_id = excludePaymentId;
+        if (companyAccountId) params.company_account_id = companyAccountId;
+        const res = await axios.get(`/api/wh-vouchers/outstanding`, { params });
+        const data = res.data || null;
+        outstandingCacheRef.current.set(key, { time: Date.now(), data });
+        setPartyOutstanding(data);
+        return data;
+      } catch (err) {
+        console.error(err);
+        setPartyOutstanding(null);
+        return null;
+      } finally {
+        outstandingInFlightRef.current.delete(key);
+      }
+    })();
+
+    outstandingInFlightRef.current.set(key, request);
+    return request;
   };
 
   const loadVouchers = async () => {
@@ -1231,24 +1318,43 @@ export default function WarehouseTradingPage() {
       if (filters.warehouse_id) params.warehouse_id = filters.warehouse_id;
       if (filters.farmer_id) params.farmer_id = filters.farmer_id;
       if (filters.sale_buyer_id) params.buyer_id = filters.sale_buyer_id;
+
       const cacheKey = JSON.stringify({ reportType, params });
       const cached = reportFilterCacheRef.current.get(cacheKey);
-      if (cached && Date.now() - cached.time < 15000) {
+      if (cached && Date.now() - cached.time < 5 * 60 * 1000) {
         setReportFilterOptions(cached.data);
         return;
       }
-      const res = await axios.get("/api/wh-vouchers/report/filter-options", { params: { ...params, type: reportType } });
-      const nextData = {
-        account_ids: Array.isArray(res.data?.account_ids) ? res.data.account_ids : [],
-        warehouse_ids: Array.isArray(res.data?.warehouse_ids) ? res.data.warehouse_ids : [],
-        farmer_ids: Array.isArray(res.data?.farmer_ids) ? res.data.farmer_ids : [],
-        buyer_ids: Array.isArray(res.data?.buyer_ids) ? res.data.buyer_ids : [],
-        accounts: Array.isArray(res.data?.accounts) ? res.data.accounts : [],
-        warehouses: Array.isArray(res.data?.warehouses) ? res.data.warehouses : [],
-        farmers: Array.isArray(res.data?.farmers) ? res.data.farmers : [],
-        buyers: Array.isArray(res.data?.buyers) ? res.data.buyers : [],
-      };
-      reportFilterCacheRef.current.set(cacheKey, { time: Date.now(), data: nextData });
+
+      const inFlight = reportFilterInFlightRef.current.get(cacheKey);
+      if (inFlight) {
+        const data = await inFlight;
+        if (data) setReportFilterOptions(data);
+        return;
+      }
+
+      const request = axios
+        .get("/api/wh-vouchers/report/filter-options", { params: { ...params, type: reportType } })
+        .then((res) => {
+          const nextData = {
+            account_ids: Array.isArray(res.data?.account_ids) ? res.data.account_ids : [],
+            warehouse_ids: Array.isArray(res.data?.warehouse_ids) ? res.data.warehouse_ids : [],
+            farmer_ids: Array.isArray(res.data?.farmer_ids) ? res.data.farmer_ids : [],
+            buyer_ids: Array.isArray(res.data?.buyer_ids) ? res.data.buyer_ids : [],
+            accounts: Array.isArray(res.data?.accounts) ? res.data.accounts : [],
+            warehouses: Array.isArray(res.data?.warehouses) ? res.data.warehouses : [],
+            farmers: Array.isArray(res.data?.farmers) ? res.data.farmers : [],
+            buyers: Array.isArray(res.data?.buyers) ? res.data.buyers : [],
+          };
+          reportFilterCacheRef.current.set(cacheKey, { time: Date.now(), data: nextData });
+          return nextData;
+        })
+        .finally(() => {
+          reportFilterInFlightRef.current.delete(cacheKey);
+        });
+
+      reportFilterInFlightRef.current.set(cacheKey, request);
+      const nextData = await request;
       setReportFilterOptions(nextData);
     } catch (err) {
       console.error("Failed to load Trading report filters:", err);
@@ -1358,10 +1464,9 @@ export default function WarehouseTradingPage() {
     setPaymentAdjustments([]);
     setShowPaymentAdjustPopup(false);
 
-    if (normalizedMode === "against" && toNumber(amountVal) > 0 && farmerVal) {
-      await loadOutstanding("farmer", farmerVal, warehouseVal, editId, companyAccountVal);
-      setShowPaymentAdjustPopup(true);
-    }
+    // Selecting "Against Purchase Bills" must not make a network request or
+    // open the adjustment panel automatically. The user explicitly opens it.
+    // Keep the values local until Open Adjustment is clicked.
   };
 
   const handleChange = (e) => {
@@ -1463,22 +1568,11 @@ export default function WarehouseTradingPage() {
 
     if (activeVoucherType === "payment" && name === "company_account_id") {
       if (value) {
-        Promise.all([
-          axios.get(`/api/wh-vouchers/farmers-by-account/${value}`, { params: { warehouse_id: undefined } }),
-          axios.get("/api/wh-vouchers/report/filter-options", { params: { type: "purchase", company_account_id: value } }),
-        ])
-          .then(([farmerRes, filterRes]) => {
-            const farmersWithOutstanding = Array.isArray(farmerRes.data) ? farmerRes.data : [];
-            const warehouseIds = Array.isArray(filterRes.data?.warehouse_ids) ? filterRes.data.warehouse_ids.map(String) : [];
-            const nextWarehouses = warehouses.filter((w) => warehouseIds.includes(String(w.id || w._id)));
-            setAccountFarmers(farmersWithOutstanding);
-            setPaymentWarehouses(nextWarehouses);
-          })
-          .catch((err) => {
-            console.error("Failed to load payment account filters:", err);
-            setAccountFarmers([]);
-            setPaymentWarehouses([]);
-          });
+        loadPaymentFarmers(value).catch((err) => {
+          console.error("Failed to load payment account filters:", err);
+          setAccountFarmers([]);
+          setPaymentWarehouses([]);
+        });
         setFormData((prev) => ({ ...prev, warehouse_id: "", farmer_id: "" }));
         setPartyOutstanding(null);
         setPaymentAdjustments([]);
@@ -1502,10 +1596,7 @@ export default function WarehouseTradingPage() {
             farmer_id: "",
           }));
         }
-        axios
-          .get(`/api/wh-vouchers/farmers-by-account/${formData.company_account_id}`, { params: { warehouse_id: value } })
-          .then((res) => setAccountFarmers(Array.isArray(res.data) ? res.data : []))
-          .catch(() => setAccountFarmers([]));
+        loadPaymentFarmers(formData.company_account_id, value).catch(() => setAccountFarmers([]));
         setPartyOutstanding(null);
         setPaymentAdjustments([]);
         setShowPaymentAdjustPopup(false);
