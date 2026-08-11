@@ -232,6 +232,7 @@ const reportUiInitialState = {
     sale_journey_token: "",
     sale_lorry_no: "",
     sale_bill_no: "",
+    details_of_deduction: false,
   },
   saleFollowupFilter: "all",
   selectedLedgerBillId: "",
@@ -491,10 +492,15 @@ export default function WarehouseTradingPage() {
     purchaseDeductionTotal;
   const safePurchaseNetWeight = Math.max(purchaseNetWeight, 0);
   const purchaseGrossAmount = safePurchaseNetWeight * toNumber(formData.rate);
+  const purchaseClaimAmount = toNumber(formData.claim_amount) || toNumber(formData.bags_claim);
   const purchaseTotalDeduction =
-    toNumber(formData.bags_claim) +
+    purchaseClaimAmount +
     toNumber(formData.labour) +
-    toNumber(formData.transport_charge);
+    toNumber(formData.transport_charge) +
+    toNumber(formData.cd_amount) +
+    toNumber(formData.tds_amount) +
+    toNumber(formData.other_deduction) +
+    toNumber(formData.adjustment_amount);
   const purchaseRoundOff = toNumber(formData.round_off);
   const purchaseNetPayable = Math.max(purchaseGrossAmount - purchaseTotalDeduction + purchaseRoundOff, 0);
   const purchaseDeductionDefaults = purchaseBaseline || {
@@ -911,7 +917,7 @@ export default function WarehouseTradingPage() {
       loadReport();
     }, 40);
     return () => window.clearTimeout(timer);
-  }, [activeTab, activeReport, reportPage, globalSearch, reportFilters.farmer_id, reportFilters.company_account_id, reportFilters.warehouse_id, reportFilters.sale_buyer_id, reportFilters.sale_company_account_id, reportFilters.sale_journey_token, reportFilters.sale_lorry_no, reportFilters.sale_bill_no]);
+  }, [activeTab, activeReport, reportPage, globalSearch, reportFilters.farmer_id, reportFilters.company_account_id, reportFilters.warehouse_id, reportFilters.sale_buyer_id, reportFilters.sale_company_account_id, reportFilters.sale_journey_token, reportFilters.sale_lorry_no, reportFilters.sale_bill_no, reportFilters.details_of_deduction]);
 
   // Filter options are independent of pagination. Never reload them just
   // because the user moves from page 1 to page 2.
@@ -1446,6 +1452,9 @@ export default function WarehouseTradingPage() {
       if (isSaleReport && filters.sale_buyer_id) {
         params.buyer_id = filters.sale_buyer_id;
       }
+      if (reportType === "purchase-party-ledger" && filters.details_of_deduction) {
+        params.details_of_deduction = 1;
+      }
       // Search must be executed by MongoDB before pagination. Otherwise the
       // old UI searched only the currently loaded 15 rows.
       if ((reportType === "sale" || reportType === "purchase") && normalizedSearch) {
@@ -1910,7 +1919,14 @@ export default function WarehouseTradingPage() {
         payload.quantity = safePurchaseNetWeight;
         payload.net_weight = safePurchaseNetWeight;
         payload.total_qty = safePurchaseNetWeight;
-        payload.total_deduct_amount = 0;
+        payload.claim_amount = purchaseClaimAmount;
+        payload.bags_claim = purchaseClaimAmount;
+        payload.cd_amount = toNumber(formData.cd_amount);
+        payload.tds_amount = toNumber(formData.tds_amount);
+        payload.other_deduction = toNumber(formData.other_deduction);
+        payload.adjustment_amount = toNumber(formData.adjustment_amount);
+        payload.transport_charge = toNumber(formData.transport_charge);
+        payload.total_deduct_amount = purchaseTotalDeduction;
         payload.total_deduction = purchaseTotalDeduction;
         payload.amount = purchaseNetPayable;
         payload.net_amount_payable = purchaseNetPayable;
@@ -3730,7 +3746,7 @@ export default function WarehouseTradingPage() {
     ].filter(Boolean).join("  |  ");
 
     const drawInfoCard = (x, y, w, label, details, address, accent) => {
-      const h = 17;
+      const h = 25;
       doc.setFillColor(248, 250, 252);
       doc.setDrawColor(226, 232, 240);
       doc.roundedRect(x, y, w, h, 2, 2, "FD");
@@ -3747,8 +3763,8 @@ export default function WarehouseTradingPage() {
       doc.setFontSize(6.3);
       doc.setTextColor(71, 85, 105);
       const line = contactLine(details, address) || "Address: -";
-      const wrapped = doc.splitTextToSize(line, w - 12);
-      doc.text(wrapped[0], x + 6, y + 14.2);
+      const wrapped = doc.splitTextToSize(line, w - 12).slice(0, 3);
+      doc.text(wrapped, x + 6, y + 14.2, { lineHeightFactor: 1.15 });
       return y + h;
     };
 
@@ -3812,6 +3828,7 @@ export default function WarehouseTradingPage() {
       ? ["Date", "Type", "Voucher No", "Adjustment & Details", "Particulars", "Due Date", "Due Days", "Overdue", "Dr", "Cr", "Balance"]
       : ["Date", "Type", "Voucher No", "Particulars", "Adjustment Details", "Warehouse", "Due Date", "Due Days", "Overdue", "Dr", "Cr", "Balance"];
 
+    const bodyRowTypes = entryRows.map((row) => row.row_type || "entry");
     const body = entryRows.map((row) => {
       if (isSaleLedger) {
         const saleDetails = [
@@ -4363,16 +4380,26 @@ export default function WarehouseTradingPage() {
                                 <th style={{ ...erpTh, background: "#eef4ff", textAlign: "center" }}>Claim</th>
                                 <th style={{ ...erpTh, background: "#eef4ff", textAlign: "center" }}>Labour</th>
                                 <th style={{ ...erpTh, background: "#eef4ff", textAlign: "center" }}>Freight</th>
+                                <th style={{ ...erpTh, background: "#eef4ff", textAlign: "center" }}>CD %</th>
+                                <th style={{ ...erpTh, background: "#eef4ff", textAlign: "center" }}>CD Amount</th>
+                                <th style={{ ...erpTh, background: "#eef4ff", textAlign: "center" }}>TDS</th>
+                                <th style={{ ...erpTh, background: "#eef4ff", textAlign: "center" }}>Other</th>
+                                <th style={{ ...erpTh, background: "#eef4ff", textAlign: "center" }}>Adjustment</th>
                                 <th style={{ ...erpTh, background: "#eef4ff", textAlign: "center" }}>Round Off</th>
                                 <th style={{ ...erpTh, background: "#eef4ff", textAlign: "center" }}>Total Deduction</th>
                               </tr>
                             </thead>
                             <tbody>
                               <tr>
-                                <td style={erpTd}><input name="bags_claim" type="number" step="0.0001" value={formData.bags_claim} onChange={handleChange} style={{ ...erpInput, width: "100%" }} /></td>
-                                <td style={erpTd}><input name="labour" type="number" step="0.0001" value={formData.labour} onChange={handleChange} style={{ ...erpInput, width: "100%" }} /></td>
-                                <td style={erpTd}><input name="transport_charge" type="number" step="0.0001" value={formData.transport_charge} onChange={handleChange} style={{ ...erpInput, width: "100%" }} /></td>
-                                <td style={erpTd}><input name="round_off" type="number" step="0.0001" value={formData.round_off} onChange={handleChange} style={{ ...erpInput, width: "100%" }} /></td>
+                                <td style={erpTd}><input name="claim_amount" type="number" step="0.01" value={formData.claim_amount || formData.bags_claim} onChange={(e) => { handleChange(e); }} style={{ ...erpInput, width: "100%" }} /></td>
+                                <td style={erpTd}><input name="labour" type="number" step="0.01" value={formData.labour} onChange={handleChange} style={{ ...erpInput, width: "100%" }} /></td>
+                                <td style={erpTd}><input name="transport_charge" type="number" step="0.01" value={formData.transport_charge} onChange={handleChange} style={{ ...erpInput, width: "100%" }} /></td>
+                                <td style={erpTd}><input name="cd_percent" type="number" step="0.01" value={formData.cd_percent} onChange={handleChange} style={{ ...erpInput, width: "100%" }} /></td>
+                                <td style={erpTd}><input name="cd_amount" type="number" step="0.01" value={formData.cd_amount} onChange={handleChange} style={{ ...erpInput, width: "100%" }} /></td>
+                                <td style={erpTd}><input name="tds_amount" type="number" step="0.01" value={formData.tds_amount} onChange={handleChange} style={{ ...erpInput, width: "100%" }} /></td>
+                                <td style={erpTd}><input name="other_deduction" type="number" step="0.01" value={formData.other_deduction} onChange={handleChange} style={{ ...erpInput, width: "100%" }} /></td>
+                                <td style={erpTd}><input name="adjustment_amount" type="number" step="0.01" value={formData.adjustment_amount} onChange={handleChange} style={{ ...erpInput, width: "100%" }} /></td>
+                                <td style={erpTd}><input name="round_off" type="number" step="0.01" value={formData.round_off} onChange={handleChange} style={{ ...erpInput, width: "100%" }} /></td>
                                 <td style={erpTd}><input value={formatMoney(purchaseTotalDeduction)} readOnly style={{ ...erpInput, width: "100%", background: "#f8fafc", fontWeight: 800 }} /></td>
                               </tr>
                             </tbody>
@@ -5542,10 +5569,10 @@ export default function WarehouseTradingPage() {
                   placeholder={reportFilters.warehouse_id ? "Select Farmer" : "Select Warehouse First"}
                   disabled={!reportFilters.company_account_id || !reportFilters.warehouse_id}
                 />
-                {(reportFilters.farmer_id || reportFilters.warehouse_id || reportFilters.company_account_id) && (
+                {(reportFilters.farmer_id || reportFilters.warehouse_id || reportFilters.company_account_id || reportFilters.details_of_deduction) && (
                   <button
                     type="button"
-                    onClick={() => setReportFilters({ farmer_id: "", warehouse_id: "", company_account_id: "", sale_buyer_id: "", sale_company_account_id: "", sale_journey_token: "", sale_lorry_no: "", sale_bill_no: "" })}
+                    onClick={() => setReportFilters({ farmer_id: "", warehouse_id: "", company_account_id: "", sale_buyer_id: "", sale_company_account_id: "", sale_journey_token: "", sale_lorry_no: "", sale_bill_no: "", details_of_deduction: false })}
                     style={{ ...btnAction, background: "#64748b", marginBottom: 1 }}
                   >
                     Clear Filters
@@ -5587,10 +5614,22 @@ export default function WarehouseTradingPage() {
                   placeholder={reportFilters.warehouse_id ? "Select Farmer" : "Select Warehouse First"}
                   disabled={!reportFilters.company_account_id || !reportFilters.warehouse_id}
                 />
-                {(reportFilters.farmer_id || reportFilters.warehouse_id || reportFilters.company_account_id) && (
+                <label style={{ display: "grid", gap: 6, minWidth: 190 }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: "#334155" }}>Journal / Deduction Details</span>
+                  <select
+                  value={reportFilters.details_of_deduction ? "details" : "all"}
+                  onChange={(e) => updateReportFilter("details_of_deduction", e.target.value === "details")}
+                  style={{ ...inp, minWidth: 190, height: 42 }}
+                  title="Show purchase deduction entries in ledger"
+                  >
+                    <option value="all">Normal Ledger</option>
+                    <option value="details">Details of Deduction</option>
+                  </select>
+                </label>
+                {(reportFilters.farmer_id || reportFilters.warehouse_id || reportFilters.company_account_id || reportFilters.details_of_deduction) && (
                   <button
                     type="button"
-                    onClick={() => setReportFilters({ farmer_id: "", warehouse_id: "", company_account_id: "", sale_buyer_id: "", sale_company_account_id: "", sale_journey_token: "", sale_lorry_no: "", sale_bill_no: "" })}
+                    onClick={() => setReportFilters({ farmer_id: "", warehouse_id: "", company_account_id: "", sale_buyer_id: "", sale_company_account_id: "", sale_journey_token: "", sale_lorry_no: "", sale_bill_no: "", details_of_deduction: false })}
                     style={{ ...btnAction, background: "#64748b", marginBottom: 1 }}
                   >
                     Clear Filters
