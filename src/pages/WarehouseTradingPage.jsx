@@ -852,11 +852,10 @@ export default function WarehouseTradingPage() {
   }, [activeTab, activeReport, reportPage, reportFilters.farmer_id, reportFilters.company_account_id, reportFilters.warehouse_id, reportFilters.sale_buyer_id, reportFilters.sale_company_account_id, reportFilters.sale_journey_token, reportFilters.sale_lorry_no, reportFilters.sale_bill_no]);
 
   useEffect(() => {
-    if (activeReport === "purchase-party-ledger") setShowPurchaseBillWise(true);
-    else setShowPurchaseBillWise(false);
-    
-    if (activeReport === "sale-party-ledger") setShowSaleBillWise(true);
-    else setShowSaleBillWise(false);
+    // Keep bill-wise detail panels hidden by default. Press F5 to reveal and
+    // refresh the selected party ledger when detailed bill information is needed.
+    setShowPurchaseBillWise(false);
+    setShowSaleBillWise(false);
   }, [activeReport]);
 
   useEffect(() => {
@@ -1496,9 +1495,10 @@ export default function WarehouseTradingPage() {
       loadOutstanding("company", formData.company_id || formData.buyer_id, formData.warehouse_id, null, value);
     }
     if (activeVoucherType === "payment" && name === "amount") {
-      if (toNumber(value) > 0 && formData.farmer_id && activePaymentMode === "against") {
-        setShowPaymentAdjustPopup(true);
-      } else {
+      // Amount entry must stay local. Do not open the adjustment panel or
+      // trigger any report/ledger request automatically. The user can click
+      // "Open Adjustment" when ready; Auto Adjust remains available there.
+      if (toNumber(value) <= 0) {
         setPaymentAdjustments([]);
         setShowPaymentAdjustPopup(false);
       }
@@ -2904,8 +2904,6 @@ export default function WarehouseTradingPage() {
     ],
     "purchase-party-ledger": [
       ["date", "Date", (item) => (item.row_type === "closing" ? "" : formatLedgerDate(item.date))],
-      ["farmer", "Farmer", (item) => (item.row_type === "closing" ? `Closing Balance (${item.closing_side})` : (item.farmer_name || getFarmerName(item) || "-"))],
-      ["account", "Account", (item) => (item.row_type === "closing" ? "" : getAccountName(item))],
       ["voucher_type", "Type", (item) => (item.row_type === "closing" ? "" : (item.voucher_type || "-"))],
       ["voucher_no", "Voucher No", (item) => (item.row_type === "closing" ? "" : (item.voucher_no || "-"))],
       ["particulars", "Particulars", (item) => (item.row_type === "closing" ? "" : (item.particulars || "-"))],
@@ -3732,7 +3730,7 @@ export default function WarehouseTradingPage() {
     <div ref={arrowNavRootRef} className="warehouse-trading-page" style={{ fontFamily: "Segoe UI, Arial, sans-serif", padding: "16px" }}>
       <style>{`
   .warehouse-trading-page { max-width: 100%; box-sizing: border-box; }
-  .payment-mobile-shell { width: min(100%, 820px); margin: 0 auto 14px; box-sizing: border-box; }
+  .payment-mobile-shell { width: 100%; margin: 0 auto 14px; box-sizing: border-box; }
   @media (max-width: 820px) {
     .warehouse-trading-page { padding: 8px !important; }
     .payment-mobile-shell { width: 100%; padding: 11px !important; border-radius: 12px !important; }
@@ -5315,8 +5313,6 @@ export default function WarehouseTradingPage() {
                         <em>{item.row_type === "closing" ? "" : formatLedgerDate(item.date)}</em>
                       </div>
                       <div className="purchase-mobile-entry-grid">
-                        <div><span>Farmer</span><strong>{item.row_type === "closing" ? `Closing (${item.closing_side || ""})` : item.farmer_name || getFarmerName(item) || "-"}</strong></div>
-                        <div><span>Account</span><strong>{item.row_type === "closing" ? "-" : getAccountName(item)}</strong></div>
                         <div><span>Warehouse</span><strong>{item.row_type === "closing" ? "-" : getWarehouseName(item)}</strong></div>
                         <div><span>Debit</span><strong>{formatMoney(item.debit || 0)}</strong></div>
                         <div><span>Credit</span><strong>{formatMoney(item.credit || 0)}</strong></div>
