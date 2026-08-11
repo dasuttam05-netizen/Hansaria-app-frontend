@@ -605,7 +605,10 @@ export default function WarehouseTradingPage() {
   });
   const allowedReports = Object.keys(reportPermissionMap).filter((type) => {
     if (type === "sale" || type === "sale-party-ledger" || type === "sale-followup" || type === "sale-journey") {
-      return hasPermission(user, "warehouse.trading.report.sale");
+      // Sale reports must remain visible for users who can access the Sale module.
+      // Some older roles only have the Sale view permission and do not have the
+      // newer report-specific permission yet.
+      return hasPermission(user, "warehouse.trading.report.sale") || canUseSale;
     }
     if (type === "warehouse-stock") {
       return canUseWarehouseStockReport;
@@ -1442,12 +1445,36 @@ export default function WarehouseTradingPage() {
       }
       if (reportType === "purchase" && hasPermission(user, voucherPermissionMap.purchase) && !hasActivePurchaseFilters) {
         try {
-          const fallbackRes = await axios.get("/api/wh-vouchers/purchase");
+          const fallbackRes = await axios.get("/api/wh-vouchers/purchase", { params: { page: 1, limit: PAGE_SIZE, order: "desc" } });
           if (token !== reportLoadTokenRef.current) return;
-          setReportData(Array.isArray(fallbackRes.data) ? fallbackRes.data : []);
+          const fallbackPayload = fallbackRes.data || [];
+          setReportData(Array.isArray(fallbackPayload) ? fallbackPayload : (fallbackPayload.data || []));
           return;
         } catch (fallbackErr) {
           console.error(fallbackErr);
+        }
+      }
+      if (isSaleReport && canUseSale) {
+        try {
+          // Sale report fallback: the voucher list endpoint is kept as a safe
+          // fallback when the report-specific endpoint is unavailable.
+          const fallbackRes = await axios.get("/api/wh-vouchers/sale", {
+            params: { page: page || 1, limit: PAGE_SIZE, order: "desc", ...params },
+          });
+          if (token !== reportLoadTokenRef.current) return;
+          const fallbackPayload = fallbackRes.data || [];
+          const fallbackRows = Array.isArray(fallbackPayload) ? fallbackPayload : (fallbackPayload.data || []);
+          setReportData(fallbackRows);
+          const fallbackPagination = Array.isArray(fallbackPayload) ? null : fallbackPayload.pagination;
+          setReportPageInfo({
+            page: fallbackPagination?.page || page || 1,
+            pageSize: fallbackPagination?.pageSize || PAGE_SIZE,
+            total: fallbackPagination?.total ?? fallbackRows.length,
+            hasMore: Boolean(fallbackPagination?.hasMore),
+          });
+          return;
+        } catch (fallbackSaleErr) {
+          console.error("Sale report fallback failed:", fallbackSaleErr);
         }
       }
       setReportData([]);
