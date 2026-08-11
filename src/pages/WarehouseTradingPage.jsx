@@ -831,6 +831,49 @@ export default function WarehouseTradingPage() {
     return () => window.clearTimeout(timer);
   }, [activeTab]);
 
+  // Refresh farmers whenever Purchase/New Sale voucher is opened so a farmer
+  // created in the master screen is immediately available. The master bundle
+  // intentionally uses a session cache for performance, but farmers are a
+  // frequently-created master and must not remain stale for 30 minutes.
+  useEffect(() => {
+    if (activeTab !== "vouchers") return;
+    if (!["purchase", "sale"].includes(activeVoucherType)) return;
+
+    let cancelled = false;
+    const refreshFarmers = async () => {
+      try {
+        const res = await axios.get("/api/farmers", {
+          headers: { "Cache-Control": "no-cache" },
+          params: { _refresh: Date.now() },
+        });
+        const freshFarmers = Array.isArray(res.data) ? res.data : [];
+        if (cancelled) return;
+        setFarmers(freshFarmers);
+
+        // Keep the other cached master data, but replace only the farmers list.
+        try {
+          const cached = JSON.parse(sessionStorage.getItem("warehouseTradingMasterData:v2") || "null");
+          if (cached?.data) {
+            sessionStorage.setItem("warehouseTradingMasterData:v2", JSON.stringify({
+              ...cached,
+              time: Date.now(),
+              data: { ...cached.data, farmers: freshFarmers },
+            }));
+          }
+        } catch {}
+      } catch (err) {
+        // Keep the cached farmer list if the refresh endpoint is temporarily unavailable.
+        if (!cancelled) console.warn("Fresh farmer list unavailable; using cached farmers", err);
+      }
+    };
+
+    const timer = window.setTimeout(refreshFarmers, 120);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [activeTab, activeVoucherType]);
+
   // Load voucher list when type changes
   useEffect(() => {
     if (activeTab !== "vouchers") return;
