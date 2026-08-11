@@ -512,6 +512,27 @@ export default function WarehouseTradingPage() {
     (sum, item) => sum + toNumber(item.adjusted_amount),
     0
   );
+  const paymentFinancialStats = partyOutstanding?.stats || {};
+  const paymentTotalBill = toNumber(
+    paymentFinancialStats.total_bill ??
+    paymentFinancialStats.total_purchase ??
+    paymentFinancialStats.bill_amount
+  );
+  const paymentTotalDeduction = toNumber(
+    paymentFinancialStats.total_deduction ??
+    paymentFinancialStats.deduction_total
+  );
+  const paymentTotalPaid = toNumber(
+    paymentFinancialStats.total_payment ??
+    paymentFinancialStats.paid ??
+    paymentFinancialStats.payment_total
+  );
+  // Keep the existing outstanding calculation as the accounting source of truth.
+  // The deduction card is informational and is not subtracted twice from an already-net payable amount.
+  const paymentTotalDue = toNumber(
+    paymentFinancialStats.outstanding ??
+    (paymentTotalBill - paymentTotalPaid)
+  );
   const receiptAdjustmentTotal = receiptAdjustments.reduce(
     (sum, item) => sum + toNumber(item.adjusted_amount),
     0
@@ -3709,6 +3730,23 @@ export default function WarehouseTradingPage() {
 
   return (
     <div ref={arrowNavRootRef} className="warehouse-trading-page" style={{ fontFamily: "Segoe UI, Arial, sans-serif", padding: "16px" }}>
+      <style>{`
+  .warehouse-trading-page { max-width: 100%; box-sizing: border-box; }
+  .payment-mobile-shell { width: min(100%, 820px); margin: 0 auto 14px; box-sizing: border-box; }
+  @media (max-width: 820px) {
+    .warehouse-trading-page { padding: 8px !important; }
+    .payment-mobile-shell { width: 100%; padding: 11px !important; border-radius: 12px !important; }
+    .payment-financial-summary { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+    .payment-selector-grid { grid-template-columns: 1fr !important; }
+    .payment-entry-row { grid-template-columns: 1fr !important; }
+    .payment-adjustment-action { justify-content: flex-start; }
+  }
+  @media (max-width: 480px) {
+    .payment-financial-summary { grid-template-columns: 1fr 1fr !important; }
+    .payment-stat-value { font-size: 11.5px !important; }
+    .payment-selected-bar { display: grid !important; grid-template-columns: 1fr !important; }
+  }
+`}</style>
       <WarehouseTradingHeader
         activeTab={activeTab}
         activeTabStyle={activeTabStyle}
@@ -4254,80 +4292,135 @@ export default function WarehouseTradingPage() {
               ) : (
                 <div>
                   {activeVoucherType === "payment" && (
-                    <div style={paymentHeroCard}>
+                    <div className="payment-mobile-shell" style={paymentHeroCard}>
                       <div style={paymentHeroHeader}>
                         <div>
-                          <div style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.16em", color: "#2563eb", fontWeight: 800, marginBottom: 4 }}>Payment voucher</div>
-                          <h3 style={{ margin: "0 0 6px", fontSize: 18, color: "#0f172a" }}>Fast payment entry with bill adjustment tracking</h3>
-                          <p style={{ margin: 0, fontSize: 13, color: "#475569" }}>Select the account, choose the farmer, and adjust purchase bills directly from this polished form.</p>
+                          <div style={paymentEyebrow}>PAYMENT VOUCHER</div>
+                          <h3 style={paymentHeroTitle}>Smart Payment Entry</h3>
+                          <p style={paymentHeroSubtitle}>Select account, warehouse and pending farmer, then adjust purchase bills.</p>
                         </div>
-                        <div style={paymentBadge}>⚡ Smart Payment Entry</div>
+                        <div style={paymentBadge}>⚡ Smart Entry</div>
                       </div>
-                        <div style={{ marginTop: 14, display: "grid", gap: 10 }}>
-                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                          {paymentModeOptions.map((option) => {
-                            const isActive = activePaymentMode === option.value;
-                            return (
-                                <button
-                                  key={option.value}
-                                  type="button"
-                                  onClick={() => handlePaymentModeChange(option.value, { amount: formData.amount, farmer_id: formData.farmer_id, warehouse_id: formData.warehouse_id, company_account_id: formData.company_account_id })}
-                                style={{
-                                  border: isActive ? "1px solid #2563eb" : "1px solid #dbe4f0",
-                                  background: isActive ? "#eff6ff" : "#fff",
-                                  color: isActive ? "#1d4ed8" : "#334155",
-                                  borderRadius: 999,
-                                  padding: "8px 12px",
-                                  fontWeight: 700,
-                                  fontSize: 13,
-                                  cursor: "pointer",
-                                }}
-                              >
-                                {option.label}
-                              </button>
-                            );
-                          })}
-                        </div>
-                        <div style={{ fontSize: 13, color: "#475569" }}>{paymentModeOptions.find((option) => option.value === activePaymentMode)?.description}</div>
+
+                      <div style={paymentModeRow}>
+                        {paymentModeOptions.map((option) => {
+                          const isActive = activePaymentMode === option.value;
+                          return (
+                            <button
+                              key={option.value}
+                              type="button"
+                              onClick={() =>
+                                handlePaymentModeChange(option.value, {
+                                  amount: formData.amount,
+                                  farmer_id: formData.farmer_id,
+                                  warehouse_id: formData.warehouse_id,
+                                  company_account_id: formData.company_account_id,
+                                })
+                              }
+                              style={{
+                                ...paymentModeButton,
+                                ...(isActive ? paymentModeButtonActive : {}),
+                              }}
+                            >
+                              {option.label}
+                            </button>
+                          );
+                        })}
                       </div>
-                      <div style={{ marginTop: 16, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10 }}>
+
+                      <div style={paymentSelectorGrid}>
                         <SearchableSelect
                           label="Account"
                           value={formData.company_account_id}
-                          options={companyAccounts.map((a) => ({ value: a.id || a._id, label: a.account_name || a.name }))}
+                          options={companyAccounts.map((a) => ({
+                            value: a.id || a._id,
+                            label: a.account_name || a.name,
+                          }))}
                           onChange={(value) => handleChange({ target: { name: "company_account_id", value } })}
                           placeholder="Choose account"
                         />
                         <SearchableSelect
                           label="Warehouse"
                           value={formData.warehouse_id}
-                          options={paymentWarehouses.map((w) => ({ value: w.id || w._id, label: w.name }))}
+                          options={paymentWarehouses.map((w) => ({
+                            value: w.id || w._id,
+                            label: w.name,
+                          }))}
                           onChange={(value) => handleChange({ target: { name: "warehouse_id", value } })}
                           placeholder={formData.company_account_id ? "Choose warehouse" : "Choose account first"}
                           disabled={!formData.company_account_id}
                         />
                         <SearchableSelect
-                          label="Farmer (Pending)"
+                          label="Pending Farmer"
                           value={formData.farmer_id}
-                          options={accountFarmers.map((f) => ({ value: f.id || f._id, label: `${f.name}${f.outstanding !== undefined ? ` — Pending Rs.${formatMoney(f.outstanding)}` : ""}` }))}
+                          options={accountFarmers.map((f) => ({
+                            value: f.id || f._id,
+                            label: `${f.name}${f.outstanding !== undefined ? ` — Due Rs.${formatMoney(f.outstanding)}` : ""}`,
+                          }))}
                           onChange={(value) => handleChange({ target: { name: "farmer_id", value } })}
                           placeholder={formData.warehouse_id ? "Choose pending farmer" : "Choose warehouse first"}
                           disabled={!formData.warehouse_id}
                         />
-                        <Field label="Amount">
-                          <input name="amount" type="number" step="0.0001" value={formData.amount} onChange={(event) => { handleChange(event); setPaymentAdjustments([]); }} style={inp} required />
+                      </div>
+
+                      <div className="payment-financial-summary" style={paymentFinancialSummary}>
+                        <div style={paymentStatCard}>
+                          <span style={paymentStatLabel}>Total Bill</span>
+                          <strong style={paymentStatValue}>Rs.{formatMoney(paymentTotalBill)}</strong>
+                        </div>
+                        <div style={paymentStatCard}>
+                          <span style={paymentStatLabel}>Total Deduction</span>
+                          <strong style={paymentStatValue}>Rs.{formatMoney(paymentTotalDeduction)}</strong>
+                        </div>
+                        <div style={paymentStatCard}>
+                          <span style={paymentStatLabel}>Total Paid</span>
+                          <strong style={paymentStatValue}>Rs.{formatMoney(paymentTotalPaid)}</strong>
+                        </div>
+                        <div style={{ ...paymentStatCard, ...paymentDueCard }}>
+                          <span style={paymentStatLabel}>Total Due</span>
+                          <strong style={{ ...paymentStatValue, color: "#b91c1c" }}>Rs.{formatMoney(paymentTotalDue)}</strong>
+                        </div>
+                      </div>
+
+                      <div style={paymentEntryRow}>
+                        <Field label="Payment Amount">
+                          <input
+                            name="amount"
+                            type="number"
+                            step="0.0001"
+                            value={formData.amount}
+                            onChange={(event) => {
+                              handleChange(event);
+                              setPaymentAdjustments([]);
+                            }}
+                            style={paymentAmountInput}
+                            required
+                          />
                         </Field>
+                        <div style={paymentAdjustmentAction}>
+                          <button
+                            type="button"
+                            onClick={openPaymentAdjustmentPopup}
+                            style={{ ...btnAction, background: "#2563eb", minHeight: 42 }}
+                            disabled={
+                              !formData.company_account_id ||
+                              !formData.warehouse_id ||
+                              !formData.farmer_id ||
+                              toNumber(formData.amount) <= 0
+                            }
+                          >
+                            Open Adjustment
+                          </button>
+                          <span style={paymentAdjustedText}>
+                            Adjusted: <strong>Rs.{formatMoney(paymentAdjustmentTotal)}</strong>
+                          </span>
+                        </div>
                       </div>
-                      <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-                        <button type="button" onClick={openPaymentAdjustmentPopup} style={{ ...btnAction, background: "#2563eb" }} disabled={!formData.company_account_id || !formData.warehouse_id || !formData.farmer_id || toNumber(formData.amount) <= 0}>
-                          Open Adjustment
-                        </button>
-                        <span style={{ fontSize: 13, color: "#475569" }}>Adjusted: <strong>Rs.{formatMoney(paymentAdjustmentTotal)}</strong></span>
-                      </div>
-                      <div style={paymentQuickGrid}>
-                        <div style={paymentQuickBox}><div style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>Account</div><strong>{getAccountName(formData) || "Choose account"}</strong></div>
-                        <div style={paymentQuickBox}><div style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>Warehouse</div><strong>{getWarehouseName(formData) || "Choose warehouse"}</strong></div>
-                        <div style={paymentQuickBox}><div style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>Farmer</div><strong>{farmers.find((f) => String(f.id || f._id) === String(formData.farmer_id))?.name || "Pick the pending farmer"}</strong></div>
+
+                      <div style={paymentSelectedBar}>
+                        <span><b>Account:</b> {getAccountName(formData) || "Choose account"}</span>
+                        <span><b>Warehouse:</b> {getWarehouseName(formData) || "Choose warehouse"}</span>
+                        <span><b>Farmer:</b> {farmers.find((f) => String(f.id || f._id) === String(formData.farmer_id))?.name || "Pick the pending farmer"}</span>
                       </div>
                     </div>
                   )}
@@ -6140,6 +6233,25 @@ const paymentHeroHeader = { display: "flex", justifyContent: "space-between", ga
 const paymentBadge = { display: "inline-flex", alignItems: "center", gap: 8, padding: "7px 11px", borderRadius: 999, background: "#2563eb", color: "#fff", fontWeight: 700, fontSize: 12 };
 const paymentQuickGrid = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10, marginTop: 12 };
 const paymentQuickBox = { background: "#fff", border: "1px solid #dbeafe", borderRadius: 10, padding: 10 };
+
+const paymentEyebrow = { fontSize: 10, textTransform: "uppercase", letterSpacing: "0.18em", color: "#0f766e", fontWeight: 800, marginBottom: 3 };
+const paymentHeroTitle = { margin: "0 0 4px", fontSize: 17, color: "#0f172a" };
+const paymentHeroSubtitle = { margin: 0, fontSize: 12, color: "#64748b" };
+const paymentModeRow = { display: "flex", gap: 6, flexWrap: "wrap", marginTop: 12 };
+const paymentModeButton = { border: "1px solid #dbe4f0", background: "#fff", color: "#334155", borderRadius: 8, padding: "7px 10px", fontWeight: 700, fontSize: 11, cursor: "pointer" };
+const paymentModeButtonActive = { background: "#0f766e", color: "#fff", borderColor: "#0f766e" };
+const paymentSelectorGrid = { display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 8, marginTop: 12 };
+const paymentFinancialSummary = { display: "grid", gridTemplateColumns: "repeat(4, minmax(0, 1fr))", gap: 7, marginTop: 10 };
+const paymentStatCard = { background: "#fff", border: "1px solid #dbe4f0", borderRadius: 9, padding: "8px 9px", minWidth: 0 };
+const paymentStatLabel = { display: "block", fontSize: 10, color: "#64748b", marginBottom: 3, fontWeight: 700 };
+const paymentStatValue = { display: "block", fontSize: 13, color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" };
+const paymentDueCard = { borderColor: "#fecaca", background: "#fff7f7" };
+const paymentEntryRow = { display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", gap: 8, alignItems: "end", marginTop: 10 };
+const paymentAmountInput = { ...inp, minHeight: 42, fontSize: 15, fontWeight: 700 };
+const paymentAdjustmentAction = { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", paddingBottom: 1 };
+const paymentAdjustedText = { fontSize: 11, color: "#475569", whiteSpace: "nowrap" };
+const paymentSelectedBar = { display: "flex", gap: 8, flexWrap: "wrap", marginTop: 9, padding: "7px 9px", borderRadius: 8, background: "#f8fafc", border: "1px solid #e2e8f0", fontSize: 10.5, color: "#475569" };
+
 const inp = { width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #cbd5e1", fontSize: 14, boxSizing: "border-box" };
 const readOnlyInp = { ...inp, background: "#f8fafc", color: "#475569" };
 const btnPrimary = { background: "#2563eb", color: "#fff", border: "none", padding: "10px 18px", borderRadius: 8, cursor: "pointer", fontWeight: 600, fontSize: 14 };
