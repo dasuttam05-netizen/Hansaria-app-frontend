@@ -272,6 +272,7 @@ export default function WarehouseTradingPage() {
   const [warehouses, setWarehouses] = useState([]);
   const [farmers, setFarmers] = useState([]);
   const [accountFarmers, setAccountFarmers] = useState([]);
+  const [paymentWarehouses, setPaymentWarehouses] = useState([]);
   const [buyerNames, setBuyerNames] = useState([]);
   const [companies, setCompanies] = useState([]);
   const [companyAccounts, setCompanyAccounts] = useState([]);
@@ -909,7 +910,7 @@ export default function WarehouseTradingPage() {
     };
     window.addEventListener("keydown", handleLedgerRefresh);
     return () => window.removeEventListener("keydown", handleLedgerRefresh);
-  }, [activeTab, activeReport, reportFilters.farmer_id, reportFilters.company_account_id, reportFilters.sale_buyer_id, reportFilters.sale_company_account_id, reportFilters.sale_journey_token, reportFilters.sale_lorry_no, reportFilters.sale_bill_no]);
+  }, [activeTab, activeReport, reportFilters.farmer_id, reportFilters.warehouse_id, reportFilters.company_account_id, reportFilters.sale_buyer_id, reportFilters.sale_company_account_id, reportFilters.sale_journey_token, reportFilters.sale_lorry_no, reportFilters.sale_bill_no]);
 
   useEffect(() => {
     const handleF2Key = (event) => {
@@ -1131,7 +1132,7 @@ export default function WarehouseTradingPage() {
       }
       // This is a form lookup, not the main voucher table. Keep it explicit so
       // the table itself remains strictly paginated.
-      const res = await axios.get("/api/wh-vouchers/purchase", { params: { all: 1, limit: 5000 } });
+      const res = await axios.get("/api/wh-vouchers/purchase", { params: { page: 1, limit: 100, lookup: 1, order: "asc", warehouse_id: formData.warehouse_id || undefined, farmer_id: formData.against_purchase_farmer_id || undefined, company_account_id: formData.company_account_id || undefined, product_id: formData.product_id || undefined } });
       const payload = res.data || {};
       const rows = Array.isArray(payload) ? payload : (Array.isArray(payload.data) ? payload.data : []);
       setSalePurchaseRows(rows);
@@ -1373,23 +1374,53 @@ export default function WarehouseTradingPage() {
 
     if (activeVoucherType === "payment" && name === "company_account_id") {
       if (value) {
-        axios
-          .get(`/api/wh-vouchers/farmers-by-account/${value}`, {
-            params: { warehouse_id: formData.warehouse_id || undefined },
-          })
-          .then((res) => {
-            const farmersWithOutstanding = Array.isArray(res.data) ? res.data : [];
+        Promise.all([
+          axios.get(`/api/wh-vouchers/farmers-by-account/${value}`, { params: { warehouse_id: undefined } }),
+          axios.get("/api/wh-vouchers/report/filter-options", { params: { type: "purchase", company_account_id: value } }),
+        ])
+          .then(([farmerRes, filterRes]) => {
+            const farmersWithOutstanding = Array.isArray(farmerRes.data) ? farmerRes.data : [];
+            const warehouseIds = Array.isArray(filterRes.data?.warehouse_ids) ? filterRes.data.warehouse_ids.map(String) : [];
+            const nextWarehouses = warehouses.filter((w) => warehouseIds.includes(String(w.id || w._id)));
             setAccountFarmers(farmersWithOutstanding);
+            setPaymentWarehouses(nextWarehouses);
           })
           .catch((err) => {
-            console.error("Failed to load farmers for account:", err);
+            console.error("Failed to load payment account filters:", err);
             setAccountFarmers([]);
+            setPaymentWarehouses([]);
           });
-        setFormData((prev) => ({ ...prev, farmer_id: "" }));
+        setFormData((prev) => ({ ...prev, warehouse_id: "", farmer_id: "" }));
         setPartyOutstanding(null);
         setPaymentAdjustments([]);
         setShowPaymentAdjustPopup(false);
       } else {
+        setAccountFarmers([]);
+        setPaymentWarehouses([]);
+        setPartyOutstanding(null);
+        setPaymentAdjustments([]);
+        setShowPaymentAdjustPopup(false);
+      }
+    }
+    if (activeVoucherType === "payment" && name === "warehouse_id") {
+      if (value && formData.company_account_id) {
+        const selected = warehouses.find((w) => String(w.id || w._id) === String(value));
+        if (selected) {
+          setFormData((prev) => ({
+            ...prev,
+            location_id: prev.location_id || selected.location_id || "",
+            employee_id: prev.employee_id || selected.employee_id || "",
+            farmer_id: "",
+          }));
+        }
+        axios
+          .get(`/api/wh-vouchers/farmers-by-account/${formData.company_account_id}`, { params: { warehouse_id: value } })
+          .then((res) => setAccountFarmers(Array.isArray(res.data) ? res.data : []))
+          .catch(() => setAccountFarmers([]));
+        setPartyOutstanding(null);
+        setPaymentAdjustments([]);
+        setShowPaymentAdjustPopup(false);
+      } else if (!value) {
         setAccountFarmers([]);
         setPartyOutstanding(null);
         setPaymentAdjustments([]);
@@ -1428,11 +1459,9 @@ export default function WarehouseTradingPage() {
       }
     }
     if (name === "warehouse_id") {
-      if (activeVoucherType === "payment" && formData.farmer_id) {
+      if (activeVoucherType === "payment" && formData.farmer_id && value) {
         loadOutstanding("farmer", formData.farmer_id, value, editId, formData.company_account_id).then(() => {
-          if (toNumber(formData.amount) > 0) {
-            setShowPaymentAdjustPopup(true);
-          }
+          if (toNumber(formData.amount) > 0 && activePaymentMode === "against") setShowPaymentAdjustPopup(true);
         });
       }
       if (activeVoucherType === "receipt" && formData.company_id) {
@@ -1858,6 +1887,15 @@ export default function WarehouseTradingPage() {
               reference_id: paymentMode === "new_reference" ? payment.reference_id || "" : "",
             });
             setPaymentAdjustments(paymentMode === "against" ? existingAdjustments : []);
+            if (payment.company_account_id) {
+              try {
+                const filterRes = await axios.get("/api/wh-vouchers/report/filter-options", { params: { type: "purchase", company_account_id: payment.company_account_id } });
+                const ids = Array.isArray(filterRes.data?.warehouse_ids) ? filterRes.data.warehouse_ids.map(String) : [];
+                setPaymentWarehouses(warehouses.filter((w) => ids.includes(String(w.id || w._id))));
+              } catch (filterErr) {
+                setPaymentWarehouses([]);
+              }
+            }
             // Ensure farmer appears in account-specific farmer list so dropdown shows it
             if (payment.company_account_id && payment.farmer_id) {
               const fid = String(payment.farmer_id || "");
@@ -3172,13 +3210,17 @@ export default function WarehouseTradingPage() {
   }, [activeVoucherType, normalizedGlobalSearch]);
   useEffect(() => {
     setReportPage(1);
-    }, [activeReport, normalizedGlobalSearch, saleFollowupFilter, reportFilters.farmer_id, reportFilters.company_account_id, reportFilters.sale_buyer_id, reportFilters.sale_company_account_id, reportFilters.sale_journey_token, reportFilters.sale_lorry_no, reportFilters.sale_bill_no]);
+    }, [activeReport, normalizedGlobalSearch, saleFollowupFilter, reportFilters.farmer_id, reportFilters.warehouse_id, reportFilters.company_account_id, reportFilters.sale_buyer_id, reportFilters.sale_company_account_id, reportFilters.sale_journey_token, reportFilters.sale_lorry_no, reportFilters.sale_bill_no]);
   useEffect(() => {
     setVoucherPage((current) => Math.min(current, Math.max(1, Number(voucherPageInfo.totalPages || 1))));
   }, [voucherPageInfo.totalPages]);
   useEffect(() => {
-    setReportPage((current) => Math.min(current, Math.max(1, Math.ceil(filteredReportDataAll.length / PAGE_SIZE))));
-  }, [filteredReportDataAll.length]);
+    const serverPagedReport = activeReport === "sale" || activeReport === "purchase" || activeReport === "warehouse-stock";
+    const totalPages = serverPagedReport
+      ? Math.max(1, Math.ceil(Number(reportPageInfo.total || 0) / Number(reportPageInfo.pageSize || PAGE_SIZE)))
+      : Math.max(1, Math.ceil(filteredReportDataAll.length / PAGE_SIZE));
+    setReportPage((current) => Math.min(current, totalPages));
+  }, [activeReport, reportPageInfo.total, reportPageInfo.pageSize, filteredReportDataAll.length]);
   const saleFollowupCounts = useMemo(() => {
     const counts = { all: filteredReportDataAll.length, payment_done: 0, unloading_pending: 0, pending: 0, overdue: 0 };
     filteredReportDataAll.forEach((row) => {
@@ -4248,19 +4290,44 @@ export default function WarehouseTradingPage() {
                         </div>
                         <div style={{ fontSize: 13, color: "#475569" }}>{paymentModeOptions.find((option) => option.value === activePaymentMode)?.description}</div>
                       </div>
+                      <div style={{ marginTop: 16, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10 }}>
+                        <SearchableSelect
+                          label="Account"
+                          value={formData.company_account_id}
+                          options={companyAccounts.map((a) => ({ value: a.id || a._id, label: a.account_name || a.name }))}
+                          onChange={(value) => handleChange({ target: { name: "company_account_id", value } })}
+                          placeholder="Choose account"
+                        />
+                        <SearchableSelect
+                          label="Warehouse"
+                          value={formData.warehouse_id}
+                          options={paymentWarehouses.map((w) => ({ value: w.id || w._id, label: w.name }))}
+                          onChange={(value) => handleChange({ target: { name: "warehouse_id", value } })}
+                          placeholder={formData.company_account_id ? "Choose warehouse" : "Choose account first"}
+                          disabled={!formData.company_account_id}
+                        />
+                        <SearchableSelect
+                          label="Farmer (Pending)"
+                          value={formData.farmer_id}
+                          options={accountFarmers.map((f) => ({ value: f.id || f._id, label: `${f.name}${f.outstanding !== undefined ? ` — Pending Rs.${formatMoney(f.outstanding)}` : ""}` }))}
+                          onChange={(value) => handleChange({ target: { name: "farmer_id", value } })}
+                          placeholder={formData.warehouse_id ? "Choose pending farmer" : "Choose warehouse first"}
+                          disabled={!formData.warehouse_id}
+                        />
+                        <Field label="Amount">
+                          <input name="amount" type="number" step="0.0001" value={formData.amount} onChange={(event) => { handleChange(event); setPaymentAdjustments([]); }} style={inp} required />
+                        </Field>
+                      </div>
+                      <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+                        <button type="button" onClick={openPaymentAdjustmentPopup} style={{ ...btnAction, background: "#2563eb" }} disabled={!formData.company_account_id || !formData.warehouse_id || !formData.farmer_id || toNumber(formData.amount) <= 0}>
+                          Open Adjustment
+                        </button>
+                        <span style={{ fontSize: 13, color: "#475569" }}>Adjusted: <strong>Rs.{formatMoney(paymentAdjustmentTotal)}</strong></span>
+                      </div>
                       <div style={paymentQuickGrid}>
-                        <div style={paymentQuickBox}>
-                          <div style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>Account</div>
-                          <strong>{formData.company_account_id ? "Ready for payment" : "Choose account"}</strong>
-                        </div>
-                        <div style={paymentQuickBox}>
-                          <div style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>Farmer</div>
-                          <strong>{formData.farmer_id ? "Farmer selected" : "Pick the creditor"}</strong>
-                        </div>
-                        <div style={paymentQuickBox}>
-                          <div style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>Adjustments</div>
-                          <strong>{paymentAdjustments.length ? `${paymentAdjustments.length} bill(s)` : "No bill adjustments"}</strong>
-                        </div>
+                        <div style={paymentQuickBox}><div style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>Account</div><strong>{getAccountName(formData) || "Choose account"}</strong></div>
+                        <div style={paymentQuickBox}><div style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>Warehouse</div><strong>{getWarehouseName(formData) || "Choose warehouse"}</strong></div>
+                        <div style={paymentQuickBox}><div style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>Farmer</div><strong>{farmers.find((f) => String(f.id || f._id) === String(formData.farmer_id))?.name || "Pick the pending farmer"}</strong></div>
                       </div>
                     </div>
                   )}
@@ -4279,7 +4346,7 @@ export default function WarehouseTradingPage() {
                     </select>
                   </Field>
                 )}
-                {(activeVoucherType !== "sale" || formData.sale_type !== "direct") && (
+                {(activeVoucherType !== "payment" && (activeVoucherType !== "sale" || formData.sale_type !== "direct")) && (
                   <Field label="Warehouse">
                     <select name="warehouse_id" value={formData.warehouse_id} onChange={handleChange} style={inp}>
                       <option value="">Select Warehouse</option>
@@ -4289,25 +4356,29 @@ export default function WarehouseTradingPage() {
                     </select>
                   </Field>
                 )}
-                <Field label="Location">
-                  <select name="location_id" value={formData.location_id} onChange={handleChange} style={inp}>
-                    <option value="">Select Location</option>
-                    {locations.map((l) => (
-                      <option key={l.id || l._id} value={l.id || l._id}>{l.name}</option>
-                    ))}
-                  </select>
-                </Field>
-                <Field label="Employee">
-                  <select name="employee_id" value={formData.employee_id} onChange={handleChange} style={inp}>
-                    <option value="">Select Employee</option>
-                    {employees.map((e) => (
-                      <option key={e.id || e._id} value={e.id || e._id}>{e.name}</option>
-                    ))}
-                  </select>
-                </Field>
-                <Field label="Account">
+                {activeVoucherType !== "payment" && (
+                  <>
+                    <Field label="Location">
+                      <select name="location_id" value={formData.location_id} onChange={handleChange} style={inp}>
+                        <option value="">Select Location</option>
+                        {locations.map((l) => (
+                          <option key={l.id || l._id} value={l.id || l._id}>{l.name}</option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Field label="Employee">
+                      <select name="employee_id" value={formData.employee_id} onChange={handleChange} style={inp}>
+                        <option value="">Select Employee</option>
+                        {employees.map((e) => (
+                          <option key={e.id || e._id} value={e.id || e._id}>{e.name}</option>
+                        ))}
+                      </select>
+                    </Field>
+                  </>
+                )}
+                {activeVoucherType !== "payment" && <Field label="Account">
                   {renderAccountSelect(inp)}
-                </Field>
+                </Field>}
                 {activeVoucherType === "sale" && formData.sale_type === "direct" && (
                   <>
                     <Field label="Farmer">
@@ -4329,7 +4400,7 @@ export default function WarehouseTradingPage() {
 
                 {(activeVoucherType === "purchase" || activeVoucherType === "payment") && (
                   <>
-                    {activeVoucherType === "payment" && (
+                    {activeVoucherType === "payment" && false && (
                       <Field label="Amount">
                         <input
                           name="amount"
@@ -4345,7 +4416,7 @@ export default function WarehouseTradingPage() {
                         />
                       </Field>
                     )}
-                    <Field label="Farmer (Creditor)">
+                    {activeVoucherType !== "payment" && <Field label="Farmer (Creditor)">
                       <select name="farmer_id" value={formData.farmer_id} onChange={handleChange} style={inp}>
                         <option value="">Select Farmer</option>
                         {(activeVoucherType === "payment" && formData.company_account_id
@@ -4365,8 +4436,8 @@ export default function WarehouseTradingPage() {
                           </option>
                         )}
                       </select>
-                    </Field>
-                    {partyOutstanding && activeVoucherType === "payment" && (
+                    </Field>}
+                    {false && partyOutstanding && activeVoucherType === "payment" && (
                       <div style={{ marginTop: 8, fontSize: 13, color: "#444", display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
                         <span>Party: <strong>{formData.company_account_id ? companyAccounts.find(ca => String(ca.id || ca._id) === String(formData.company_account_id))?.account_name || "-" : "-"}</strong></span>
                         <span>Farmer Bill: <strong>Rs.{formatMoney(partyOutstanding.stats?.total_purchase ?? partyOutstanding.total_purchase ?? 0)}</strong></span>
@@ -5443,8 +5514,35 @@ export default function WarehouseTradingPage() {
         <div style={modalOverlayStyle}>
           <WarehouseAdjustModal
             title="Payment Adjustment"
-            subtitle="Farmer and warehouse wise pending purchase bills"
+            subtitle="Account → Warehouse → Pending Farmer → Purchase Bills"
             actionButton={btnAction}
+            controls={
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10, marginTop: 12 }}>
+                <SearchableSelect
+                  label="Account"
+                  value={formData.company_account_id}
+                  options={companyAccounts.map((a) => ({ value: a.id || a._id, label: a.account_name || a.name }))}
+                  onChange={(value) => handleChange({ target: { name: "company_account_id", value } })}
+                  placeholder="Choose account"
+                />
+                <SearchableSelect
+                  label="Warehouse"
+                  value={formData.warehouse_id}
+                  options={paymentWarehouses.map((w) => ({ value: w.id || w._id, label: w.name }))}
+                  onChange={(value) => handleChange({ target: { name: "warehouse_id", value } })}
+                  placeholder={formData.company_account_id ? "Choose warehouse" : "Choose account first"}
+                  disabled={!formData.company_account_id}
+                />
+                <SearchableSelect
+                  label="Pending Farmer"
+                  value={formData.farmer_id}
+                  options={accountFarmers.map((f) => ({ value: f.id || f._id, label: `${f.name}${f.outstanding !== undefined ? ` — Pending Rs.${formatMoney(f.outstanding)}` : ""}` }))}
+                  onChange={(value) => handleChange({ target: { name: "farmer_id", value } })}
+                  placeholder={formData.warehouse_id ? "Choose pending farmer" : "Choose warehouse first"}
+                  disabled={!formData.warehouse_id}
+                />
+              </div>
+            }
             tableCard={{ ...paymentAdjustModalStyle, ...tableCard }}
             reportHeaderRowStyle={reportHeaderRowStyle}
             th={th}
@@ -5483,6 +5581,8 @@ export default function WarehouseTradingPage() {
               },
             ]}
             emptyText="No pending purchase bills found."
+            onAutoAdjust={autoFillPaymentAdjustments}
+            autoAdjustLabel={`Auto Adjust Rs.${formatMoney(formData.amount)}`}
             onClose={() => setShowPaymentAdjustPopup(false)}
             onClear={() => setPaymentAdjustments([])}
             onConfirm={() => setShowPaymentAdjustPopup(false)}
