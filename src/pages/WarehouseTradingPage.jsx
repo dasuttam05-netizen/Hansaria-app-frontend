@@ -868,7 +868,7 @@ export default function WarehouseTradingPage() {
       loadReport();
     }, 40);
     return () => window.clearTimeout(timer);
-  }, [activeTab, activeReport, reportPage, reportFilters.farmer_id, reportFilters.company_account_id, reportFilters.warehouse_id, reportFilters.sale_buyer_id, reportFilters.sale_company_account_id, reportFilters.sale_journey_token, reportFilters.sale_lorry_no, reportFilters.sale_bill_no]);
+  }, [activeTab, activeReport, reportPage, globalSearch, reportFilters.farmer_id, reportFilters.company_account_id, reportFilters.warehouse_id, reportFilters.sale_buyer_id, reportFilters.sale_company_account_id, reportFilters.sale_journey_token, reportFilters.sale_lorry_no, reportFilters.sale_bill_no]);
 
   // Filter options are independent of pagination. Never reload them just
   // because the user moves from page 1 to page 2.
@@ -1373,6 +1373,19 @@ export default function WarehouseTradingPage() {
 
   const loadReport = async (reportType = activeReport, page = reportPage, filters = reportFilters) => {
     const token = ++reportLoadTokenRef.current;
+    // Keep report-type flags outside try/catch. The previous v8.9 build
+    // declared isSaleReport inside try and then referenced it from catch,
+    // which caused: "isSaleReport is not defined" and hid the real API error.
+    const isPurchaseReport = ["purchase", "purchase-party-ledger"].includes(reportType);
+    const isSaleReport = ["sale", "sale-party-ledger", "sale-followup", "sale-journey"].includes(reportType);
+    const hasActivePurchaseFilters = Boolean(filters.farmer_id || filters.warehouse_id || filters.company_account_id);
+    const normalizedSearch = String(globalSearch || "").trim();
+
+    // Do not keep stale Purchase rows visible while Sale Report is loading.
+    if (token === reportLoadTokenRef.current) {
+      setReportData([]);
+    }
+
     try {
       if (!hasPermission(user, reportPermissionMap[reportType])) {
         if (token !== reportLoadTokenRef.current) return;
@@ -1382,9 +1395,6 @@ export default function WarehouseTradingPage() {
       }
       const endpoint = reportEndpointMap[reportType] || reportType;
       const params = {};
-      const hasActivePurchaseFilters = Boolean(filters.farmer_id || filters.warehouse_id || filters.company_account_id);
-      const isPurchaseReport = ["purchase", "purchase-party-ledger"].includes(reportType);
-      const isSaleReport = ["sale", "sale-party-ledger", "sale-followup", "sale-journey"].includes(reportType);
       if (isPurchaseReport || isSaleReport) {
         if (filters.farmer_id) params.farmer_id = filters.farmer_id;
         if (filters.warehouse_id) params.warehouse_id = filters.warehouse_id;
@@ -1392,6 +1402,11 @@ export default function WarehouseTradingPage() {
       }
       if (isSaleReport && filters.sale_buyer_id) {
         params.buyer_id = filters.sale_buyer_id;
+      }
+      // Search must be executed by MongoDB before pagination. Otherwise the
+      // old UI searched only the currently loaded 15 rows.
+      if ((reportType === "sale" || reportType === "purchase") && normalizedSearch) {
+        params.search = normalizedSearch;
       }
       if (reportType === "sale-journey") {
         if (filters.sale_journey_token) params.journey_token = filters.sale_journey_token;
@@ -1454,10 +1469,11 @@ export default function WarehouseTradingPage() {
           console.error(fallbackErr);
         }
       }
-      if (isSaleReport && canUseSale) {
+      if (reportType === "sale" && canUseSale) {
         try {
-          // Sale report fallback: the voucher list endpoint is kept as a safe
-          // fallback when the report-specific endpoint is unavailable.
+          // Only Sale Summary uses the sale-voucher fallback. Do not use it
+          // for Party Ledger/Follow-up/Journey because those endpoints have
+          // different response shapes.
           const fallbackRes = await axios.get("/api/wh-vouchers/sale", {
             params: { page: page || 1, limit: PAGE_SIZE, order: "desc", ...params },
           });
@@ -3408,7 +3424,9 @@ export default function WarehouseTradingPage() {
   const filteredVoucherList = list;
 
   const filteredReportDataAll = useMemo(() => {
-    if (!normalizedGlobalSearch) return displayReportData;
+    const serverPagedReport = activeReport === "sale" || activeReport === "purchase" || activeReport === "warehouse-stock";
+    // Sale/Purchase search is already applied in MongoDB before pagination.
+    if (serverPagedReport || !normalizedGlobalSearch) return displayReportData;
     return displayReportData.filter((item) =>
       matchesAnyValue([
         item.voucher_no,
@@ -5817,7 +5835,16 @@ export default function WarehouseTradingPage() {
                 )}
               </>
             )}
-            {renderPaginationBar(reportPage, totalReportPages, () => setReportPage((prev) => Math.max(1, prev - 1)), () => setReportPage((prev) => Math.min(totalReportPages, prev + 1)), filteredReportDataAll.length, "rows")}
+            {renderPaginationBar(
+              reportPage,
+              totalReportPages,
+              () => setReportPage((prev) => Math.max(1, prev - 1)),
+              () => setReportPage((prev) => Math.min(totalReportPages, prev + 1)),
+              (activeReport === "sale" || activeReport === "purchase" || activeReport === "warehouse-stock")
+                ? Number(reportPageInfo.total || 0)
+                : filteredReportDataAll.length,
+              "rows"
+            )}
           </WarehouseReportPanel>
         </div>
       )}
