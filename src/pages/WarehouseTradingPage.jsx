@@ -3699,136 +3699,147 @@ export default function WarehouseTradingPage() {
     const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
-    const firstEntry = (displayReportData || []).find((row) => row.row_type !== "closing") || {};
+    const left = 9;
+    const right = 9;
+    const usableWidth = pageWidth - left - right;
+    const allRows = Array.isArray(displayReportData) ? displayReportData : [];
+    const entryRows = allRows.filter((row) => row.row_type !== "closing");
+    const firstEntry = entryRows[0] || {};
     const reportParty = getLedgerPartyDetails(firstEntry, ledgerType);
     const reportAccount = getLedgerAccountDetails(firstEntry);
 
-    // Keep the report data readable on mobile PDF viewers: use the full page
-    // width, smaller margins and no heavy cell borders.
-    const left = 10;
-    const right = 10;
-    const usableWidth = pageWidth - left - right;
+    const teal = [15, 118, 110];
+    const tealDark = [13, 83, 78];
+    const blue = [37, 99, 235];
+    const ink = [15, 23, 42];
+    const muted = [71, 85, 105];
+    const border = [220, 228, 236];
+    const soft = [247, 250, 252];
+    const deductionBg = [255, 247, 237];
+    const deductionText = [154, 52, 18];
+    const closingBg = [236, 253, 245];
 
-    const joinAddress = (details) => {
-      const parts = [
-        details.address,
-        details.village,
-        details.city,
-        details.district,
-        details.state,
-        details.pincode,
-      ].map((v) => String(v || "").trim()).filter(Boolean);
-      return [...new Set(parts)].join(", ");
-    };
+    const joinAddress = (details) => [
+      details.address,
+      details.village,
+      details.city,
+      details.district,
+      details.state,
+      details.pincode,
+    ].map((v) => String(v || "").trim()).filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join(", ");
 
-    const accountAddress = joinAddress({
-      address: reportAccount.address,
-      city: reportAccount.city,
-      district: reportAccount.district,
-      state: reportAccount.state,
-      pincode: reportAccount.pincode,
-    });
-    const farmerAddress = joinAddress({
-      address: reportParty.address,
-      village: reportParty.village,
-      city: reportParty.city,
-      district: reportParty.district,
-      state: reportParty.state,
-      pincode: reportParty.pincode,
-    });
+    const accountAddress = joinAddress(reportAccount);
+    const partyAddress = joinAddress(reportParty);
 
-    const contactLine = (details, address) => [
+    const detailLines = (details, address) => [
       address ? `Address: ${address}` : "",
       details.mobile ? `Phone: ${details.mobile}` : "",
       details.email ? `Email: ${details.email}` : "",
       details.gst ? `GST: ${details.gst}` : "",
       details.pan ? `PAN: ${details.pan}` : "",
-    ].filter(Boolean).join("  |  ");
+    ].filter(Boolean);
 
     const drawInfoCard = (x, y, w, label, details, address, accent) => {
-      const h = 25;
-      doc.setFillColor(248, 250, 252);
-      doc.setDrawColor(226, 232, 240);
-      doc.roundedRect(x, y, w, h, 2, 2, "FD");
+      const lines = detailLines(details, address);
+      const h = Math.max(24, 15 + Math.min(lines.length, 3) * 4.2);
+      doc.setFillColor(255, 255, 255);
+      doc.setDrawColor(...border);
+      doc.setLineWidth(0.25);
+      doc.roundedRect(x, y, w, h, 2.5, 2.5, "FD");
       doc.setFillColor(...accent);
-      doc.roundedRect(x, y, 2.5, h, 1.2, 1.2, "F");
+      doc.roundedRect(x, y, 2.2, h, 1.1, 1.1, "F");
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(6.8);
-      doc.setTextColor(...accent);
-      doc.text(label.toUpperCase(), x + 6, y + 5.2);
-      doc.setFontSize(9.5);
-      doc.setTextColor(15, 23, 42);
-      doc.text(String(details.name || "-").slice(0, 100), x + 6, y + 10.2);
-      doc.setFont("helvetica", "normal");
       doc.setFontSize(6.3);
-      doc.setTextColor(71, 85, 105);
-      const line = contactLine(details, address) || "Address: -";
-      const wrapped = doc.splitTextToSize(line, w - 12).slice(0, 3);
-      doc.text(wrapped, x + 6, y + 14.2, { lineHeightFactor: 1.15 });
+      doc.setTextColor(...accent);
+      doc.text(label.toUpperCase(), x + 6, y + 5.5);
+      doc.setFontSize(9.2);
+      doc.setTextColor(...ink);
+      doc.text(String(details.name || "-").slice(0, 85), x + 6, y + 10.5);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(5.9);
+      doc.setTextColor(...muted);
+      const wrapped = [];
+      lines.slice(0, 3).forEach((line) => {
+        const pieces = doc.splitTextToSize(line, w - 12);
+        wrapped.push(...pieces.slice(0, 2));
+      });
+      doc.text(wrapped.slice(0, 4), x + 6, y + 15, { lineHeightFactor: 1.12 });
       return y + h;
     };
 
-    // Header
-    doc.setFillColor(15, 118, 110);
-    doc.rect(0, 0, pageWidth, 7, "F");
+    // Premium report header.
+    doc.setFillColor(...tealDark);
+    doc.rect(0, 0, pageWidth, 10, "F");
+    doc.setFillColor(...teal);
+    doc.rect(0, 7.5, pageWidth, 2.5, "F");
     doc.setFont("helvetica", "bold");
     doc.setFontSize(15);
-    doc.setTextColor(15, 23, 42);
-    doc.text(title, left, 17);
+    doc.setTextColor(255, 255, 255);
+    doc.text(title, left, 6.6);
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(7);
-    doc.setTextColor(100, 116, 139);
-    doc.text(`Generated: ${formatLedgerDate(new Date().toISOString().slice(0, 10))}`, pageWidth - right, 17, { align: "right" });
+    doc.setFontSize(6.2);
+    doc.setTextColor(220, 245, 242);
+    doc.text("WAREHOUSE TRADING • ACCOUNTING REPORT", pageWidth - right, 6.3, { align: "right" });
 
-    let contentStartY = 22;
+    let y = 17;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(7.5);
+    doc.setTextColor(...ink);
+    doc.text(isPurchaseLedger ? "Party & Account Information" : "Party & Account Information", left, y);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(6.1);
+    doc.setTextColor(...muted);
+    doc.text(`Generated ${formatLedgerDate(new Date().toISOString().slice(0, 10))}`, pageWidth - right, y, { align: "right" });
+    y += 3;
+
     if (isPurchaseLedger) {
-      const accountBottom = drawInfoCard(left, contentStartY, usableWidth, "Account Details", reportAccount, accountAddress, [15, 118, 110]);
-      const farmerBottom = drawInfoCard(left, accountBottom + 3, usableWidth, "Farmer Details", reportParty, farmerAddress, [37, 99, 235]);
-      contentStartY = farmerBottom + 5;
-    } else if (isSaleLedger) {
+      const accountBottom = drawInfoCard(left, y, usableWidth, "Account Details", reportAccount, accountAddress, teal);
+      const partyBottom = drawInfoCard(left, accountBottom + 2.5, usableWidth, "Farmer Details", reportParty, partyAddress, blue);
+      y = partyBottom + 4;
+    } else {
       const gap = 4;
       const cardW = (usableWidth - gap) / 2;
-      const accountBottom = drawInfoCard(left, contentStartY, cardW, "Account Details", reportAccount, accountAddress, [15, 118, 110]);
-      const partyBottom = drawInfoCard(left + cardW + gap, contentStartY, cardW, `${isSaleLedger ? "Party" : "Farmer"} Details`, reportParty, farmerAddress, [37, 99, 235]);
-      contentStartY = Math.max(accountBottom, partyBottom) + 5;
+      const accountBottom = drawInfoCard(left, y, cardW, "Account Details", reportAccount, accountAddress, teal);
+      const partyBottom = drawInfoCard(left + cardW + gap, y, cardW, "Party Details", reportParty, partyAddress, blue);
+      y = Math.max(accountBottom, partyBottom) + 4;
     }
 
-    const allRows = Array.isArray(displayReportData) ? displayReportData : [];
-    const entryRows = allRows.filter((row) => row.row_type !== "closing");
     const totalDebit = entryRows.reduce((sum, row) => sum + toNumber(row.debit || 0), 0);
     const totalCredit = entryRows.reduce((sum, row) => sum + toNumber(row.credit || 0), 0);
     const closingBalance = Number((totalDebit - totalCredit).toFixed(2));
     const closingSide = closingBalance >= 0 ? "DR" : "CR";
     const closingAmount = Math.abs(closingBalance);
 
-    const summary = [
-      ["Entries", String(entryRows.length)],
-      ["Debit", `Rs.${formatMoney(totalDebit)}`],
-      ["Credit", `Rs.${formatMoney(totalCredit)}`],
-      ["Closing Due", `Rs.${formatMoney(closingAmount)}`],
+    // Four compact KPI cards.
+    const cards = [
+      ["ENTRIES", String(entryRows.length), teal],
+      ["TOTAL DEBIT", `Rs.${formatMoney(totalDebit)}`, blue],
+      ["TOTAL CREDIT", `Rs.${formatMoney(totalCredit)}`, teal],
+      ["CLOSING DUE", `${closingSide}  Rs.${formatMoney(closingAmount)}`, [220, 38, 38]],
     ];
-    const summaryW = (usableWidth - 9) / 4;
-    summary.forEach(([label, value], i) => {
-      const x = left + i * (summaryW + 3);
-      doc.setFillColor(i === 3 ? 239 : 248, i === 3 ? 246 : 250, i === 3 ? 255 : 252);
-      doc.setDrawColor(226, 232, 240);
-      doc.roundedRect(x, contentStartY, summaryW, 14, 2, 2, "FD");
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(6.5);
-      doc.setTextColor(71, 85, 105);
-      doc.text(label, x + 4, contentStartY + 5);
+    const gap = 3;
+    const cardW = (usableWidth - gap * 3) / 4;
+    cards.forEach(([label, value, accent], i) => {
+      const x = left + i * (cardW + gap);
+      doc.setFillColor(...soft);
+      doc.setDrawColor(...border);
+      doc.roundedRect(x, y, cardW, 16, 2.2, 2.2, "FD");
+      doc.setFillColor(...accent);
+      doc.roundedRect(x, y, 1.8, 16, 0.9, 0.9, "F");
       doc.setFont("helvetica", "bold");
-      doc.setFontSize(8.5);
-      doc.setTextColor(15, 23, 42);
-      doc.text(value, x + 4, contentStartY + 10.8);
+      doc.setFontSize(5.7);
+      doc.setTextColor(...muted);
+      doc.text(label, x + 5, y + 5.2);
+      doc.setFontSize(8.1);
+      doc.setTextColor(...ink);
+      doc.text(String(value), x + 5, y + 11.6);
     });
+    y += 20;
 
-    const tableStartY = contentStartY + 18;
     const columns = isSaleLedger
       ? ["Date", "Type", "Voucher No", "Adjustment & Details", "Particulars", "Due Date", "Due Days", "Overdue", "Dr", "Cr", "Balance"]
-      : ["Date", "Type", "Voucher No", "Particulars", "Adjustment Details", "Warehouse", "Due Date", "Due Days", "Overdue", "Dr", "Cr", "Balance"];
+      : ["Date", "Type", "Voucher No", "Particulars", "Journal / Deduction Details", "Warehouse", "Due Date", "Due Days", "Overdue", "Dr", "Cr", "Balance"];
 
-    const bodyRowTypes = entryRows.map((row) => row.row_type || "entry");
     const body = entryRows.map((row) => {
       if (isSaleLedger) {
         const saleDetails = [
@@ -3851,70 +3862,77 @@ export default function WarehouseTradingPage() {
       ];
     });
 
-    // ONE closing row, always at the absolute end of the ledger.
+    // Always one final closing row. It is deliberately not mixed into the data rows.
     body.push([
       "", `Closing (${closingSide})`, "", "", "", "", "", "", "",
       formatMoney(totalDebit), formatMoney(totalCredit), formatMoney(closingAmount),
     ]);
 
-    const purchaseWidths = [17, 18, 25, 37, 40, 31, 20, 12, 15, 20, 20, 22];
-    const saleWidths = [17, 18, 25, 40, 40, 20, 13, 15, 22, 22, 25];
+    const purchaseWidths = [17, 17, 24, 38, 42, 29, 18, 12, 15, 20, 20, 23];
+    const saleWidths = [17, 17, 24, 39, 40, 19, 13, 14, 21, 21, 24];
     const widths = isSaleLedger ? saleWidths : purchaseWidths;
 
     autoTable(doc, {
-      startY: tableStartY,
-      margin: { left, right },
+      startY: y,
+      margin: { left, right, bottom: 13 },
       tableWidth: usableWidth,
       theme: "plain",
-      styles: {
-        fontSize: 6.2,
-        cellPadding: { top: 1.6, right: 1.5, bottom: 1.6, left: 1.5 },
-        overflow: "linebreak",
-        valign: "middle",
-        textColor: [15, 23, 42],
-        lineColor: [226, 232, 240],
-        lineWidth: 0.15,
-      },
-      headStyles: {
-        fillColor: [15, 118, 110],
-        textColor: [255, 255, 255],
-        fontStyle: "bold",
-        fontSize: 6.1,
-        lineWidth: 0,
-      },
-      alternateRowStyles: { fillColor: [248, 250, 252] },
       head: [columns],
       body,
       columnStyles: Object.fromEntries(widths.map((w, i) => [i, { cellWidth: w }])),
+      styles: {
+        font: "helvetica",
+        fontSize: 6.0,
+        cellPadding: { top: 1.55, right: 1.4, bottom: 1.55, left: 1.4 },
+        overflow: "linebreak",
+        valign: "middle",
+        textColor: ink,
+        lineWidth: 0,
+      },
+      headStyles: {
+        fillColor: teal,
+        textColor: [255, 255, 255],
+        fontStyle: "bold",
+        fontSize: 5.9,
+        cellPadding: { top: 2.2, right: 1.4, bottom: 2.2, left: 1.4 },
+      },
+      alternateRowStyles: { fillColor: [250, 252, 253] },
       didParseCell: (data) => {
-        // Last row is the single closing row. Make it visually distinct and
-        // remove its cell borders while keeping all values aligned.
-        if (data.section === "body" && data.row.index === body.length - 1) {
-          data.cell.styles.fillColor = [239, 246, 255];
+        if (data.section !== "body") return;
+        const row = entryRows[data.row.index];
+        const isClosing = data.row.index === body.length - 1;
+        if (isClosing) {
+          data.cell.styles.fillColor = closingBg;
           data.cell.styles.fontStyle = "bold";
-          data.cell.styles.textColor = [15, 23, 42];
-          data.cell.styles.lineWidth = 0;
+          data.cell.styles.textColor = ink;
+        } else if (row?.row_type === "deduction") {
+          data.cell.styles.fillColor = deductionBg;
+          data.cell.styles.textColor = deductionText;
+          data.cell.styles.fontStyle = "bold";
         }
-        // Amount columns are right aligned for clean accounting presentation.
-        if (data.section === "body" && data.column.index >= (isSaleLedger ? 8 : 9)) {
-          data.cell.styles.halign = "right";
-        }
+        const amountStart = isSaleLedger ? 8 : 9;
+        if (data.column.index >= amountStart) data.cell.styles.halign = "right";
       },
       didDrawCell: (data) => {
-        if (data.section === "body" && data.row.index < body.length - 1) {
-          doc.setDrawColor(226, 232, 240);
-          doc.setLineWidth(0.12);
+        if (data.section !== "body") return;
+        const isClosing = data.row.index === body.length - 1;
+        doc.setDrawColor(...(isClosing ? [187, 220, 211] : border));
+        doc.setLineWidth(isClosing ? 0.35 : 0.12);
+        if (data.row.index < body.length - 1 || isClosing) {
           doc.line(data.cell.x, data.cell.y + data.cell.height, data.cell.x + data.cell.width, data.cell.y + data.cell.height);
         }
       },
       didDrawPage: (data) => {
+        doc.setFillColor(...tealDark);
+        doc.rect(0, pageHeight - 8, pageWidth, 8, "F");
         doc.setFont("helvetica", "normal");
-        doc.setFontSize(6.5);
-        doc.setTextColor(100, 116, 139);
-        doc.text(`Warehouse Trading • ${title}`, left, pageHeight - 6);
-        doc.text(`Page ${data.pageNumber} / ${doc.internal.getNumberOfPages()}`, pageWidth - right, pageHeight - 6, { align: "right" });
+        doc.setFontSize(5.8);
+        doc.setTextColor(225, 245, 242);
+        doc.text(`Warehouse Trading  •  ${title}`, left, pageHeight - 3.1);
+        doc.text(`Page ${data.pageNumber} / ${doc.internal.getNumberOfPages()}`, pageWidth - right, pageHeight - 3.1, { align: "right" });
       },
     });
+
     return { doc, title };
   };
 
