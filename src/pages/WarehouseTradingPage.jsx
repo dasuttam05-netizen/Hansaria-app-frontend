@@ -3210,7 +3210,7 @@ export default function WarehouseTradingPage() {
     ],
     "sale-party-ledger": [
       ["date", "Date", (item) => (item.row_type === "closing" ? "" : formatLedgerDate(item.date))],
-      ["party", "Party", (item) => (item.row_type === "closing" ? `Closing Balance (${item.closing_side})` : (item.party_name || item.company_name || "-"))],
+      ["party", "Party", (item) => (item.row_type === "closing" ? `Closing Balance (${item.closing_side})` : (item.party_name || item.buyer_name || item.company_name || item.consignee_name || "-"))],
       ["account", "Account", (item) => (item.row_type === "closing" ? "" : getAccountName(item))],
       ["voucher_type", "Type", (item) => (item.row_type === "closing" ? "" : (item.voucher_type || "-"))],
       ["voucher_no", "Voucher No", (item) => (item.row_type === "closing" ? "" : (item.voucher_no || "-"))],
@@ -3362,7 +3362,7 @@ export default function WarehouseTradingPage() {
     const entries = (Array.isArray(reportData) ? reportData : []).filter((row) => row.row_type !== "closing");
     const ledgerPartyName = (row) => activeReport === "purchase-party-ledger"
       ? (row.farmer_name || getFarmerName(row) || "Unknown Farmer")
-      : (row.party_name || row.buyer_name || row.company_name || "Unknown Party");
+      : (row.party_name || row.buyer_name || row.company_name || row.consignee_name || "Unknown Party");
     const ledgerGroupKey = (row) => `${ledgerPartyName(row)}::${row.company_account_id || row.company_account_name || row.account_name || ""}`;
     const sorted = entries.slice().sort((a, b) => {
       const leftParty = ledgerGroupKey(a);
@@ -3673,14 +3673,20 @@ export default function WarehouseTradingPage() {
     const firstEntry = (displayReportData || []).find((row) => row.row_type !== "closing") || {};
     const reportParty = getLedgerPartyDetails(firstEntry, ledgerType);
     const reportAccount = getLedgerAccountDetails(firstEntry);
-    doc.setFontSize(10);
-    doc.text(`${reportAccount.name || "-"}`, 14, 26);
-    doc.setFontSize(8.5);
-    doc.text(formatLedgerContact(reportAccount), 14, 31);
-    doc.setFontSize(10);
-    doc.text(`${reportParty.name || "-"}`, 14, 37);
-    doc.setFontSize(8.5);
-    doc.text(formatLedgerContact(reportParty), 14, 42);
+    // Purchase PDF is intentionally compact: the table must not repeat
+    // Farmer / Party Details / Account / Account Details. Those details made
+    // the PDF very wide and duplicated information already available in the
+    // voucher/report filters. Sale PDF keeps its existing compact layout.
+    if (ledgerType === "sale-party-ledger") {
+      doc.setFontSize(10);
+      doc.text(`${reportAccount.name || "-"}`, 14, 26);
+      doc.setFontSize(8.5);
+      doc.text(formatLedgerContact(reportAccount), 14, 31);
+      doc.setFontSize(10);
+      doc.text(`${reportParty.name || "-"}`, 14, 37);
+      doc.setFontSize(8.5);
+      doc.text(formatLedgerContact(reportParty), 14, 42);
+    }
     const saleOnlyColumns = ledgerType === "sale-party-ledger"
       ? [
           "Date",
@@ -3688,19 +3694,15 @@ export default function WarehouseTradingPage() {
           "Voucher No",
           "Adjustment & Details",
           "Particulars",
-        "Due Date",
-        "Due Days",
-        "Days Overdue",
-        "Dr",
-        "Cr",
-        "Balance",
-      ]
+          "Due Date",
+          "Due Days",
+          "Days Overdue",
+          "Dr",
+          "Cr",
+          "Balance",
+        ]
       : [
           "Date",
-          partyLabel,
-          "Party Details",
-          "Account",
-          "Account Details",
           "Type",
           "Voucher No",
           "Adjustment Details",
@@ -3748,11 +3750,7 @@ export default function WarehouseTradingPage() {
         }
         return [
           row.row_type === "closing" ? "" : formatLedgerDate(row.date),
-          row.row_type === "closing" ? `Closing Balance (${row.closing_side})` : party.name,
-          row.row_type === "closing" ? "" : formatLedgerContact(party),
-          row.row_type === "closing" ? "" : account.name,
-          row.row_type === "closing" ? "" : formatLedgerContact(account),
-          row.row_type === "closing" ? "" : (row.voucher_type || ""),
+          row.row_type === "closing" ? `Closing Balance (${row.closing_side})` : (row.voucher_type || ""),
           row.row_type === "closing" ? "" : (row.voucher_no || ""),
           row.row_type === "closing" ? "" : (row.adjustment_details || row.particulars || ""),
           row.row_type === "closing" ? "" : getWarehouseName(row),
@@ -3774,11 +3772,14 @@ export default function WarehouseTradingPage() {
               10: { cellWidth: 22 },
             }
           : {
-              2: { cellWidth: 38 },
-              4: { cellWidth: 36 },
+              3: { cellWidth: 58 },
+              4: { cellWidth: 34 },
               5: { cellWidth: 24 },
-              6: { cellWidth: 22 },
+              6: { cellWidth: 18 },
               7: { cellWidth: 22 },
+              8: { cellWidth: 22 },
+              9: { cellWidth: 22 },
+              10: { cellWidth: 24 },
             }),
       },
     });
@@ -3806,6 +3807,9 @@ export default function WarehouseTradingPage() {
     const closingRows = displayReportData.filter((row) => row.row_type === "closing");
     const summary = closingRows
       .map((row) => {
+        if (ledgerType === "purchase-party-ledger") {
+          return `Closing Balance: ${row.closing_side} ${formatMoney(Math.abs(row.balance || 0))}`;
+        }
         const party = getLedgerPartyDetails(row, ledgerType);
         const account = getLedgerAccountDetails(row);
         return `${party.name} | ${account.name}: ${row.closing_side} ${formatMoney(Math.abs(row.balance || 0))}`;
@@ -3815,6 +3819,14 @@ export default function WarehouseTradingPage() {
       .filter((row) => row.row_type !== "closing")
       .slice(0, 20)
       .map((row) => {
+        if (ledgerType === "purchase-party-ledger") {
+          return [
+            `${formatLedgerDate(row.date)} ${row.voucher_no || ""} ${row.voucher_type || ""}`,
+            `Adjustment: ${row.adjustment_details || row.particulars || "-"}`,
+            `Warehouse: ${getWarehouseName(row)}`,
+            `Dr ${formatMoney(row.debit || 0)} Cr ${formatMoney(row.credit || 0)} Bal ${formatMoney(Math.abs(row.balance || 0))}`,
+          ].join("\n");
+        }
         const party = getLedgerPartyDetails(row, ledgerType);
         const account = getLedgerAccountDetails(row);
         return [
@@ -5687,12 +5699,12 @@ export default function WarehouseTradingPage() {
                         <div className="purchase-mobile-entry-head">
                           <div>
                             <span>{item.row_type === "closing" ? "Closing" : item.voucher_type || "Entry"}</span>
-                            <strong>{item.voucher_no || item.party_name || item.company_name || "-"}</strong>
+                            <strong>{item.voucher_no || item.party_name || item.buyer_name || item.company_name || item.consignee_name || "-"}</strong>
                           </div>
                           <em>{item.row_type === "closing" ? "" : formatLedgerDate(item.date)}</em>
                         </div>
                         <div className="purchase-mobile-entry-grid">
-                          <div><span>Party</span><strong>{item.row_type === "closing" ? `Closing (${item.closing_side || ""})` : item.party_name || item.company_name || "-"}</strong></div>
+                          <div><span>Party</span><strong>{item.row_type === "closing" ? `Closing (${item.closing_side || ""})` : item.party_name || item.buyer_name || item.company_name || item.consignee_name || "-"}</strong></div>
                           <div><span>Account</span><strong>{item.row_type === "closing" ? "-" : getAccountName(item)}</strong></div>
                           <div><span>Warehouse</span><strong>{item.row_type === "closing" ? "-" : getWarehouseName(item)}</strong></div>
                           <div><span>Debit</span><strong>{formatMoney(item.debit || 0)}</strong></div>
