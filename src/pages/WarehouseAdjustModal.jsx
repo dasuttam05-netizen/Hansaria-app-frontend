@@ -4,6 +4,7 @@ function WarehouseAdjustModal({
   title,
   subtitle,
   summaryItems,
+  controls,
   actionButton,
   tableCard,
   reportHeaderRowStyle,
@@ -16,6 +17,8 @@ function WarehouseAdjustModal({
   onClear,
   onConfirm,
   confirmDisabled,
+  onAutoAdjust,
+  autoAdjustLabel = "Auto Adjust",
 }) {
   return (
     <div style={tableCard}>
@@ -29,7 +32,8 @@ function WarehouseAdjustModal({
         </button>
       </div>
 
-      <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginTop: 14, fontSize: 13 }}>
+      {controls}
+      <div style={{ display: "flex", gap: 16, flexWrap: "wrap", marginTop: controls ? 10 : 14, fontSize: 13 }}>
         {summaryItems}
       </div>
 
@@ -61,10 +65,18 @@ function WarehouseAdjustModal({
         </table>
       </div>
 
-      <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, marginTop: 14 }}>
-        <button type="button" onClick={onClear} style={{ ...actionButton, background: "#64748b" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", gap: 10, marginTop: 14, flexWrap: "wrap" }}>
+        <div style={{ display: "flex", gap: 8 }}>
+          {onAutoAdjust && (
+            <button type="button" onClick={onAutoAdjust} style={{ ...actionButton, background: "#0f766e" }}>
+              {autoAdjustLabel}
+            </button>
+          )}
+          <button type="button" onClick={onClear} style={{ ...actionButton, background: "#64748b" }}>
           Clear
-        </button>
+          </button>
+        </div>
+        <div style={{ display: "flex", gap: 8 }}>
         <button
           type="button"
           onClick={onConfirm}
@@ -78,6 +90,7 @@ function WarehouseAdjustModal({
         >
           Confirm
         </button>
+        </div>
       </div>
     </div>
   );
