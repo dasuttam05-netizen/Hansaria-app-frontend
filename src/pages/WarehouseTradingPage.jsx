@@ -810,8 +810,18 @@ export default function WarehouseTradingPage() {
       setShowMobileTradingTabs(true);
     }
 
-    loadData();
+    // Do not load the large master-data bundle while opening Reports.
+    // Reports receive their own filter options from the Trading API.
+    if (nextTab === "vouchers") {
+      loadData();
+    }
   }, [searchParams]);
+
+  // Load the master bundle only when the user actually enters Vouchers.
+  useEffect(() => {
+    if (activeTab !== "vouchers") return;
+    loadData();
+  }, [activeTab]);
 
   // Load voucher list when type changes
   useEffect(() => {
@@ -843,15 +853,24 @@ export default function WarehouseTradingPage() {
     }
   }, [activeTab, activeVoucherType]);
 
-  // Load report when type changes
+  // Report rows: page/filter changes only.
   useEffect(() => {
     if (activeTab !== "reports") return;
     const timer = window.setTimeout(() => {
       loadReport();
-      loadReportFilterOptions();
-    }, 80);
+    }, 40);
     return () => window.clearTimeout(timer);
   }, [activeTab, activeReport, reportPage, reportFilters.farmer_id, reportFilters.company_account_id, reportFilters.warehouse_id, reportFilters.sale_buyer_id, reportFilters.sale_company_account_id, reportFilters.sale_journey_token, reportFilters.sale_lorry_no, reportFilters.sale_bill_no]);
+
+  // Filter options are independent of pagination. Never reload them just
+  // because the user moves from page 1 to page 2.
+  useEffect(() => {
+    if (activeTab !== "reports") return;
+    const timer = window.setTimeout(() => {
+      loadReportFilterOptions();
+    }, 40);
+    return () => window.clearTimeout(timer);
+  }, [activeTab, activeReport, reportFilters.farmer_id, reportFilters.company_account_id, reportFilters.warehouse_id, reportFilters.sale_buyer_id]);
 
   useEffect(() => {
     // Keep bill-wise detail panels hidden by default. Press F5 to reveal and
@@ -1031,6 +1050,30 @@ export default function WarehouseTradingPage() {
 
   const loadData = async ({ force = false } = {}) => {
     if (!force && masterDataLoadedRef.current) return;
+
+    // Reuse the master bundle between Trading page mounts. The previous
+    // version wrote this cache but never read it, so every modal/page mount
+    // still caused nine network requests.
+    if (!force) {
+      try {
+        const cached = JSON.parse(sessionStorage.getItem("warehouseTradingMasterData:v1") || "null");
+        if (cached?.data && Date.now() - Number(cached.time || 0) < 10 * 60 * 1000) {
+          const data = cached.data;
+          setWarehouses(Array.isArray(data.warehouses) ? data.warehouses : []);
+          setFarmers(Array.isArray(data.farmers) ? data.farmers : []);
+          setBuyerNames(Array.isArray(data.buyerNames) ? data.buyerNames : []);
+          setCompanies(Array.isArray(data.companies) ? data.companies : []);
+          setCompanyAccounts(Array.isArray(data.companyAccounts) ? data.companyAccounts : []);
+          setConsignees(Array.isArray(data.consignees) ? data.consignees : []);
+          setProducts(Array.isArray(data.products) ? data.products : []);
+          setEmployees(Array.isArray(data.employees) ? data.employees : []);
+          setLocations(Array.isArray(data.locations) ? data.locations : []);
+          masterDataLoadedRef.current = true;
+          return;
+        }
+      } catch {}
+    }
+
     const token = ++masterLoadTokenRef.current;
     try {
       const [wRes, fRes, bRes, cRes, caRes, coRes, pRes, eRes, lRes] = await Promise.allSettled([
@@ -1179,7 +1222,7 @@ export default function WarehouseTradingPage() {
   const loadReportFilterOptions = async (reportType = activeReport, filters = reportFilters) => {
     const supported = ["purchase", "purchase-party-ledger", "sale", "sale-party-ledger", "sale-followup", "sale-journey"].includes(reportType);
     if (!supported) {
-      setReportFilterOptions({ account_ids: [], warehouse_ids: [], farmer_ids: [], buyer_ids: [] });
+      setReportFilterOptions({ account_ids: [], warehouse_ids: [], farmer_ids: [], buyer_ids: [], accounts: [], warehouses: [], farmers: [], buyers: [] });
       return;
     }
     try {
@@ -1200,12 +1243,16 @@ export default function WarehouseTradingPage() {
         warehouse_ids: Array.isArray(res.data?.warehouse_ids) ? res.data.warehouse_ids : [],
         farmer_ids: Array.isArray(res.data?.farmer_ids) ? res.data.farmer_ids : [],
         buyer_ids: Array.isArray(res.data?.buyer_ids) ? res.data.buyer_ids : [],
+        accounts: Array.isArray(res.data?.accounts) ? res.data.accounts : [],
+        warehouses: Array.isArray(res.data?.warehouses) ? res.data.warehouses : [],
+        farmers: Array.isArray(res.data?.farmers) ? res.data.farmers : [],
+        buyers: Array.isArray(res.data?.buyers) ? res.data.buyers : [],
       };
       reportFilterCacheRef.current.set(cacheKey, { time: Date.now(), data: nextData });
       setReportFilterOptions(nextData);
     } catch (err) {
       console.error("Failed to load Trading report filters:", err);
-      setReportFilterOptions({ account_ids: [], warehouse_ids: [], farmer_ids: [], buyer_ids: [] });
+      setReportFilterOptions({ account_ids: [], warehouse_ids: [], farmer_ids: [], buyer_ids: [], accounts: [], warehouses: [], farmers: [], buyers: [] });
     }
   };
 
@@ -3180,27 +3227,39 @@ export default function WarehouseTradingPage() {
   }, [activeReport, currentReportRows, reportData, farmers, buyerNames, companyAccounts, saleFollowupFilter]);
   const saleFollowupRows = activeReport === "sale-followup" ? displayReportData : [];
   const purchasePartyLedgerCompanyAccounts = useMemo(() => {
+    if (Array.isArray(reportFilterOptions.accounts) && reportFilterOptions.accounts.length) {
+      return reportFilterOptions.accounts;
+    }
     const ids = new Set((reportFilterOptions.account_ids || []).map(String));
     return companyAccounts.filter((account) => ids.has(String(account.id || account._id || "")));
-  }, [companyAccounts, reportFilterOptions.account_ids]);
+  }, [companyAccounts, reportFilterOptions.account_ids, reportFilterOptions.accounts]);
 
   const purchasePartyLedgerWarehouses = useMemo(() => {
+    if (Array.isArray(reportFilterOptions.warehouses) && reportFilterOptions.warehouses.length) {
+      return reportFilterOptions.warehouses;
+    }
     const ids = new Set((reportFilterOptions.warehouse_ids || []).map(String));
     return warehouses.filter((warehouse) => ids.has(String(warehouse.id || warehouse._id || "")));
-  }, [warehouses, reportFilterOptions.warehouse_ids]);
+  }, [warehouses, reportFilterOptions.warehouse_ids, reportFilterOptions.warehouses]);
 
   const purchasePartyLedgerFarmers = useMemo(() => {
+    if (Array.isArray(reportFilterOptions.farmers) && reportFilterOptions.farmers.length) {
+      return reportFilterOptions.farmers;
+    }
     const ids = new Set((reportFilterOptions.farmer_ids || []).map(String));
     return farmers.filter((farmer) => ids.has(String(farmer.id || farmer._id || "")));
-  }, [farmers, reportFilterOptions.farmer_ids]);
+  }, [farmers, reportFilterOptions.farmer_ids, reportFilterOptions.farmers]);
 
   const saleReportAccounts = purchasePartyLedgerCompanyAccounts;
   const saleReportWarehouses = purchasePartyLedgerWarehouses;
   const saleReportFarmers = purchasePartyLedgerFarmers;
   const saleReportBuyers = useMemo(() => {
+    if (Array.isArray(reportFilterOptions.buyers) && reportFilterOptions.buyers.length) {
+      return reportFilterOptions.buyers;
+    }
     const ids = new Set((reportFilterOptions.buyer_ids || []).map(String));
     return buyerNames.filter((buyer) => ids.has(String(buyer.id || buyer._id || "")));
-  }, [buyerNames, reportFilterOptions.buyer_ids]);
+  }, [buyerNames, reportFilterOptions.buyer_ids, reportFilterOptions.buyers]);
 
   const normalizedGlobalSearch = String(globalSearch || "").trim().toLowerCase();
   const matchesGlobalSearch = (value) =>
