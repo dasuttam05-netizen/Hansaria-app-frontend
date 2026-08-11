@@ -377,6 +377,8 @@ export default function WarehouseTradingPage() {
   const [voucherSortAsc, setVoucherSortAsc] = useState(false);
   const [voucherPageInfo, setVoucherPageInfo] = useState({ page: 1, pageSize: PAGE_SIZE, total: 0, totalPages: 1, hasMore: false });
   const masterLoadTokenRef = useRef(0);
+  const masterDataLoadedRef = useRef(false);
+  const reportFilterCacheRef = useRef(new Map());
   const arrowNavRootRef = useRef(null);
   const voucherPanelRef = useRef(null);
   const reportPanelRef = useRef(null);
@@ -1027,7 +1029,8 @@ export default function WarehouseTradingPage() {
     };
   }, [activeTab, activeVoucherType, formData.sale_type, formData.warehouse_id, formData.product_id, editId]);
 
-  const loadData = async () => {
+  const loadData = async ({ force = false } = {}) => {
+    if (!force && masterDataLoadedRef.current) return;
     const token = ++masterLoadTokenRef.current;
     try {
       const [wRes, fRes, bRes, cRes, caRes, coRes, pRes, eRes, lRes] = await Promise.allSettled([
@@ -1052,6 +1055,17 @@ export default function WarehouseTradingPage() {
       setProducts(Array.isArray(dataOf(pRes)) ? dataOf(pRes) : []);
       setEmployees(Array.isArray(dataOf(eRes)) ? dataOf(eRes) : []);
       setLocations(Array.isArray(dataOf(lRes)) ? dataOf(lRes) : []);
+      masterDataLoadedRef.current = true;
+      try {
+        sessionStorage.setItem("warehouseTradingMasterData:v1", JSON.stringify({
+          time: Date.now(),
+          data: {
+            warehouses: dataOf(wRes), farmers: dataOf(fRes), buyerNames: dataOf(bRes),
+            companies: dataOf(cRes), companyAccounts: dataOf(caRes), consignees: dataOf(coRes),
+            products: dataOf(pRes), employees: dataOf(eRes), locations: dataOf(lRes),
+          },
+        }));
+      } catch {}
     } catch (err) {
       if (token !== masterLoadTokenRef.current) return;
       console.error(err);
@@ -1174,13 +1188,21 @@ export default function WarehouseTradingPage() {
       if (filters.warehouse_id) params.warehouse_id = filters.warehouse_id;
       if (filters.farmer_id) params.farmer_id = filters.farmer_id;
       if (filters.sale_buyer_id) params.buyer_id = filters.sale_buyer_id;
+      const cacheKey = JSON.stringify({ reportType, params });
+      const cached = reportFilterCacheRef.current.get(cacheKey);
+      if (cached && Date.now() - cached.time < 15000) {
+        setReportFilterOptions(cached.data);
+        return;
+      }
       const res = await axios.get("/api/wh-vouchers/report/filter-options", { params: { ...params, type: reportType } });
-      setReportFilterOptions({
+      const nextData = {
         account_ids: Array.isArray(res.data?.account_ids) ? res.data.account_ids : [],
         warehouse_ids: Array.isArray(res.data?.warehouse_ids) ? res.data.warehouse_ids : [],
         farmer_ids: Array.isArray(res.data?.farmer_ids) ? res.data.farmer_ids : [],
         buyer_ids: Array.isArray(res.data?.buyer_ids) ? res.data.buyer_ids : [],
-      });
+      };
+      reportFilterCacheRef.current.set(cacheKey, { time: Date.now(), data: nextData });
+      setReportFilterOptions(nextData);
     } catch (err) {
       console.error("Failed to load Trading report filters:", err);
       setReportFilterOptions({ account_ids: [], warehouse_ids: [], farmer_ids: [], buyer_ids: [] });
@@ -1449,11 +1471,7 @@ export default function WarehouseTradingPage() {
     }
     if (activeVoucherType === "payment" && name === "farmer_id") {
       if (value) {
-        loadOutstanding("farmer", value, formData.warehouse_id, editId, formData.company_account_id).then(() => {
-          if (toNumber(formData.amount) > 0 && activePaymentMode === "against") {
-            setShowPaymentAdjustPopup(true);
-          }
-        });
+        loadOutstanding("farmer", value, formData.warehouse_id, editId, formData.company_account_id);
       } else {
         setPartyOutstanding(null);
       }
@@ -1480,9 +1498,7 @@ export default function WarehouseTradingPage() {
     }
     if (name === "warehouse_id") {
       if (activeVoucherType === "payment" && formData.farmer_id && value) {
-        loadOutstanding("farmer", formData.farmer_id, value, editId, formData.company_account_id).then(() => {
-          if (toNumber(formData.amount) > 0 && activePaymentMode === "against") setShowPaymentAdjustPopup(true);
-        });
+        loadOutstanding("farmer", formData.farmer_id, value, editId, formData.company_account_id);
       }
       if (activeVoucherType === "receipt" && formData.company_id) {
         loadOutstanding("company", formData.company_id, value, null, formData.company_account_id);
@@ -2389,7 +2405,15 @@ export default function WarehouseTradingPage() {
       alert("Please select farmer");
       return;
     }
-    await loadOutstanding("farmer", formData.farmer_id, formData.warehouse_id, editId, formData.company_account_id);
+    const outstandingMatchesSelection =
+      partyOutstanding &&
+      String(partyOutstanding?.party_id || partyOutstanding?.farmer_id || partyOutstanding?.id || "") === String(formData.farmer_id) &&
+      String(partyOutstanding?.warehouse_id || "") === String(formData.warehouse_id || "") &&
+      String(partyOutstanding?.company_account_id || "") === String(formData.company_account_id || "") &&
+      Array.isArray(partyOutstanding?.purchases);
+    if (!outstandingMatchesSelection) {
+      await loadOutstanding("farmer", formData.farmer_id, formData.warehouse_id, editId, formData.company_account_id);
+    }
     setShowPaymentAdjustPopup(true);
   };
 
@@ -3727,7 +3751,9 @@ export default function WarehouseTradingPage() {
   };
 
   return (
-    <div ref={arrowNavRootRef} className="warehouse-trading-page" style={{ fontFamily: "Segoe UI, Arial, sans-serif", padding: "16px" }}>
+    <>
+      <style>{paymentResponsiveCss}</style>
+      <div ref={arrowNavRootRef} className="warehouse-trading-page" style={{ fontFamily: "Segoe UI, Arial, sans-serif", padding: "16px" }}>
       <style>{`
   .warehouse-trading-page { max-width: 100%; box-sizing: border-box; }
   .payment-mobile-shell { width: 100%; margin: 0 auto 14px; box-sizing: border-box; }
@@ -4380,7 +4406,7 @@ export default function WarehouseTradingPage() {
                         </div>
                       </div>
 
-                      <div style={paymentEntryRow}>
+                      <div className="payment-entry-row" style={paymentEntryRow}>
                         <Field label="Payment Amount">
                           <input
                             name="amount"
@@ -6062,7 +6088,8 @@ export default function WarehouseTradingPage() {
           axios={axios}
         />
       )}
-    </div>
+      </div>
+    </>
   );
 }
 
@@ -6213,6 +6240,16 @@ function SummaryInput({ label, name, value, onChange, readOnly = false }) {
   );
 }
 
+
+const paymentResponsiveCss = `
+  .payment-entry-row { grid-template-columns: minmax(0, 230px) auto !important; }
+  .payment-entry-row input { width: 230px !important; max-width: 100% !important; }
+  @media (max-width: 700px) {
+    .payment-entry-row { grid-template-columns: 1fr !important; }
+    .payment-entry-row input { width: 100% !important; }
+  }
+`;
+
 const headerRow = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, marginBottom: 18, flexWrap: "wrap", position: "sticky", top: 0, zIndex: 30, background: "#fff", padding: "16px 0" };
 const subtitleStyle = { margin: 0, color: "#475569" };
 const titleStyle = { margin: 0, fontSize: 22, color: "#0f172a" };
@@ -6243,8 +6280,8 @@ const paymentStatLabel = { display: "block", fontSize: 10, color: "#64748b", mar
 const paymentStatValue = { display: "block", fontSize: 13, color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" };
 const paymentDueCard = { borderColor: "#fecaca", background: "#fff7f7" };
 const inp = { width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #cbd5e1", fontSize: 14, boxSizing: "border-box" };
-const paymentEntryRow = { display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", gap: 8, alignItems: "end", marginTop: 10 };
-const paymentAmountInput = { width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #cbd5e1", fontSize: 15, fontWeight: 700, boxSizing: "border-box", minHeight: 42 };
+const paymentEntryRow = { display: "grid", gridTemplateColumns: "minmax(0, 230px) auto", justifyContent: "start", gap: 12, alignItems: "end", marginTop: 10 };
+const paymentAmountInput = { width: "230px", maxWidth: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #cbd5e1", fontSize: 15, fontWeight: 700, boxSizing: "border-box", minHeight: 42 };
 const paymentAdjustmentAction = { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", paddingBottom: 1 };
 const paymentAdjustedText = { fontSize: 11, color: "#475569", whiteSpace: "nowrap" };
 const paymentSelectedBar = { display: "flex", gap: 8, flexWrap: "wrap", marginTop: 9, padding: "7px 9px", borderRadius: 8, background: "#f8fafc", border: "1px solid #e2e8f0", fontSize: 10.5, color: "#475569" };
