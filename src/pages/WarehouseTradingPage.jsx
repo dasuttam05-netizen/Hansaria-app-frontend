@@ -377,6 +377,8 @@ export default function WarehouseTradingPage() {
   const [voucherSortAsc, setVoucherSortAsc] = useState(false);
   const [voucherPageInfo, setVoucherPageInfo] = useState({ page: 1, pageSize: PAGE_SIZE, total: 0, totalPages: 1, hasMore: false });
   const masterLoadTokenRef = useRef(0);
+  const masterDataLoadedRef = useRef(false);
+  const reportFilterCacheRef = useRef(new Map());
   const arrowNavRootRef = useRef(null);
   const voucherPanelRef = useRef(null);
   const reportPanelRef = useRef(null);
@@ -511,6 +513,27 @@ export default function WarehouseTradingPage() {
   const paymentAdjustmentTotal = paymentAdjustments.reduce(
     (sum, item) => sum + toNumber(item.adjusted_amount),
     0
+  );
+  const paymentFinancialStats = partyOutstanding?.stats || {};
+  const paymentTotalBill = toNumber(
+    paymentFinancialStats.total_bill ??
+    paymentFinancialStats.total_purchase ??
+    paymentFinancialStats.bill_amount
+  );
+  const paymentTotalDeduction = toNumber(
+    paymentFinancialStats.total_deduction ??
+    paymentFinancialStats.deduction_total
+  );
+  const paymentTotalPaid = toNumber(
+    paymentFinancialStats.total_payment ??
+    paymentFinancialStats.paid ??
+    paymentFinancialStats.payment_total
+  );
+  // Keep the existing outstanding calculation as the accounting source of truth.
+  // The deduction card is informational and is not subtracted twice from an already-net payable amount.
+  const paymentTotalDue = toNumber(
+    paymentFinancialStats.outstanding ??
+    (paymentTotalBill - paymentTotalPaid)
   );
   const receiptAdjustmentTotal = receiptAdjustments.reduce(
     (sum, item) => sum + toNumber(item.adjusted_amount),
@@ -787,8 +810,18 @@ export default function WarehouseTradingPage() {
       setShowMobileTradingTabs(true);
     }
 
-    loadData();
+    // Do not load the large master-data bundle while opening Reports.
+    // Reports receive their own filter options from the Trading API.
+    if (nextTab === "vouchers") {
+      loadData();
+    }
   }, [searchParams]);
+
+  // Load the master bundle only when the user actually enters Vouchers.
+  useEffect(() => {
+    if (activeTab !== "vouchers") return;
+    loadData();
+  }, [activeTab]);
 
   // Load voucher list when type changes
   useEffect(() => {
@@ -820,22 +853,30 @@ export default function WarehouseTradingPage() {
     }
   }, [activeTab, activeVoucherType]);
 
-  // Load report when type changes
+  // Report rows: page/filter changes only.
   useEffect(() => {
     if (activeTab !== "reports") return;
     const timer = window.setTimeout(() => {
       loadReport();
-      loadReportFilterOptions();
-    }, 80);
+    }, 40);
     return () => window.clearTimeout(timer);
   }, [activeTab, activeReport, reportPage, reportFilters.farmer_id, reportFilters.company_account_id, reportFilters.warehouse_id, reportFilters.sale_buyer_id, reportFilters.sale_company_account_id, reportFilters.sale_journey_token, reportFilters.sale_lorry_no, reportFilters.sale_bill_no]);
 
+  // Filter options are independent of pagination. Never reload them just
+  // because the user moves from page 1 to page 2.
   useEffect(() => {
-    if (activeReport === "purchase-party-ledger") setShowPurchaseBillWise(true);
-    else setShowPurchaseBillWise(false);
-    
-    if (activeReport === "sale-party-ledger") setShowSaleBillWise(true);
-    else setShowSaleBillWise(false);
+    if (activeTab !== "reports") return;
+    const timer = window.setTimeout(() => {
+      loadReportFilterOptions();
+    }, 40);
+    return () => window.clearTimeout(timer);
+  }, [activeTab, activeReport, reportFilters.farmer_id, reportFilters.company_account_id, reportFilters.warehouse_id, reportFilters.sale_buyer_id]);
+
+  useEffect(() => {
+    // Keep bill-wise detail panels hidden by default. Press F5 to reveal and
+    // refresh the selected party ledger when detailed bill information is needed.
+    setShowPurchaseBillWise(false);
+    setShowSaleBillWise(false);
   }, [activeReport]);
 
   useEffect(() => {
@@ -1007,7 +1048,32 @@ export default function WarehouseTradingPage() {
     };
   }, [activeTab, activeVoucherType, formData.sale_type, formData.warehouse_id, formData.product_id, editId]);
 
-  const loadData = async () => {
+  const loadData = async ({ force = false } = {}) => {
+    if (!force && masterDataLoadedRef.current) return;
+
+    // Reuse the master bundle between Trading page mounts. The previous
+    // version wrote this cache but never read it, so every modal/page mount
+    // still caused nine network requests.
+    if (!force) {
+      try {
+        const cached = JSON.parse(sessionStorage.getItem("warehouseTradingMasterData:v1") || "null");
+        if (cached?.data && Date.now() - Number(cached.time || 0) < 10 * 60 * 1000) {
+          const data = cached.data;
+          setWarehouses(Array.isArray(data.warehouses) ? data.warehouses : []);
+          setFarmers(Array.isArray(data.farmers) ? data.farmers : []);
+          setBuyerNames(Array.isArray(data.buyerNames) ? data.buyerNames : []);
+          setCompanies(Array.isArray(data.companies) ? data.companies : []);
+          setCompanyAccounts(Array.isArray(data.companyAccounts) ? data.companyAccounts : []);
+          setConsignees(Array.isArray(data.consignees) ? data.consignees : []);
+          setProducts(Array.isArray(data.products) ? data.products : []);
+          setEmployees(Array.isArray(data.employees) ? data.employees : []);
+          setLocations(Array.isArray(data.locations) ? data.locations : []);
+          masterDataLoadedRef.current = true;
+          return;
+        }
+      } catch {}
+    }
+
     const token = ++masterLoadTokenRef.current;
     try {
       const [wRes, fRes, bRes, cRes, caRes, coRes, pRes, eRes, lRes] = await Promise.allSettled([
@@ -1032,6 +1098,17 @@ export default function WarehouseTradingPage() {
       setProducts(Array.isArray(dataOf(pRes)) ? dataOf(pRes) : []);
       setEmployees(Array.isArray(dataOf(eRes)) ? dataOf(eRes) : []);
       setLocations(Array.isArray(dataOf(lRes)) ? dataOf(lRes) : []);
+      masterDataLoadedRef.current = true;
+      try {
+        sessionStorage.setItem("warehouseTradingMasterData:v1", JSON.stringify({
+          time: Date.now(),
+          data: {
+            warehouses: dataOf(wRes), farmers: dataOf(fRes), buyerNames: dataOf(bRes),
+            companies: dataOf(cRes), companyAccounts: dataOf(caRes), consignees: dataOf(coRes),
+            products: dataOf(pRes), employees: dataOf(eRes), locations: dataOf(lRes),
+          },
+        }));
+      } catch {}
     } catch (err) {
       if (token !== masterLoadTokenRef.current) return;
       console.error(err);
@@ -1145,7 +1222,7 @@ export default function WarehouseTradingPage() {
   const loadReportFilterOptions = async (reportType = activeReport, filters = reportFilters) => {
     const supported = ["purchase", "purchase-party-ledger", "sale", "sale-party-ledger", "sale-followup", "sale-journey"].includes(reportType);
     if (!supported) {
-      setReportFilterOptions({ account_ids: [], warehouse_ids: [], farmer_ids: [], buyer_ids: [] });
+      setReportFilterOptions({ account_ids: [], warehouse_ids: [], farmer_ids: [], buyer_ids: [], accounts: [], warehouses: [], farmers: [], buyers: [] });
       return;
     }
     try {
@@ -1154,16 +1231,28 @@ export default function WarehouseTradingPage() {
       if (filters.warehouse_id) params.warehouse_id = filters.warehouse_id;
       if (filters.farmer_id) params.farmer_id = filters.farmer_id;
       if (filters.sale_buyer_id) params.buyer_id = filters.sale_buyer_id;
+      const cacheKey = JSON.stringify({ reportType, params });
+      const cached = reportFilterCacheRef.current.get(cacheKey);
+      if (cached && Date.now() - cached.time < 15000) {
+        setReportFilterOptions(cached.data);
+        return;
+      }
       const res = await axios.get("/api/wh-vouchers/report/filter-options", { params: { ...params, type: reportType } });
-      setReportFilterOptions({
+      const nextData = {
         account_ids: Array.isArray(res.data?.account_ids) ? res.data.account_ids : [],
         warehouse_ids: Array.isArray(res.data?.warehouse_ids) ? res.data.warehouse_ids : [],
         farmer_ids: Array.isArray(res.data?.farmer_ids) ? res.data.farmer_ids : [],
         buyer_ids: Array.isArray(res.data?.buyer_ids) ? res.data.buyer_ids : [],
-      });
+        accounts: Array.isArray(res.data?.accounts) ? res.data.accounts : [],
+        warehouses: Array.isArray(res.data?.warehouses) ? res.data.warehouses : [],
+        farmers: Array.isArray(res.data?.farmers) ? res.data.farmers : [],
+        buyers: Array.isArray(res.data?.buyers) ? res.data.buyers : [],
+      };
+      reportFilterCacheRef.current.set(cacheKey, { time: Date.now(), data: nextData });
+      setReportFilterOptions(nextData);
     } catch (err) {
       console.error("Failed to load Trading report filters:", err);
-      setReportFilterOptions({ account_ids: [], warehouse_ids: [], farmer_ids: [], buyer_ids: [] });
+      setReportFilterOptions({ account_ids: [], warehouse_ids: [], farmer_ids: [], buyer_ids: [], accounts: [], warehouses: [], farmers: [], buyers: [] });
     }
   };
 
@@ -1429,11 +1518,7 @@ export default function WarehouseTradingPage() {
     }
     if (activeVoucherType === "payment" && name === "farmer_id") {
       if (value) {
-        loadOutstanding("farmer", value, formData.warehouse_id, editId, formData.company_account_id).then(() => {
-          if (toNumber(formData.amount) > 0 && activePaymentMode === "against") {
-            setShowPaymentAdjustPopup(true);
-          }
-        });
+        loadOutstanding("farmer", value, formData.warehouse_id, editId, formData.company_account_id);
       } else {
         setPartyOutstanding(null);
       }
@@ -1460,9 +1545,7 @@ export default function WarehouseTradingPage() {
     }
     if (name === "warehouse_id") {
       if (activeVoucherType === "payment" && formData.farmer_id && value) {
-        loadOutstanding("farmer", formData.farmer_id, value, editId, formData.company_account_id).then(() => {
-          if (toNumber(formData.amount) > 0 && activePaymentMode === "against") setShowPaymentAdjustPopup(true);
-        });
+        loadOutstanding("farmer", formData.farmer_id, value, editId, formData.company_account_id);
       }
       if (activeVoucherType === "receipt" && formData.company_id) {
         loadOutstanding("company", formData.company_id, value, null, formData.company_account_id);
@@ -1475,9 +1558,10 @@ export default function WarehouseTradingPage() {
       loadOutstanding("company", formData.company_id || formData.buyer_id, formData.warehouse_id, null, value);
     }
     if (activeVoucherType === "payment" && name === "amount") {
-      if (toNumber(value) > 0 && formData.farmer_id && activePaymentMode === "against") {
-        setShowPaymentAdjustPopup(true);
-      } else {
+      // Amount entry must stay local. Do not open the adjustment panel or
+      // trigger any report/ledger request automatically. The user can click
+      // "Open Adjustment" when ready; Auto Adjust remains available there.
+      if (toNumber(value) <= 0) {
         setPaymentAdjustments([]);
         setShowPaymentAdjustPopup(false);
       }
@@ -2368,7 +2452,15 @@ export default function WarehouseTradingPage() {
       alert("Please select farmer");
       return;
     }
-    await loadOutstanding("farmer", formData.farmer_id, formData.warehouse_id, editId, formData.company_account_id);
+    const outstandingMatchesSelection =
+      partyOutstanding &&
+      String(partyOutstanding?.party_id || partyOutstanding?.farmer_id || partyOutstanding?.id || "") === String(formData.farmer_id) &&
+      String(partyOutstanding?.warehouse_id || "") === String(formData.warehouse_id || "") &&
+      String(partyOutstanding?.company_account_id || "") === String(formData.company_account_id || "") &&
+      Array.isArray(partyOutstanding?.purchases);
+    if (!outstandingMatchesSelection) {
+      await loadOutstanding("farmer", formData.farmer_id, formData.warehouse_id, editId, formData.company_account_id);
+    }
     setShowPaymentAdjustPopup(true);
   };
 
@@ -2883,8 +2975,6 @@ export default function WarehouseTradingPage() {
     ],
     "purchase-party-ledger": [
       ["date", "Date", (item) => (item.row_type === "closing" ? "" : formatLedgerDate(item.date))],
-      ["farmer", "Farmer", (item) => (item.row_type === "closing" ? `Closing Balance (${item.closing_side})` : (item.farmer_name || getFarmerName(item) || "-"))],
-      ["account", "Account", (item) => (item.row_type === "closing" ? "" : getAccountName(item))],
       ["voucher_type", "Type", (item) => (item.row_type === "closing" ? "" : (item.voucher_type || "-"))],
       ["voucher_no", "Voucher No", (item) => (item.row_type === "closing" ? "" : (item.voucher_no || "-"))],
       ["particulars", "Particulars", (item) => (item.row_type === "closing" ? "" : (item.particulars || "-"))],
@@ -3137,27 +3227,39 @@ export default function WarehouseTradingPage() {
   }, [activeReport, currentReportRows, reportData, farmers, buyerNames, companyAccounts, saleFollowupFilter]);
   const saleFollowupRows = activeReport === "sale-followup" ? displayReportData : [];
   const purchasePartyLedgerCompanyAccounts = useMemo(() => {
+    if (Array.isArray(reportFilterOptions.accounts) && reportFilterOptions.accounts.length) {
+      return reportFilterOptions.accounts;
+    }
     const ids = new Set((reportFilterOptions.account_ids || []).map(String));
     return companyAccounts.filter((account) => ids.has(String(account.id || account._id || "")));
-  }, [companyAccounts, reportFilterOptions.account_ids]);
+  }, [companyAccounts, reportFilterOptions.account_ids, reportFilterOptions.accounts]);
 
   const purchasePartyLedgerWarehouses = useMemo(() => {
+    if (Array.isArray(reportFilterOptions.warehouses) && reportFilterOptions.warehouses.length) {
+      return reportFilterOptions.warehouses;
+    }
     const ids = new Set((reportFilterOptions.warehouse_ids || []).map(String));
     return warehouses.filter((warehouse) => ids.has(String(warehouse.id || warehouse._id || "")));
-  }, [warehouses, reportFilterOptions.warehouse_ids]);
+  }, [warehouses, reportFilterOptions.warehouse_ids, reportFilterOptions.warehouses]);
 
   const purchasePartyLedgerFarmers = useMemo(() => {
+    if (Array.isArray(reportFilterOptions.farmers) && reportFilterOptions.farmers.length) {
+      return reportFilterOptions.farmers;
+    }
     const ids = new Set((reportFilterOptions.farmer_ids || []).map(String));
     return farmers.filter((farmer) => ids.has(String(farmer.id || farmer._id || "")));
-  }, [farmers, reportFilterOptions.farmer_ids]);
+  }, [farmers, reportFilterOptions.farmer_ids, reportFilterOptions.farmers]);
 
   const saleReportAccounts = purchasePartyLedgerCompanyAccounts;
   const saleReportWarehouses = purchasePartyLedgerWarehouses;
   const saleReportFarmers = purchasePartyLedgerFarmers;
   const saleReportBuyers = useMemo(() => {
+    if (Array.isArray(reportFilterOptions.buyers) && reportFilterOptions.buyers.length) {
+      return reportFilterOptions.buyers;
+    }
     const ids = new Set((reportFilterOptions.buyer_ids || []).map(String));
     return buyerNames.filter((buyer) => ids.has(String(buyer.id || buyer._id || "")));
-  }, [buyerNames, reportFilterOptions.buyer_ids]);
+  }, [buyerNames, reportFilterOptions.buyer_ids, reportFilterOptions.buyers]);
 
   const normalizedGlobalSearch = String(globalSearch || "").trim().toLowerCase();
   const matchesGlobalSearch = (value) =>
@@ -3708,7 +3810,26 @@ export default function WarehouseTradingPage() {
   };
 
   return (
-    <div ref={arrowNavRootRef} className="warehouse-trading-page" style={{ fontFamily: "Segoe UI, Arial, sans-serif", padding: "16px" }}>
+    <>
+      <style>{paymentResponsiveCss}</style>
+      <div ref={arrowNavRootRef} className="warehouse-trading-page" style={{ fontFamily: "Segoe UI, Arial, sans-serif", padding: "16px" }}>
+      <style>{`
+  .warehouse-trading-page { max-width: 100%; box-sizing: border-box; }
+  .payment-mobile-shell { width: 100%; margin: 0 auto 14px; box-sizing: border-box; }
+  @media (max-width: 820px) {
+    .warehouse-trading-page { padding: 8px !important; }
+    .payment-mobile-shell { width: 100%; padding: 11px !important; border-radius: 12px !important; }
+    .payment-financial-summary { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+    .payment-selector-grid { grid-template-columns: 1fr !important; }
+    .payment-entry-row { grid-template-columns: 1fr !important; }
+    .payment-adjustment-action { justify-content: flex-start; }
+  }
+  @media (max-width: 480px) {
+    .payment-financial-summary { grid-template-columns: 1fr 1fr !important; }
+    .payment-stat-value { font-size: 11.5px !important; }
+    .payment-selected-bar { display: grid !important; grid-template-columns: 1fr !important; }
+  }
+`}</style>
       <WarehouseTradingHeader
         activeTab={activeTab}
         activeTabStyle={activeTabStyle}
@@ -4254,80 +4375,135 @@ export default function WarehouseTradingPage() {
               ) : (
                 <div>
                   {activeVoucherType === "payment" && (
-                    <div style={paymentHeroCard}>
+                    <div className="payment-mobile-shell" style={paymentHeroCard}>
                       <div style={paymentHeroHeader}>
                         <div>
-                          <div style={{ fontSize: 12, textTransform: "uppercase", letterSpacing: "0.16em", color: "#2563eb", fontWeight: 800, marginBottom: 4 }}>Payment voucher</div>
-                          <h3 style={{ margin: "0 0 6px", fontSize: 18, color: "#0f172a" }}>Fast payment entry with bill adjustment tracking</h3>
-                          <p style={{ margin: 0, fontSize: 13, color: "#475569" }}>Select the account, choose the farmer, and adjust purchase bills directly from this polished form.</p>
+                          <div style={paymentEyebrow}>PAYMENT VOUCHER</div>
+                          <h3 style={paymentHeroTitle}>Smart Payment Entry</h3>
+                          <p style={paymentHeroSubtitle}>Select account, warehouse and pending farmer, then adjust purchase bills.</p>
                         </div>
-                        <div style={paymentBadge}>⚡ Smart Payment Entry</div>
+                        <div style={paymentBadge}>⚡ Smart Entry</div>
                       </div>
-                        <div style={{ marginTop: 14, display: "grid", gap: 10 }}>
-                        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                          {paymentModeOptions.map((option) => {
-                            const isActive = activePaymentMode === option.value;
-                            return (
-                                <button
-                                  key={option.value}
-                                  type="button"
-                                  onClick={() => handlePaymentModeChange(option.value, { amount: formData.amount, farmer_id: formData.farmer_id, warehouse_id: formData.warehouse_id, company_account_id: formData.company_account_id })}
-                                style={{
-                                  border: isActive ? "1px solid #2563eb" : "1px solid #dbe4f0",
-                                  background: isActive ? "#eff6ff" : "#fff",
-                                  color: isActive ? "#1d4ed8" : "#334155",
-                                  borderRadius: 999,
-                                  padding: "8px 12px",
-                                  fontWeight: 700,
-                                  fontSize: 13,
-                                  cursor: "pointer",
-                                }}
-                              >
-                                {option.label}
-                              </button>
-                            );
-                          })}
-                        </div>
-                        <div style={{ fontSize: 13, color: "#475569" }}>{paymentModeOptions.find((option) => option.value === activePaymentMode)?.description}</div>
+
+                      <div style={paymentModeRow}>
+                        {paymentModeOptions.map((option) => {
+                          const isActive = activePaymentMode === option.value;
+                          return (
+                            <button
+                              key={option.value}
+                              type="button"
+                              onClick={() =>
+                                handlePaymentModeChange(option.value, {
+                                  amount: formData.amount,
+                                  farmer_id: formData.farmer_id,
+                                  warehouse_id: formData.warehouse_id,
+                                  company_account_id: formData.company_account_id,
+                                })
+                              }
+                              style={{
+                                ...paymentModeButton,
+                                ...(isActive ? paymentModeButtonActive : {}),
+                              }}
+                            >
+                              {option.label}
+                            </button>
+                          );
+                        })}
                       </div>
-                      <div style={{ marginTop: 16, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10 }}>
+
+                      <div style={paymentSelectorGrid}>
                         <SearchableSelect
                           label="Account"
                           value={formData.company_account_id}
-                          options={companyAccounts.map((a) => ({ value: a.id || a._id, label: a.account_name || a.name }))}
+                          options={companyAccounts.map((a) => ({
+                            value: a.id || a._id,
+                            label: a.account_name || a.name,
+                          }))}
                           onChange={(value) => handleChange({ target: { name: "company_account_id", value } })}
                           placeholder="Choose account"
                         />
                         <SearchableSelect
                           label="Warehouse"
                           value={formData.warehouse_id}
-                          options={paymentWarehouses.map((w) => ({ value: w.id || w._id, label: w.name }))}
+                          options={paymentWarehouses.map((w) => ({
+                            value: w.id || w._id,
+                            label: w.name,
+                          }))}
                           onChange={(value) => handleChange({ target: { name: "warehouse_id", value } })}
                           placeholder={formData.company_account_id ? "Choose warehouse" : "Choose account first"}
                           disabled={!formData.company_account_id}
                         />
                         <SearchableSelect
-                          label="Farmer (Pending)"
+                          label="Pending Farmer"
                           value={formData.farmer_id}
-                          options={accountFarmers.map((f) => ({ value: f.id || f._id, label: `${f.name}${f.outstanding !== undefined ? ` — Pending Rs.${formatMoney(f.outstanding)}` : ""}` }))}
+                          options={accountFarmers.map((f) => ({
+                            value: f.id || f._id,
+                            label: `${f.name}${f.outstanding !== undefined ? ` — Due Rs.${formatMoney(f.outstanding)}` : ""}`,
+                          }))}
                           onChange={(value) => handleChange({ target: { name: "farmer_id", value } })}
                           placeholder={formData.warehouse_id ? "Choose pending farmer" : "Choose warehouse first"}
                           disabled={!formData.warehouse_id}
                         />
-                        <Field label="Amount">
-                          <input name="amount" type="number" step="0.0001" value={formData.amount} onChange={(event) => { handleChange(event); setPaymentAdjustments([]); }} style={inp} required />
+                      </div>
+
+                      <div className="payment-financial-summary" style={paymentFinancialSummary}>
+                        <div style={paymentStatCard}>
+                          <span style={paymentStatLabel}>Total Bill</span>
+                          <strong style={paymentStatValue}>Rs.{formatMoney(paymentTotalBill)}</strong>
+                        </div>
+                        <div style={paymentStatCard}>
+                          <span style={paymentStatLabel}>Total Deduction</span>
+                          <strong style={paymentStatValue}>Rs.{formatMoney(paymentTotalDeduction)}</strong>
+                        </div>
+                        <div style={paymentStatCard}>
+                          <span style={paymentStatLabel}>Total Paid</span>
+                          <strong style={paymentStatValue}>Rs.{formatMoney(paymentTotalPaid)}</strong>
+                        </div>
+                        <div style={{ ...paymentStatCard, ...paymentDueCard }}>
+                          <span style={paymentStatLabel}>Total Due</span>
+                          <strong style={{ ...paymentStatValue, color: "#b91c1c" }}>Rs.{formatMoney(paymentTotalDue)}</strong>
+                        </div>
+                      </div>
+
+                      <div className="payment-entry-row" style={paymentEntryRow}>
+                        <Field label="Payment Amount">
+                          <input
+                            name="amount"
+                            type="number"
+                            step="0.0001"
+                            value={formData.amount}
+                            onChange={(event) => {
+                              handleChange(event);
+                              setPaymentAdjustments([]);
+                            }}
+                            style={paymentAmountInput}
+                            required
+                          />
                         </Field>
+                        <div style={paymentAdjustmentAction}>
+                          <button
+                            type="button"
+                            onClick={openPaymentAdjustmentPopup}
+                            style={{ ...btnAction, background: "#2563eb", minHeight: 42 }}
+                            disabled={
+                              !formData.company_account_id ||
+                              !formData.warehouse_id ||
+                              !formData.farmer_id ||
+                              toNumber(formData.amount) <= 0
+                            }
+                          >
+                            Open Adjustment
+                          </button>
+                          <span style={paymentAdjustedText}>
+                            Adjusted: <strong>Rs.{formatMoney(paymentAdjustmentTotal)}</strong>
+                          </span>
+                        </div>
                       </div>
-                      <div style={{ marginTop: 12, display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
-                        <button type="button" onClick={openPaymentAdjustmentPopup} style={{ ...btnAction, background: "#2563eb" }} disabled={!formData.company_account_id || !formData.warehouse_id || !formData.farmer_id || toNumber(formData.amount) <= 0}>
-                          Open Adjustment
-                        </button>
-                        <span style={{ fontSize: 13, color: "#475569" }}>Adjusted: <strong>Rs.{formatMoney(paymentAdjustmentTotal)}</strong></span>
-                      </div>
-                      <div style={paymentQuickGrid}>
-                        <div style={paymentQuickBox}><div style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>Account</div><strong>{getAccountName(formData) || "Choose account"}</strong></div>
-                        <div style={paymentQuickBox}><div style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>Warehouse</div><strong>{getWarehouseName(formData) || "Choose warehouse"}</strong></div>
-                        <div style={paymentQuickBox}><div style={{ fontSize: 12, color: "#64748b", marginBottom: 4 }}>Farmer</div><strong>{farmers.find((f) => String(f.id || f._id) === String(formData.farmer_id))?.name || "Pick the pending farmer"}</strong></div>
+
+                      <div style={paymentSelectedBar}>
+                        <span><b>Account:</b> {getAccountName(formData) || "Choose account"}</span>
+                        <span><b>Warehouse:</b> {getWarehouseName(formData) || "Choose warehouse"}</span>
+                        <span><b>Farmer:</b> {farmers.find((f) => String(f.id || f._id) === String(formData.farmer_id))?.name || "Pick the pending farmer"}</span>
                       </div>
                     </div>
                   )}
@@ -5222,8 +5398,6 @@ export default function WarehouseTradingPage() {
                         <em>{item.row_type === "closing" ? "" : formatLedgerDate(item.date)}</em>
                       </div>
                       <div className="purchase-mobile-entry-grid">
-                        <div><span>Farmer</span><strong>{item.row_type === "closing" ? `Closing (${item.closing_side || ""})` : item.farmer_name || getFarmerName(item) || "-"}</strong></div>
-                        <div><span>Account</span><strong>{item.row_type === "closing" ? "-" : getAccountName(item)}</strong></div>
                         <div><span>Warehouse</span><strong>{item.row_type === "closing" ? "-" : getWarehouseName(item)}</strong></div>
                         <div><span>Debit</span><strong>{formatMoney(item.debit || 0)}</strong></div>
                         <div><span>Credit</span><strong>{formatMoney(item.credit || 0)}</strong></div>
@@ -5973,7 +6147,8 @@ export default function WarehouseTradingPage() {
           axios={axios}
         />
       )}
-    </div>
+      </div>
+    </>
   );
 }
 
@@ -6124,6 +6299,16 @@ function SummaryInput({ label, name, value, onChange, readOnly = false }) {
   );
 }
 
+
+const paymentResponsiveCss = `
+  .payment-entry-row { grid-template-columns: minmax(0, 230px) auto !important; }
+  .payment-entry-row input { width: 230px !important; max-width: 100% !important; }
+  @media (max-width: 700px) {
+    .payment-entry-row { grid-template-columns: 1fr !important; }
+    .payment-entry-row input { width: 100% !important; }
+  }
+`;
+
 const headerRow = { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, marginBottom: 18, flexWrap: "wrap", position: "sticky", top: 0, zIndex: 30, background: "#fff", padding: "16px 0" };
 const subtitleStyle = { margin: 0, color: "#475569" };
 const titleStyle = { margin: 0, fontSize: 22, color: "#0f172a" };
@@ -6140,8 +6325,26 @@ const paymentHeroHeader = { display: "flex", justifyContent: "space-between", ga
 const paymentBadge = { display: "inline-flex", alignItems: "center", gap: 8, padding: "7px 11px", borderRadius: 999, background: "#2563eb", color: "#fff", fontWeight: 700, fontSize: 12 };
 const paymentQuickGrid = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10, marginTop: 12 };
 const paymentQuickBox = { background: "#fff", border: "1px solid #dbeafe", borderRadius: 10, padding: 10 };
+
+const paymentEyebrow = { fontSize: 10, textTransform: "uppercase", letterSpacing: "0.18em", color: "#0f766e", fontWeight: 800, marginBottom: 3 };
+const paymentHeroTitle = { margin: "0 0 4px", fontSize: 17, color: "#0f172a" };
+const paymentHeroSubtitle = { margin: 0, fontSize: 12, color: "#64748b" };
+const paymentModeRow = { display: "flex", gap: 6, flexWrap: "wrap", marginTop: 12 };
+const paymentModeButton = { border: "1px solid #dbe4f0", background: "#fff", color: "#334155", borderRadius: 8, padding: "7px 10px", fontWeight: 700, fontSize: 11, cursor: "pointer" };
+const paymentModeButtonActive = { background: "#0f766e", color: "#fff", borderColor: "#0f766e" };
+const paymentSelectorGrid = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(170px, 1fr))", gap: 8, marginTop: 12 };
+const paymentFinancialSummary = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(135px, 1fr))", gap: 7, marginTop: 10 };
+const paymentStatCard = { background: "#fff", border: "1px solid #dbe4f0", borderRadius: 9, padding: "8px 9px", minWidth: 0 };
+const paymentStatLabel = { display: "block", fontSize: 10, color: "#64748b", marginBottom: 3, fontWeight: 700 };
+const paymentStatValue = { display: "block", fontSize: 13, color: "#0f172a", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" };
+const paymentDueCard = { borderColor: "#fecaca", background: "#fff7f7" };
 const inp = { width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #cbd5e1", fontSize: 14, boxSizing: "border-box" };
-const readOnlyInp = { ...inp, background: "#f8fafc", color: "#475569" };
+const paymentEntryRow = { display: "grid", gridTemplateColumns: "minmax(0, 230px) auto", justifyContent: "start", gap: 12, alignItems: "end", marginTop: 10 };
+const paymentAmountInput = { width: "230px", maxWidth: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #cbd5e1", fontSize: 15, fontWeight: 700, boxSizing: "border-box", minHeight: 42 };
+const paymentAdjustmentAction = { display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", paddingBottom: 1 };
+const paymentAdjustedText = { fontSize: 11, color: "#475569", whiteSpace: "nowrap" };
+const paymentSelectedBar = { display: "flex", gap: 8, flexWrap: "wrap", marginTop: 9, padding: "7px 9px", borderRadius: 8, background: "#f8fafc", border: "1px solid #e2e8f0", fontSize: 10.5, color: "#475569" };
+const readOnlyInp = { width: "100%", padding: "10px 12px", borderRadius: 8, border: "1px solid #cbd5e1", fontSize: 14, boxSizing: "border-box", background: "#f8fafc", color: "#475569" };
 const btnPrimary = { background: "#2563eb", color: "#fff", border: "none", padding: "10px 18px", borderRadius: 8, cursor: "pointer", fontWeight: 600, fontSize: 14 };
 const th = { padding: "10px 8px", textAlign: "left", borderBottom: "1px solid #0d5c56" };
 const td = { padding: "8px", borderBottom: "1px solid #e2e8f0" };
