@@ -3226,19 +3226,34 @@ export default function WarehouseTradingPage() {
     ],
     "sale-party-ledger": [
       ["date", "Date", (item) => (item.row_type === "closing" ? "" : formatLedgerDate(item.date))],
-      ["party", "Party", (item) => (item.row_type === "closing" ? `Closing Balance (${item.closing_side})` : (item.party_name || item.buyer_name || item.company_name || item.consignee_name || "-"))],
-      ["account", "Account", (item) => (item.row_type === "closing" ? "" : getAccountName(item))],
+      ["party", "Party Name", (item) => (item.row_type === "closing" ? `Closing Balance (${item.closing_side})` : (item.party_name || item.buyer_name || item.company_name || item.consignee_name || "-"))],
+      ["account", "Company Account", (item) => (item.row_type === "closing" ? "" : getAccountName(item))],
       ["voucher_type", "Type", (item) => (item.row_type === "closing" ? "" : (item.voucher_type || "-"))],
-      ["voucher_no", "Voucher No", (item) => (item.row_type === "closing" ? "" : (item.voucher_no || "-"))],
-      ["due_date", "Due Date", (item) => (item.row_type === "closing" ? "" : formatLedgerDate(item.due_date || item.unloading_date || ""))],
-      ["due_days", "Due Days", (item) => (item.row_type === "closing" ? "" : (item.due_days !== undefined ? item.due_days : ""))],
-      ["days_overdue", "Days Overdue", (item) => (item.row_type === "closing" ? "" : (item.days_overdue || ""))],
-      ["followup_status_label", "Status", (item) => (item.row_type === "closing" ? "" : (item.followup_status_label || item.followup_status || "-"))],
-      ["adjustment_details", "Adjustment Details", (item) => (item.row_type === "closing" ? "" : (item.adjustment_details || "-"))],
+      ["voucher_no", "Voucher / Bill No", (item) => (item.row_type === "closing" ? "" : (item.voucher_no || item.bill_no || "-"))],
+      ["product", "Product", (item) => (item.row_type === "closing" ? "" : (getProductName(item) || item.product_name || "-"))],
+      ["quantity", "Qty", (item) => (item.row_type === "closing" ? "" : formatDecimal4(item.quantity || item.total_quantity || 0))],
+      ["rate", "Rate", (item) => (item.row_type === "closing" ? "" : formatMoney(item.rate || 0))],
+      ["gross_amount", "Gross / Sale Amount", (item) => (item.row_type === "closing" ? "" : formatMoney(item.gross_amount || item.sale_amount || item.total_amount || item.amount || 0))],
+      ["receipt_date", "Receipt Date", (item) => {
+        if (item.row_type === "closing") return "";
+        const details = Array.isArray(item.receipt_details) ? item.receipt_details : [];
+        return details.map((detail) => formatLedgerDate(detail.receipt_date || "")).filter(Boolean).join("\n") || "-";
+      }],
+      ["receipt_voucher_no", "Receipt Voucher No", (item) => {
+        if (item.row_type === "closing") return "";
+        const details = Array.isArray(item.receipt_details) ? item.receipt_details : [];
+        return details.map((detail) => `${detail.receipt_voucher_no || "-"}${detail.inferred_adjustment ? " (auto)" : ""}`).join("\n") || "-";
+      }],
+      ["received_amount", "Received Amount", (item) => {
+        if (item.row_type === "closing") return "";
+        if (item.voucher_type === "Receipt") return formatMoney(item.receipt_amount || item.amount || 0);
+        return formatMoney(item.receipt_amount || 0);
+      }],
+      ["adjustment", "Adjustment", (item) => (item.row_type === "closing" ? "" : formatMoney(item.adjustment || item.receipt_amount || 0))],
       ["warehouse", "Warehouse", (item) => (item.row_type === "closing" ? "" : getWarehouseName(item))],
       ["debit", "Debit", (item) => formatMoney(item.debit || 0)],
       ["credit", "Credit", (item) => formatMoney(item.credit || 0)],
-      ["balance", "Balance", (item) => formatMoney(Math.abs(item.balance || 0))],
+      ["balance", "Balance", (item) => formatMoney(Math.abs(item.balance || item.closing_balance || 0))],
     ],
     "sale-followup": [
       ["date", "Date", (item) => formatLedgerDate(item.date)],
