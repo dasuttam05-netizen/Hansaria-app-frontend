@@ -848,7 +848,7 @@ export default function WarehouseTradingPage() {
   // so the first voucher table paint is not competing with nine master requests.
   useEffect(() => {
     if (activeTab !== "vouchers") return;
-    const timer = window.setTimeout(() => { loadData(); }, 900);
+    const timer = window.setTimeout(() => { loadData(); }, 50);
     return () => window.clearTimeout(timer);
   }, [activeTab]);
 
@@ -900,7 +900,7 @@ export default function WarehouseTradingPage() {
     if (activeTab !== "vouchers") return;
     const timer = window.setTimeout(() => {
       loadVouchers();
-    }, 250);
+    }, 50);
     return () => window.clearTimeout(timer);
   }, [activeTab, activeVoucherType, voucherSortAsc, voucherPage, globalSearch]);
 
@@ -930,7 +930,7 @@ export default function WarehouseTradingPage() {
     if (activeTab !== "reports") return;
     const timer = window.setTimeout(() => {
       loadReport();
-    }, 40);
+    }, 0);
     return () => window.clearTimeout(timer);
   }, [activeTab, activeReport, reportPage, globalSearch, reportFilters.farmer_id, reportFilters.company_account_id, reportFilters.warehouse_id, reportFilters.sale_buyer_id, reportFilters.sale_company_account_id, reportFilters.sale_journey_token, reportFilters.sale_lorry_no, reportFilters.sale_bill_no, reportFilters.details_of_deduction]);
 
@@ -940,7 +940,7 @@ export default function WarehouseTradingPage() {
     if (activeTab !== "reports") return;
     const timer = window.setTimeout(() => {
       loadReportFilterOptions();
-    }, 40);
+    }, 0);
     return () => window.clearTimeout(timer);
   }, [activeTab, activeReport, reportFilters.farmer_id, reportFilters.company_account_id, reportFilters.warehouse_id, reportFilters.sale_buyer_id]);
 
