@@ -849,7 +849,7 @@ export default function WarehouseTradingPage() {
     const refreshFarmers = async () => {
       try {
         const res = await axios.get("/api/farmers", {
-          headers: { "Cache-Control": "no-cache" },
+          
           params: { _refresh: Date.now() },
         });
         const freshFarmers = Array.isArray(res.data) ? res.data : [];
@@ -1374,8 +1374,9 @@ export default function WarehouseTradingPage() {
       const params = {};
       if (filters.company_account_id) params.company_account_id = filters.company_account_id;
       if (filters.warehouse_id) params.warehouse_id = filters.warehouse_id;
-      if (filters.farmer_id) params.farmer_id = filters.farmer_id;
-      if (filters.sale_buyer_id) params.buyer_id = filters.sale_buyer_id;
+      const saleFilterReport = ["sale", "sale-party-ledger", "sale-followup", "sale-journey"].includes(reportType);
+      if (!saleFilterReport && filters.farmer_id) params.farmer_id = filters.farmer_id;
+      if (saleFilterReport && filters.sale_buyer_id) params.buyer_id = filters.sale_buyer_id;
 
       const cacheKey = JSON.stringify({ reportType, params });
       const cached = reportFilterCacheRef.current.get(cacheKey);
@@ -1445,7 +1446,7 @@ export default function WarehouseTradingPage() {
       const endpoint = reportEndpointMap[reportType] || reportType;
       const params = {};
       if (isPurchaseReport || isSaleReport) {
-        if (filters.farmer_id) params.farmer_id = filters.farmer_id;
+        if (isPurchaseReport && filters.farmer_id) params.farmer_id = filters.farmer_id;
         if (filters.warehouse_id) params.warehouse_id = filters.warehouse_id;
         if (filters.company_account_id) params.company_account_id = filters.company_account_id;
       }
@@ -5682,17 +5683,6 @@ export default function WarehouseTradingPage() {
                   disabled={!reportFilters.company_account_id && saleReportWarehouses.length === 0}
                 />
                 <SearchableSelect
-                  label="Farmer Filter"
-                  value={reportFilters.farmer_id}
-                  options={saleReportFarmers.map((farmer) => ({
-                    value: farmer.id || farmer._id,
-                    label: farmer.name,
-                  }))}
-                  onChange={(value) => updateReportFilter("farmer_id", value)}
-                  placeholder="All Farmers"
-                  disabled={!reportFilters.company_account_id && !reportFilters.warehouse_id && saleReportFarmers.length === 0}
-                />
-                <SearchableSelect
                   label="Buyer Filter"
                   value={reportFilters.sale_buyer_id}
                   options={saleReportBuyers.map((buyer) => ({
@@ -5702,7 +5692,7 @@ export default function WarehouseTradingPage() {
                   onChange={(value) => setReportFilters((prev) => ({ ...prev, sale_buyer_id: value }))}
                   placeholder="All Buyers"
                 />
-                {(reportFilters.farmer_id || reportFilters.warehouse_id || reportFilters.company_account_id || reportFilters.sale_buyer_id) && (
+                {(reportFilters.warehouse_id || reportFilters.company_account_id || reportFilters.sale_buyer_id) && (
                   <button
                     type="button"
                     onClick={() => setReportFilters((prev) => ({ ...prev, farmer_id: "", warehouse_id: "", company_account_id: "", sale_buyer_id: "" }))}
