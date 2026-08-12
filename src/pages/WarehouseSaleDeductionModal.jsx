@@ -33,6 +33,8 @@ export default function WarehouseSaleDeductionModal({
   saleTransportCharge = 0,
   tdsEligible,
   autoTdsAmount,
+  getBuyerName,
+  filteredConsignees = [],
 }) {
   const rows = Array.isArray(saleVoucherPassBills) ? saleVoucherPassBills : [];
   const filteredBills = useMemo(() => {
@@ -51,6 +53,19 @@ export default function WarehouseSaleDeductionModal({
   const otherDeduction = String(formData.other_deduction ?? "").trim() !== ""
     ? toNumber(formData.other_deduction)
     : saleQualityDeduction;
+
+  const buyerName =
+    getBuyerName?.(formData) ||
+    selectedSalePassBill?.buyer_name ||
+    selectedSalePassBill?.company_name ||
+    "-";
+  const selectedConsignee = (Array.isArray(filteredConsignees) ? filteredConsignees : [])
+    .find((item) => String(item?.id || item?._id || "") === String(formData.consignee_id || ""));
+  const consigneeName =
+    selectedConsignee?.name ||
+    selectedConsignee?.consignee_name ||
+    selectedSalePassBill?.consignee_name ||
+    "-";
 
   return (
     <div style={modalOverlayStyle}>
@@ -101,6 +116,8 @@ export default function WarehouseSaleDeductionModal({
 
           <div style={{ border: "1px solid #dbe4ef", borderRadius: 10, padding: 12, background: "#fff" }}>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
+              <div><label style={{ fontSize: 12, fontWeight: 700 }}>Buyer Name</label><input value={buyerName} readOnly style={readOnlyInp} /></div>
+              <div><label style={{ fontSize: 12, fontWeight: 700 }}>Consignee Name</label><input value={consigneeName} readOnly style={readOnlyInp} /></div>
               <div><label style={{ fontSize: 12, fontWeight: 700 }}>Voucher No</label><input value={formData.voucher_no || ""} readOnly style={readOnlyInp} /></div>
               <div><label style={{ fontSize: 12, fontWeight: 700 }}>Loading Date</label><input name="date" type="date" value={formData.date || ""} onChange={handleChange} style={inp} /></div>
               <div><label style={{ fontSize: 12, fontWeight: 700 }}>Unloading Date *</label><input name="unloading_date" type="date" value={formData.unloading_date || ""} onChange={handleChange} style={inp} /></div>
@@ -141,7 +158,6 @@ export default function WarehouseSaleDeductionModal({
 
         <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, flexWrap: "wrap", marginTop: 16 }}>
           <button type="button" onClick={() => setShowSaleDeductionModal(false)} style={{ ...btnAction, background: "#64748b" }}>Cancel</button>
-          <button type="button" onClick={saveSaleVoucherPassAndNew} style={{ ...btnAction, background: "#2563eb" }}>Save & New Bill</button>
           <button type="button" onClick={saveSaleVoucherPass} style={{ ...btnAction, background: "#0f766e" }}>Save F2 Voucher Pass</button>
         </div>
       </div>
