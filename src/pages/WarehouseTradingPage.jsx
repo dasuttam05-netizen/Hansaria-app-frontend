@@ -441,8 +441,8 @@ export default function WarehouseTradingPage() {
     const buyer = buyerById.get(buyerId) || {};
     const company = companyById.get(String(item?.company_id || buyerId)) || {};
     const candidates = [
-      item?.buyer_name,
       item?.party_name,
+      item?.buyer_name,
       item?.company_name,
       buyer?.name,
       buyer?.buyer_name,
@@ -3458,7 +3458,7 @@ export default function WarehouseTradingPage() {
     const entries = (Array.isArray(reportData) ? reportData : []).filter((row) => row.row_type !== "closing");
     const ledgerPartyName = (row) => activeReport === "purchase-party-ledger"
       ? (row.farmer_name || getFarmerName(row) || "Unknown Farmer")
-      : (getBuyerName(row) || row.party_name || row.buyer_name || row.company_name || row.consignee_name || "Unknown Party");
+      : (row.party_name || row.buyer_name || row.company_name || row.consignee_name || getBuyerName(row) || "Unknown Party");
     const ledgerGroupKey = (row) => `${ledgerPartyName(row)}::${row.company_account_id || row.company_account_name || row.account_name || ""}`;
     const sorted = entries.slice().sort((a, b) => {
       const leftParty = ledgerGroupKey(a);
