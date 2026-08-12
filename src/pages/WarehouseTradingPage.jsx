@@ -2075,11 +2075,30 @@ export default function WarehouseTradingPage() {
       const res = isEdit
         ? await axios.put(url, payload, { headers: requestHeaders })
         : await axios.post(url, payload, { headers: requestHeaders });
-      
+
       alert(`Voucher ${isEdit ? "updated" : "saved"} successfully`);
       if (res.data?.stats) {
         setPartyOutstanding(res.data.stats);
       }
+
+      if (activeVoucherType === "sale") {
+        try {
+          const saleId = res.data?.id || res.data?.sale?.id || res.data?.sale?._id || editId;
+          if (saleId) {
+            const summaryRes = await axios.get(`/api/wh-vouchers/sale/${saleId}/summary`);
+            const saleSummary = summaryRes.data || {};
+            const journalRows = Array.isArray(saleSummary?.journal_details) ? saleSummary.journal_details : [];
+            const deductionTotal = toNumber(saleSummary?.summary?.total_deduction || 0);
+            if (deductionTotal > 0 && journalRows.length === 0) {
+              alert("Sale saved, but auto F2 journal was not attached. Please check journal setup or try saving again.");
+            }
+          }
+        } catch (summaryErr) {
+          console.error("Sale journal verification failed:", summaryErr);
+          alert("Sale saved, but auto F2 journal verification failed.");
+        }
+      }
+
       setFormData(defaultForm());
       setPaymentAdjustments([]);
       setReceiptAdjustments([]);
@@ -6048,6 +6067,9 @@ export default function WarehouseTradingPage() {
                         <button type="button" onClick={() => onSelect(rowKey)} style={linkButtonStyle}>{row.receipt_amount}</button>
                       ) },
                       { key: "deduction", label: "Deduction", render: (row) => row.journal_amount },
+                      { key: "journal_no", label: "Journal No", render: (row) => (row.journal_details || []).map((detail) => detail.voucher_no || "-").filter(Boolean).join(", ") || "-" },
+                      { key: "credit_account", label: "Credit Account", render: (row) => (row.journal_details || []).map((detail) => detail.credit_account || detail.label || "-").filter(Boolean).join(", ") || "-" },
+                      { key: "description", label: "Description", render: (row) => (row.journal_details || []).map((detail) => detail.description || "-").filter(Boolean).join(" | ") || "-" },
                       { key: "balance", label: "Balance", render: (row) => row.bill_balance },
                     ]}
                     detailTitle={selectedSaleBill?.voucher_no || "Select a bill"}
@@ -6071,7 +6093,20 @@ export default function WarehouseTradingPage() {
                           (selectedSaleBill.journal_details || []).map((detail, index) => (
                             <div key={`${detail.voucher_no}-${index}`} style={paymentDetailRowStyle}>
                               <span>{detail.date || "-"}</span>
-                              <span>{detail.type || "-"}</span>
+                              <span>
+                                {String(detail.type || detail.label || "journal").toLowerCase().includes("cash_discount") || String(detail.label || "").toLowerCase().includes("cash discount")
+                                  ? "Auto F2 - Cash Discount"
+                                  : String(detail.type || detail.label || "journal").toLowerCase().includes("claim")
+                                    ? "Auto F2 - Claim"
+                                    : String(detail.type || detail.label || "journal").toLowerCase().includes("tds")
+                                      ? "Auto F2 - TDS"
+                                      : String(detail.type || detail.label || "journal").toLowerCase().includes("other")
+                                        ? "Auto F2 - Other Deduction"
+                                    : `Auto F2 - ${detail.type || detail.label || "Journal"}`}
+                              </span>
+                              <span>{detail.voucher_no || "-"}</span>
+                              <span>{detail.credit_account || detail.label || "-"}</span>
+                              <span style={{ maxWidth: 260, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{detail.description || "-"}</span>
                               <strong>Rs.{formatMoney(detail.amount || 0)}</strong>
                             </div>
                           ))
