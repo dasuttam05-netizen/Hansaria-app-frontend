@@ -433,12 +433,27 @@ export default function WarehouseTradingPage() {
     farmerById.get(String(item?.farmer_id))?.name ||
     "-";
   const getBuyerId = (item) => item?.buyer_id || item?.company_id || "";
-  const getBuyerName = (item) =>
-    item?.buyer_name ||
-    buyerById.get(String(getBuyerId(item)))?.name ||
-    item?.company_name ||
-    companyById.get(String(item?.company_id))?.name ||
-    "-";
+  const getBuyerName = (item) => {
+    const buyerId = String(getBuyerId(item) || "");
+    const buyer = buyerById.get(buyerId) || {};
+    const company = companyById.get(String(item?.company_id || buyerId)) || {};
+    const candidates = [
+      item?.buyer_name,
+      item?.party_name,
+      item?.company_name,
+      buyer?.name,
+      buyer?.buyer_name,
+      buyer?.company_name,
+      buyer?.party_name,
+      company?.name,
+      company?.company_name,
+    ];
+    const found = candidates.find((value) => {
+      const text = String(value ?? "").trim();
+      return text && text !== "-" && text.toLowerCase() !== "unknown party";
+    });
+    return found || "-";
+  };
   const saleQtyFromData = (data) => {
     const newWeight = Math.max(toNumber(data.gross_weight) - toNumber(data.tare_weight), 0);
     return newWeight || toNumber(data.quantity) || toNumber(data.unloading_qty);
@@ -858,9 +873,9 @@ export default function WarehouseTradingPage() {
 
         // Keep the other cached master data, but replace only the farmers list.
         try {
-          const cached = JSON.parse(sessionStorage.getItem("warehouseTradingMasterData:v2") || "null");
+          const cached = JSON.parse(sessionStorage.getItem("warehouseTradingMasterData:v3") || "null");
           if (cached?.data) {
-            sessionStorage.setItem("warehouseTradingMasterData:v2", JSON.stringify({
+            sessionStorage.setItem("warehouseTradingMasterData:v3", JSON.stringify({
               ...cached,
               time: Date.now(),
               data: { ...cached.data, farmers: freshFarmers },
@@ -1114,7 +1129,7 @@ export default function WarehouseTradingPage() {
       // one in-flight request group so React effects cannot fire the same 9 calls twice.
       if (!force) {
         try {
-          const cached = JSON.parse(sessionStorage.getItem("warehouseTradingMasterData:v2") || "null");
+          const cached = JSON.parse(sessionStorage.getItem("warehouseTradingMasterData:v3") || "null");
           if (cached?.data && Date.now() - Number(cached.time || 0) < 30 * 60 * 1000) {
             const data = cached.data;
             setWarehouses(Array.isArray(data.warehouses) ? data.warehouses : []);
@@ -1169,7 +1184,7 @@ export default function WarehouseTradingPage() {
         setLocations(data.locations);
         masterDataLoadedRef.current = true;
         try {
-          sessionStorage.setItem("warehouseTradingMasterData:v2", JSON.stringify({
+          sessionStorage.setItem("warehouseTradingMasterData:v3", JSON.stringify({
             time: Date.now(),
             data,
           }));
@@ -3227,7 +3242,7 @@ export default function WarehouseTradingPage() {
     ],
     "sale-party-ledger": [
       ["date", "Date", (item) => (item.row_type === "closing" ? "" : formatLedgerDate(item.date))],
-      ["party", "Party Name", (item) => (item.row_type === "closing" ? `Closing Balance (${item.closing_side})` : (item.party_name || item.buyer_name || item.company_name || item.consignee_name || "-"))],
+      ["party", "Party Name", (item) => (item.row_type === "closing" ? `Closing Balance (${item.closing_side})` : getBuyerName(item))],
       ["account", "Company Account", (item) => (item.row_type === "closing" ? "" : (item.company_account_name || getAccountName(item) || "-"))],
       ["voucher_type", "Type", (item) => (item.row_type === "closing" ? "" : (item.voucher_type || "-"))],
       ["voucher_no", "Voucher / Bill No", (item) => (item.row_type === "closing" ? "" : (item.voucher_no || item.bill_no || "-"))],
@@ -3382,7 +3397,7 @@ export default function WarehouseTradingPage() {
     const entries = (Array.isArray(reportData) ? reportData : []).filter((row) => row.row_type !== "closing");
     const ledgerPartyName = (row) => activeReport === "purchase-party-ledger"
       ? (row.farmer_name || getFarmerName(row) || "Unknown Farmer")
-      : (row.party_name || row.buyer_name || row.company_name || row.consignee_name || "Unknown Party");
+      : (getBuyerName(row) || row.party_name || row.buyer_name || row.company_name || row.consignee_name || "Unknown Party");
     const ledgerGroupKey = (row) => `${ledgerPartyName(row)}::${row.company_account_id || row.company_account_name || row.account_name || ""}`;
     const sorted = entries.slice().sort((a, b) => {
       const leftParty = ledgerGroupKey(a);
@@ -3470,12 +3485,22 @@ export default function WarehouseTradingPage() {
   const saleReportWarehouses = purchasePartyLedgerWarehouses;
   const saleReportFarmers = purchasePartyLedgerFarmers;
   const saleReportBuyers = useMemo(() => {
-    if (Array.isArray(reportFilterOptions.buyers) && reportFilterOptions.buyers.length) {
-      return reportFilterOptions.buyers;
-    }
+    const byId = new Map();
+    const add = (item) => {
+      const id = String(item?.id || item?._id || item?.legacy_id || "").trim();
+      const name = String(item?.name || item?.buyer_name || item?.company_name || item?.party_name || "").trim();
+      if (id && name && name !== "-") byId.set(id, { ...item, id, name });
+    };
+
+    (reportFilterOptions.buyers || []).forEach(add);
     const ids = new Set((reportFilterOptions.buyer_ids || []).map(String));
-    return buyerNames.filter((buyer) => ids.has(String(buyer.id || buyer._id || "")));
-  }, [buyerNames, reportFilterOptions.buyer_ids, reportFilterOptions.buyers]);
+    buyerNames.filter((buyer) => !ids.size || ids.has(String(buyer.id || buyer._id || ""))).forEach(add);
+    companies.filter((company) => !ids.size || ids.has(String(company.id || company._id || ""))).forEach((company) => {
+      add({ ...company, name: company.name || company.company_name });
+    });
+
+    return Array.from(byId.values()).sort((a, b) => String(a.name).localeCompare(String(b.name), undefined, { sensitivity: "base" }));
+  }, [buyerNames, companies, reportFilterOptions.buyer_ids, reportFilterOptions.buyers]);
 
   const normalizedGlobalSearch = String(globalSearch || "").trim().toLowerCase();
   const matchesGlobalSearch = (value) =>
