@@ -355,7 +355,6 @@ export default function WarehouseTradingPage() {
   const [importingReceipt, setImportingReceipt] = useState(false);
   const [voucherNumberLoading, setVoucherNumberLoading] = useState(false);
   const [showSaleDeductionModal, setShowSaleDeductionModal] = useState(false);
-  const [journalPostedPopup, setJournalPostedPopup] = useState(null);
   const [saleBillSearch, setSaleBillSearch] = useState("");
   const [journeyTemplateId, setJourneyTemplateId] = useState("");
   const [showSaleAdjustedModal, setShowSaleAdjustedModal] = useState(false);
@@ -2904,16 +2903,8 @@ export default function WarehouseTradingPage() {
 
     setLoading(true);
     try {
-      const saveResponse = await axios.put(`/api/wh-vouchers/sale/${editId}`, payload);
-      const postedJournals = Array.isArray(saveResponse?.data?.journals) ? saveResponse.data.journals : [];
-      if (postedJournals.length) {
-        setJournalPostedPopup({
-          voucherNo: formData.voucher_no || "",
-          journals: postedJournals,
-        });
-      } else {
-        alert("Sale voucher pass saved successfully. No deduction amount was posted as a journal.");
-      }
+      await axios.put(`/api/wh-vouchers/sale/${editId}`, payload);
+      alert("Sale voucher pass saved successfully");
       const remainingQtyAfterSave = Math.max(saleDispatchQty - saleUnloadingQty, 0);
       const nextVoucherNo = await axios
         .get(`/api/wh-vouchers/next-voucher-no`, { params: { type: "sale" } })
@@ -2956,8 +2947,158 @@ export default function WarehouseTradingPage() {
     }
   };
 
-  // Save & New was intentionally removed from the F2 flow.
-  const saveSaleVoucherPassAndNew = saveSaleVoucherPass;
+  const saveSaleVoucherPassAndNew = async () => {
+    if (!editId) {
+      alert("Please select sale bill");
+      return;
+    }
+    if (!formData.unloading_date) {
+      alert("Please enter unloading date");
+      return;
+    }
+    if (saleUnloadingQty <= 0) {
+      alert("Please enter unloading weight");
+      return;
+    }
+
+    const manualClaimEntered = String(formData.claim_amount ?? "").trim() !== "";
+    const manualOtherDeductionEntered = String(formData.other_deduction ?? "").trim() !== "";
+    const manualTdsEntered = String(formData.tds_amount ?? "").trim() !== "";
+    const finalClaimAmount = manualClaimEntered ? toNumber(formData.claim_amount) : saleShortageAmount;
+    const finalOtherDeduction = manualOtherDeductionEntered ? toNumber(formData.other_deduction) : saleQualityDeduction;
+    const finalTdsAmount = manualTdsEntered ? toNumber(formData.tds_amount) : (tdsEligible ? autoTdsAmount : 0);
+    const finalCdAmount = Number((saleBillAmountFromData(formData) * toNumber(formData.cd_percent) / 100).toFixed(2));
+    const unloadingDate = formData.unloading_date || "";
+    const dueDays = formData.due_days !== undefined && formData.due_days !== null && String(formData.due_days).trim() !== "" ? toNumber(formData.due_days) : "";
+    const dueDate = formData.due_date || (unloadingDate && dueDays !== "" ? (() => {
+      const parsed = new Date(`${unloadingDate}T00:00:00Z`);
+      if (Number.isNaN(parsed.getTime())) return "";
+      parsed.setUTCDate(parsed.getUTCDate() + toNumber(dueDays));
+      return parsed.toISOString().slice(0, 10);
+    })() : "");
+    const payload = {
+      ...formData,
+      deduction_only: true,
+      voucher_no: formData.voucher_no || null,
+      date: formData.date || null,
+      bill_no: formData.bill_no || formData.voucher_no || null,
+      bill_date: formData.bill_date || formData.date || null,
+      journey_token: formData.journey_token || buildJourneyToken(),
+      unloading_date: unloadingDate,
+      due_days: dueDays,
+      due_date: dueDate,
+      unloading_qty: saleUnloadingQty,
+      shortage_quantity: saleShortageQty,
+      shortage_amount: saleShortageAmount,
+      claim_amount: finalClaimAmount,
+      other_deduction: finalOtherDeduction,
+      transport_charge: saleTransportCharge,
+      cd_amount: finalCdAmount,
+      total_deduction: finalClaimAmount + finalOtherDeduction + saleTransportCharge + finalCdAmount + toNumber(formData.adjustment_amount) + finalTdsAmount,
+      tds_amount: finalTdsAmount,
+      reject_qty: toNumber(formData.reject_qty),
+      amount: saleBillAmountFromData(formData),
+    };
+
+    setLoading(true);
+    try {
+      await axios.put(`/api/wh-vouchers/sale/${editId}`, payload);
+      alert("Sale voucher pass saved successfully");
+      const remainingQtyAfterSave = Math.max(saleDispatchQty - saleUnloadingQty, 0);
+      const addQty = Math.max(toNumber(formData.add_qty), 0);
+      const nextDispatchQty = Math.max(remainingQtyAfterSave + addQty, 0);
+      const nextRate = toNumber(formData.rate);
+      const nextAmount = Number((nextDispatchQty * nextRate).toFixed(2));
+      const nextVoucherNo = await axios
+        .get(`/api/wh-vouchers/next-voucher-no`, { params: { type: "sale" } })
+        .then((res) => res.data?.voucher_no || "")
+        .catch(() => "");
+
+      if (nextDispatchQty <= 0) {
+        alert("Sale voucher pass saved successfully. No remaining quantity left to create the next bill.");
+        setShowSaleDeductionModal(false);
+        setEditId(null);
+        setFormData(defaultForm());
+        await loadVouchers();
+        if (activeTab === "reports") await loadReport();
+        fetchNextVoucherNo(activeVoucherType);
+        return;
+      }
+
+      const nextPayload = {
+        ...formData,
+        voucher_no: nextVoucherNo || "",
+        bill_no: nextVoucherNo || "",
+        bill_date: new Date().toISOString().slice(0, 10),
+        date: new Date().toISOString().slice(0, 10),
+        unloading_date: "",
+        due_days: "",
+        due_date: "",
+        unloading_qty: "",
+        shortage_quantity: "",
+        shortage_amount: "",
+        claim_amount: "",
+        other_deduction: "",
+        cd_percent: "",
+        cd_amount: "",
+        adjustment_amount: "",
+        tds_amount: "",
+        round_off: "",
+        add_qty: "",
+        dispatch_qty: formatDecimal4(nextDispatchQty),
+        quantity: formatDecimal4(nextDispatchQty),
+        rate: formData.rate || "",
+        amount: nextAmount,
+        buyer_id: formData.buyer_id || formData.company_id || "",
+        company_id: formData.company_id || formData.buyer_id || "",
+        consignee_id: formData.consignee_id || "",
+        buyer_name: formData.buyer_name || "",
+        consignee_name: formData.consignee_name || "",
+        company_account_id: formData.company_account_id || "",
+        product_id: formData.product_id || "",
+        warehouse_id: formData.warehouse_id || "",
+        location_id: formData.location_id || "",
+        employee_id: formData.employee_id || "",
+        lorry_no: formData.lorry_no || "",
+        journey_token: formData.journey_token || buildJourneyToken(),
+      };
+      const createRes = await axios.post("/api/wh-vouchers/sale", nextPayload);
+      setFormData((prev) => ({
+        ...nextPayload,
+        warehouse_id: prev.warehouse_id || "",
+        company_account_id: prev.company_account_id || "",
+        employee_id: prev.employee_id || "",
+        location_id: prev.location_id || "",
+        lorry_no: selectedSalePassBill?.lorry_no || prev.lorry_no || "",
+        journey_token: prev.journey_token || buildJourneyToken(),
+        bill_no: nextVoucherNo || "",
+        voucher_no: nextVoucherNo || "",
+        bill_date: new Date().toISOString().slice(0, 10),
+        date: new Date().toISOString().slice(0, 10),
+        dispatch_qty: nextDispatchQty > 0 ? nextDispatchQty.toFixed(4) : "",
+        quantity: nextDispatchQty > 0 ? nextDispatchQty.toFixed(4) : "",
+        add_qty: "",
+        rate: formData.rate || "",
+        amount: nextAmount,
+        unloading_qty: "",
+        company_id: formData.company_id || formData.buyer_id || "",
+        buyer_id: formData.buyer_id || formData.company_id || "",
+        consignee_id: formData.consignee_id || "",
+        unloading_date: "",
+        due_days: "",
+        due_date: "",
+      }));
+      setEditId(createRes.data?.id || createRes.data?._id || editId);
+      await loadVouchers();
+      if (activeTab === "reports") await loadReport();
+      fetchNextVoucherNo(activeVoucherType);
+    } catch (err) {
+      console.error(err);
+      alert(err?.response?.data?.error || "Failed to save sale voucher pass");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const setPaymentAdjustmentAmount = (purchase, value) => {
     const purchaseId = String(purchase.id || purchase._id);
@@ -6524,35 +6665,6 @@ export default function WarehouseTradingPage() {
           getSalePreviewDataForRow={getSalePreviewDataForRow}
           axios={axios}
         />
-      )}
-      {journalPostedPopup && (
-        <div style={{
-          position: "fixed", inset: 0, zIndex: 99999, background: "rgba(15, 23, 42, 0.42)",
-          display: "flex", alignItems: "center", justifyContent: "center", padding: 20,
-        }}>
-          <div style={{ width: "min(520px, 96vw)", background: "#fff", borderRadius: 14, boxShadow: "0 24px 70px rgba(0,0,0,.25)", overflow: "hidden" }}>
-            <div style={{ background: "#0f766e", color: "#fff", padding: "16px 18px", fontSize: 18, fontWeight: 800 }}>
-              ✓ Journal Posted in Ledger
-            </div>
-            <div style={{ padding: 18 }}>
-              <div style={{ color: "#334155", marginBottom: 12 }}>
-                Sale voucher <strong>{journalPostedPopup.voucherNo || "-"}</strong> has been saved and the following journal entries were posted automatically.
-              </div>
-              <div style={{ border: "1px solid #e2e8f0", borderRadius: 10, overflow: "hidden" }}>
-                {(journalPostedPopup.journals || []).map((j, index) => (
-                  <div key={`${j.voucher_no || j.id || index}-${index}`} style={{ display: "grid", gridTemplateColumns: "1.1fr 1.2fr .8fr", gap: 8, padding: "9px 10px", borderBottom: index === (journalPostedPopup.journals || []).length - 1 ? "none" : "1px solid #eef2f7", fontSize: 13 }}>
-                    <strong>{j.voucher_no || "-"}</strong>
-                    <span>{j.type || j.credit_account || "Journal"}</span>
-                    <strong style={{ textAlign: "right" }}>Rs.{formatMoney(j.amount || 0)}</strong>
-                  </div>
-                ))}
-              </div>
-              <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 16 }}>
-                <button type="button" onClick={() => setJournalPostedPopup(null)} style={{ ...btnAction, background: "#0f766e" }}>OK</button>
-              </div>
-            </div>
-          </div>
-        </div>
       )}
       </div>
     </>
