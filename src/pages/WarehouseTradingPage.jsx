@@ -6376,7 +6376,6 @@ export default function WarehouseTradingPage() {
           toNumber={toNumber}
           selectSaleVoucherForPass={selectSaleVoucherForPass}
           saveSaleVoucherPass={saveSaleVoucherPass}
-          saveSaleVoucherPassAndNew={saveSaleVoucherPassAndNew}
           saleQualityDeduction={saleQualityDeduction}
           saleTransportCharge={saleTransportCharge}
           saleCashDiscountAmount={saleCashDiscountAmount}
