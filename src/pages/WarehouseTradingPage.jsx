@@ -273,6 +273,7 @@ export default function WarehouseTradingPage() {
   const [warehouses, setWarehouses] = useState([]);
   const [farmers, setFarmers] = useState([]);
   const [accountFarmers, setAccountFarmers] = useState([]);
+  const [pendingReceiptBuyers, setPendingReceiptBuyers] = useState([]);
   const [paymentWarehouses, setPaymentWarehouses] = useState([]);
   const [buyerNames, setBuyerNames] = useState([]);
   const [companies, setCompanies] = useState([]);
@@ -386,6 +387,8 @@ export default function WarehouseTradingPage() {
   const outstandingInFlightRef = useRef(new Map());
   const paymentFarmersCacheRef = useRef(new Map());
   const paymentFarmersInFlightRef = useRef(new Map());
+  const receiptBuyersCacheRef = useRef(new Map());
+  const receiptBuyersInFlightRef = useRef(new Map());
   const arrowNavRootRef = useRef(null);
   const voucherPanelRef = useRef(null);
   const reportPanelRef = useRef(null);
@@ -1273,6 +1276,44 @@ export default function WarehouseTradingPage() {
     return request;
   };
 
+  const loadPendingReceiptBuyers = async (companyAccountId = "", warehouseId = "", excludeReceiptId = "") => {
+    const account = String(companyAccountId || "").trim();
+    const warehouse = String(warehouseId || "").trim();
+    const exclude = String(excludeReceiptId || "").trim();
+    if (!account) {
+      setPendingReceiptBuyers([]);
+      return [];
+    }
+    const key = `${account}::${warehouse}::${exclude}`;
+    const cached = receiptBuyersCacheRef.current.get(key);
+    if (cached && Date.now() - cached.time < 15000) {
+      setPendingReceiptBuyers(cached.rows || []);
+      return cached.rows || [];
+    }
+    const inFlight = receiptBuyersInFlightRef.current.get(key);
+    if (inFlight) return inFlight;
+    const request = axios.get("/api/wh-vouchers/receipt-pending-buyers", {
+      params: { company_account_id: account, warehouse_id: warehouse || undefined, exclude_receipt_id: exclude || undefined },
+    }).then((res) => {
+      const rows = Array.isArray(res.data) ? res.data : [];
+      receiptBuyersCacheRef.current.set(key, { time: Date.now(), rows });
+      setPendingReceiptBuyers(rows);
+      return rows;
+    }).catch((err) => {
+      console.error(err);
+      setPendingReceiptBuyers([]);
+      return [];
+    }).finally(() => receiptBuyersInFlightRef.current.delete(key));
+    receiptBuyersInFlightRef.current.set(key, request);
+    return request;
+  };
+
+  useEffect(() => {
+    if (activeVoucherType === "receipt" && formData.company_account_id) {
+      loadPendingReceiptBuyers(formData.company_account_id, formData.warehouse_id, editId);
+    }
+  }, [activeVoucherType, formData.company_account_id, formData.warehouse_id, editId]);
+
   const loadOutstanding = async (partyType, partyId, warehouseId = null, excludePaymentId = null, companyAccountId = null) => {
     if (!partyType || !partyId) {
       setPartyOutstanding(null);
@@ -1755,14 +1796,23 @@ export default function WarehouseTradingPage() {
       if (activeVoucherType === "payment" && formData.farmer_id && value) {
         loadOutstanding("farmer", formData.farmer_id, value, editId, formData.company_account_id);
       }
-      if (activeVoucherType === "receipt" && formData.company_id) {
-        loadOutstanding("company", formData.company_id, value, null, formData.company_account_id);
+      if (activeVoucherType === "receipt") {
+        loadPendingReceiptBuyers(formData.company_account_id, value, editId);
+        if (formData.company_id) {
+          loadOutstanding("company", formData.company_id, value, null, formData.company_account_id);
+        }
       }
       if (activeVoucherType === "sale" && (formData.buyer_id || formData.company_id)) {
         loadOutstanding("company", formData.buyer_id || formData.company_id, value, null, formData.company_account_id);
       }
     }
-    if ((activeVoucherType === "receipt" || activeVoucherType === "sale") && name === "company_account_id" && (formData.company_id || formData.buyer_id)) {
+    if (activeVoucherType === "receipt" && name === "company_account_id") {
+      loadPendingReceiptBuyers(value, formData.warehouse_id, editId);
+      if (formData.company_id) {
+        loadOutstanding("company", formData.company_id, formData.warehouse_id, null, value);
+      }
+    }
+    if (activeVoucherType === "sale" && name === "company_account_id" && (formData.company_id || formData.buyer_id)) {
       loadOutstanding("company", formData.company_id || formData.buyer_id, formData.warehouse_id, null, value);
     }
     if (activeVoucherType === "payment" && name === "amount") {
@@ -2812,7 +2862,12 @@ export default function WarehouseTradingPage() {
       return;
     }
 
-    const finalTdsAmount = tdsEligible ? autoTdsAmount : toNumber(formData.tds_amount);
+    const manualClaimEntered = String(formData.claim_amount ?? "").trim() !== "";
+    const manualOtherDeductionEntered = String(formData.other_deduction ?? "").trim() !== "";
+    const manualTdsEntered = String(formData.tds_amount ?? "").trim() !== "";
+    const finalClaimAmount = manualClaimEntered ? toNumber(formData.claim_amount) : saleShortageAmount;
+    const finalOtherDeduction = manualOtherDeductionEntered ? toNumber(formData.other_deduction) : saleQualityDeduction;
+    const finalTdsAmount = manualTdsEntered ? toNumber(formData.tds_amount) : (tdsEligible ? autoTdsAmount : 0);
     const finalCdAmount = Number((saleBillAmountFromData(formData) * toNumber(formData.cd_percent) / 100).toFixed(2));
     const unloadingDate = formData.unloading_date || "";
     const dueDays = formData.due_days !== undefined && formData.due_days !== null && String(formData.due_days).trim() !== "" ? toNumber(formData.due_days) : "";
@@ -2836,11 +2891,11 @@ export default function WarehouseTradingPage() {
       unloading_qty: saleUnloadingQty,
       shortage_quantity: saleShortageQty,
       shortage_amount: saleShortageAmount,
-      claim_amount: saleShortageAmount,
-      other_deduction: saleQualityDeduction,
+      claim_amount: finalClaimAmount,
+      other_deduction: finalOtherDeduction,
       transport_charge: saleTransportCharge,
       cd_amount: finalCdAmount,
-      total_deduction: saleQualityDeduction + saleTransportCharge + finalCdAmount,
+      total_deduction: finalClaimAmount + finalOtherDeduction + saleTransportCharge + finalCdAmount + toNumber(formData.adjustment_amount) + finalTdsAmount,
       tds_amount: finalTdsAmount,
       reject_qty: toNumber(formData.reject_qty),
       amount: saleBillAmountFromData(formData),
@@ -2906,7 +2961,12 @@ export default function WarehouseTradingPage() {
       return;
     }
 
-    const finalTdsAmount = tdsEligible ? autoTdsAmount : toNumber(formData.tds_amount);
+    const manualClaimEntered = String(formData.claim_amount ?? "").trim() !== "";
+    const manualOtherDeductionEntered = String(formData.other_deduction ?? "").trim() !== "";
+    const manualTdsEntered = String(formData.tds_amount ?? "").trim() !== "";
+    const finalClaimAmount = manualClaimEntered ? toNumber(formData.claim_amount) : saleShortageAmount;
+    const finalOtherDeduction = manualOtherDeductionEntered ? toNumber(formData.other_deduction) : saleQualityDeduction;
+    const finalTdsAmount = manualTdsEntered ? toNumber(formData.tds_amount) : (tdsEligible ? autoTdsAmount : 0);
     const finalCdAmount = Number((saleBillAmountFromData(formData) * toNumber(formData.cd_percent) / 100).toFixed(2));
     const unloadingDate = formData.unloading_date || "";
     const dueDays = formData.due_days !== undefined && formData.due_days !== null && String(formData.due_days).trim() !== "" ? toNumber(formData.due_days) : "";
@@ -2930,11 +2990,11 @@ export default function WarehouseTradingPage() {
       unloading_qty: saleUnloadingQty,
       shortage_quantity: saleShortageQty,
       shortage_amount: saleShortageAmount,
-      claim_amount: saleShortageAmount,
-      other_deduction: saleQualityDeduction,
+      claim_amount: finalClaimAmount,
+      other_deduction: finalOtherDeduction,
       transport_charge: saleTransportCharge,
       cd_amount: finalCdAmount,
-      total_deduction: saleQualityDeduction + saleTransportCharge + finalCdAmount,
+      total_deduction: finalClaimAmount + finalOtherDeduction + saleTransportCharge + finalCdAmount + toNumber(formData.adjustment_amount) + finalTdsAmount,
       tds_amount: finalTdsAmount,
       reject_qty: toNumber(formData.reject_qty),
       amount: saleBillAmountFromData(formData),
@@ -5268,31 +5328,65 @@ export default function WarehouseTradingPage() {
                 )}
                 {activeVoucherType === "receipt" && (
                   <>
-                    <Field label="Reference Type">
+                    <Field label="Pending Buyer">
                       <select
-                        name="reference_type"
-                        value={formData.reference_type}
+                        name="company_id"
+                        value={formData.company_id || ""}
                         onChange={handleChange}
                         style={inp}
                       >
-                        <option value="">Select Reference</option>
-                        <option value="purchase">Purchase Bill</option>
-                        <option value="sale">Sale Bill</option>
-                        <option value="other">Other</option>
+                        <option value="">Select Pending Buyer</option>
+                        {pendingReceiptBuyers.map((row) => {
+                          const buyerId = String(row.company_id || row.buyer_id || row.id || "");
+                          const buyer = buyerNames.find((b) => String(b.id || b._id) === buyerId);
+                          return (
+                            <option key={buyerId} value={buyerId}>
+                              {buyer?.name || row.buyer_name || row.company_name || buyerId} — Due Rs.{formatMoney(row.outstanding)}
+                            </option>
+                          );
+                        })}
+                        {formData.company_account_id && pendingReceiptBuyers.length === 0 && (
+                          <option value="" disabled>No buyers with outstanding balance</option>
+                        )}
                       </select>
                     </Field>
-                    <Field label="Reference ID">
+                    <Field label="Receipt Amount">
                       <input
-                        name="reference_id"
-                        value={formData.reference_id}
+                        name="amount"
+                        type="number"
+                        step="0.0001"
+                        value={formData.amount}
                         onChange={handleChange}
-                        style={inp}
-                        placeholder="Optional bill ID"
+                        style={paymentAmountInput}
+                        required
                       />
                     </Field>
-                    <Field label="Amount">
-                      <input name="amount" type="number" step="0.0001" value={formData.amount} onChange={handleChange} style={inp} required />
+                    <Field label="Reference / Note">
+                      <input name="reference_id" value={formData.reference_id} onChange={handleChange} style={inp} placeholder="Optional reference note" />
                     </Field>
+                    <div style={{ gridColumn: "1 / -1", ...paymentSelectedBar }}>
+                      <span><b>Account:</b> {getAccountName(formData) || "Choose account"}</span>
+                      <span><b>Warehouse:</b> {getWarehouseName(formData) || "Choose warehouse"}</span>
+                      <span><b>Buyer:</b> {getBuyerName({ company_id: formData.company_id }) || "Pick the pending buyer"}</span>
+                      <span><b>Pending:</b> Rs.{formatMoney(partyOutstanding?.stats?.outstanding ?? partyOutstanding?.outstanding ?? pendingReceiptBuyers.find((r) => String(r.company_id || r.buyer_id || r.id) === String(formData.company_id))?.outstanding ?? 0)}</span>
+                    </div>
+                    <div style={{ gridColumn: "1 / -1", ...paymentFinancialSummary }}>
+                      <div style={paymentStatCard}><span style={paymentStatLabel}>Total Sale</span><strong style={paymentStatValue}>Rs.{formatMoney(partyOutstanding?.stats?.total_sale ?? partyOutstanding?.stats?.total_bill ?? 0)}</strong></div>
+                      <div style={paymentStatCard}><span style={paymentStatLabel}>Total Received</span><strong style={paymentStatValue}>Rs.{formatMoney(partyOutstanding?.stats?.total_receipt ?? partyOutstanding?.stats?.total_payment ?? 0)}</strong></div>
+                      <div style={{ ...paymentStatCard, ...paymentDueCard }}><span style={paymentStatLabel}>Total Due</span><strong style={{ ...paymentStatValue, color: "#b91c1c" }}>Rs.{formatMoney(partyOutstanding?.stats?.outstanding ?? partyOutstanding?.outstanding ?? 0)}</strong></div>
+                      <div style={paymentStatCard}><span style={paymentStatLabel}>Adjusted</span><strong style={paymentStatValue}>Rs.{formatMoney(receiptAdjustmentTotal)}</strong></div>
+                    </div>
+                    <div style={{ gridColumn: "1 / -1", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                      <button
+                        type="button"
+                        onClick={openReceiptAdjustmentPopup}
+                        style={{ ...btnAction, background: "#2563eb", minHeight: 42 }}
+                        disabled={!formData.company_id || toNumber(formData.amount) <= 0}
+                      >
+                        Open Adjustment
+                      </button>
+                      <span style={paymentAdjustedText}>Adjusted: <strong>Rs.{formatMoney(receiptAdjustmentTotal)}</strong></span>
+                    </div>
                   </>
                 )}
 
@@ -6284,6 +6378,7 @@ export default function WarehouseTradingPage() {
           saveSaleVoucherPass={saveSaleVoucherPass}
           saveSaleVoucherPassAndNew={saveSaleVoucherPassAndNew}
           saleQualityDeduction={saleQualityDeduction}
+          saleTransportCharge={saleTransportCharge}
           saleCashDiscountAmount={saleCashDiscountAmount}
           saleBillAmountFromData={saleBillAmountFromData}
           tdsEligible={tdsEligible}
