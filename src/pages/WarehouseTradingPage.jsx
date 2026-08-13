@@ -3460,7 +3460,52 @@ export default function WarehouseTradingPage() {
       ? (row.farmer_name || getFarmerName(row) || "Unknown Farmer")
       : (getBuyerName(row) || row.party_name || row.buyer_name || row.company_name || row.consignee_name || "Unknown Party");
     const ledgerGroupKey = (row) => `${ledgerPartyName(row)}::${row.company_account_id || row.company_account_name || row.account_name || ""}`;
-    const sorted = entries.slice().sort((a, b) => {
+    // Sale Party Ledger supports two views:
+    // 1) Normal: one Sale row with gross debit and all F2 deductions as one credit,
+    //    while receipts remain separate credit entries.
+    // 2) Detailed: every Claim/Shortage/CD/Freight/Others/Adjustment/TDS is shown separately.
+    const ledgerEntries = activeReport === "sale-party-ledger" && !reportFilters.details_of_deduction
+      ? (() => {
+          const saleRows = entries.filter((row) => String(row.voucher_type || "") === "Sale");
+          const deductionRows = entries.filter((row) => String(row.voucher_type || "").startsWith("Sale - ") && row.ledger_component);
+          const receiptRows = entries.filter((row) => String(row.voucher_type || "") === "Receipt");
+          const deductionsBySale = new Map();
+          deductionRows.forEach((row) => {
+            const key = String(row.sale_id || "");
+            if (!key) return;
+            const list = deductionsBySale.get(key) || [];
+            list.push(row);
+            deductionsBySale.set(key, list);
+          });
+          const normalSales = saleRows.map((sale) => {
+            const saleId = String(sale.sale_id || sale.id || sale._id || "");
+            const parts = deductionsBySale.get(saleId) || [];
+            const deductionTotal = parts.reduce((sum, row) => sum + toNumber(row.credit || row.journal_amount || 0), 0);
+            const deductionLabels = parts
+              .map((row) => String(row.voucher_type || "").replace(/^Sale\s*-\s*/, ""))
+              .filter(Boolean)
+              .join(", ");
+            return {
+              ...sale,
+              particulars: deductionLabels
+                ? `Sale Bill ${sale.voucher_no || ""} | Less: ${deductionLabels}`
+                : `Sale Bill ${sale.voucher_no || ""}`.trim(),
+              adjustment_details: deductionLabels
+                ? `Total deductions: Rs.${formatMoney(deductionTotal)}`
+                : "",
+              journal_amount: Number(deductionTotal.toFixed(2)),
+              deduction_total: Number(deductionTotal.toFixed(2)),
+              debit: Number(toNumber(sale.debit || sale.sale_amount || sale.amount || 0).toFixed(2)),
+              credit: Number(deductionTotal.toFixed(2)),
+              voucher_type: "Sale",
+              ledger_view: "normal",
+            };
+          });
+          return [...normalSales, ...receiptRows];
+        })()
+      : entries;
+
+    const sorted = ledgerEntries.slice().sort((a, b) => {
       const leftParty = ledgerGroupKey(a);
       const rightParty = ledgerGroupKey(b);
       const partyCmp = String(leftParty).localeCompare(String(rightParty));
@@ -3516,7 +3561,7 @@ export default function WarehouseTradingPage() {
     });
     pushClosing();
     return grouped;
-  }, [activeReport, currentReportRows, reportData, farmers, buyerNames, companyAccounts, saleFollowupFilter]);
+  }, [activeReport, currentReportRows, reportData, farmers, buyerNames, companyAccounts, saleFollowupFilter, reportFilters.details_of_deduction]);
   const saleFollowupRows = activeReport === "sale-followup" ? displayReportData : [];
   const purchasePartyLedgerCompanyAccounts = useMemo(() => {
     if (Array.isArray(reportFilterOptions.accounts) && reportFilterOptions.accounts.length) {
@@ -5884,7 +5929,20 @@ export default function WarehouseTradingPage() {
                   onChange={(value) => setReportFilters((prev) => ({ ...prev, sale_buyer_id: value }))}
                   placeholder="All Buyers"
                 />
-                {(reportFilters.warehouse_id || reportFilters.company_account_id || reportFilters.sale_buyer_id) && (
+                {activeReport === "sale-party-ledger" && (
+                  <label style={{ display: "flex", flexDirection: "column", gap: 5, minWidth: 170, fontSize: 12, fontWeight: 700, color: "#334155" }}>
+                    Ledger View
+                    <select
+                      value={reportFilters.details_of_deduction ? "details" : "normal"}
+                      onChange={(event) => updateReportFilter("details_of_deduction", event.target.value === "details")}
+                      style={{ ...inp, minHeight: 38 }}
+                    >
+                      <option value="normal">Normal Ledger</option>
+                      <option value="details">Detailed Ledger</option>
+                    </select>
+                  </label>
+                )}
+                {(reportFilters.warehouse_id || reportFilters.company_account_id || reportFilters.sale_buyer_id || (activeReport === "sale-party-ledger" && reportFilters.details_of_deduction)) && (
                   <button
                     type="button"
                     onClick={() => setReportFilters((prev) => ({ ...prev, farmer_id: "", warehouse_id: "", company_account_id: "", sale_buyer_id: "" }))}
@@ -6391,7 +6449,7 @@ export default function WarehouseTradingPage() {
                     step="0.0001"
                     min="0"
                     max={row.row.pending_amount || row.row.amount || 0}
-                    value={selectedAdjustmentFor(row.key)}
+                    value={selectedAdjustmentForReceipt(row.key)}
                     onChange={(event) => setReceiptAdjustmentAmount(row.row, event.target.value)}
                     style={{ ...inp, padding: "7px 8px" }}
                   />
@@ -6399,10 +6457,12 @@ export default function WarehouseTradingPage() {
               },
             ]}
             emptyText="No pending sale bills found."
+            onAutoAdjust={autoFillReceiptAdjustments}
+            autoAdjustLabel={`Auto Adjust Rs.${formatMoney(formData.amount)}`}
             onClose={() => setShowReceiptAdjustPopup(false)}
             onClear={() => setReceiptAdjustments([])}
             onConfirm={() => setShowReceiptAdjustPopup(false)}
-            confirmDisabled={false}
+            confirmDisabled={Math.abs(receiptAdjustmentTotal - toNumber(formData.amount)) > 0.0001}
           />
         </div>
       )}
