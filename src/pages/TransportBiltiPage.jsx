@@ -279,13 +279,28 @@ export default function TransportBiltiPage() {
       const res = await axios.get(`${API_BASE}/transport-bilti/${id}`, {
         params: source ? { source } : undefined,
       });
-      const row = res.data;
+      let row = res.data || {};
+
+      // Warehouse Trading Sale details are stored on the Sale voucher.
+      // Keep the existing Bilti response untouched, but fill any missing
+      // Sale fields from the existing Sale Summary endpoint when a Sale is
+      // selected. This does not change any save/calculation logic.
+      if (source === "sale") {
+        try {
+          const saleRes = await axios.get(`${API_BASE.replace(/\/$/, "")}/wh-vouchers/sale/${id}/summary`);
+          const saleData = saleRes.data?.sale || saleRes.data || {};
+          row = { ...saleData, ...row };
+        } catch (saleErr) {
+          console.warn("Sale detail lookup unavailable; using Transport Bilti data", saleErr);
+        }
+      }
       setMeta(row);
 
       const sourceDate =
         row.outward_entry_date ||
         row.sale_entry_date ||
-        row.outward_date;
+        row.outward_date ||
+        row.date;
       const sourceQty =
         row.outward_quantity ||
         row.outward_weight ||
