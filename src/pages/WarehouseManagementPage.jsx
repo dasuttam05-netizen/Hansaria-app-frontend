@@ -20,7 +20,7 @@ const emptyForm = () => ({
   opening_balance: "0",
   opening_balance_type: "dr",
   company_id: "",
-  monthly_rent: "0",
+  monthly_rent: "",
 });
 
 const emptySaleForm = () => ({
@@ -223,8 +223,8 @@ export default function WarehouseManagementPage() {
       employee_ids: safeEmployeeIds,
       opening_balance: String(w.opening_balance ?? 0),
       opening_balance_type: String(w.opening_balance_type || "dr"),
-      company_id: normalizeId(w.company_id || w.company?._id || w.company?.id),
-      monthly_rent: String(w.monthly_rent ?? 0),
+      company_id: normalizeId(w.company_id),
+      monthly_rent: String(w.monthly_rent ?? ""),
     });
     setEditId(w.id);
     setShowForm(true);
@@ -479,28 +479,6 @@ export default function WarehouseManagementPage() {
                 <Field label="Street / Locality / Landmark">
                   <input name="street_locality_landmark" value={formData.street_locality_landmark} onChange={handleChange} placeholder="Street / Locality / Landmark" style={inp} />
                 </Field>
-                <Field label="Company / Rent Payee">
-                  <select name="company_id" value={formData.company_id} onChange={handleChange} style={inp}>
-                    <option value="">Select Company</option>
-                    {companies.map((company) => {
-                      const companyId = company._id || company.id;
-                      const companyName = company.name || company.company_name || company.companyName || "";
-                      return <option key={companyId} value={String(companyId)}>{companyName}</option>;
-                    })}
-                  </select>
-                </Field>
-                <Field label="Monthly Warehouse Rent">
-                  <input
-                    name="monthly_rent"
-                    value={formData.monthly_rent}
-                    onChange={handleChange}
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    placeholder="e.g. 50000"
-                    style={inp}
-                  />
-                </Field>
                 <Field label="Assign Employee">
                   <MultiSelectDropdown
                     label=""
@@ -515,6 +493,17 @@ export default function WarehouseManagementPage() {
                     }
                     placeholder={formData.location_id ? "Select Employees" : "Select Location First (Optional)"}
                   />
+                </Field>
+                <Field label="Company / Rent Payee">
+                  <select name="company_id" value={formData.company_id} onChange={handleChange} style={inp}>
+                    <option value="">Select Company / Rent Payee</option>
+                    {companies.map((company) => (
+                      <option key={company._id || company.id} value={String(company._id || company.id)}>{company.name || company.company_name}</option>
+                    ))}
+                  </select>
+                </Field>
+                <Field label="Monthly Warehouse Rent">
+                  <input name="monthly_rent" value={formData.monthly_rent} onChange={handleChange} type="number" min="0" step="0.01" style={inp} placeholder="e.g. 50000" />
                 </Field>
                 <Field label="Opening Balance">
                   <input
@@ -553,7 +542,7 @@ export default function WarehouseManagementPage() {
           <>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px", gap: 10, flexWrap: "wrap" }}>
               <h2 style={titleStyle}>Warehouse Management</h2>
-              <button type="button" onClick={() => setShowForm(true)} style={{ ...btnPrimary, background: "#0f766e" }}>Add Warehouse</button>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}><button type="button" onClick={() => setShowForm(true)} style={{ ...btnPrimary, background: "#0f766e" }}>Add Warehouse</button><button type="button" onClick={() => navigate("/warehouse-rent-booking")} style={{ ...btnPrimary, background: "#7c3aed" }}>Warehouse Rent Booking</button></div>
             </div>
             <div style={tableCard}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
@@ -592,6 +581,8 @@ export default function WarehouseManagementPage() {
                         <td style={td}>{locationName}</td>
                         <td style={td}>{`${Number(w.opening_balance ?? 0).toFixed(2)} ${String(w.opening_balance_type || "dr").toUpperCase()}`}</td>
                         <td style={td}>{employeeName}</td>
+                        <td style={td}>{w.company_name || "-"}</td>
+                        <td style={td}>{Number(w.monthly_rent ?? 0).toFixed(2)}</td>
                         <td style={td}>
                           <button type="button" onClick={() => handleEdit(w)} style={{ ...mini, background: "#2563eb" }}>Edit</button>{" "}
                           <button type="button" onClick={() => handleDelete(w.id)} style={{ ...mini, background: "#dc2626" }}>Delete</button>
@@ -600,7 +591,7 @@ export default function WarehouseManagementPage() {
                     );
                   })}
                   {warehouses.length === 0 ? (
-                    <tr><td colSpan={7} style={{ ...td, textAlign: "center", padding: "20px" }}>No warehouses found.</td></tr>
+                    <tr><td colSpan={9} style={{ ...td, textAlign: "center", padding: "20px" }}>No warehouses found.</td></tr>
                   ) : null}
                 </tbody>
               </table>
