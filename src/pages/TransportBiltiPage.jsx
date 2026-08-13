@@ -124,9 +124,14 @@ export default function TransportBiltiPage() {
   const numberToWords = (value) => {
     const number = Number(value);
     if (!Number.isFinite(number)) return "Zero";
-    const absolute = Math.abs(number);
-    const integerPart = Math.floor(absolute);
-    const fractionalPart = Math.round((absolute - integerPart) * 100);
+
+    // Use the same 2-decimal amount shown on the transport bill.
+    // This prevents floating-point values such as 12410.9999999
+    // from becoming "100/100" in the words.
+    const roundedAmount = Math.round((Math.abs(number) + Number.EPSILON) * 100) / 100;
+    const totalPaise = Math.round(roundedAmount * 100);
+    const integerPart = Math.floor(totalPaise / 100);
+    const fractionalPart = totalPaise % 100;
 
     const wordsForNumber = (num) => {
       const units = [
