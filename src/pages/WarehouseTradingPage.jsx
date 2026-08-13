@@ -3668,13 +3668,13 @@ export default function WarehouseTradingPage() {
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <button type="button" onClick={onPrev} disabled={page <= 1} style={{ ...btnAction, background: page <= 1 ? "#cbd5e1" : "#64748b", color: page <= 1 ? "#64748b" : "#fff", cursor: page <= 1 ? "not-allowed" : "pointer", padding: "6px 12px" }}>
-            ← Prev
+            â† Prev
           </button>
           <div style={{ alignSelf: "center", padding: "0 12px", fontWeight: 700, color: "#0f172a", whiteSpace: "nowrap", background: "#fff", border: "1px solid #cbd5e1", borderRadius: "6px", padding: "6px 12px" }}>
             Showing {totalItems === 0 ? 0 : `${start}-${end}`} | Page {page} / {totalPages}
           </div>
           <button type="button" onClick={onNext} disabled={page >= totalPages} style={{ ...btnAction, background: page >= totalPages ? "#cbd5e1" : "#0f766e", color: page >= totalPages ? "#64748b" : "#fff", cursor: page >= totalPages ? "not-allowed" : "pointer", padding: "6px 12px" }}>
-            Next →
+            Next â†’
           </button>
         </div>
       </div>
@@ -3869,7 +3869,7 @@ export default function WarehouseTradingPage() {
     doc.setFont("helvetica", "normal");
     doc.setFontSize(6.2);
     doc.setTextColor(220, 245, 242);
-    doc.text("WAREHOUSE TRADING • ACCOUNTING REPORT", pageWidth - right, 6.3, { align: "right" });
+    doc.text("WAREHOUSE TRADING â€¢ ACCOUNTING REPORT", pageWidth - right, 6.3, { align: "right" });
 
     let y = 17;
     doc.setFont("helvetica", "bold");
@@ -4018,7 +4018,7 @@ export default function WarehouseTradingPage() {
         doc.setFont("helvetica", "normal");
         doc.setFontSize(5.8);
         doc.setTextColor(225, 245, 242);
-        doc.text(`Warehouse Trading  •  ${title}`, left, pageHeight - 3.1);
+        doc.text(`Warehouse Trading  â€¢  ${title}`, left, pageHeight - 3.1);
         doc.text(`Page ${data.pageNumber} / ${doc.internal.getNumberOfPages()}`, pageWidth - right, pageHeight - 3.1, { align: "right" });
       },
     });
@@ -4857,7 +4857,7 @@ export default function WarehouseTradingPage() {
                           <h3 style={paymentHeroTitle}>Smart Payment Entry</h3>
                           <p style={paymentHeroSubtitle}>Select account, warehouse and pending farmer, then adjust purchase bills.</p>
                         </div>
-                        <div style={paymentBadge}>⚡ Smart Entry</div>
+                        <div style={paymentBadge}>âš¡ Smart Entry</div>
                       </div>
 
                       <div style={paymentModeRow}>
@@ -4913,7 +4913,7 @@ export default function WarehouseTradingPage() {
                           value={formData.farmer_id}
                           options={accountFarmers.map((f) => ({
                             value: f.id || f._id,
-                            label: `${f.name}${f.outstanding !== undefined ? ` — Due Rs.${formatMoney(f.outstanding)}` : ""}`,
+                            label: `${f.name}${f.outstanding !== undefined ? ` â€” Due Rs.${formatMoney(f.outstanding)}` : ""}`,
                           }))}
                           onChange={(value) => handleChange({ target: { name: "farmer_id", value } })}
                           placeholder={formData.warehouse_id ? "Choose pending farmer" : "Choose warehouse first"}
@@ -4982,6 +4982,136 @@ export default function WarehouseTradingPage() {
                       </div>
                     </div>
                   )}
+                  {activeVoucherType === "receipt" && (
+                    <div className="payment-mobile-shell" style={paymentHeroCard}>
+                      <div style={paymentHeroHeader}>
+                        <div>
+                          <div style={paymentEyebrow}>RECEIPT VOUCHER</div>
+                          <h3 style={paymentHeroTitle}>Smart Receipt Entry</h3>
+                          <p style={paymentHeroSubtitle}>Select account, warehouse and pending buyer, then adjust sale bills.</p>
+                        </div>
+                        <div style={paymentBadge}>Ã¢Å¡Â¡ Smart Entry</div>
+                      </div>
+
+                      <div style={paymentModeRow}>
+                        {paymentModeOptions.map((option) => {
+                          const isActive = activePaymentMode === option.value;
+                          return (
+                            <button
+                              key={option.value}
+                              type="button"
+                              onClick={() => handleChange({ target: { name: "payment_mode", value: option.value } })}
+                              style={{
+                                ...paymentModeButton,
+                                ...(isActive ? paymentModeButtonActive : {}),
+                              }}
+                            >
+                              {option.label === "Against Purchase Bills" ? "Against Sale Bills" : option.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      <div style={paymentSelectorGrid}>
+                        <SearchableSelect
+                          label="Account"
+                          value={formData.company_account_id}
+                          options={companyAccounts.map((account) => ({
+                            value: account.id || account._id,
+                            label: account.account_name || account.name,
+                          }))}
+                          onChange={(value) => handleChange({ target: { name: "company_account_id", value } })}
+                          placeholder="Choose account"
+                        />
+                        <SearchableSelect
+                          label="Warehouse"
+                          value={formData.warehouse_id}
+                          options={warehouses.map((warehouse) => ({
+                            value: warehouse.id || warehouse._id,
+                            label: warehouse.name,
+                          }))}
+                          onChange={(value) => handleChange({ target: { name: "warehouse_id", value } })}
+                          placeholder={formData.company_account_id ? "Choose warehouse" : "Choose account first"}
+                          disabled={!formData.company_account_id}
+                        />
+                        <SearchableSelect
+                          label="Pending Buyer"
+                          value={formData.company_id}
+                          options={pendingReceiptBuyers.map((row) => {
+                            const buyerId = String(row.company_id || row.buyer_id || row.id || "");
+                            const buyer = buyerNames.find((item) => String(item.id || item._id) === buyerId);
+                            return {
+                              value: buyerId,
+                              label: `${buyer?.name || row.buyer_name || row.company_name || buyerId}${row.outstanding !== undefined ? ` Ã¢â‚¬â€ Due Rs.${formatMoney(row.outstanding)}` : ""}`,
+                            };
+                          })}
+                          onChange={(value) => handleChange({ target: { name: "company_id", value } })}
+                          placeholder={formData.warehouse_id ? "Choose pending buyer" : "Choose warehouse first"}
+                          disabled={!formData.warehouse_id}
+                        />
+                      </div>
+
+                      <div className="payment-financial-summary" style={paymentFinancialSummary}>
+                        <div style={paymentStatCard}>
+                          <span style={paymentStatLabel}>Total Bill</span>
+                          <strong style={paymentStatValue}>Rs.{formatMoney(partyOutstanding?.stats?.total_sale ?? partyOutstanding?.stats?.total_bill ?? 0)}</strong>
+                        </div>
+                        <div style={paymentStatCard}>
+                          <span style={paymentStatLabel}>Total Deduction</span>
+                          <strong style={paymentStatValue}>Rs.{formatMoney(partyOutstanding?.stats?.total_deduction ?? 0)}</strong>
+                        </div>
+                        <div style={paymentStatCard}>
+                          <span style={paymentStatLabel}>Total Received</span>
+                          <strong style={paymentStatValue}>Rs.{formatMoney(partyOutstanding?.stats?.total_receipt ?? partyOutstanding?.stats?.total_payment ?? 0)}</strong>
+                        </div>
+                        <div style={{ ...paymentStatCard, ...paymentDueCard }}>
+                          <span style={paymentStatLabel}>Total Due</span>
+                          <strong style={{ ...paymentStatValue, color: "#b91c1c" }}>Rs.{formatMoney(partyOutstanding?.stats?.outstanding ?? partyOutstanding?.outstanding ?? 0)}</strong>
+                        </div>
+                      </div>
+
+                      <div className="payment-entry-row" style={paymentEntryRow}>
+                        <Field label="Receipt Amount">
+                          <input
+                            name="amount"
+                            type="number"
+                            step="0.0001"
+                            value={formData.amount}
+                            onChange={(event) => {
+                              handleChange(event);
+                              setReceiptAdjustments([]);
+                            }}
+                            style={paymentAmountInput}
+                            required
+                          />
+                        </Field>
+                        <div style={paymentAdjustmentAction}>
+                          <button
+                            type="button"
+                            onClick={openReceiptAdjustmentPopup}
+                            style={{ ...btnAction, background: "#2563eb", minHeight: 42 }}
+                            disabled={
+                              !formData.company_account_id ||
+                              !formData.warehouse_id ||
+                              !formData.company_id ||
+                              toNumber(formData.amount) <= 0
+                            }
+                          >
+                            Open Adjustment
+                          </button>
+                          <span style={paymentAdjustedText}>
+                            Adjusted: <strong>Rs.{formatMoney(receiptAdjustmentTotal)}</strong>
+                          </span>
+                        </div>
+                      </div>
+
+                      <div style={paymentSelectedBar}>
+                        <span><b>Account:</b> {getAccountName(formData) || "Choose account"}</span>
+                        <span><b>Warehouse:</b> {getWarehouseName(formData) || "Choose warehouse"}</span>
+                        <span><b>Buyer:</b> {getBuyerName({ company_id: formData.company_id }) || "Pick the pending buyer"}</span>
+                      </div>
+                    </div>
+                  )}
                   <div style={formGrid}>
                 <Field label="Voucher No">
                   <input name="voucher_no" value={formData.voucher_no} onChange={handleChange} placeholder="Voucher No *" style={inp} required />
@@ -4997,7 +5127,7 @@ export default function WarehouseTradingPage() {
                     </select>
                   </Field>
                 )}
-                {(activeVoucherType !== "payment" && (activeVoucherType !== "sale" || formData.sale_type !== "direct")) && (
+                {(activeVoucherType !== "payment" && activeVoucherType !== "receipt" && (activeVoucherType !== "sale" || formData.sale_type !== "direct")) && (
                   <Field label="Warehouse">
                     <select name="warehouse_id" value={formData.warehouse_id} onChange={handleChange} style={inp}>
                       <option value="">Select Warehouse</option>
@@ -5007,7 +5137,7 @@ export default function WarehouseTradingPage() {
                     </select>
                   </Field>
                 )}
-                {activeVoucherType !== "payment" && (
+                {activeVoucherType !== "payment" && activeVoucherType !== "receipt" && (
                   <>
                     <Field label="Location">
                       <select name="location_id" value={formData.location_id} onChange={handleChange} style={inp}>
@@ -5027,7 +5157,7 @@ export default function WarehouseTradingPage() {
                     </Field>
                   </>
                 )}
-                {activeVoucherType !== "payment" && <Field label="Account">
+                {activeVoucherType !== "payment" && activeVoucherType !== "receipt" && <Field label="Account">
                   {renderAccountSelect(inp)}
                 </Field>}
                 {activeVoucherType === "sale" && formData.sale_type === "direct" && (
@@ -5103,7 +5233,7 @@ export default function WarehouseTradingPage() {
                   </>
                 )}
 
-                {(activeVoucherType === "sale" || activeVoucherType === "receipt") && (
+                {activeVoucherType === "sale" && (
                   <>
                     {activeVoucherType === "sale" ? (
                       <Field label="Buyer Name">
@@ -5327,67 +5457,9 @@ export default function WarehouseTradingPage() {
                   </>
                 )}
                 {activeVoucherType === "receipt" && (
-                  <>
-                    <Field label="Pending Buyer">
-                      <select
-                        name="company_id"
-                        value={formData.company_id || ""}
-                        onChange={handleChange}
-                        style={inp}
-                      >
-                        <option value="">Select Pending Buyer</option>
-                        {pendingReceiptBuyers.map((row) => {
-                          const buyerId = String(row.company_id || row.buyer_id || row.id || "");
-                          const buyer = buyerNames.find((b) => String(b.id || b._id) === buyerId);
-                          return (
-                            <option key={buyerId} value={buyerId}>
-                              {buyer?.name || row.buyer_name || row.company_name || buyerId} — Due Rs.{formatMoney(row.outstanding)}
-                            </option>
-                          );
-                        })}
-                        {formData.company_account_id && pendingReceiptBuyers.length === 0 && (
-                          <option value="" disabled>No buyers with outstanding balance</option>
-                        )}
-                      </select>
-                    </Field>
-                    <Field label="Receipt Amount">
-                      <input
-                        name="amount"
-                        type="number"
-                        step="0.0001"
-                        value={formData.amount}
-                        onChange={handleChange}
-                        style={paymentAmountInput}
-                        required
-                      />
-                    </Field>
-                    <Field label="Reference / Note">
-                      <input name="reference_id" value={formData.reference_id} onChange={handleChange} style={inp} placeholder="Optional reference note" />
-                    </Field>
-                    <div style={{ gridColumn: "1 / -1", ...paymentSelectedBar }}>
-                      <span><b>Account:</b> {getAccountName(formData) || "Choose account"}</span>
-                      <span><b>Warehouse:</b> {getWarehouseName(formData) || "Choose warehouse"}</span>
-                      <span><b>Buyer:</b> {getBuyerName({ company_id: formData.company_id }) || "Pick the pending buyer"}</span>
-                      <span><b>Pending:</b> Rs.{formatMoney(partyOutstanding?.stats?.outstanding ?? partyOutstanding?.outstanding ?? pendingReceiptBuyers.find((r) => String(r.company_id || r.buyer_id || r.id) === String(formData.company_id))?.outstanding ?? 0)}</span>
-                    </div>
-                    <div style={{ gridColumn: "1 / -1", ...paymentFinancialSummary }}>
-                      <div style={paymentStatCard}><span style={paymentStatLabel}>Total Sale</span><strong style={paymentStatValue}>Rs.{formatMoney(partyOutstanding?.stats?.total_sale ?? partyOutstanding?.stats?.total_bill ?? 0)}</strong></div>
-                      <div style={paymentStatCard}><span style={paymentStatLabel}>Total Received</span><strong style={paymentStatValue}>Rs.{formatMoney(partyOutstanding?.stats?.total_receipt ?? partyOutstanding?.stats?.total_payment ?? 0)}</strong></div>
-                      <div style={{ ...paymentStatCard, ...paymentDueCard }}><span style={paymentStatLabel}>Total Due</span><strong style={{ ...paymentStatValue, color: "#b91c1c" }}>Rs.{formatMoney(partyOutstanding?.stats?.outstanding ?? partyOutstanding?.outstanding ?? 0)}</strong></div>
-                      <div style={paymentStatCard}><span style={paymentStatLabel}>Adjusted</span><strong style={paymentStatValue}>Rs.{formatMoney(receiptAdjustmentTotal)}</strong></div>
-                    </div>
-                    <div style={{ gridColumn: "1 / -1", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
-                      <button
-                        type="button"
-                        onClick={openReceiptAdjustmentPopup}
-                        style={{ ...btnAction, background: "#2563eb", minHeight: 42 }}
-                        disabled={!formData.company_id || toNumber(formData.amount) <= 0}
-                      >
-                        Open Adjustment
-                      </button>
-                      <span style={paymentAdjustedText}>Adjusted: <strong>Rs.{formatMoney(receiptAdjustmentTotal)}</strong></span>
-                    </div>
-                  </>
+                  <Field label="Reference / Note">
+                    <input name="reference_id" value={formData.reference_id} onChange={handleChange} style={inp} placeholder="Optional reference note" />
+                  </Field>
                 )}
 
                 {activeVoucherType === "journal" && (
@@ -5525,7 +5597,7 @@ export default function WarehouseTradingPage() {
               <h3 style={{ marginTop: 0 }}>{activeVoucherType.charAt(0).toUpperCase() + activeVoucherType.slice(1)} Vouchers</h3>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
                 <button type="button" onClick={() => setVoucherSortAsc((prev) => !prev)} style={{ ...btnAction, background: voucherSortAsc ? "#0f766e" : "#64748b", padding: "6px 12px", fontSize: 12 }}>
-                  📅 {voucherSortAsc ? "Oldest First" : "Newest First"}
+                  ðŸ“… {voucherSortAsc ? "Oldest First" : "Newest First"}
                 </button>
                 {activeVoucherType === "sale" && (
                   <button type="button" onClick={() => setShowSaleAdjustedModal(true)} style={{ ...btnAction, background: "#0f766e" }}>
@@ -6207,7 +6279,7 @@ export default function WarehouseTradingPage() {
         <div style={modalOverlayStyle}>
           <WarehouseAdjustModal
             title="Payment Adjustment"
-            subtitle="Account → Warehouse → Pending Farmer → Purchase Bills"
+            subtitle="Account â†’ Warehouse â†’ Pending Farmer â†’ Purchase Bills"
             actionButton={btnAction}
             controls={
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10, marginTop: 12 }}>
@@ -6229,7 +6301,7 @@ export default function WarehouseTradingPage() {
                 <SearchableSelect
                   label="Pending Farmer"
                   value={formData.farmer_id}
-                  options={accountFarmers.map((f) => ({ value: f.id || f._id, label: `${f.name}${f.outstanding !== undefined ? ` — Pending Rs.${formatMoney(f.outstanding)}` : ""}` }))}
+                  options={accountFarmers.map((f) => ({ value: f.id || f._id, label: `${f.name}${f.outstanding !== undefined ? ` â€” Pending Rs.${formatMoney(f.outstanding)}` : ""}` }))}
                   onChange={(value) => handleChange({ target: { name: "farmer_id", value } })}
                   placeholder={formData.warehouse_id ? "Choose pending farmer" : "Choose warehouse first"}
                   disabled={!formData.warehouse_id}
