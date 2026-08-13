@@ -77,7 +77,6 @@ export default function DashboardPage() {
   const [partyStock, setPartyStock] = useState([]);
   const [warehouseStock, setWarehouseStock] = useState([]);
   const [totalStock, setTotalStock] = useState(0);
-  const [totalRent, setTotalRent] = useState(0);
   const [monthEndRentSummary, setMonthEndRentSummary] = useState([]);
 
   const [showLocationPopup, setShowLocationPopup] = useState(false);
@@ -109,9 +108,40 @@ export default function DashboardPage() {
   const API_BASE = "/api";
   const currentMonth = formatLocalMonthInput();
 
+  const fetchRentLedgerForDashboard = async () => {
+    const allRows = [];
+    let page = 1;
+    const pageSize = 500;
+
+    while (true) {
+      const response = await API.get(`${API_BASE}/reports/warehouse-rent-ledger`, {
+        params: { page, page_size: pageSize },
+      });
+      const payload = response?.data || [];
+      const rows = Array.isArray(payload)
+        ? payload
+        : Array.isArray(payload.data)
+          ? payload.data
+          : [];
+
+      allRows.push(...rows);
+
+      const pagination = Array.isArray(payload) ? null : payload.pagination || null;
+      if (!pagination || page >= Number(pagination.totalPages || 1) || rows.length === 0) {
+        break;
+      }
+      page += 1;
+    }
+
+    return allRows;
+  };
+
   const fetchData = async (currentUser, isActive) => {
     try {
-      const payload = await API.get(`${API_BASE}/dashboard`);
+      const [payload, rentLedgerRows] = await Promise.all([
+        API.get(`${API_BASE}/dashboard`),
+        fetchRentLedgerForDashboard(),
+      ]);
 
       if (!isActive()) {
         return;
@@ -128,9 +158,15 @@ export default function DashboardPage() {
       const normalizedOutwards = Array.isArray(data.outwards) ? data.outwards : [];
       const normalizedPartyStock = Array.isArray(data.partyStock) ? data.partyStock : [];
       const normalizedWarehouseStock = Array.isArray(data.warehouseStock) ? data.warehouseStock : [];
-      const normalizedMonthEndRentSummary = Array.isArray(data.monthEndRentSummary) ? data.monthEndRentSummary : [];
+      // Dashboard Party Rent must use the exact same rent calculation as the
+      // existing Warehouse Rent Ledger report. Do not duplicate/recalculate rent here.
+      const normalizedMonthEndRentSummary = (Array.isArray(rentLedgerRows) ? rentLedgerRows : []).map((row) => ({
+        party_name: row.party_name || "Unknown",
+        warehouse_name: row.warehouse_name || "Unknown",
+        total_rent: Number(row.rent_amount || 0),
+        total_entries: 1,
+      }));
       const normalizedTotalStock = Number(data.totalStock ?? 0);
-      const normalizedTotalRent = Number(data.totalRent ?? 0);
 
       setLocations(normalizedLocations);
       setEmployees(normalizedEmployees);
@@ -143,7 +179,6 @@ export default function DashboardPage() {
       setPartyStock(normalizedPartyStock);
       setWarehouseStock(normalizedWarehouseStock);
       setTotalStock(normalizedTotalStock);
-      setTotalRent(normalizedTotalRent);
       setMonthEndRentSummary(normalizedMonthEndRentSummary);
     } catch (err) {
       console.error("Failed to fetch dashboard data:", err);
@@ -846,11 +881,10 @@ export default function DashboardPage() {
     (sum, row) => sum + Number(row.total_rent || 0),
     0
   );
-  const calculatedRentFromRows = filteredMonthEndRentSummary.reduce(
+  const totalRentCollected = filteredMonthEndRentSummary.reduce(
     (sum, row) => sum + Number(row.total_rent ?? row.rent_amount ?? 0),
     0
   );
-  const totalRentCollected = totalRent > 0 ? totalRent : calculatedRentFromRows;
 
   const stockCoveragePercentage = totalStock > 0 ? Math.round(Math.min(100, (totalWarehouseStock / totalStock) * 100)) : 0;
   const expenseBalanceRatio = totalRentCollected > 0 ? Math.round(Math.min(100, (totalWarehouseRent / totalRentCollected) * 100)) : 0;
@@ -1318,6 +1352,17 @@ export default function DashboardPage() {
             </div>
 
             <div className="dashboard-panel table-card" style={{ padding: "18px" }}>
+              <div className="report-highlight-row" style={{ marginBottom: "14px" }}>
+                <div className="report-highlight-card">
+                  <span>Total Available Stock</span>
+                  <strong>{Number(totalWarehouseStock).toFixed(2)}</strong>
+                </div>
+                <div className="report-highlight-card">
+                  <span>Total Current Rent</span>
+                  <strong>{Number(totalRentCollected).toFixed(2)}</strong>
+                </div>
+              </div>
+
               <div className="stock-report-filter-panel">
                 <div className="stock-filter-field stock-filter-search">
                   <span>Search</span>
