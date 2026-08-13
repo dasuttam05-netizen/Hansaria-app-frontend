@@ -218,7 +218,7 @@ export default function TransportBiltiPage() {
       warehouseRes,
     ] = await Promise.all([
       axios.get(`${API_BASE}/transport-bilti/outward-list`),
-      axios.get(`${API_BASE}/wh-vouchers/sale`),
+      axios.get(`${API_BASE}/transport-bilti/sale-list`),
       axios.get(`${API_BASE}/transporters`),
       axios.get(`${API_BASE}/companies`),
       axios.get(`${API_BASE}/company-accounts`),
