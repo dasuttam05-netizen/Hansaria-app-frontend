@@ -17,6 +17,7 @@ import EmployeeManagementPage from "./pages/EmployeeManagementPage";
 import CompanyManagementPage from "./pages/CompanyManagementPage";
 import CompanyAccountsPage from "./pages/CompanyAccountsPage";
 import WarehouseManagementPage from "./pages/WarehouseManagementPage";
+import WarehouseRentBookingPage from "./pages/WarehouseRentBookingPage";
 import ProductsManagementPage from "./pages/ProductsManagementPage";
 import InwardPage from "./pages/InwardPage";
 import InwardReportPage from "./pages/InwardReportPage";
@@ -101,6 +102,11 @@ function App() {
         <Route
           path="/warehouses"
           element={<WarehouseManagementPage />}
+        />
+
+        <Route
+          path="/warehouse-rent-booking"
+          element={<WarehouseRentBookingPage />}
         />
 
         <Route
