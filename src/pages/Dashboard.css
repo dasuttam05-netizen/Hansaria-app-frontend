@@ -1922,3 +1922,134 @@ body {
     white-space: nowrap !important;
   }
 }
+
+
+/* Dashboard analytics visual refresh — presentation only.
+   Existing calculations, API calls and dashboard logic are unchanged. */
+.analytics-section {
+  margin-top: 8px;
+}
+
+.analytics-section .section-header {
+  margin-bottom: 18px;
+  padding: 0 4px;
+}
+
+.analytics-section .section-header h2 {
+  font-size: clamp(22px, 2vw, 28px);
+  font-weight: 900;
+  letter-spacing: -0.025em;
+  margin-bottom: 6px;
+}
+
+.analytics-section .section-header p {
+  margin: 0;
+  max-width: 720px;
+  font-size: 13px;
+}
+
+.analytics-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr)) 1.15fr;
+  gap: 16px;
+}
+
+.analytics-card,
+.ai-insights-panel {
+  min-height: 230px;
+  border-radius: 22px;
+  padding: 20px;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  background: linear-gradient(145deg, rgba(255,255,255,.96), rgba(241,248,250,.88));
+  box-shadow: 0 14px 38px rgba(15, 23, 42, .075);
+}
+
+.analytics-card:nth-child(1) {
+  background: linear-gradient(145deg, #ffffff 0%, #effaf7 100%);
+}
+.analytics-card:nth-child(2) {
+  background: linear-gradient(145deg, #ffffff 0%, #eef4ff 100%);
+}
+.analytics-card:nth-child(3) {
+  background: linear-gradient(145deg, #ffffff 0%, #fff7ed 100%);
+}
+
+.analytics-card:hover,
+.ai-insights-panel:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 22px 50px rgba(15, 23, 42, .12);
+}
+
+.analytics-card-head {
+  margin-bottom: 10px;
+}
+
+.analytics-card-head span {
+  font-size: 11px;
+  letter-spacing: .13em;
+}
+
+.analytics-card-head strong {
+  font-size: 17px;
+  line-height: 1.25;
+}
+
+.analytics-card-value {
+  margin-top: 18px;
+  font-size: clamp(30px, 3vw, 42px);
+  letter-spacing: -0.035em;
+}
+
+.analytics-card-text {
+  max-width: 340px;
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.sparkline-row {
+  margin-top: 20px;
+  min-height: 54px;
+  gap: 6px;
+}
+
+.sparkline-segment {
+  width: 9px;
+  opacity: .9;
+  box-shadow: 0 4px 10px rgba(15,118,110,.12);
+}
+
+.ai-insights-panel {
+  min-height: 230px;
+}
+
+.insights-list {
+  gap: 10px;
+  margin-top: 10px;
+}
+
+.insight-item {
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(255,255,255,.68);
+  border: 1px solid rgba(15,118,110,.12);
+  backdrop-filter: blur(8px);
+}
+
+.insight-value {
+  font-size: 17px;
+}
+
+@media (max-width: 1200px) {
+  .analytics-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 800px) {
+  .analytics-grid {
+    grid-template-columns: 1fr;
+  }
+  .analytics-card,
+  .ai-insights-panel {
+    min-height: 205px;
+  }
+}
