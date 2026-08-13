@@ -1171,7 +1171,7 @@ export default function DashboardPage() {
               </div>
               <div className="hero-stat-item">
                 <span>Total Rent</span>
-                <strong>₹{Number(totalRentCollected || 0).toFixed(2)}</strong>
+                <strong>₹{Number(totalWarehouseRent || 0).toFixed(2)}</strong>
               </div>
               <div className="hero-stat-item">
                 <span>Warehouse</span>
@@ -1194,7 +1194,7 @@ export default function DashboardPage() {
             <div className="section-header">
               <div>
                 <h2>Premium Analytics</h2>
-                <p>Live warehouse, stock and expense analytics with AI-powered insights.</p>
+                <p>Live warehouse, stock and expense analytics with clear operational insights.</p>
               </div>
             </div>
 
@@ -1232,8 +1232,8 @@ export default function DashboardPage() {
                   <span>Expense Analytics</span>
                   <strong>Rent and expense balance</strong>
                 </div>
-                <div className="analytics-card-value">₹{Number(totalRentCollected || 0).toFixed(2)}</div>
-                <div className="analytics-card-text">Current rent exposure and expense flow across your warehouses.</div>
+                <div className="analytics-card-value">₹{Number(totalWarehouseRent || 0).toFixed(2)}</div>
+                <div className="analytics-card-text">Current warehouse rent calculated from the existing dashboard rent data.</div>
                 <div className="sparkline-row">
                   {analyticsSparkline.expense.map((value, idx) => (
                     <span key={idx} className="sparkline-segment" style={{ height: `${value}%` }} />
@@ -1243,7 +1243,7 @@ export default function DashboardPage() {
 
               <div className="ai-insights-panel glass-card">
                 <div className="analytics-card-head">
-                  <span>AI Insights</span>
+                  <span>Quick Insights</span>
                   <strong>Suggested actions</strong>
                 </div>
                 <div className="insights-list">
