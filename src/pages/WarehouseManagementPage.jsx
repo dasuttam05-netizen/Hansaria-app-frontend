@@ -7,8 +7,6 @@ import "react-toastify/dist/ReactToastify.css";
 
 const emptyForm = () => ({
   name: "",
-  company_id: "",
-  monthly_rent: "0",
   address: "",
   pincode: "",
   state: "",
@@ -21,6 +19,8 @@ const emptyForm = () => ({
   employee_ids: [],
   opening_balance: "0",
   opening_balance_type: "dr",
+  company_id: "",
+  monthly_rent: "0",
 });
 
 const emptySaleForm = () => ({
@@ -170,8 +170,6 @@ export default function WarehouseManagementPage() {
         : [];
       const payload = {
         name: formData.name,
-        company_id: formData.company_id || null,
-        monthly_rent: Number(formData.monthly_rent || 0),
         address: formData.address,
         pincode: formData.pincode || null,
         state: formData.state || null,
@@ -187,6 +185,8 @@ export default function WarehouseManagementPage() {
           String(formData.opening_balance_type || "dr").toLowerCase() === "cr"
             ? "cr"
             : "dr",
+        company_id: formData.company_id || null,
+        monthly_rent: Number.isFinite(Number(formData.monthly_rent)) ? Number(formData.monthly_rent) : 0,
       };
       if (editId) {
         await axios.put(`${API_URL}/${editId}`, payload);
@@ -211,8 +211,6 @@ export default function WarehouseManagementPage() {
       : [];
     setFormData({
       name: w.name || "",
-      company_id: normalizeId(w.company_id),
-      monthly_rent: String(w.monthly_rent ?? 0),
       address: w.address || "",
       pincode: w.pincode || "",
       state: w.state || "",
@@ -225,6 +223,8 @@ export default function WarehouseManagementPage() {
       employee_ids: safeEmployeeIds,
       opening_balance: String(w.opening_balance ?? 0),
       opening_balance_type: String(w.opening_balance_type || "dr"),
+      company_id: normalizeId(w.company_id || w.company?._id || w.company?.id),
+      monthly_rent: String(w.monthly_rent ?? 0),
     });
     setEditId(w.id);
     setShowForm(true);
@@ -450,18 +450,6 @@ export default function WarehouseManagementPage() {
                 <Field label="Warehouse Name">
                   <input name="name" value={formData.name} onChange={handleChange} placeholder="Warehouse Name *" style={inp} />
                 </Field>
-                <Field label="Company (Automatic in Rent Booking)">
-                  <select name="company_id" value={formData.company_id} onChange={handleChange} style={inp}>
-                    <option value="">Select Company</option>
-                    {companies.map((company) => {
-                      const companyId = company._id || company.id;
-                      return <option key={companyId} value={String(companyId)}>{company.name}</option>;
-                    })}
-                  </select>
-                </Field>
-                <Field label="Monthly Warehouse Rent">
-                  <input name="monthly_rent" value={formData.monthly_rent} onChange={handleChange} type="number" min="0" step="0.01" placeholder="e.g. 50000" style={inp} />
-                </Field>
                 <Field label="Location">
                   <select name="location_id" value={formData.location_id} onChange={handleChange} style={inp}>
                     <option value="">Select Location</option>
@@ -490,6 +478,28 @@ export default function WarehouseManagementPage() {
                 </Field>
                 <Field label="Street / Locality / Landmark">
                   <input name="street_locality_landmark" value={formData.street_locality_landmark} onChange={handleChange} placeholder="Street / Locality / Landmark" style={inp} />
+                </Field>
+                <Field label="Company / Rent Payee">
+                  <select name="company_id" value={formData.company_id} onChange={handleChange} style={inp}>
+                    <option value="">Select Company</option>
+                    {companies.map((company) => {
+                      const companyId = company._id || company.id;
+                      const companyName = company.name || company.company_name || company.companyName || "";
+                      return <option key={companyId} value={String(companyId)}>{companyName}</option>;
+                    })}
+                  </select>
+                </Field>
+                <Field label="Monthly Warehouse Rent">
+                  <input
+                    name="monthly_rent"
+                    value={formData.monthly_rent}
+                    onChange={handleChange}
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="e.g. 50000"
+                    style={inp}
+                  />
                 </Field>
                 <Field label="Assign Employee">
                   <MultiSelectDropdown
@@ -543,10 +553,7 @@ export default function WarehouseManagementPage() {
           <>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px", gap: 10, flexWrap: "wrap" }}>
               <h2 style={titleStyle}>Warehouse Management</h2>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-                <button type="button" onClick={() => navigate("/warehouse-rent-booking")} style={{ ...btnPrimary, background: "#7c3aed" }}>Warehouse Rent Booking</button>
-                <button type="button" onClick={() => setShowForm(true)} style={{ ...btnPrimary, background: "#0f766e" }}>Add Warehouse</button>
-              </div>
+              <button type="button" onClick={() => setShowForm(true)} style={{ ...btnPrimary, background: "#0f766e" }}>Add Warehouse</button>
             </div>
             <div style={tableCard}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
@@ -554,12 +561,12 @@ export default function WarehouseManagementPage() {
                   <tr style={{ background: "#0f766e", color: "#fff" }}>
                     <th style={th}>ID</th>
                     <th style={th}>Name</th>
-                    <th style={th}>Company</th>
-                    <th style={th}>Monthly Rent</th>
                     <th style={th}>Address</th>
                     <th style={th}>Location</th>
                     <th style={th}>Opening</th>
                     <th style={th}>Employee</th>
+                    <th style={th}>Company / Rent Payee</th>
+                    <th style={th}>Monthly Rent</th>
                     <th style={th}>Actions</th>
                   </tr>
                 </thead>
@@ -581,8 +588,6 @@ export default function WarehouseManagementPage() {
                       <tr key={w.id} style={{ background: i % 2 ? "#f8fafc" : "#fff" }}>
                         <td style={td}>{i + 1}</td>
                         <td style={td}>{w.name || "-"}</td>
-                        <td style={td}>{w.company_name || companies.find(c => String(c._id || c.id) === String(w.company_id))?.name || "-"}</td>
-                        <td style={td}>₹{Number(w.monthly_rent || 0).toFixed(2)}</td>
                         <td style={td}>{w.address || "-"}</td>
                         <td style={td}>{locationName}</td>
                         <td style={td}>{`${Number(w.opening_balance ?? 0).toFixed(2)} ${String(w.opening_balance_type || "dr").toUpperCase()}`}</td>
@@ -595,7 +600,7 @@ export default function WarehouseManagementPage() {
                     );
                   })}
                   {warehouses.length === 0 ? (
-                    <tr><td colSpan={9} style={{ ...td, textAlign: "center", padding: "20px" }}>No warehouses found.</td></tr>
+                    <tr><td colSpan={7} style={{ ...td, textAlign: "center", padding: "20px" }}>No warehouses found.</td></tr>
                   ) : null}
                 </tbody>
               </table>
