@@ -11,6 +11,7 @@ const EmployeeManagementPage = lazy(() => import("./pages/EmployeeManagementPage
 const CompanyManagementPage = lazy(() => import("./pages/CompanyManagementPage"));
 const CompanyAccountsPage = lazy(() => import("./pages/CompanyAccountsPage"));
 const WarehouseManagementPage = lazy(() => import("./pages/WarehouseManagementPage"));
+const WarehouseRentBookingPage = lazy(() => import("./pages/WarehouseRentBookingPage"));
 const ProductsManagementPage = lazy(() => import("./pages/ProductsManagementPage"));
 const BuyerNamesManagementPage = lazy(() => import("./pages/BuyerNamesManagementPage"));
 const ConsigneeNamesManagementPage = lazy(() => import("./pages/ConsigneeNamesManagementPage"));
@@ -66,6 +67,7 @@ const preloadRouteModules = () => {
       () => import("./pages/CompanyManagementPage"),
       () => import("./pages/CompanyAccountsPage"),
       () => import("./pages/WarehouseManagementPage"),
+      () => import("./pages/WarehouseRentBookingPage"),
       () => import("./pages/ProductsManagementPage"),
       () => import("./pages/BuyerNamesManagementPage"),
       () => import("./pages/ConsigneeNamesManagementPage"),
@@ -211,6 +213,14 @@ function AppRoutes() {
       element: (
         <ProtectedRoute permission="warehouses.manage">
           <WarehouseManagementPage />
+        </ProtectedRoute>
+      ),
+    },
+    {
+      path: "/warehouse-rent-booking",
+      element: (
+        <ProtectedRoute permission="warehouses.manage">
+          <WarehouseRentBookingPage />
         </ProtectedRoute>
       ),
     },
