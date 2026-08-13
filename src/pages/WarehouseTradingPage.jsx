@@ -3311,10 +3311,22 @@ export default function WarehouseTradingPage() {
       ["quantity", "Qty", (item) => (item.row_type === "closing" ? "" : formatDecimal4(item.quantity ?? item.total_quantity ?? item.unloading_qty ?? 0))],
       ["rate", "Rate", (item) => (item.row_type === "closing" ? "" : formatMoney(item.rate || 0))],
       ["gross_amount", "Gross / Sale Amount", (item) => (item.row_type === "closing" ? "" : formatMoney(item.gross_amount ?? item.sale_amount ?? item.total_amount ?? 0))],
-      ["receipt_date", "Receipt Date", (item) => (item.row_type === "closing" ? "" : formatLedgerDate(item.receipt_date || ""))],
-      ["receipt_voucher_no", "Receipt Voucher No", (item) => (item.row_type === "closing" ? "" : (item.receipt_voucher_no || "-"))],
-      ["received_amount", "Received Amount", (item) => (item.row_type === "closing" ? "" : formatMoney(item.received_amount ?? item.receipt_amount ?? 0))],
-      ["adjustment", "Adjustment", (item) => (item.row_type === "closing" ? "" : formatMoney(item.adjustment ?? item.receipt_amount ?? 0))],
+      ["adjustment", "Adjustment", (item) => {
+        if (item.row_type === "closing") return "";
+        const details = Array.isArray(item.receipt_details) ? item.receipt_details : [];
+        const lines = String(item.voucher_type || "") === "Receipt" && details.length
+          ? details.map((detail) => {
+              const saleDate = formatLedgerDate(detail.sale_date || detail.date || "");
+              const saleVoucher = detail.sale_voucher_no || detail.voucher_no || "-";
+              return `${saleDate || "-"} | ${saleVoucher} | Rs.${formatMoney(detail.adjusted_amount || 0)}`;
+            })
+          : String(item.adjustment_details || item.particulars || "-").split("; ").filter(Boolean);
+        return (
+          <div style={{ whiteSpace: "pre-line", lineHeight: 1.35 }}>
+            {lines.map((line, index) => <div key={`${item.id || item._id || "row"}-adj-${index}`}>{line}</div>)}
+          </div>
+        );
+      }],
       ["warehouse", "Warehouse", (item) => (item.row_type === "closing" ? "" : getWarehouseName(item))],
       ["debit", "Debit", (item) => formatMoney(item.debit || 0)],
       ["credit", "Credit", (item) => formatMoney(item.credit || 0)],
@@ -3460,7 +3472,52 @@ export default function WarehouseTradingPage() {
       ? (row.farmer_name || getFarmerName(row) || "Unknown Farmer")
       : (getBuyerName(row) || row.party_name || row.buyer_name || row.company_name || row.consignee_name || "Unknown Party");
     const ledgerGroupKey = (row) => `${ledgerPartyName(row)}::${row.company_account_id || row.company_account_name || row.account_name || ""}`;
-    const sorted = entries.slice().sort((a, b) => {
+    // Sale Party Ledger supports two views:
+    // 1) Normal: one Sale row with gross debit and all F2 deductions as one credit,
+    //    while receipts remain separate credit entries.
+    // 2) Detailed: every Claim/Shortage/CD/Freight/Others/Adjustment/TDS is shown separately.
+    const ledgerEntries = activeReport === "sale-party-ledger" && !reportFilters.details_of_deduction
+      ? (() => {
+          const saleRows = entries.filter((row) => String(row.voucher_type || "") === "Sale");
+          const deductionRows = entries.filter((row) => String(row.voucher_type || "").startsWith("Sale - ") && row.ledger_component);
+          const receiptRows = entries.filter((row) => String(row.voucher_type || "") === "Receipt");
+          const deductionsBySale = new Map();
+          deductionRows.forEach((row) => {
+            const key = String(row.sale_id || "");
+            if (!key) return;
+            const list = deductionsBySale.get(key) || [];
+            list.push(row);
+            deductionsBySale.set(key, list);
+          });
+          const normalSales = saleRows.map((sale) => {
+            const saleId = String(sale.sale_id || sale.id || sale._id || "");
+            const parts = deductionsBySale.get(saleId) || [];
+            const deductionTotal = parts.reduce((sum, row) => sum + toNumber(row.credit || row.journal_amount || 0), 0);
+            const deductionLabels = parts
+              .map((row) => String(row.voucher_type || "").replace(/^Sale\s*-\s*/, ""))
+              .filter(Boolean)
+              .join(", ");
+            return {
+              ...sale,
+              particulars: deductionLabels
+                ? `Sale Bill ${sale.voucher_no || ""} | Less: ${deductionLabels}`
+                : `Sale Bill ${sale.voucher_no || ""}`.trim(),
+              adjustment_details: deductionLabels
+                ? `Total deductions: Rs.${formatMoney(deductionTotal)}`
+                : "",
+              journal_amount: Number(deductionTotal.toFixed(2)),
+              deduction_total: Number(deductionTotal.toFixed(2)),
+              debit: Number(toNumber(sale.debit || sale.sale_amount || sale.amount || 0).toFixed(2)),
+              credit: Number(deductionTotal.toFixed(2)),
+              voucher_type: "Sale",
+              ledger_view: "normal",
+            };
+          });
+          return [...normalSales, ...receiptRows];
+        })()
+      : entries;
+
+    const sorted = ledgerEntries.slice().sort((a, b) => {
       const leftParty = ledgerGroupKey(a);
       const rightParty = ledgerGroupKey(b);
       const partyCmp = String(leftParty).localeCompare(String(rightParty));
@@ -3506,17 +3563,22 @@ export default function WarehouseTradingPage() {
       running += debit - credit;
       farmerDebit += debit;
       farmerCredit += credit;
+      const isRepeatedSaleParty = activeReport === "sale-party-ledger"
+        && grouped.length > 0
+        && grouped[grouped.length - 1]?.row_type === "entry"
+        && String(grouped[grouped.length - 1]?.party_name || "") === String(partyName || "")
+        && String(grouped[grouped.length - 1]?.company_account_id || grouped[grouped.length - 1]?.company_account_name || "") === String(row.company_account_id || row.company_account_name || row.account_name || "");
       grouped.push({
         ...row,
         farmer_name: activeReport === "purchase-party-ledger" ? partyName : row.farmer_name,
-        party_name: activeReport === "sale-party-ledger" ? partyName : row.party_name,
+        party_name: activeReport === "sale-party-ledger" ? (isRepeatedSaleParty ? "" : partyName) : row.party_name,
         balance: Number(running.toFixed(4)),
         row_type: "entry",
       });
     });
     pushClosing();
     return grouped;
-  }, [activeReport, currentReportRows, reportData, farmers, buyerNames, companyAccounts, saleFollowupFilter]);
+  }, [activeReport, currentReportRows, reportData, farmers, buyerNames, companyAccounts, saleFollowupFilter, reportFilters.details_of_deduction]);
   const saleFollowupRows = activeReport === "sale-followup" ? displayReportData : [];
   const purchasePartyLedgerCompanyAccounts = useMemo(() => {
     if (Array.isArray(reportFilterOptions.accounts) && reportFilterOptions.accounts.length) {
@@ -3554,28 +3616,14 @@ export default function WarehouseTradingPage() {
     };
 
     (reportFilterOptions.buyers || []).forEach(add);
-
-    // Buyer Filter must always be populated from the existing Buyer master.
-    // Do not restrict the dropdown by reportFilterOptions.buyer_ids: those IDs
-    // can be empty or use a different legacy ID format even when Sale Summary
-    // rows clearly contain buyer names.
-    buyerNames.forEach(add);
-    companies.forEach((company) => {
+    const ids = new Set((reportFilterOptions.buyer_ids || []).map(String));
+    buyerNames.filter((buyer) => !ids.size || ids.has(String(buyer.id || buyer._id || ""))).forEach(add);
+    companies.filter((company) => !ids.size || ids.has(String(company.id || company._id || ""))).forEach((company) => {
       add({ ...company, name: company.name || company.company_name });
     });
 
-    // Final fallback: if the Buyer master endpoint has no rows, build the
-    // dropdown from the Sale Summary rows already loaded on this screen.
-    if (!byId.size) {
-      (displayReportData || []).forEach((row) => {
-        const id = String(row?.buyer_id || row?.company_id || row?.buyer_name || row?.company_name || "").trim();
-        const name = String(row?.buyer_name || row?.company_name || row?.party_name || "").trim();
-        if (name && name !== "-") add({ id: id || name, name });
-      });
-    }
-
     return Array.from(byId.values()).sort((a, b) => String(a.name).localeCompare(String(b.name), undefined, { sensitivity: "base" }));
-  }, [buyerNames, companies, displayReportData, reportFilterOptions.buyers]);
+  }, [buyerNames, companies, reportFilterOptions.buyer_ids, reportFilterOptions.buyers]);
 
   const normalizedGlobalSearch = String(globalSearch || "").trim().toLowerCase();
   const matchesGlobalSearch = (value) =>
@@ -5898,7 +5946,20 @@ export default function WarehouseTradingPage() {
                   onChange={(value) => setReportFilters((prev) => ({ ...prev, sale_buyer_id: value }))}
                   placeholder="All Buyers"
                 />
-                {(reportFilters.warehouse_id || reportFilters.company_account_id || reportFilters.sale_buyer_id) && (
+                {activeReport === "sale-party-ledger" && (
+                  <label style={{ display: "flex", flexDirection: "column", gap: 5, minWidth: 170, fontSize: 12, fontWeight: 700, color: "#334155" }}>
+                    Ledger View
+                    <select
+                      value={reportFilters.details_of_deduction ? "details" : "normal"}
+                      onChange={(event) => updateReportFilter("details_of_deduction", event.target.value === "details")}
+                      style={{ ...inp, minHeight: 38 }}
+                    >
+                      <option value="normal">Normal Ledger</option>
+                      <option value="details">Detailed Ledger</option>
+                    </select>
+                  </label>
+                )}
+                {(reportFilters.warehouse_id || reportFilters.company_account_id || reportFilters.sale_buyer_id || (activeReport === "sale-party-ledger" && reportFilters.details_of_deduction)) && (
                   <button
                     type="button"
                     onClick={() => setReportFilters((prev) => ({ ...prev, farmer_id: "", warehouse_id: "", company_account_id: "", sale_buyer_id: "" }))}
@@ -6405,7 +6466,7 @@ export default function WarehouseTradingPage() {
                     step="0.0001"
                     min="0"
                     max={row.row.pending_amount || row.row.amount || 0}
-                    value={selectedAdjustmentFor(row.key)}
+                    value={selectedAdjustmentForReceipt(row.key)}
                     onChange={(event) => setReceiptAdjustmentAmount(row.row, event.target.value)}
                     style={{ ...inp, padding: "7px 8px" }}
                   />
@@ -6413,10 +6474,12 @@ export default function WarehouseTradingPage() {
               },
             ]}
             emptyText="No pending sale bills found."
+            onAutoAdjust={autoFillReceiptAdjustments}
+            autoAdjustLabel={`Auto Adjust Rs.${formatMoney(formData.amount)}`}
             onClose={() => setShowReceiptAdjustPopup(false)}
             onClear={() => setReceiptAdjustments([])}
             onConfirm={() => setShowReceiptAdjustPopup(false)}
-            confirmDisabled={false}
+            confirmDisabled={Math.abs(receiptAdjustmentTotal - toNumber(formData.amount)) > 0.0001}
           />
         </div>
       )}
