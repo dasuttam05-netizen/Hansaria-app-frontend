@@ -3311,10 +3311,18 @@ export default function WarehouseTradingPage() {
       ["quantity", "Qty", (item) => (item.row_type === "closing" ? "" : formatDecimal4(item.quantity ?? item.total_quantity ?? item.unloading_qty ?? 0))],
       ["rate", "Rate", (item) => (item.row_type === "closing" ? "" : formatMoney(item.rate || 0))],
       ["gross_amount", "Gross / Sale Amount", (item) => (item.row_type === "closing" ? "" : formatMoney(item.gross_amount ?? item.sale_amount ?? item.total_amount ?? 0))],
-      ["receipt_date", "Receipt Date", (item) => (item.row_type === "closing" ? "" : formatLedgerDate(item.receipt_date || ""))],
-      ["receipt_voucher_no", "Receipt Voucher No", (item) => (item.row_type === "closing" ? "" : (item.receipt_voucher_no || "-"))],
-      ["received_amount", "Received Amount", (item) => (item.row_type === "closing" ? "" : formatMoney(item.received_amount ?? item.receipt_amount ?? 0))],
-      ["adjustment", "Adjustment", (item) => (item.row_type === "closing" ? "" : formatMoney(item.adjustment ?? item.receipt_amount ?? 0))],
+      ["adjustment", "Adjustment", (item) => {
+        if (item.row_type === "closing") return "";
+        const details = Array.isArray(item.receipt_details) ? item.receipt_details : [];
+        if (String(item.voucher_type || "") === "Receipt" && details.length) {
+          return details.map((detail) => {
+            const saleDate = formatLedgerDate(detail.sale_date || detail.date || "");
+            const saleVoucher = detail.sale_voucher_no || detail.voucher_no || "-";
+            return `${saleDate || "-"} | ${saleVoucher} | Rs.${formatMoney(detail.adjusted_amount || 0)}`;
+          }).join("\n");
+        }
+        return item.adjustment_details || item.particulars || "-";
+      }],
       ["warehouse", "Warehouse", (item) => (item.row_type === "closing" ? "" : getWarehouseName(item))],
       ["debit", "Debit", (item) => formatMoney(item.debit || 0)],
       ["credit", "Credit", (item) => formatMoney(item.credit || 0)],
