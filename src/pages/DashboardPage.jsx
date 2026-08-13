@@ -77,8 +77,8 @@ export default function DashboardPage() {
   const [partyStock, setPartyStock] = useState([]);
   const [warehouseStock, setWarehouseStock] = useState([]);
   const [totalStock, setTotalStock] = useState(0);
+  const [totalRent, setTotalRent] = useState(0);
   const [monthEndRentSummary, setMonthEndRentSummary] = useState([]);
-  const [dashboardTotalRent, setDashboardTotalRent] = useState(0);
 
   const [showLocationPopup, setShowLocationPopup] = useState(false);
   const [showEmployeePopup, setShowEmployeePopup] = useState(false);
@@ -143,8 +143,8 @@ export default function DashboardPage() {
       setPartyStock(normalizedPartyStock);
       setWarehouseStock(normalizedWarehouseStock);
       setTotalStock(normalizedTotalStock);
+      setTotalRent(normalizedTotalRent);
       setMonthEndRentSummary(normalizedMonthEndRentSummary);
-      setDashboardTotalRent(normalizedTotalRent);
     } catch (err) {
       console.error("Failed to fetch dashboard data:", err);
     }
@@ -846,7 +846,11 @@ export default function DashboardPage() {
     (sum, row) => sum + Number(row.total_rent || 0),
     0
   );
-  const totalRentCollected = dashboardTotalRent;
+  const calculatedRentFromRows = filteredMonthEndRentSummary.reduce(
+    (sum, row) => sum + Number(row.total_rent ?? row.rent_amount ?? 0),
+    0
+  );
+  const totalRentCollected = totalRent > 0 ? totalRent : calculatedRentFromRows;
 
   const stockCoveragePercentage = totalStock > 0 ? Math.round(Math.min(100, (totalWarehouseStock / totalStock) * 100)) : 0;
   const expenseBalanceRatio = totalRentCollected > 0 ? Math.round(Math.min(100, (totalWarehouseRent / totalRentCollected) * 100)) : 0;
@@ -1194,7 +1198,7 @@ export default function DashboardPage() {
             <div className="section-header">
               <div>
                 <h2>Premium Analytics</h2>
-                <p>Live warehouse, stock and expense analytics with practical insights.</p>
+                <p>Live warehouse, stock and expense analytics with AI-powered insights.</p>
               </div>
             </div>
 
@@ -1243,7 +1247,7 @@ export default function DashboardPage() {
 
               <div className="ai-insights-panel glass-card">
                 <div className="analytics-card-head">
-                  <span>Quick Insights</span>
+                  <span>AI Insights</span>
                   <strong>Suggested actions</strong>
                 </div>
                 <div className="insights-list">
