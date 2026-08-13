@@ -78,6 +78,7 @@ export default function DashboardPage() {
   const [warehouseStock, setWarehouseStock] = useState([]);
   const [totalStock, setTotalStock] = useState(0);
   const [monthEndRentSummary, setMonthEndRentSummary] = useState([]);
+  const [dashboardTotalRent, setDashboardTotalRent] = useState(0);
 
   const [showLocationPopup, setShowLocationPopup] = useState(false);
   const [showEmployeePopup, setShowEmployeePopup] = useState(false);
@@ -129,6 +130,7 @@ export default function DashboardPage() {
       const normalizedWarehouseStock = Array.isArray(data.warehouseStock) ? data.warehouseStock : [];
       const normalizedMonthEndRentSummary = Array.isArray(data.monthEndRentSummary) ? data.monthEndRentSummary : [];
       const normalizedTotalStock = Number(data.totalStock ?? 0);
+      const normalizedTotalRent = Number(data.totalRent ?? 0);
 
       setLocations(normalizedLocations);
       setEmployees(normalizedEmployees);
@@ -142,6 +144,7 @@ export default function DashboardPage() {
       setWarehouseStock(normalizedWarehouseStock);
       setTotalStock(normalizedTotalStock);
       setMonthEndRentSummary(normalizedMonthEndRentSummary);
+      setDashboardTotalRent(normalizedTotalRent);
     } catch (err) {
       console.error("Failed to fetch dashboard data:", err);
     }
@@ -843,10 +846,7 @@ export default function DashboardPage() {
     (sum, row) => sum + Number(row.total_rent || 0),
     0
   );
-  const totalRentCollected = filteredMonthEndRentSummary.reduce(
-    (sum, row) => sum + Number(row.total_rent ?? row.rent_amount ?? 0),
-    0
-  );
+  const totalRentCollected = dashboardTotalRent;
 
   const stockCoveragePercentage = totalStock > 0 ? Math.round(Math.min(100, (totalWarehouseStock / totalStock) * 100)) : 0;
   const expenseBalanceRatio = totalRentCollected > 0 ? Math.round(Math.min(100, (totalWarehouseRent / totalRentCollected) * 100)) : 0;
@@ -1171,7 +1171,7 @@ export default function DashboardPage() {
               </div>
               <div className="hero-stat-item">
                 <span>Total Rent</span>
-                <strong>₹{Number(totalWarehouseRent || 0).toFixed(2)}</strong>
+                <strong>₹{Number(totalRentCollected || 0).toFixed(2)}</strong>
               </div>
               <div className="hero-stat-item">
                 <span>Warehouse</span>
@@ -1194,7 +1194,7 @@ export default function DashboardPage() {
             <div className="section-header">
               <div>
                 <h2>Premium Analytics</h2>
-                <p>Live warehouse, stock and expense analytics with clear operational insights.</p>
+                <p>Live warehouse, stock and expense analytics with practical insights.</p>
               </div>
             </div>
 
@@ -1232,8 +1232,8 @@ export default function DashboardPage() {
                   <span>Expense Analytics</span>
                   <strong>Rent and expense balance</strong>
                 </div>
-                <div className="analytics-card-value">₹{Number(totalWarehouseRent || 0).toFixed(2)}</div>
-                <div className="analytics-card-text">Current warehouse rent calculated from the existing dashboard rent data.</div>
+                <div className="analytics-card-value">₹{Number(totalRentCollected || 0).toFixed(2)}</div>
+                <div className="analytics-card-text">Current rent exposure and expense flow across your warehouses.</div>
                 <div className="sparkline-row">
                   {analyticsSparkline.expense.map((value, idx) => (
                     <span key={idx} className="sparkline-segment" style={{ height: `${value}%` }} />
@@ -1314,17 +1314,6 @@ export default function DashboardPage() {
             </div>
 
             <div className="dashboard-panel table-card" style={{ padding: "18px" }}>
-              <div className="report-highlight-row" style={{ marginBottom: "14px" }}>
-                <div className="report-highlight-card">
-                  <span>Total Available Stock</span>
-                  <strong>{Number(totalWarehouseStock).toFixed(2)}</strong>
-                </div>
-                <div className="report-highlight-card">
-                  <span>Total Current Rent</span>
-                  <strong>{Number(totalRentCollected).toFixed(2)}</strong>
-                </div>
-              </div>
-
               <div className="stock-report-filter-panel">
                 <div className="stock-filter-field stock-filter-search">
                   <span>Search</span>
