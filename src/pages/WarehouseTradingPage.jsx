@@ -3668,13 +3668,13 @@ export default function WarehouseTradingPage() {
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <button type="button" onClick={onPrev} disabled={page <= 1} style={{ ...btnAction, background: page <= 1 ? "#cbd5e1" : "#64748b", color: page <= 1 ? "#64748b" : "#fff", cursor: page <= 1 ? "not-allowed" : "pointer", padding: "6px 12px" }}>
-            â† Prev
+                  ← Prev
           </button>
           <div style={{ alignSelf: "center", padding: "0 12px", fontWeight: 700, color: "#0f172a", whiteSpace: "nowrap", background: "#fff", border: "1px solid #cbd5e1", borderRadius: "6px", padding: "6px 12px" }}>
             Showing {totalItems === 0 ? 0 : `${start}-${end}`} | Page {page} / {totalPages}
           </div>
           <button type="button" onClick={onNext} disabled={page >= totalPages} style={{ ...btnAction, background: page >= totalPages ? "#cbd5e1" : "#0f766e", color: page >= totalPages ? "#64748b" : "#fff", cursor: page >= totalPages ? "not-allowed" : "pointer", padding: "6px 12px" }}>
-            Next â†’
+                  Next →
           </button>
         </div>
       </div>
@@ -3869,7 +3869,7 @@ export default function WarehouseTradingPage() {
     doc.setFont("helvetica", "normal");
     doc.setFontSize(6.2);
     doc.setTextColor(220, 245, 242);
-    doc.text("WAREHOUSE TRADING â€¢ ACCOUNTING REPORT", pageWidth - right, 6.3, { align: "right" });
+    doc.text("WAREHOUSE TRADING - ACCOUNTING REPORT", pageWidth - right, 6.3, { align: "right" });
 
     let y = 17;
     doc.setFont("helvetica", "bold");
@@ -4018,7 +4018,7 @@ export default function WarehouseTradingPage() {
         doc.setFont("helvetica", "normal");
         doc.setFontSize(5.8);
         doc.setTextColor(225, 245, 242);
-        doc.text(`Warehouse Trading  â€¢  ${title}`, left, pageHeight - 3.1);
+      doc.text(`Warehouse Trading - ${title}`, left, pageHeight - 3.1);
         doc.text(`Page ${data.pageNumber} / ${doc.internal.getNumberOfPages()}`, pageWidth - right, pageHeight - 3.1, { align: "right" });
       },
     });
@@ -4857,7 +4857,7 @@ export default function WarehouseTradingPage() {
                           <h3 style={paymentHeroTitle}>Smart Payment Entry</h3>
                           <p style={paymentHeroSubtitle}>Select account, warehouse and pending farmer, then adjust purchase bills.</p>
                         </div>
-                        <div style={paymentBadge}>âš¡ Smart Entry</div>
+                        <div style={paymentBadge}>Smart Entry</div>
                       </div>
 
                       <div style={paymentModeRow}>
@@ -4913,7 +4913,7 @@ export default function WarehouseTradingPage() {
                           value={formData.farmer_id}
                           options={accountFarmers.map((f) => ({
                             value: f.id || f._id,
-                            label: `${f.name}${f.outstanding !== undefined ? ` â€” Due Rs.${formatMoney(f.outstanding)}` : ""}`,
+                            label: `${f.name}${f.outstanding !== undefined ? ` - Due Rs.${formatMoney(f.outstanding)}` : ""}`,
                           }))}
                           onChange={(value) => handleChange({ target: { name: "farmer_id", value } })}
                           placeholder={formData.warehouse_id ? "Choose pending farmer" : "Choose warehouse first"}
@@ -4990,7 +4990,7 @@ export default function WarehouseTradingPage() {
                           <h3 style={paymentHeroTitle}>Smart Receipt Entry</h3>
                           <p style={paymentHeroSubtitle}>Select account, warehouse and pending buyer, then adjust sale bills.</p>
                         </div>
-                        <div style={paymentBadge}>Ã¢Å¡Â¡ Smart Entry</div>
+                        <div style={paymentBadge}>Smart Entry</div>
                       </div>
 
                       <div style={paymentModeRow}>
@@ -5042,7 +5042,7 @@ export default function WarehouseTradingPage() {
                             const buyer = buyerNames.find((item) => String(item.id || item._id) === buyerId);
                             return {
                               value: buyerId,
-                              label: `${buyer?.name || row.buyer_name || row.company_name || buyerId}${row.outstanding !== undefined ? ` Ã¢â‚¬â€ Due Rs.${formatMoney(row.outstanding)}` : ""}`,
+                              label: `${buyer?.name || row.buyer_name || row.company_name || buyerId}${row.outstanding !== undefined ? ` - Due Rs.${formatMoney(row.outstanding)}` : ""}`,
                             };
                           })}
                           onChange={(value) => handleChange({ target: { name: "company_id", value } })}
@@ -5597,7 +5597,7 @@ export default function WarehouseTradingPage() {
               <h3 style={{ marginTop: 0 }}>{activeVoucherType.charAt(0).toUpperCase() + activeVoucherType.slice(1)} Vouchers</h3>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
                 <button type="button" onClick={() => setVoucherSortAsc((prev) => !prev)} style={{ ...btnAction, background: voucherSortAsc ? "#0f766e" : "#64748b", padding: "6px 12px", fontSize: 12 }}>
-                  ðŸ“… {voucherSortAsc ? "Oldest First" : "Newest First"}
+                  {voucherSortAsc ? "Oldest First" : "Newest First"}
                 </button>
                 {activeVoucherType === "sale" && (
                   <button type="button" onClick={() => setShowSaleAdjustedModal(true)} style={{ ...btnAction, background: "#0f766e" }}>
@@ -6279,7 +6279,7 @@ export default function WarehouseTradingPage() {
         <div style={modalOverlayStyle}>
           <WarehouseAdjustModal
             title="Payment Adjustment"
-            subtitle="Account â†’ Warehouse â†’ Pending Farmer â†’ Purchase Bills"
+          subtitle="Account → Warehouse → Pending Farmer → Purchase Bills"
             actionButton={btnAction}
             controls={
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10, marginTop: 12 }}>
@@ -6301,7 +6301,7 @@ export default function WarehouseTradingPage() {
                 <SearchableSelect
                   label="Pending Farmer"
                   value={formData.farmer_id}
-                  options={accountFarmers.map((f) => ({ value: f.id || f._id, label: `${f.name}${f.outstanding !== undefined ? ` â€” Pending Rs.${formatMoney(f.outstanding)}` : ""}` }))}
+              options={accountFarmers.map((f) => ({ value: f.id || f._id, label: `${f.name}${f.outstanding !== undefined ? ` - Pending Rs.${formatMoney(f.outstanding)}` : ""}` }))}
                   onChange={(value) => handleChange({ target: { name: "farmer_id", value } })}
                   placeholder={formData.warehouse_id ? "Choose pending farmer" : "Choose warehouse first"}
                   disabled={!formData.warehouse_id}
