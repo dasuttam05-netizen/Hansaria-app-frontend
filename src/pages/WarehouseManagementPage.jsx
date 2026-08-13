@@ -133,7 +133,15 @@ export default function WarehouseManagementPage() {
         axios.get("/api/companies").catch(() => ({ data: [] })),
         axios.get("/api/company-accounts").catch(() => ({ data: [] })),
       ]);
-      setWarehouses(Array.isArray(wRes.data) ? wRes.data : []);
+      const warehouseRows = Array.isArray(wRes.data) ? wRes.data : [];
+      const companyRows = Array.isArray(cRes.data) ? cRes.data : [];
+      const companyMap = new Map(companyRows.map((c) => [String(c._id || c.id), c.name || c.company_name || ""]));
+      setWarehouses(warehouseRows.map((w) => ({
+        ...w,
+        company_name: w.company_name || companyMap.get(String(w.company_id || "")) || "",
+        monthly_rent: Number(w.monthly_rent ?? 0),
+      })));
+
       setLocations(Array.isArray(lRes.data) ? lRes.data : []);
       setEmployees(Array.isArray(eRes.data) ? eRes.data : []);
       setBuyerNames(Array.isArray(bRes.data) ? bRes.data : []);
@@ -240,6 +248,8 @@ export default function WarehouseManagementPage() {
       alert(err?.response?.data?.error || "Error deleting warehouse");
     }
   };
+
+  const companyNameById = useMemo(() => new Map((companies || []).map((c) => [String(c._id || c.id), c.name || c.company_name || ""])), [companies]);
 
   const employeeOptions = useMemo(
     () =>
@@ -581,7 +591,7 @@ export default function WarehouseManagementPage() {
                         <td style={td}>{locationName}</td>
                         <td style={td}>{`${Number(w.opening_balance ?? 0).toFixed(2)} ${String(w.opening_balance_type || "dr").toUpperCase()}`}</td>
                         <td style={td}>{employeeName}</td>
-                        <td style={td}>{w.company_name || "-"}</td>
+                        <td style={td}>{w.company_name || companyNameById.get(String(w.company_id || "")) || "-"}</td>
                         <td style={td}>{Number(w.monthly_rent ?? 0).toFixed(2)}</td>
                         <td style={td}>
                           <button type="button" onClick={() => handleEdit(w)} style={{ ...mini, background: "#2563eb" }}>Edit</button>{" "}
