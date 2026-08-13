@@ -3242,7 +3242,7 @@ export default function WarehouseTradingPage() {
       ["po_no", "P.O No", (item) => item.po_no || "-"],
       ["due_date", "Due Date", (item) => formatLedgerDate(item.due_date)],
       ["buyer", "Buyer", (item) => getBuyerName(item)],
-      ["consignee", "Consignee", (item) => item.consignee_name || consignees.find((c) => String(c.id || c._id) === String(item.consignee_id))?.name || "-"],
+      ["consignee", "Consignee", (item) => item.consignee_name || item.consigneeName || item.consignee?.name || consignees.find((c) => String(c.id || c._id) === String(item.consignee_id || item.consigneeId))?.name || "-"],
       ["account", "Account", (item) => getAccountName(item)],
       ["warehouse", "Warehouse", (item) => getWarehouseName(item)],
       ["product", "Product", (item) => getProductName(item)],
@@ -3607,9 +3607,10 @@ export default function WarehouseTradingPage() {
     };
 
     (reportFilterOptions.buyers || []).forEach(add);
-    const ids = new Set((reportFilterOptions.buyer_ids || []).map(String));
-    buyerNames.filter((buyer) => !ids.size || ids.has(String(buyer.id || buyer._id || ""))).forEach(add);
-    companies.filter((company) => !ids.size || ids.has(String(company.id || company._id || ""))).forEach((company) => {
+    // Keep the Buyer Filter populated from the existing master lists even when
+    // the report endpoint returns only a partial set of buyer IDs.
+    buyerNames.forEach(add);
+    companies.forEach((company) => {
       add({ ...company, name: company.name || company.company_name });
     });
 
