@@ -203,12 +203,11 @@ export default function InwardPage() {
   useEffect(() => {
     if (!formData.company_id || formData.company_account_id) return;
 
-    const matchingAccount = companyAccounts.find((acc) => {
-      return (
-        sameId(getRecordId(acc.company_id), formData.company_id) ||
-        sameText(acc.company_name, companies.find((c) => sameId(getRecordId(c), formData.company_id))?.name)
-      );
-    });
+    const selectedCompany = companies.find((c) => sameId(getRecordId(c), formData.company_id));
+    const matchingAccount =
+      companyAccounts.find((acc) => sameId(getRecordId(acc.company_id), formData.company_id)) ||
+      companyAccounts.find((acc) => sameText(acc.company_name, selectedCompany?.name)) ||
+      companyAccounts.find((acc) => sameText(acc.account_name, selectedCompany?.name));
 
     if (matchingAccount) {
       setFormData((prev) => ({
