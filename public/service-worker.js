@@ -1,4 +1,4 @@
-const CACHE_NAME = "hansaria-pwa-v2";
+const CACHE_NAME = "hansaria-pwa-v4";
 const APP_SHELL = ["/", "/manifest.json", "/app-icon.svg"];
 
 self.addEventListener("install", (event) => {
@@ -26,6 +26,17 @@ self.addEventListener("fetch", (event) => {
 
   const requestUrl = new URL(event.request.url);
   if (requestUrl.origin !== self.location.origin) {
+    return;
+  }
+
+  if (requestUrl.pathname.startsWith("/api/")) {
+    // Never cache API responses (including transient 404/401/500 responses).
+    event.respondWith(fetch(event.request));
+    return;
+  }
+
+  if (requestUrl.pathname.startsWith("/static/")) {
+    event.respondWith(fetch(event.request));
     return;
   }
 
