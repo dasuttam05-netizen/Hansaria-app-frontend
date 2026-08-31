@@ -1208,7 +1208,7 @@ export default function WarehouseTradingPage() {
   const loadWarehouseStockReport = async () => {
     const token = ++reportLoadTokenRef.current;
     try {
-      const res = await axios.get("/api/wh-vouchers/report/warehouse-stock");
+      const res = await axios.get("/api/warehouse-trading/report/warehouse-stock");
       if (token !== reportLoadTokenRef.current) return;
       setWarehouseStockReport(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
@@ -1449,7 +1449,9 @@ export default function WarehouseTradingPage() {
       }
 
       const request = axios
-        .get("/api/wh-vouchers/report/filter-options", { params: { ...params, type: reportType } })
+        .get("/api/warehouse-trading/report/filter-options", {
+  params: { ...params, type: reportType }
+})
         .then((res) => {
           const nextData = {
             account_ids: Array.isArray(res.data?.account_ids) ? res.data.account_ids : [],
@@ -1530,7 +1532,7 @@ export default function WarehouseTradingPage() {
         params.page = page;
         params.page_size = PAGE_SIZE;
       }
-      const res = await axios.get(`/api/wh-vouchers/report/${endpoint}`, { params });
+      const res = await axios.get(`/api/warehouse-trading/report/${endpoint}`, { params });
       if (token !== reportLoadTokenRef.current) return;
       const payload = res.data || [];
       const rows = Array.isArray(payload) ? payload : Array.isArray(payload.data) ? payload.data : [];
