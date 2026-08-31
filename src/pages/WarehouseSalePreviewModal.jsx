@@ -68,8 +68,8 @@ function WarehouseSalePreviewModal({
               const tdsValue = toNumber(salePreviewRow?.tds_amount);
               const roundOffValue = toNumber(salePreviewRow?.round_off);
               const payload = { deduction_only: true, sale_type: salePreviewRow?.sale_type || "direct", unloading_date: salePreviewRow?.unloading_date || salePreviewRow?.date || "", unloading_qty: unloadingQtyValue, shortage_quantity: shortageQty, shortage_amount: shortageAmount, claim_amount: claimValue, other_deduction: otherDeductionValue, cd_percent: toNumber(salePreviewRow?.cd_percent), cd_amount: cdAmountValue, adjustment_amount: adjustmentValue, tds_amount: tdsValue, transport_charge: transportChargeValue, round_off: roundOffValue, total_deduction: toNumber(salePreviewSummary?.summary?.total_deduction) || toNumber(salePreviewRow?.total_deduction) || claimValue + otherDeductionValue + cdAmountValue + adjustmentValue + tdsValue };
-              await axios.put(`/api/wh-vouchers/sale/${saleId}`, payload);
-              const updated = await axios.get(`/api/wh-vouchers/sale/${saleId}/summary`);
+              await axios.put(`/api/warehouse-trading/sale/${saleId}`, payload);
+              const updated = await axios.get(`/api/warehouse-trading/sale/${saleId}/summary`);
               setSalePreviewSummary(updated.data || salePreviewSummary);
               setSalePreviewRow(updated.data?.sale || salePreviewRow);
               alert("Direct sale report saved successfully");
