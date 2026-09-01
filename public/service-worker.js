@@ -1,4 +1,4 @@
-const CACHE_NAME = "hansaria-pwa-v5";
+const CACHE_NAME = "hansaria-pwa-v6";
 const APP_SHELL = ["/", "/manifest.json", "/app-icon.svg"];
 
 self.addEventListener("install", (event) => {
@@ -25,13 +25,14 @@ self.addEventListener("fetch", (event) => {
   }
 
   const requestUrl = new URL(event.request.url);
-  // Never intercept API calls. API responses must always come directly from
-  // the backend so stale/404 responses cannot be served from the PWA cache.
-  if (requestUrl.pathname.startsWith("/api/")) {
+  if (requestUrl.origin !== self.location.origin) {
     return;
   }
 
-  if (requestUrl.origin !== self.location.origin) {
+  // Never cache API responses. The API lives on the cloud backend and stale
+  // 404/401 responses must never be replayed by the frontend service worker.
+  if (requestUrl.pathname.startsWith("/api/") || requestUrl.pathname === "/auth/login") {
+    event.respondWith(fetch(event.request));
     return;
   }
 
