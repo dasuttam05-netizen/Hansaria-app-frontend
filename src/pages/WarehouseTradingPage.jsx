@@ -1068,7 +1068,7 @@ export default function WarehouseTradingPage() {
       const saleId = salePreviewRow.id || salePreviewRow._id;
       if (!saleId) return;
       try {
-        const response = await API.get(`/api/warehouse-trading/sale/${saleId}/summary`);
+        const response = await API.get(`/api/wh-vouchers/sale/${saleId}/summary`);
         const transportValue = toNumber(response.data?.transport_charge || response.data?.summary?.transport_charge || 0);
         if (transportValue > 0) {
           setSalePreviewSummary(response.data);
@@ -1104,7 +1104,7 @@ export default function WarehouseTradingPage() {
 
     let cancelled = false;
     axios
-      .get("/api/warehouse-trading/available-sale-stock", {
+      .get("/api/wh-vouchers/available-sale-stock", {
         params: {
           warehouse_id: formData.warehouse_id,
           product_id: formData.product_id,
@@ -1208,7 +1208,7 @@ export default function WarehouseTradingPage() {
   const loadWarehouseStockReport = async () => {
     const token = ++reportLoadTokenRef.current;
     try {
-      const res = await API.get("/api/warehouse-trading/report/warehouse-stock");
+      const res = await API.get("/api/wh-vouchers/report/warehouse-stock");
       if (token !== reportLoadTokenRef.current) return;
       setWarehouseStockReport(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
@@ -1221,7 +1221,7 @@ export default function WarehouseTradingPage() {
   const fetchNextVoucherNo = async (type) => {
     try {
       setVoucherNumberLoading(true);
-      const res = await API.get(`/api/warehouse-trading/next-voucher-no`, { params: { type } });
+      const res = await API.get(`/api/wh-vouchers/next-voucher-no`, { params: { type } });
       if (res.data?.voucher_no) {
         setFormData((prev) => ({ ...prev, voucher_no: prev.voucher_no || res.data.voucher_no }));
       }
@@ -1253,7 +1253,7 @@ export default function WarehouseTradingPage() {
     }
     const inFlight = paymentFarmersInFlightRef.current.get(key);
     if (inFlight) return inFlight;
-    const request = API.get(`/api/warehouse-trading/farmers-by-account/${account}`, {
+    const request = API.get(`/api/wh-vouchers/farmers-by-account/${account}`, {
       params: {
         ...(warehouse ? { warehouse_id: warehouse } : {}),
         ...(excludePayment ? { exclude_payment_id: excludePayment } : {}),
@@ -1292,7 +1292,7 @@ export default function WarehouseTradingPage() {
     }
     const inFlight = receiptBuyersInFlightRef.current.get(key);
     if (inFlight) return inFlight;
-    const request = API.get("/api/warehouse-trading/receipt-pending-buyers", {
+    const request = API.get("/api/wh-vouchers/receipt-pending-buyers", {
       params: { company_account_id: account, warehouse_id: warehouse || undefined, exclude_receipt_id: exclude || undefined },
     }).then((res) => {
       const rows = Array.isArray(res.data) ? res.data : [];
@@ -1344,7 +1344,7 @@ export default function WarehouseTradingPage() {
         if (warehouse) params.warehouse_id = warehouse;
         if (excludePaymentId) params.exclude_payment_id = excludePaymentId;
         if (companyAccountId) params.company_account_id = companyAccountId;
-        const res = await API.get(`/api/warehouse-trading/outstanding`, { params });
+        const res = await API.get(`/api/wh-vouchers/outstanding`, { params });
         const data = res.data || null;
         outstandingCacheRef.current.set(key, { time: Date.now(), data });
         setPartyOutstanding(data);
@@ -1380,7 +1380,7 @@ export default function WarehouseTradingPage() {
       const search = String(globalSearch || "").trim();
       if (search) params.search = search;
 
-      const res = await API.get(`/api/warehouse-trading/${activeVoucherType}`, { params });
+      const res = await API.get(`/api/wh-vouchers/${activeVoucherType}`, { params });
       if (token !== voucherLoadTokenRef.current) return;
 
       const payload = res.data || {};
@@ -1410,7 +1410,7 @@ export default function WarehouseTradingPage() {
       }
       // This is a form lookup, not the main voucher table. Keep it explicit so
       // the table itself remains strictly paginated.
-      const res = await API.get("/api/warehouse-trading/purchase", { params: { page: 1, limit: 100, lookup: 1, order: "asc", warehouse_id: formData.warehouse_id || undefined, farmer_id: formData.against_purchase_farmer_id || undefined, company_account_id: formData.company_account_id || undefined, product_id: formData.product_id || undefined } });
+      const res = await API.get("/api/wh-vouchers/purchase", { params: { page: 1, limit: 100, lookup: 1, order: "asc", warehouse_id: formData.warehouse_id || undefined, farmer_id: formData.against_purchase_farmer_id || undefined, company_account_id: formData.company_account_id || undefined, product_id: formData.product_id || undefined } });
       const payload = res.data || {};
       const rows = Array.isArray(payload) ? payload : (Array.isArray(payload.data) ? payload.data : []);
       setSalePurchaseRows(rows);
@@ -1449,7 +1449,7 @@ export default function WarehouseTradingPage() {
       }
 
       const request = axios
-        .get("/api/warehouse-trading/report/filter-options", {
+        .get("/api/wh-vouchers/report/filter-options", {
   params: { ...params, type: reportType }
 })
         .then((res) => {
@@ -1532,7 +1532,7 @@ export default function WarehouseTradingPage() {
         params.page = page;
         params.page_size = PAGE_SIZE;
       }
-      const res = await API.get(`/api/warehouse-trading/report/${endpoint}`, { params });
+      const res = await API.get(`/api/wh-vouchers/report/${endpoint}`, { params });
       if (token !== reportLoadTokenRef.current) return;
       const payload = res.data || [];
       const rows = Array.isArray(payload) ? payload : Array.isArray(payload.data) ? payload.data : [];
@@ -1571,7 +1571,7 @@ export default function WarehouseTradingPage() {
       }
       if (reportType === "purchase" && hasPermission(user, voucherPermissionMap.purchase) && !hasActivePurchaseFilters) {
         try {
-          const fallbackRes = await API.get("/api/warehouse-trading/purchase", { params: { page: 1, limit: PAGE_SIZE, order: "desc" } });
+          const fallbackRes = await API.get("/api/wh-vouchers/purchase", { params: { page: 1, limit: PAGE_SIZE, order: "desc" } });
           if (token !== reportLoadTokenRef.current) return;
           const fallbackPayload = fallbackRes.data || [];
           setReportData(Array.isArray(fallbackPayload) ? fallbackPayload : (fallbackPayload.data || []));
@@ -1585,7 +1585,7 @@ export default function WarehouseTradingPage() {
           // Only Sale Summary uses the sale-voucher fallback. Do not use it
           // for Party Ledger/Follow-up/Journey because those endpoints have
           // different response shapes.
-          const fallbackRes = await API.get("/api/warehouse-trading/sale", {
+          const fallbackRes = await API.get("/api/wh-vouchers/sale", {
             params: { page: page || 1, limit: PAGE_SIZE, order: "desc", ...params },
           });
           if (token !== reportLoadTokenRef.current) return;
@@ -1839,7 +1839,7 @@ export default function WarehouseTradingPage() {
   const buildWhatsappShareUrl = (message) => `https://wa.me/?text=${encodeURIComponent(message)}`;
 
   const sharePurchasePdfOnWhatsapp = async (voucherId, voucherNo, voucherDate) => {
-    const response = await API.get(`/api/warehouse-trading/purchase/${voucherId}/pdf`, {
+    const response = await API.get(`/api/wh-vouchers/purchase/${voucherId}/pdf`, {
       responseType: "blob",
     });
     const pdfBlob = new Blob([response.data], { type: "application/pdf" });
@@ -2070,7 +2070,7 @@ export default function WarehouseTradingPage() {
       }
       
       const isEdit = editId && String(editId).trim();
-      const url = isEdit ? `/api/warehouse-trading/${activeVoucherType}/${editId}` : `/api/warehouse-trading/${activeVoucherType}`;
+      const url = isEdit ? `/api/wh-vouchers/${activeVoucherType}/${editId}` : `/api/wh-vouchers/${activeVoucherType}`;
       const requestHeaders = typeof window !== "undefined" && localStorage.getItem("token")
         ? { Authorization: `Bearer ${localStorage.getItem("token")}` }
         : {};
@@ -2168,7 +2168,7 @@ export default function WarehouseTradingPage() {
   const handleDeleteVoucher = async (voucherId) => {
     if (!window.confirm("Are you sure you want to delete this voucher?")) return;
     try {
-      await API.delete(`/api/warehouse-trading/${activeVoucherType}/${voucherId}`);
+      await API.delete(`/api/wh-vouchers/${activeVoucherType}/${voucherId}`);
       alert("Voucher deleted successfully");
       loadVouchers();
     } catch (err) {
@@ -2184,7 +2184,7 @@ export default function WarehouseTradingPage() {
     try {
       if (activeVoucherType === "receipt") {
         setLoading(true);
-        const res = await API.get(`/api/warehouse-trading/receipt/${voucherId}`);
+        const res = await API.get(`/api/wh-vouchers/receipt/${voucherId}`);
         const receipt = res.data;
         setFormData({ ...defaultForm(), ...receipt });
         const existingAdjustments = Array.isArray(receipt.adjustments)
@@ -2220,7 +2220,7 @@ export default function WarehouseTradingPage() {
         if (activeVoucherType === "payment") {
           setLoading(true);
           try {
-            const res = await API.get(`/api/warehouse-trading/payment/${voucherId}`);
+            const res = await API.get(`/api/wh-vouchers/payment/${voucherId}`);
             const payment = res.data;
             const paymentMode = inferPaymentMode(payment);
             const existingAdjustments = Array.isArray(payment.adjustments)
@@ -2326,7 +2326,7 @@ export default function WarehouseTradingPage() {
 
   const handleGeneratePDF = async (voucherId) => {
     try {
-      const response = await API.get(`/api/warehouse-trading/${activeVoucherType}/${voucherId}/pdf`, {
+      const response = await API.get(`/api/wh-vouchers/${activeVoucherType}/${voucherId}/pdf`, {
         responseType: "blob",
       });
       const url = window.URL.createObjectURL(new Blob([response.data]));
@@ -2344,7 +2344,7 @@ export default function WarehouseTradingPage() {
 
   const handlePurchaseReportPDF = async (voucherId) => {
     try {
-      const response = await API.get(`/api/warehouse-trading/purchase/${voucherId}/pdf`, {
+      const response = await API.get(`/api/wh-vouchers/purchase/${voucherId}/pdf`, {
         responseType: "blob",
       });
       const url = window.URL.createObjectURL(new Blob([response.data]));
@@ -2377,7 +2377,7 @@ export default function WarehouseTradingPage() {
     if (!recordId) return;
 
     try {
-      const res = await API.get(`/api/warehouse-trading/purchase/${recordId}`);
+      const res = await API.get(`/api/wh-vouchers/purchase/${recordId}`);
       if (res?.data) {
         setPurchasePreviewRow(res.data);
       }
@@ -2545,7 +2545,7 @@ export default function WarehouseTradingPage() {
       }
       setSalePreviewLoading(true);
       try {
-        const response = await API.get(`/api/warehouse-trading/sale/${saleId}/summary`);
+        const response = await API.get(`/api/wh-vouchers/sale/${saleId}/summary`);
         setSalePreviewSummary(response.data || salePreviewRow);
       } catch (err) {
         setSalePreviewSummary(salePreviewRow);
@@ -2558,7 +2558,7 @@ export default function WarehouseTradingPage() {
 
   const downloadPurchaseImportTemplate = async () => {
     try {
-      const response = await API.get("/api/warehouse-trading/purchase/import-template", {
+      const response = await API.get("/api/wh-vouchers/purchase/import-template", {
         responseType: "blob",
       });
       const url = window.URL.createObjectURL(new Blob([response.data]));
@@ -2588,7 +2588,7 @@ export default function WarehouseTradingPage() {
     uploadForm.append("file", file);
     setImportingPurchase(true);
     try {
-      const res = await API.post("/api/warehouse-trading/purchase/import-xlsx", uploadForm, {
+      const res = await API.post("/api/wh-vouchers/purchase/import-xlsx", uploadForm, {
         headers: { "Content-Type": "multipart/form-data" },
       });
       const imported = Number(res.data?.imported || 0);
@@ -2613,7 +2613,7 @@ export default function WarehouseTradingPage() {
 
   const downloadPaymentImportTemplate = async () => {
     try {
-      const response = await API.get("/api/warehouse-trading/payment/import-template", {
+      const response = await API.get("/api/wh-vouchers/payment/import-template", {
         responseType: "blob",
       });
       const url = window.URL.createObjectURL(new Blob([response.data]));
@@ -2643,7 +2643,7 @@ export default function WarehouseTradingPage() {
     uploadForm.append("file", file);
     setImportingPayment(true);
     try {
-      const res = await API.post("/api/warehouse-trading/payment/import-xlsx", uploadForm, {
+      const res = await API.post("/api/wh-vouchers/payment/import-xlsx", uploadForm, {
         headers: { "Content-Type": "multipart/form-data" },
       });
       const imported = Number(res.data?.imported || 0);
@@ -2668,7 +2668,7 @@ export default function WarehouseTradingPage() {
 
   const downloadReceiptImportTemplate = async () => {
     try {
-      const response = await API.get("/api/warehouse-trading/receipt/import-template", {
+      const response = await API.get("/api/wh-vouchers/receipt/import-template", {
         responseType: "blob",
       });
       const url = window.URL.createObjectURL(new Blob([response.data]));
@@ -2698,7 +2698,7 @@ export default function WarehouseTradingPage() {
     uploadForm.append("file", file);
     setImportingReceipt(true);
     try {
-      const res = await API.post("/api/warehouse-trading/receipt/import-xlsx", uploadForm, {
+      const res = await API.post("/api/wh-vouchers/receipt/import-xlsx", uploadForm, {
         headers: { "Content-Type": "multipart/form-data" },
       });
       const imported = Number(res.data?.imported || 0);
@@ -2905,11 +2905,11 @@ export default function WarehouseTradingPage() {
 
     setLoading(true);
     try {
-      await API.put(`/api/warehouse-trading/sale/${editId}`, payload);
+      await API.put(`/api/wh-vouchers/sale/${editId}`, payload);
       alert("Sale voucher pass saved successfully");
       const remainingQtyAfterSave = Math.max(saleDispatchQty - saleUnloadingQty, 0);
       const nextVoucherNo = await axios
-        .get(`/api/warehouse-trading/next-voucher-no`, { params: { type: "sale" } })
+        .get(`/api/wh-vouchers/next-voucher-no`, { params: { type: "sale" } })
         .then((res) => res.data?.voucher_no || "")
         .catch(() => "");
       setShowSaleDeductionModal(false);
@@ -3004,7 +3004,7 @@ export default function WarehouseTradingPage() {
 
     setLoading(true);
     try {
-      await API.put(`/api/warehouse-trading/sale/${editId}`, payload);
+      await API.put(`/api/wh-vouchers/sale/${editId}`, payload);
       alert("Sale voucher pass saved successfully");
       const remainingQtyAfterSave = Math.max(saleDispatchQty - saleUnloadingQty, 0);
       const addQty = Math.max(toNumber(formData.add_qty), 0);
@@ -3012,7 +3012,7 @@ export default function WarehouseTradingPage() {
       const nextRate = toNumber(formData.rate);
       const nextAmount = Number((nextDispatchQty * nextRate).toFixed(2));
       const nextVoucherNo = await axios
-        .get(`/api/warehouse-trading/next-voucher-no`, { params: { type: "sale" } })
+        .get(`/api/wh-vouchers/next-voucher-no`, { params: { type: "sale" } })
         .then((res) => res.data?.voucher_no || "")
         .catch(() => "");
 
@@ -3064,7 +3064,7 @@ export default function WarehouseTradingPage() {
         lorry_no: formData.lorry_no || "",
         journey_token: formData.journey_token || buildJourneyToken(),
       };
-      const createRes = await API.post("/api/warehouse-trading/sale", nextPayload);
+      const createRes = await API.post("/api/wh-vouchers/sale", nextPayload);
       setFormData((prev) => ({
         ...nextPayload,
         warehouse_id: prev.warehouse_id || "",
