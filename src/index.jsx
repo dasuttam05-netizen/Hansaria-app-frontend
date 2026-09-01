@@ -1,9 +1,16 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
 import axios from "axios";
+import { getApiOrigin } from "./utils/api";
 import App from "./App.js";
 import { loadSession, touchSessionActivity } from "./utils/auth";
 import "./mobile.css";
+
+// Initialize the browser API client before any component API calls.
+// All relative Axios requests such as /api/warehouse-trading/... are sent
+// to the cloud backend, never to the Vercel frontend origin.
+axios.defaults.baseURL = getApiOrigin();
+axios.defaults.headers.common.Accept = "application/json";
 
 // Initialize auth header from stored session before any component API calls.
 loadSession();
