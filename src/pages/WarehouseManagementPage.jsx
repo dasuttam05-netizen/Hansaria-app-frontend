@@ -384,7 +384,7 @@ export default function WarehouseManagementPage() {
           unloading_date: unloadingDate,
         },
       };
-      await axios.post("/api/wh-vouchers/sale", payload);
+      await axios.post("/api/warehouse-trading/sale", payload);
       toast.success("Sale Entry saved successfully!", { theme: "colored" });
       setSaleFormData(emptySaleForm());
     } catch (err) {
