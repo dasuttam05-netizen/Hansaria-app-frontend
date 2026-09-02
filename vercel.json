@@ -4,6 +4,14 @@
   "framework": "create-react-app",
   "rewrites": [
     {
+      "source": "/warehouse-trading",
+      "destination": "/index.html"
+    },
+    {
+      "source": "/warehouse-trading/(.*)",
+      "destination": "/index.html"
+    },
+    {
       "source": "/((?!static/|manifest.json|service-worker.js|app-icon.svg|favicon.ico).*)",
       "destination": "/index.html"
     }
