@@ -1,4 +1,4 @@
-const CACHE_NAME = "hansaria-pwa-v7";
+const CACHE_NAME = "hansaria-pwa-v8";
 const APP_SHELL = ["/", "/manifest.json", "/app-icon.svg"];
 
 self.addEventListener("install", (event) => {
