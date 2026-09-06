@@ -1103,7 +1103,7 @@ export default function WarehouseTradingPage() {
     }
 
     let cancelled = false;
-    axios
+    API
       .get("/api/wh-vouchers/available-sale-stock", {
         params: {
           warehouse_id: formData.warehouse_id,
@@ -1448,7 +1448,7 @@ export default function WarehouseTradingPage() {
         return;
       }
 
-      const request = axios
+      const request = API
         .get("/api/wh-vouchers/report/filter-options", {
   params: { ...params, type: reportType }
 })
@@ -2911,7 +2911,7 @@ export default function WarehouseTradingPage() {
       await API.put(`/api/wh-vouchers/sale/${editId}`, payload);
       alert("Sale voucher pass saved successfully");
       const remainingQtyAfterSave = Math.max(saleDispatchQty - saleUnloadingQty, 0);
-      const nextVoucherNo = await axios
+      const nextVoucherNo = await API
         .get(`/api/wh-vouchers/next-voucher-no`, { params: { type: "sale" } })
         .then((res) => res.data?.voucher_no || "")
         .catch(() => "");
@@ -3014,7 +3014,7 @@ export default function WarehouseTradingPage() {
       const nextDispatchQty = Math.max(remainingQtyAfterSave + addQty, 0);
       const nextRate = toNumber(formData.rate);
       const nextAmount = Number((nextDispatchQty * nextRate).toFixed(2));
-      const nextVoucherNo = await axios
+      const nextVoucherNo = await API
         .get(`/api/wh-vouchers/next-voucher-no`, { params: { type: "sale" } })
         .then((res) => res.data?.voucher_no || "")
         .catch(() => "");
@@ -6817,7 +6817,7 @@ export default function WarehouseTradingPage() {
           formatDecimal4={formatDecimal4}
           toNumber={toNumber}
           getSalePreviewDataForRow={getSalePreviewDataForRow}
-          axios={axios}
+          axios={API}
         />
       )}
       </div>
