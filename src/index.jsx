@@ -7,7 +7,7 @@ import { loadSession, touchSessionActivity } from "./utils/auth";
 import "./mobile.css";
 
 // Initialize the browser API client before any component API calls.
-// All relative Axios requests such as /api/warehouse-trading/... are sent
+// All relative Axios requests such as /api/wh-vouchers/... are sent
 // to the cloud backend, never to the Vercel frontend origin.
 axios.defaults.baseURL = getApiOrigin();
 axios.defaults.headers.common.Accept = "application/json";
