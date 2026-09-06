@@ -171,8 +171,9 @@ const getArrowFocusableInputs = (root) =>
 const buildLookupMap = (rows) => {
   const map = new Map();
   (Array.isArray(rows) ? rows : []).forEach((row) => {
-    const key = String(row?.id || row?._id || "").trim();
-    if (key) map.set(key, row);
+    [row?.id, row?._id, row?.legacy_id]
+      .filter((value) => value !== undefined && value !== null && String(value).trim())
+      .forEach((value) => map.set(String(value).trim(), row));
   });
   return map;
 };
