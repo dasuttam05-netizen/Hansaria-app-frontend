@@ -1508,6 +1508,9 @@ export default function WarehouseTradingPage() {
         if (filters.warehouse_id) params.warehouse_id = filters.warehouse_id;
         if (filters.company_account_id) params.company_account_id = filters.company_account_id;
       }
+      if (isPurchaseReport && normalizedSearch) {
+        params.search = normalizedSearch;
+      }
       if (isSaleReport && filters.sale_buyer_id) {
         params.buyer_id = filters.sale_buyer_id;
       }
