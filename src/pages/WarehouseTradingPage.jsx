@@ -431,6 +431,21 @@ export default function WarehouseTradingPage() {
     item?.warehouse_name ||
     warehouseById.get(String(item?.warehouse_id))?.name ||
     "-";
+  const paymentWarehouseOptions = useMemo(() => {
+    const byId = new Map();
+    [...paymentWarehouses, ...warehouses].forEach((warehouse) => {
+      const id = String(warehouse?.id || warehouse?._id || "").trim();
+      if (id && !byId.has(id)) byId.set(id, warehouse);
+    });
+    const selectedId = String(formData.warehouse_id || "").trim();
+    if (selectedId && !byId.has(selectedId)) {
+      byId.set(selectedId, {
+        id: selectedId,
+        name: formData.warehouse_name || "Selected warehouse",
+      });
+    }
+    return Array.from(byId.values());
+  }, [formData.warehouse_id, formData.warehouse_name, paymentWarehouses, warehouses]);
   const getFarmerName = (item) =>
     item?.farmer_name ||
     farmerById.get(String(item?.farmer_id))?.name ||
@@ -2221,6 +2236,7 @@ export default function WarehouseTradingPage() {
           setSalePurchaseLinks(existingLinks);
         }
         if (activeVoucherType === "payment") {
+          setSelectedPaymentId(voucherId);
           setLoading(true);
           try {
             const res = await API.get(`/api/wh-vouchers/payment/${voucherId}`);
@@ -4967,7 +4983,7 @@ export default function WarehouseTradingPage() {
                         <SearchableSelect
                           label="Warehouse"
                           value={formData.warehouse_id}
-                          options={paymentWarehouses.map((w) => ({
+                          options={paymentWarehouseOptions.map((w) => ({
                             value: w.id || w._id,
                             label: w.name,
                           }))}
@@ -5776,6 +5792,7 @@ export default function WarehouseTradingPage() {
                   <div><strong>Date:</strong> {selectedVoucher.date || "-"}</div>
                   <div><strong>Account:</strong> {getAccountName(selectedVoucher)}</div>
                   <div><strong>Farmer:</strong> {getFarmerName(selectedVoucher)}</div>
+                  <div><strong>Warehouse:</strong> {getWarehouseName(selectedVoucher)}</div>
                   <div><strong>Amount:</strong> Rs.{formatMoney(selectedVoucher.amount || selectedVoucher.net_amount || selectedVoucher.amount || 0)}</div>
                   <div><strong>Reference:</strong> {selectedVoucher.reference_id || selectedVoucher.reference_type || "-"}</div>
                 </div>
@@ -6373,7 +6390,7 @@ export default function WarehouseTradingPage() {
                 <SearchableSelect
                   label="Warehouse"
                   value={formData.warehouse_id}
-                  options={paymentWarehouses.map((w) => ({ value: w.id || w._id, label: w.name }))}
+                  options={paymentWarehouseOptions.map((w) => ({ value: w.id || w._id, label: w.name }))}
                   onChange={(value) => handleChange({ target: { name: "warehouse_id", value } })}
                   placeholder={formData.company_account_id ? "Choose warehouse" : "Choose account first"}
                   disabled={!formData.company_account_id}
