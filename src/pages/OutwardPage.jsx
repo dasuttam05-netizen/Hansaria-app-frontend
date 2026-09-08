@@ -53,9 +53,9 @@ const firstNonEmpty = (...values) => values.find((value) => String(value || "").
 const buildLookupMap = (items) => {
   const map = new Map();
   (Array.isArray(items) ? items : []).forEach((item) => {
-    const id = getRecordId(item);
-    if (!id) return;
-    map.set(id, item);
+    [item?.id, item?._id, item?.legacy_id]
+      .filter((value) => value !== undefined && value !== null && String(value).trim())
+      .forEach((value) => map.set(String(value).trim(), item));
   });
   return map;
 };
@@ -68,6 +68,15 @@ const displayName = (row, id, lookup, fields, fallbackPrefix) => {
     ...fields.map((field) => row?.[field]),
     key ? `${fallbackPrefix} ${key}` : ""
   );
+};
+
+const accountBelongsToCompany = (account, companyId, company) => {
+  if (!companyId) return false;
+  const selectedId = String(companyId);
+  const accountCompanyId = getRecordId(account?.company_id);
+  if (accountCompanyId === selectedId) return true;
+  if (String(account?.company_legacy_id || account?.company_id_legacy || "") === selectedId) return true;
+  return sameText(account?.company_name, company?.name);
 };
 
 const mobileCard = {
@@ -1604,7 +1613,11 @@ Consignee: ${row.consignee_name}`;
                   >
                     <option value="">Select Account</option>
                     {formData.company_id && companyAccounts
-                      .filter((acc) => sameId(getRecordId(acc.company_id), formData.company_id))
+                      .filter((acc) => accountBelongsToCompany(
+                        acc,
+                        formData.company_id,
+                        companyLookup.get(String(formData.company_id))
+                      ))
                       .map((acc) => (
                         <option key={getRecordId(acc)} value={getRecordId(acc)}>
                           {acc.account_name}
