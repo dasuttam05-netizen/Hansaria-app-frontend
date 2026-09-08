@@ -73,7 +73,12 @@ export default function InwardReportPage() {
   const fetchReport = async () => {
     try {
       const res = await axios.get(`${API_BASE}/reports/party-stock`);
-      setRecords(Array.isArray(res.data) ? res.data : []);
+      const rows = Array.isArray(res.data)
+        ? res.data
+        : Array.isArray(res.data?.details)
+        ? res.data.details
+        : [];
+      setRecords(rows);
     } catch (err) {
       console.error("Report fetch failed:", err);
       setRecords([]);
