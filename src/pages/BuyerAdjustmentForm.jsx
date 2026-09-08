@@ -149,8 +149,15 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
       return;
     }
 
-    if (editingId === null && Number(newAdjustment.qty) > remainingQty) {
-      toast.error(`Quantity exceeds remaining ${remainingQty.toFixed(2)}`, { theme: "colored" });
+    const enteredQty = Number(newAdjustment.qty) || 0;
+    const editingExistingQty = editingId !== null
+      ? (buyerAdjustments.find((item) => item.id === editingId)?.qty || 0)
+      : 0;
+    const projectedTotal = totalAdjustedQty - Number(editingExistingQty || 0) + enteredQty;
+
+    if (projectedTotal > unloadingTargetQty + 0.0001) {
+      const allowed = Math.max(unloadingTargetQty - (totalAdjustedQty - Number(editingExistingQty || 0)), 0);
+      toast.error(`Quantity exceeds remaining ${allowed.toFixed(2)}`, { theme: "colored" });
       return;
     }
 
@@ -190,10 +197,15 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
     }
   };
 
+  const isPersistedAdjustmentId = (id) => {
+    const value = String(id ?? "").trim();
+    return value && !value.startsWith("temp-") && /^[a-fA-F0-9]{24}$/.test(value);
+  };
+
   const handleDeleteAdjustment = (id) => {
     setBuyerAdjustments((prev) => prev.filter((item) => item.id !== id));
-    if (typeof id === "number") {
-      setRemovedAdjustmentIds((prev) => [...prev, id]);
+    if (isPersistedAdjustmentId(id)) {
+      setRemovedAdjustmentIds((prev) => (prev.includes(String(id)) ? prev : [...prev, String(id)]));
     }
     if (editingId === id) {
       resetNewAdjustment();
@@ -227,6 +239,13 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
       return;
     }
 
+    // Allow saving when all existing rows were deleted. The delete operation
+    // itself is persisted below, so an empty remaining list is valid.
+    if (buyerAdjustments.length === 0 && removedAdjustmentIds.length === 0) {
+      toast.error("Add at least one buyer adjustment", { theme: "colored" });
+      return;
+    }
+
     setLoading(true);
     try {
       for (const deleteId of removedAdjustmentIds) {
@@ -235,9 +254,10 @@ export default function BuyerAdjustmentForm({ outward, onClose, buyerNames = [],
 
       for (const adj of buyerAdjustments) {
         const payload = buildAdjustmentPayload(outward.id, adj, unloadingDate || (outward?.date ? new Date(outward.date).toISOString().slice(0,10) : ""));
+        const persistedId = isPersistedAdjustmentId(adj.id) ? String(adj.id) : "";
 
-        if (typeof adj.id === "number") {
-          await axios.put(`${API_BASE}/buyer-adjustment/${adj.id}`, payload);
+        if (persistedId) {
+          await axios.put(`${API_BASE}/buyer-adjustment/${persistedId}`, payload);
         } else {
           await axios.post(`${API_BASE}/buyer-adjustment`, payload);
         }
