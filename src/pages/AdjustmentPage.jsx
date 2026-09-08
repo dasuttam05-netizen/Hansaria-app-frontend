@@ -262,6 +262,7 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
         params: {
           ...scope,
           company_id: selectedCompanyId,
+          product_id: outward?.product_id || outward?.productId || '',
           outward_date: outward.date,
           source_type: selectedSourceType,
         },
