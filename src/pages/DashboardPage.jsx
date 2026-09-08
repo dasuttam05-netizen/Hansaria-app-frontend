@@ -109,31 +109,11 @@ export default function DashboardPage() {
   const currentMonth = formatLocalMonthInput();
 
   const fetchRentLedgerForDashboard = async () => {
-    const allRows = [];
-    let page = 1;
-    const pageSize = 500;
-
-    while (true) {
-      const response = await API.get(`${API_BASE}/reports/warehouse-rent-ledger`, {
-        params: { page, page_size: pageSize },
-      });
-      const payload = response?.data || [];
-      const rows = Array.isArray(payload)
-        ? payload
-        : Array.isArray(payload.data)
-          ? payload.data
-          : [];
-
-      allRows.push(...rows);
-
-      const pagination = Array.isArray(payload) ? null : payload.pagination || null;
-      if (!pagination || page >= Number(pagination.totalPages || 1) || rows.length === 0) {
-        break;
-      }
-      page += 1;
-    }
-
-    return allRows;
+    const response = await API.get(`${API_BASE}/reports/warehouse-rent-month-end`, {
+      params: { month: currentMonth },
+    });
+    const payload = response?.data || {};
+    return Array.isArray(payload.details) ? payload.details : [];
   };
 
   const fetchData = async (currentUser, isActive) => {
