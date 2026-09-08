@@ -48,6 +48,10 @@ const getRecordId = (record) => {
 const sameId = (left, right) =>
   String(left || "") !== "" && String(left || "") === String(right || "");
 
+const sameText = (left, right) =>
+  String(left || "").trim().toLowerCase() !== "" &&
+  String(left || "").trim().toLowerCase() === String(right || "").trim().toLowerCase();
+
 const firstNonEmpty = (...values) => values.find((value) => String(value || "").trim() !== "") || "";
 
 const buildLookupMap = (items) => {
