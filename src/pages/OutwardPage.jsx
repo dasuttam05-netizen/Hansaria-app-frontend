@@ -456,22 +456,6 @@ export default function OutwardPage() {
   }, []);
 
   useEffect(() => {
-    const fetchSettlements = async () => {
-      setSummaryLoading(true);
-      try {
-        const res = await axios.get(`${API_BASE}/outward-settlement/report/list`);
-        setSettlementRows(Array.isArray(res.data) ? res.data : []);
-      } catch (err) {
-        setSettlementRows([]);
-      } finally {
-        setSummaryLoading(false);
-      }
-    };
-
-    fetchSettlements();
-  }, []);
-
-  useEffect(() => {
     if (formData.employee_id) {
       const employeeId = String(formData.employee_id);
       const emp = employees.find((e) => sameId(getRecordId(e), employeeId));
@@ -691,18 +675,26 @@ export default function OutwardPage() {
 
   const fetchOutwards = async () => {
     try {
-      const res = await axios.get(`${API_BASE}/outward`);
-      setOutwards(Array.isArray(res.data) ? res.data : []);
-      // refresh settlement summary as well
-      try {
-        const sres = await axios.get(`${API_BASE}/outward-settlement/report/list`);
-        setSettlementRows(Array.isArray(sres.data) ? sres.data : []);
-      } catch (e) {
+      const [outwardRes, settlementRes] = await Promise.allSettled([
+        axios.get(`${API_BASE}/outward`),
+        axios.get(`${API_BASE}/outward-settlement/report/list`),
+      ]);
+
+      if (outwardRes.status === "fulfilled") {
+        setOutwards(Array.isArray(outwardRes.value.data) ? outwardRes.value.data : []);
+      } else {
+        console.error("Error fetching outwards:", outwardRes.reason);
+        toast.error("Error fetching outwards", { theme: "colored" });
+      }
+
+      if (settlementRes.status === "fulfilled") {
+        setSettlementRows(Array.isArray(settlementRes.value.data) ? settlementRes.value.data : []);
+      } else {
         setSettlementRows([]);
       }
     } catch (err) {
       console.error(err);
-      toast.error("Error fetching outwards", { theme: "colored" });
+      toast.error("Error fetching outward data", { theme: "colored" });
     }
   };
 
