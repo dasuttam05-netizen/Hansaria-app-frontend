@@ -397,7 +397,9 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
           source_type: selectedInward.source_type || sourceType,
           voucher_no: selectedInward.voucher_no,
           lorry_no: selectedInward.lorry_no,
-          company_id: Number(companyId),
+          company_id: /^-?\d+(?:\.0+)?$/.test(String(companyId).trim())
+            ? Number(companyId)
+            : String(companyId).trim(),
           company_name: selectedCompany?.name || "",
           qty,
         },
