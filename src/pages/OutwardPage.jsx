@@ -157,6 +157,14 @@ const warehouseHasEmployee = (warehouse, employeeId, employees = []) => {
 };
 
 export default function OutwardPage() {
+
+  const fetchAvailableWarehouseStock = async (warehouseId, productId) => {
+    if (!warehouseId || !productId) return 0;
+    const res = await axios.get(`${API_BASE}/outward/available-stock`, {
+      params: { warehouse_id: warehouseId, product_id: productId },
+    });
+    return Number(res.data?.availableStock ?? 0);
+  };
   const API_BASE = "/api";
   const navigate = useNavigate();
   const { user } = loadSession();
@@ -456,6 +464,22 @@ export default function OutwardPage() {
   }, []);
 
   useEffect(() => {
+    const fetchSettlements = async () => {
+      setSummaryLoading(true);
+      try {
+        const res = await axios.get(`${API_BASE}/outward-settlement/report/list`);
+        setSettlementRows(Array.isArray(res.data) ? res.data : []);
+      } catch (err) {
+        setSettlementRows([]);
+      } finally {
+        setSummaryLoading(false);
+      }
+    };
+
+    fetchSettlements();
+  }, []);
+
+  useEffect(() => {
     if (formData.employee_id) {
       const employeeId = String(formData.employee_id);
       const emp = employees.find((e) => sameId(getRecordId(e), employeeId));
@@ -675,26 +699,18 @@ export default function OutwardPage() {
 
   const fetchOutwards = async () => {
     try {
-      const [outwardRes, settlementRes] = await Promise.allSettled([
-        axios.get(`${API_BASE}/outward`),
-        axios.get(`${API_BASE}/outward-settlement/report/list`),
-      ]);
-
-      if (outwardRes.status === "fulfilled") {
-        setOutwards(Array.isArray(outwardRes.value.data) ? outwardRes.value.data : []);
-      } else {
-        console.error("Error fetching outwards:", outwardRes.reason);
-        toast.error("Error fetching outwards", { theme: "colored" });
-      }
-
-      if (settlementRes.status === "fulfilled") {
-        setSettlementRows(Array.isArray(settlementRes.value.data) ? settlementRes.value.data : []);
-      } else {
+      const res = await axios.get(`${API_BASE}/outward`);
+      setOutwards(Array.isArray(res.data) ? res.data : []);
+      // refresh settlement summary as well
+      try {
+        const sres = await axios.get(`${API_BASE}/outward-settlement/report/list`);
+        setSettlementRows(Array.isArray(sres.data) ? sres.data : []);
+      } catch (e) {
         setSettlementRows([]);
       }
     } catch (err) {
       console.error(err);
-      toast.error("Error fetching outward data", { theme: "colored" });
+      toast.error("Error fetching outwards", { theme: "colored" });
     }
   };
 
