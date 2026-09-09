@@ -226,14 +226,9 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
 
     setLoading(true);
     try {
-      const [res, unloadingRes] = await Promise.all([
-        axios.get(`${API_BASE}/outward-settlement/${outward.id}`),
-        axios.get(`${API_BASE}/buyer-adjustment/${outward.id}`).catch(() => ({ data: [] })),
-      ]);
+      const res = await axios.get(`${API_BASE}/outward-settlement/${outward.id}`);
       setMeta(res.data);
-      const embeddedDetails = Array.isArray(res.data?.unloading_details) ? res.data.unloading_details : [];
-      const fallbackDetails = Array.isArray(unloadingRes.data) ? unloadingRes.data : [];
-      const sourceDetails = embeddedDetails.length > 0 ? embeddedDetails : fallbackDetails;
+      const sourceDetails = Array.isArray(res.data?.unloading_details) ? res.data.unloading_details : [];
       const realUnloadingDetails = sourceDetails.filter(isRealUnloadingDetail);
       const totalUnloadingQty = realUnloadingDetails.reduce(
         (sum, detail) => sum + num(detail.qty || detail.weight || 0),
@@ -254,23 +249,9 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
         ? res.data.labour_expense.entries.filter((item) => num(item?.amount) > 0)
         : [];
       const labourExpenseTotal = approvedLabourEntries.reduce((sum, item) => sum + num(item.amount), 0);
-      let freightValue = s.freight ?? "";
-
-      try {
-        const biltiRes = await axios.get(`${API_BASE}/transport-bilti/${outward.id}`);
-        const biltiFreight = Number(biltiRes?.data?.net_amount || 0);
-
-        // If transport payment exists, always lock freight in settlement.
-        if (biltiFreight > 0) {
-          freightValue = biltiFreight;
-          setIsFreightAutoLocked(true);
-        } else {
-          setIsFreightAutoLocked(false);
-        }
-      } catch (biltiErr) {
-        console.error(biltiErr);
-        setIsFreightAutoLocked(false);
-      }
+      const biltiFreight = Number(res.data?.transport_bilti?.net_amount || 0);
+      const freightValue = biltiFreight > 0 ? biltiFreight : (s.freight ?? "");
+      setIsFreightAutoLocked(biltiFreight > 0);
 
       const labourHasValue =
         s.outward_labour_charges !== null &&
