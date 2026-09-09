@@ -2155,7 +2155,36 @@ export default function WarehouseTradingPage() {
     }
   };
 
+  const saveVoucherRef = useRef(saveVoucher);
+  saveVoucherRef.current = saveVoucher;
+
+  useEffect(() => {
+    if (activeTab !== "vouchers") return;
+
+    const handleGlobalSaveShortcut = (event) => {
+      const isSaveShortcut = (event.ctrlKey || event.metaKey) && String(event.key || "").toLowerCase() === "s";
+      if (!isSaveShortcut) return;
+
+      if (loading) return;
+      event.preventDefault();
+      saveVoucherRef.current();
+    };
+
+    window.addEventListener("keydown", handleGlobalSaveShortcut);
+    return () => window.removeEventListener("keydown", handleGlobalSaveShortcut);
+  }, [activeTab, loading]);
+
   const handleFormKeyDown = (event) => {
+    const isSaveShortcut = (event.ctrlKey || event.metaKey) && String(event.key || "").toLowerCase() === "s";
+    if (isSaveShortcut) {
+      event.preventDefault();
+      event.stopPropagation();
+      if (!loading) {
+        saveVoucher();
+      }
+      return;
+    }
+
     if (event.key !== "Enter") return;
 
     const target = event.target;
