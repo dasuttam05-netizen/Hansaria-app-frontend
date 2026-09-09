@@ -944,14 +944,27 @@ export default function WarehouseTradingPage() {
     }
   }, [activeTab, activeVoucherType]);
 
-  // Report rows: page/filter changes only.
+  // Report rows: filters/report changes load the data. Client-paged Party
+  // Ledgers must NOT re-fetch when the user clicks Next/Prev; their rows are
+  // already in memory and pagination is handled locally.
   useEffect(() => {
     if (activeTab !== "reports") return;
     const timer = window.setTimeout(() => {
       loadReport();
-    }, 300);
+    }, 150);
     return () => window.clearTimeout(timer);
-  }, [activeTab, activeReport, reportPage, globalSearch, reportFilters.farmer_id, reportFilters.company_account_id, reportFilters.warehouse_id, reportFilters.sale_buyer_id, reportFilters.sale_company_account_id, reportFilters.sale_journey_token, reportFilters.sale_lorry_no, reportFilters.sale_bill_no, reportFilters.details_of_deduction]);
+  }, [activeTab, activeReport, globalSearch, reportFilters.farmer_id, reportFilters.company_account_id, reportFilters.warehouse_id, reportFilters.sale_buyer_id, reportFilters.sale_company_account_id, reportFilters.sale_journey_token, reportFilters.sale_lorry_no, reportFilters.sale_bill_no, reportFilters.details_of_deduction]);
+
+  // Only server-paged reports need an API call when reportPage changes.
+  useEffect(() => {
+    if (activeTab !== "reports") return;
+    const serverPagedReport = activeReport === "sale" || activeReport === "purchase" || activeReport === "warehouse-stock";
+    if (!serverPagedReport || reportPage <= 1) return;
+    const timer = window.setTimeout(() => {
+      loadReport(activeReport, reportPage, reportFilters);
+    }, 80);
+    return () => window.clearTimeout(timer);
+  }, [activeTab, activeReport, reportPage]);
 
   // Filter options are independent of pagination. Never reload them just
   // because the user moves from page 1 to page 2.
@@ -1504,11 +1517,6 @@ export default function WarehouseTradingPage() {
     const isSaleReport = ["sale", "sale-party-ledger", "sale-followup", "sale-journey"].includes(reportType);
     const hasActivePurchaseFilters = Boolean(filters.farmer_id || filters.warehouse_id || filters.company_account_id);
     const normalizedSearch = String(globalSearch || "").trim();
-
-    // Do not keep stale Purchase rows visible while Sale Report is loading.
-    if (token === reportLoadTokenRef.current) {
-      setReportData([]);
-    }
 
     try {
       if (!hasPermission(user, reportPermissionMap[reportType])) {
