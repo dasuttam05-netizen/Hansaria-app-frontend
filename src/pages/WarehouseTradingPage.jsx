@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useReducer, useRef, useState } from "react";
-import axios from "axios";
+import API from "./axiosInstance";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { FaFilePdf, FaWhatsapp } from "react-icons/fa";
 import PageBackCloseActions from "../components/PageBackCloseActions";
@@ -171,8 +171,9 @@ const getArrowFocusableInputs = (root) =>
 const buildLookupMap = (rows) => {
   const map = new Map();
   (Array.isArray(rows) ? rows : []).forEach((row) => {
-    const key = String(row?.id || row?._id || "").trim();
-    if (key) map.set(key, row);
+    [row?.id, row?._id, row?.legacy_id]
+      .filter((value) => value !== undefined && value !== null && String(value).trim())
+      .forEach((value) => map.set(String(value).trim(), row));
   });
   return map;
 };
@@ -273,6 +274,7 @@ export default function WarehouseTradingPage() {
   const [warehouses, setWarehouses] = useState([]);
   const [farmers, setFarmers] = useState([]);
   const [accountFarmers, setAccountFarmers] = useState([]);
+  const [pendingReceiptBuyers, setPendingReceiptBuyers] = useState([]);
   const [paymentWarehouses, setPaymentWarehouses] = useState([]);
   const [buyerNames, setBuyerNames] = useState([]);
   const [companies, setCompanies] = useState([]);
@@ -386,6 +388,8 @@ export default function WarehouseTradingPage() {
   const outstandingInFlightRef = useRef(new Map());
   const paymentFarmersCacheRef = useRef(new Map());
   const paymentFarmersInFlightRef = useRef(new Map());
+  const receiptBuyersCacheRef = useRef(new Map());
+  const receiptBuyersInFlightRef = useRef(new Map());
   const arrowNavRootRef = useRef(null);
   const voucherPanelRef = useRef(null);
   const reportPanelRef = useRef(null);
@@ -428,17 +432,47 @@ export default function WarehouseTradingPage() {
     item?.warehouse_name ||
     warehouseById.get(String(item?.warehouse_id))?.name ||
     "-";
+  const paymentWarehouseOptions = useMemo(() => {
+    const byId = new Map();
+    [...paymentWarehouses, ...warehouses].forEach((warehouse) => {
+      const id = String(warehouse?.id || warehouse?._id || "").trim();
+      if (id && !byId.has(id)) byId.set(id, warehouse);
+    });
+    const selectedId = String(formData.warehouse_id || "").trim();
+    if (selectedId && !byId.has(selectedId)) {
+      byId.set(selectedId, {
+        id: selectedId,
+        name: formData.warehouse_name || "Selected warehouse",
+      });
+    }
+    return Array.from(byId.values());
+  }, [formData.warehouse_id, formData.warehouse_name, paymentWarehouses, warehouses]);
   const getFarmerName = (item) =>
     item?.farmer_name ||
     farmerById.get(String(item?.farmer_id))?.name ||
     "-";
   const getBuyerId = (item) => item?.buyer_id || item?.company_id || "";
-  const getBuyerName = (item) =>
-    item?.buyer_name ||
-    buyerById.get(String(getBuyerId(item)))?.name ||
-    item?.company_name ||
-    companyById.get(String(item?.company_id))?.name ||
-    "-";
+  const getBuyerName = (item) => {
+    const buyerId = String(getBuyerId(item) || "");
+    const buyer = buyerById.get(buyerId) || {};
+    const company = companyById.get(String(item?.company_id || buyerId)) || {};
+    const candidates = [
+      item?.buyer_name,
+      item?.party_name,
+      item?.company_name,
+      buyer?.name,
+      buyer?.buyer_name,
+      buyer?.company_name,
+      buyer?.party_name,
+      company?.name,
+      company?.company_name,
+    ];
+    const found = candidates.find((value) => {
+      const text = String(value ?? "").trim();
+      return text && text !== "-" && text.toLowerCase() !== "unknown party";
+    });
+    return found || "-";
+  };
   const saleQtyFromData = (data) => {
     const newWeight = Math.max(toNumber(data.gross_weight) - toNumber(data.tare_weight), 0);
     return newWeight || toNumber(data.quantity) || toNumber(data.unloading_qty);
@@ -833,7 +867,7 @@ export default function WarehouseTradingPage() {
   // so the first voucher table paint is not competing with nine master requests.
   useEffect(() => {
     if (activeTab !== "vouchers") return;
-    const timer = window.setTimeout(() => { loadData(); }, 0);
+    const timer = window.setTimeout(() => { loadData(); }, 900);
     return () => window.clearTimeout(timer);
   }, [activeTab]);
 
@@ -848,11 +882,7 @@ export default function WarehouseTradingPage() {
     let cancelled = false;
     const refreshFarmers = async () => {
       try {
-        const farmerRefreshKey = "warehouseTradingFarmersRefreshAt:v1";
-        const lastRefresh = Number(sessionStorage.getItem(farmerRefreshKey) || 0);
-        if (Date.now() - lastRefresh < 5 * 60 * 1000) return;
-        sessionStorage.setItem(farmerRefreshKey, String(Date.now()));
-        const res = await axios.get("/api/farmers", {
+        const res = await API.get("/api/farmers", {
           
           params: { _refresh: Date.now() },
         });
@@ -862,9 +892,9 @@ export default function WarehouseTradingPage() {
 
         // Keep the other cached master data, but replace only the farmers list.
         try {
-          const cached = JSON.parse(sessionStorage.getItem("warehouseTradingMasterData:v2") || "null");
+          const cached = JSON.parse(sessionStorage.getItem("warehouseTradingMasterData:v3") || "null");
           if (cached?.data) {
-            sessionStorage.setItem("warehouseTradingMasterData:v2", JSON.stringify({
+            sessionStorage.setItem("warehouseTradingMasterData:v3", JSON.stringify({
               ...cached,
               time: Date.now(),
               data: { ...cached.data, farmers: freshFarmers },
@@ -919,7 +949,7 @@ export default function WarehouseTradingPage() {
     if (activeTab !== "reports") return;
     const timer = window.setTimeout(() => {
       loadReport();
-    }, 40);
+    }, 300);
     return () => window.clearTimeout(timer);
   }, [activeTab, activeReport, reportPage, globalSearch, reportFilters.farmer_id, reportFilters.company_account_id, reportFilters.warehouse_id, reportFilters.sale_buyer_id, reportFilters.sale_company_account_id, reportFilters.sale_journey_token, reportFilters.sale_lorry_no, reportFilters.sale_bill_no, reportFilters.details_of_deduction]);
 
@@ -1035,7 +1065,7 @@ export default function WarehouseTradingPage() {
         return;
       }
       try {
-        const response = await axios.get(`/api/transport-bilti/${biltiId}`);
+        const response = await API.get(`/api/transport-bilti/${biltiId}`);
         const amount = toNumber(response.data?.transport_charge || response.data?.net_amount || response.data?.payable_amount || response.data?.gross_freight || 0);
         setFormData((prev) => ({
           ...prev,
@@ -1054,7 +1084,7 @@ export default function WarehouseTradingPage() {
       const saleId = salePreviewRow.id || salePreviewRow._id;
       if (!saleId) return;
       try {
-        const response = await axios.get(`/api/wh-vouchers/sale/${saleId}/summary`);
+        const response = await API.get(`/api/wh-vouchers/sale/${saleId}/summary`);
         const transportValue = toNumber(response.data?.transport_charge || response.data?.summary?.transport_charge || 0);
         if (transportValue > 0) {
           setSalePreviewSummary(response.data);
@@ -1089,7 +1119,7 @@ export default function WarehouseTradingPage() {
     }
 
     let cancelled = false;
-    axios
+    API
       .get("/api/wh-vouchers/available-sale-stock", {
         params: {
           warehouse_id: formData.warehouse_id,
@@ -1118,7 +1148,7 @@ export default function WarehouseTradingPage() {
       // one in-flight request group so React effects cannot fire the same 9 calls twice.
       if (!force) {
         try {
-          const cached = JSON.parse(sessionStorage.getItem("warehouseTradingMasterData:v2") || "null");
+          const cached = JSON.parse(sessionStorage.getItem("warehouseTradingMasterData:v3") || "null");
           if (cached?.data && Date.now() - Number(cached.time || 0) < 30 * 60 * 1000) {
             const data = cached.data;
             setWarehouses(Array.isArray(data.warehouses) ? data.warehouses : []);
@@ -1139,15 +1169,15 @@ export default function WarehouseTradingPage() {
       const token = ++masterLoadTokenRef.current;
       try {
         const [wRes, fRes, bRes, cRes, caRes, coRes, pRes, eRes, lRes] = await Promise.allSettled([
-          axios.get("/api/warehouses"),
-          axios.get("/api/farmers"),
-          axios.get("/api/buyer-names"),
-          axios.get("/api/companies"),
-          axios.get("/api/company-accounts"),
-          axios.get("/api/consignee-names"),
-          axios.get("/api/products"),
-          axios.get("/api/employees"),
-          axios.get("/api/locations"),
+          API.get("/api/warehouses"),
+          API.get("/api/farmers"),
+          API.get("/api/buyer-names"),
+          API.get("/api/companies"),
+          API.get("/api/company-accounts"),
+          API.get("/api/consignee-names"),
+          API.get("/api/products"),
+          API.get("/api/employees"),
+          API.get("/api/locations"),
         ]);
         const dataOf = (result) => (result.status === "fulfilled" ? result.value.data : []);
         if (token !== masterLoadTokenRef.current) return;
@@ -1173,7 +1203,7 @@ export default function WarehouseTradingPage() {
         setLocations(data.locations);
         masterDataLoadedRef.current = true;
         try {
-          sessionStorage.setItem("warehouseTradingMasterData:v2", JSON.stringify({
+          sessionStorage.setItem("warehouseTradingMasterData:v3", JSON.stringify({
             time: Date.now(),
             data,
           }));
@@ -1194,7 +1224,7 @@ export default function WarehouseTradingPage() {
   const loadWarehouseStockReport = async () => {
     const token = ++reportLoadTokenRef.current;
     try {
-      const res = await axios.get("/api/wh-vouchers/report/warehouse-stock");
+      const res = await API.get("/api/wh-vouchers/report/warehouse-stock");
       if (token !== reportLoadTokenRef.current) return;
       setWarehouseStockReport(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
@@ -1207,7 +1237,7 @@ export default function WarehouseTradingPage() {
   const fetchNextVoucherNo = async (type) => {
     try {
       setVoucherNumberLoading(true);
-      const res = await axios.get(`/api/wh-vouchers/next-voucher-no`, { params: { type } });
+      const res = await API.get(`/api/wh-vouchers/next-voucher-no`, { params: { type } });
       if (res.data?.voucher_no) {
         setFormData((prev) => ({ ...prev, voucher_no: prev.voucher_no || res.data.voucher_no }));
       }
@@ -1239,7 +1269,7 @@ export default function WarehouseTradingPage() {
     }
     const inFlight = paymentFarmersInFlightRef.current.get(key);
     if (inFlight) return inFlight;
-    const request = axios.get(`/api/wh-vouchers/farmers-by-account/${account}`, {
+    const request = API.get(`/api/wh-vouchers/farmers-by-account/${account}`, {
       params: {
         ...(warehouse ? { warehouse_id: warehouse } : {}),
         ...(excludePayment ? { exclude_payment_id: excludePayment } : {}),
@@ -1261,6 +1291,44 @@ export default function WarehouseTradingPage() {
     paymentFarmersInFlightRef.current.set(key, request);
     return request;
   };
+
+  const loadPendingReceiptBuyers = async (companyAccountId = "", warehouseId = "", excludeReceiptId = "") => {
+    const account = String(companyAccountId || "").trim();
+    const warehouse = String(warehouseId || "").trim();
+    const exclude = String(excludeReceiptId || "").trim();
+    if (!account) {
+      setPendingReceiptBuyers([]);
+      return [];
+    }
+    const key = `${account}::${warehouse}::${exclude}`;
+    const cached = receiptBuyersCacheRef.current.get(key);
+    if (cached && Date.now() - cached.time < 15000) {
+      setPendingReceiptBuyers(cached.rows || []);
+      return cached.rows || [];
+    }
+    const inFlight = receiptBuyersInFlightRef.current.get(key);
+    if (inFlight) return inFlight;
+    const request = API.get("/api/wh-vouchers/receipt-pending-buyers", {
+      params: { company_account_id: account, warehouse_id: warehouse || undefined, exclude_receipt_id: exclude || undefined },
+    }).then((res) => {
+      const rows = Array.isArray(res.data) ? res.data : [];
+      receiptBuyersCacheRef.current.set(key, { time: Date.now(), rows });
+      setPendingReceiptBuyers(rows);
+      return rows;
+    }).catch((err) => {
+      console.error(err);
+      setPendingReceiptBuyers([]);
+      return [];
+    }).finally(() => receiptBuyersInFlightRef.current.delete(key));
+    receiptBuyersInFlightRef.current.set(key, request);
+    return request;
+  };
+
+  useEffect(() => {
+    if (activeVoucherType === "receipt" && formData.company_account_id) {
+      loadPendingReceiptBuyers(formData.company_account_id, formData.warehouse_id, editId);
+    }
+  }, [activeVoucherType, formData.company_account_id, formData.warehouse_id, editId]);
 
   const loadOutstanding = async (partyType, partyId, warehouseId = null, excludePaymentId = null, companyAccountId = null) => {
     if (!partyType || !partyId) {
@@ -1292,7 +1360,7 @@ export default function WarehouseTradingPage() {
         if (warehouse) params.warehouse_id = warehouse;
         if (excludePaymentId) params.exclude_payment_id = excludePaymentId;
         if (companyAccountId) params.company_account_id = companyAccountId;
-        const res = await axios.get(`/api/wh-vouchers/outstanding`, { params });
+        const res = await API.get(`/api/wh-vouchers/outstanding`, { params });
         const data = res.data || null;
         outstandingCacheRef.current.set(key, { time: Date.now(), data });
         setPartyOutstanding(data);
@@ -1328,7 +1396,7 @@ export default function WarehouseTradingPage() {
       const search = String(globalSearch || "").trim();
       if (search) params.search = search;
 
-      const res = await axios.get(`/api/wh-vouchers/${activeVoucherType}`, { params });
+      const res = await API.get(`/api/wh-vouchers/${activeVoucherType}`, { params });
       if (token !== voucherLoadTokenRef.current) return;
 
       const payload = res.data || {};
@@ -1358,7 +1426,7 @@ export default function WarehouseTradingPage() {
       }
       // This is a form lookup, not the main voucher table. Keep it explicit so
       // the table itself remains strictly paginated.
-      const res = await axios.get("/api/wh-vouchers/purchase", { params: { page: 1, limit: 100, lookup: 1, order: "asc", warehouse_id: formData.warehouse_id || undefined, farmer_id: formData.against_purchase_farmer_id || undefined, company_account_id: formData.company_account_id || undefined, product_id: formData.product_id || undefined } });
+      const res = await API.get("/api/wh-vouchers/purchase", { params: { page: 1, limit: 100, lookup: 1, order: "asc", warehouse_id: formData.warehouse_id || undefined, farmer_id: formData.against_purchase_farmer_id || undefined, company_account_id: formData.company_account_id || undefined, product_id: formData.product_id || undefined } });
       const payload = res.data || {};
       const rows = Array.isArray(payload) ? payload : (Array.isArray(payload.data) ? payload.data : []);
       setSalePurchaseRows(rows);
@@ -1396,8 +1464,10 @@ export default function WarehouseTradingPage() {
         return;
       }
 
-      const request = axios
-        .get("/api/wh-vouchers/report/filter-options", { params: { ...params, type: reportType } })
+      const request = API
+        .get("/api/wh-vouchers/report/filter-options", {
+  params: { ...params, type: reportType }
+})
         .then((res) => {
           const nextData = {
             account_ids: Array.isArray(res.data?.account_ids) ? res.data.account_ids : [],
@@ -1454,6 +1524,9 @@ export default function WarehouseTradingPage() {
         if (filters.warehouse_id) params.warehouse_id = filters.warehouse_id;
         if (filters.company_account_id) params.company_account_id = filters.company_account_id;
       }
+      if (isPurchaseReport && normalizedSearch) {
+        params.search = normalizedSearch;
+      }
       if (isSaleReport && filters.sale_buyer_id) {
         params.buyer_id = filters.sale_buyer_id;
       }
@@ -1478,7 +1551,7 @@ export default function WarehouseTradingPage() {
         params.page = page;
         params.page_size = PAGE_SIZE;
       }
-      const res = await axios.get(`/api/wh-vouchers/report/${endpoint}`, { params });
+      const res = await API.get(`/api/wh-vouchers/report/${endpoint}`, { params });
       if (token !== reportLoadTokenRef.current) return;
       const payload = res.data || [];
       const rows = Array.isArray(payload) ? payload : Array.isArray(payload.data) ? payload.data : [];
@@ -1517,7 +1590,7 @@ export default function WarehouseTradingPage() {
       }
       if (reportType === "purchase" && hasPermission(user, voucherPermissionMap.purchase) && !hasActivePurchaseFilters) {
         try {
-          const fallbackRes = await axios.get("/api/wh-vouchers/purchase", { params: { page: 1, limit: PAGE_SIZE, order: "desc" } });
+          const fallbackRes = await API.get("/api/wh-vouchers/purchase", { params: { page: 1, limit: PAGE_SIZE, order: "desc" } });
           if (token !== reportLoadTokenRef.current) return;
           const fallbackPayload = fallbackRes.data || [];
           setReportData(Array.isArray(fallbackPayload) ? fallbackPayload : (fallbackPayload.data || []));
@@ -1531,7 +1604,7 @@ export default function WarehouseTradingPage() {
           // Only Sale Summary uses the sale-voucher fallback. Do not use it
           // for Party Ledger/Follow-up/Journey because those endpoints have
           // different response shapes.
-          const fallbackRes = await axios.get("/api/wh-vouchers/sale", {
+          const fallbackRes = await API.get("/api/wh-vouchers/sale", {
             params: { page: page || 1, limit: PAGE_SIZE, order: "desc", ...params },
           });
           if (token !== reportLoadTokenRef.current) return;
@@ -1744,14 +1817,23 @@ export default function WarehouseTradingPage() {
       if (activeVoucherType === "payment" && formData.farmer_id && value) {
         loadOutstanding("farmer", formData.farmer_id, value, editId, formData.company_account_id);
       }
-      if (activeVoucherType === "receipt" && formData.company_id) {
-        loadOutstanding("company", formData.company_id, value, null, formData.company_account_id);
+      if (activeVoucherType === "receipt") {
+        loadPendingReceiptBuyers(formData.company_account_id, value, editId);
+        if (formData.company_id) {
+          loadOutstanding("company", formData.company_id, value, null, formData.company_account_id);
+        }
       }
       if (activeVoucherType === "sale" && (formData.buyer_id || formData.company_id)) {
         loadOutstanding("company", formData.buyer_id || formData.company_id, value, null, formData.company_account_id);
       }
     }
-    if ((activeVoucherType === "receipt" || activeVoucherType === "sale") && name === "company_account_id" && (formData.company_id || formData.buyer_id)) {
+    if (activeVoucherType === "receipt" && name === "company_account_id") {
+      loadPendingReceiptBuyers(value, formData.warehouse_id, editId);
+      if (formData.company_id) {
+        loadOutstanding("company", formData.company_id, formData.warehouse_id, null, value);
+      }
+    }
+    if (activeVoucherType === "sale" && name === "company_account_id" && (formData.company_id || formData.buyer_id)) {
       loadOutstanding("company", formData.company_id || formData.buyer_id, formData.warehouse_id, null, value);
     }
     if (activeVoucherType === "payment" && name === "amount") {
@@ -1776,7 +1858,7 @@ export default function WarehouseTradingPage() {
   const buildWhatsappShareUrl = (message) => `https://wa.me/?text=${encodeURIComponent(message)}`;
 
   const sharePurchasePdfOnWhatsapp = async (voucherId, voucherNo, voucherDate) => {
-    const response = await axios.get(`/api/wh-vouchers/purchase/${voucherId}/pdf`, {
+    const response = await API.get(`/api/wh-vouchers/purchase/${voucherId}/pdf`, {
       responseType: "blob",
     });
     const pdfBlob = new Blob([response.data], { type: "application/pdf" });
@@ -2012,8 +2094,8 @@ export default function WarehouseTradingPage() {
         ? { Authorization: `Bearer ${localStorage.getItem("token")}` }
         : {};
       const res = isEdit
-        ? await axios.put(url, payload, { headers: requestHeaders })
-        : await axios.post(url, payload, { headers: requestHeaders });
+        ? await API.put(url, payload, { headers: requestHeaders })
+        : await API.post(url, payload, { headers: requestHeaders });
       
       alert(`Voucher ${isEdit ? "updated" : "saved"} successfully`);
       if (res.data?.stats) {
@@ -2105,7 +2187,7 @@ export default function WarehouseTradingPage() {
   const handleDeleteVoucher = async (voucherId) => {
     if (!window.confirm("Are you sure you want to delete this voucher?")) return;
     try {
-      await axios.delete(`/api/wh-vouchers/${activeVoucherType}/${voucherId}`);
+      await API.delete(`/api/wh-vouchers/${activeVoucherType}/${voucherId}`);
       alert("Voucher deleted successfully");
       loadVouchers();
     } catch (err) {
@@ -2121,7 +2203,7 @@ export default function WarehouseTradingPage() {
     try {
       if (activeVoucherType === "receipt") {
         setLoading(true);
-        const res = await axios.get(`/api/wh-vouchers/receipt/${voucherId}`);
+            const res = await API.get(`/api/wh-vouchers/receipt/${voucherId}`);
         const receipt = res.data;
         setFormData({ ...defaultForm(), ...receipt });
         const existingAdjustments = Array.isArray(receipt.adjustments)
@@ -2155,9 +2237,10 @@ export default function WarehouseTradingPage() {
           setSalePurchaseLinks(existingLinks);
         }
         if (activeVoucherType === "payment") {
+          setSelectedPaymentId(voucherId);
           setLoading(true);
           try {
-            const res = await axios.get(`/api/wh-vouchers/payment/${voucherId}`);
+            const res = await API.get(`/api/wh-vouchers/payment/${voucherId}`);
             const payment = res.data;
             const paymentMode = inferPaymentMode(payment);
             const existingAdjustments = Array.isArray(payment.adjustments)
@@ -2263,7 +2346,7 @@ export default function WarehouseTradingPage() {
 
   const handleGeneratePDF = async (voucherId) => {
     try {
-      const response = await axios.get(`/api/wh-vouchers/${activeVoucherType}/${voucherId}/pdf`, {
+      const response = await API.get(`/api/wh-vouchers/${activeVoucherType}/${voucherId}/pdf`, {
         responseType: "blob",
       });
       const url = window.URL.createObjectURL(new Blob([response.data]));
@@ -2281,7 +2364,7 @@ export default function WarehouseTradingPage() {
 
   const handlePurchaseReportPDF = async (voucherId) => {
     try {
-      const response = await axios.get(`/api/wh-vouchers/purchase/${voucherId}/pdf`, {
+      const response = await API.get(`/api/wh-vouchers/purchase/${voucherId}/pdf`, {
         responseType: "blob",
       });
       const url = window.URL.createObjectURL(new Blob([response.data]));
@@ -2314,7 +2397,7 @@ export default function WarehouseTradingPage() {
     if (!recordId) return;
 
     try {
-      const res = await axios.get(`/api/wh-vouchers/purchase/${recordId}`);
+      const res = await API.get(`/api/wh-vouchers/purchase/${recordId}`);
       if (res?.data) {
         setPurchasePreviewRow(res.data);
       }
@@ -2482,7 +2565,7 @@ export default function WarehouseTradingPage() {
       }
       setSalePreviewLoading(true);
       try {
-        const response = await axios.get(`/api/wh-vouchers/sale/${saleId}/summary`);
+        const response = await API.get(`/api/wh-vouchers/sale/${saleId}/summary`);
         setSalePreviewSummary(response.data || salePreviewRow);
       } catch (err) {
         setSalePreviewSummary(salePreviewRow);
@@ -2495,7 +2578,7 @@ export default function WarehouseTradingPage() {
 
   const downloadPurchaseImportTemplate = async () => {
     try {
-      const response = await axios.get("/api/wh-vouchers/purchase/import-template", {
+      const response = await API.get("/api/wh-vouchers/purchase/import-template", {
         responseType: "blob",
       });
       const url = window.URL.createObjectURL(new Blob([response.data]));
@@ -2525,7 +2608,7 @@ export default function WarehouseTradingPage() {
     uploadForm.append("file", file);
     setImportingPurchase(true);
     try {
-      const res = await axios.post("/api/wh-vouchers/purchase/import-xlsx", uploadForm, {
+      const res = await API.post("/api/wh-vouchers/purchase/import-xlsx", uploadForm, {
         headers: { "Content-Type": "multipart/form-data" },
       });
       const imported = Number(res.data?.imported || 0);
@@ -2550,7 +2633,7 @@ export default function WarehouseTradingPage() {
 
   const downloadPaymentImportTemplate = async () => {
     try {
-      const response = await axios.get("/api/wh-vouchers/payment/import-template", {
+      const response = await API.get("/api/wh-vouchers/payment/import-template", {
         responseType: "blob",
       });
       const url = window.URL.createObjectURL(new Blob([response.data]));
@@ -2580,7 +2663,7 @@ export default function WarehouseTradingPage() {
     uploadForm.append("file", file);
     setImportingPayment(true);
     try {
-      const res = await axios.post("/api/wh-vouchers/payment/import-xlsx", uploadForm, {
+      const res = await API.post("/api/wh-vouchers/payment/import-xlsx", uploadForm, {
         headers: { "Content-Type": "multipart/form-data" },
       });
       const imported = Number(res.data?.imported || 0);
@@ -2605,7 +2688,7 @@ export default function WarehouseTradingPage() {
 
   const downloadReceiptImportTemplate = async () => {
     try {
-      const response = await axios.get("/api/wh-vouchers/receipt/import-template", {
+      const response = await API.get("/api/wh-vouchers/receipt/import-template", {
         responseType: "blob",
       });
       const url = window.URL.createObjectURL(new Blob([response.data]));
@@ -2635,7 +2718,7 @@ export default function WarehouseTradingPage() {
     uploadForm.append("file", file);
     setImportingReceipt(true);
     try {
-      const res = await axios.post("/api/wh-vouchers/receipt/import-xlsx", uploadForm, {
+      const res = await API.post("/api/wh-vouchers/receipt/import-xlsx", uploadForm, {
         headers: { "Content-Type": "multipart/form-data" },
       });
       const imported = Number(res.data?.imported || 0);
@@ -2801,7 +2884,12 @@ export default function WarehouseTradingPage() {
       return;
     }
 
-    const finalTdsAmount = tdsEligible ? autoTdsAmount : toNumber(formData.tds_amount);
+    const manualClaimEntered = String(formData.claim_amount ?? "").trim() !== "";
+    const manualOtherDeductionEntered = String(formData.other_deduction ?? "").trim() !== "";
+    const manualTdsEntered = String(formData.tds_amount ?? "").trim() !== "";
+    const finalClaimAmount = manualClaimEntered ? toNumber(formData.claim_amount) : saleShortageAmount;
+    const finalOtherDeduction = manualOtherDeductionEntered ? toNumber(formData.other_deduction) : saleQualityDeduction;
+    const finalTdsAmount = manualTdsEntered ? toNumber(formData.tds_amount) : (tdsEligible ? autoTdsAmount : 0);
     const finalCdAmount = Number((saleBillAmountFromData(formData) * toNumber(formData.cd_percent) / 100).toFixed(2));
     const unloadingDate = formData.unloading_date || "";
     const dueDays = formData.due_days !== undefined && formData.due_days !== null && String(formData.due_days).trim() !== "" ? toNumber(formData.due_days) : "";
@@ -2825,11 +2913,11 @@ export default function WarehouseTradingPage() {
       unloading_qty: saleUnloadingQty,
       shortage_quantity: saleShortageQty,
       shortage_amount: saleShortageAmount,
-      claim_amount: saleShortageAmount,
-      other_deduction: saleQualityDeduction,
+      claim_amount: finalClaimAmount,
+      other_deduction: finalOtherDeduction,
       transport_charge: saleTransportCharge,
       cd_amount: finalCdAmount,
-      total_deduction: saleQualityDeduction + saleTransportCharge + finalCdAmount,
+      total_deduction: finalClaimAmount + finalOtherDeduction + saleTransportCharge + finalCdAmount + toNumber(formData.adjustment_amount) + finalTdsAmount,
       tds_amount: finalTdsAmount,
       reject_qty: toNumber(formData.reject_qty),
       amount: saleBillAmountFromData(formData),
@@ -2837,10 +2925,10 @@ export default function WarehouseTradingPage() {
 
     setLoading(true);
     try {
-      await axios.put(`/api/wh-vouchers/sale/${editId}`, payload);
+      await API.put(`/api/wh-vouchers/sale/${editId}`, payload);
       alert("Sale voucher pass saved successfully");
       const remainingQtyAfterSave = Math.max(saleDispatchQty - saleUnloadingQty, 0);
-      const nextVoucherNo = await axios
+      const nextVoucherNo = await API
         .get(`/api/wh-vouchers/next-voucher-no`, { params: { type: "sale" } })
         .then((res) => res.data?.voucher_no || "")
         .catch(() => "");
@@ -2895,7 +2983,12 @@ export default function WarehouseTradingPage() {
       return;
     }
 
-    const finalTdsAmount = tdsEligible ? autoTdsAmount : toNumber(formData.tds_amount);
+    const manualClaimEntered = String(formData.claim_amount ?? "").trim() !== "";
+    const manualOtherDeductionEntered = String(formData.other_deduction ?? "").trim() !== "";
+    const manualTdsEntered = String(formData.tds_amount ?? "").trim() !== "";
+    const finalClaimAmount = manualClaimEntered ? toNumber(formData.claim_amount) : saleShortageAmount;
+    const finalOtherDeduction = manualOtherDeductionEntered ? toNumber(formData.other_deduction) : saleQualityDeduction;
+    const finalTdsAmount = manualTdsEntered ? toNumber(formData.tds_amount) : (tdsEligible ? autoTdsAmount : 0);
     const finalCdAmount = Number((saleBillAmountFromData(formData) * toNumber(formData.cd_percent) / 100).toFixed(2));
     const unloadingDate = formData.unloading_date || "";
     const dueDays = formData.due_days !== undefined && formData.due_days !== null && String(formData.due_days).trim() !== "" ? toNumber(formData.due_days) : "";
@@ -2919,11 +3012,11 @@ export default function WarehouseTradingPage() {
       unloading_qty: saleUnloadingQty,
       shortage_quantity: saleShortageQty,
       shortage_amount: saleShortageAmount,
-      claim_amount: saleShortageAmount,
-      other_deduction: saleQualityDeduction,
+      claim_amount: finalClaimAmount,
+      other_deduction: finalOtherDeduction,
       transport_charge: saleTransportCharge,
       cd_amount: finalCdAmount,
-      total_deduction: saleQualityDeduction + saleTransportCharge + finalCdAmount,
+      total_deduction: finalClaimAmount + finalOtherDeduction + saleTransportCharge + finalCdAmount + toNumber(formData.adjustment_amount) + finalTdsAmount,
       tds_amount: finalTdsAmount,
       reject_qty: toNumber(formData.reject_qty),
       amount: saleBillAmountFromData(formData),
@@ -2931,14 +3024,14 @@ export default function WarehouseTradingPage() {
 
     setLoading(true);
     try {
-      await axios.put(`/api/wh-vouchers/sale/${editId}`, payload);
+      await API.put(`/api/wh-vouchers/sale/${editId}`, payload);
       alert("Sale voucher pass saved successfully");
       const remainingQtyAfterSave = Math.max(saleDispatchQty - saleUnloadingQty, 0);
       const addQty = Math.max(toNumber(formData.add_qty), 0);
       const nextDispatchQty = Math.max(remainingQtyAfterSave + addQty, 0);
       const nextRate = toNumber(formData.rate);
       const nextAmount = Number((nextDispatchQty * nextRate).toFixed(2));
-      const nextVoucherNo = await axios
+      const nextVoucherNo = await API
         .get(`/api/wh-vouchers/next-voucher-no`, { params: { type: "sale" } })
         .then((res) => res.data?.voucher_no || "")
         .catch(() => "");
@@ -2991,7 +3084,7 @@ export default function WarehouseTradingPage() {
         lorry_no: formData.lorry_no || "",
         journey_token: formData.journey_token || buildJourneyToken(),
       };
-      const createRes = await axios.post("/api/wh-vouchers/sale", nextPayload);
+      const createRes = await API.post("/api/wh-vouchers/sale", nextPayload);
       setFormData((prev) => ({
         ...nextPayload,
         warehouse_id: prev.warehouse_id || "",
@@ -3192,6 +3285,7 @@ export default function WarehouseTradingPage() {
     ],
     "purchase-party-ledger": [
       ["date", "Date", (item) => (item.row_type === "closing" ? "" : formatLedgerDate(item.date))],
+      ["farmer", "Farmer", (item) => (item.row_type === "closing" ? "" : (item.farmer_name || getFarmerName(item) || "-"))],
       ["voucher_type", "Type", (item) => (item.row_type === "closing" ? "" : (item.voucher_type || "-"))],
       ["voucher_no", "Voucher No", (item) => (item.row_type === "closing" ? "" : (item.voucher_no || "-"))],
       ["particulars", "Particulars", (item) => (item.row_type === "closing" ? "" : (item.particulars || "-"))],
@@ -3231,7 +3325,7 @@ export default function WarehouseTradingPage() {
     ],
     "sale-party-ledger": [
       ["date", "Date", (item) => (item.row_type === "closing" ? "" : formatLedgerDate(item.date))],
-      ["party", "Party Name", (item) => (item.row_type === "closing" ? `Closing Balance (${item.closing_side})` : (item.party_name || item.buyer_name || item.company_name || item.consignee_name || "-"))],
+      ["party", "Party Name", (item) => (item.row_type === "closing" ? `Closing Balance (${item.closing_side})` : getBuyerName(item))],
       ["account", "Company Account", (item) => (item.row_type === "closing" ? "" : (item.company_account_name || getAccountName(item) || "-"))],
       ["voucher_type", "Type", (item) => (item.row_type === "closing" ? "" : (item.voucher_type || "-"))],
       ["voucher_no", "Voucher / Bill No", (item) => (item.row_type === "closing" ? "" : (item.voucher_no || item.bill_no || "-"))],
@@ -3239,10 +3333,22 @@ export default function WarehouseTradingPage() {
       ["quantity", "Qty", (item) => (item.row_type === "closing" ? "" : formatDecimal4(item.quantity ?? item.total_quantity ?? item.unloading_qty ?? 0))],
       ["rate", "Rate", (item) => (item.row_type === "closing" ? "" : formatMoney(item.rate || 0))],
       ["gross_amount", "Gross / Sale Amount", (item) => (item.row_type === "closing" ? "" : formatMoney(item.gross_amount ?? item.sale_amount ?? item.total_amount ?? 0))],
-      ["receipt_date", "Receipt Date", (item) => (item.row_type === "closing" ? "" : formatLedgerDate(item.receipt_date || ""))],
-      ["receipt_voucher_no", "Receipt Voucher No", (item) => (item.row_type === "closing" ? "" : (item.receipt_voucher_no || "-"))],
-      ["received_amount", "Received Amount", (item) => (item.row_type === "closing" ? "" : formatMoney(item.received_amount ?? item.receipt_amount ?? 0))],
-      ["adjustment", "Adjustment", (item) => (item.row_type === "closing" ? "" : formatMoney(item.adjustment ?? item.receipt_amount ?? 0))],
+      ["adjustment", "Adjustment", (item) => {
+        if (item.row_type === "closing") return "";
+        const details = Array.isArray(item.receipt_details) ? item.receipt_details : [];
+        const lines = String(item.voucher_type || "") === "Receipt" && details.length
+          ? details.map((detail) => {
+              const saleDate = formatLedgerDate(detail.sale_date || detail.date || "");
+              const saleVoucher = detail.sale_voucher_no || detail.voucher_no || "-";
+              return `${saleDate || "-"} | ${saleVoucher} | Rs.${formatMoney(detail.adjusted_amount || 0)}`;
+            })
+          : String(item.adjustment_details || item.particulars || "-").split("; ").filter(Boolean);
+        return (
+          <div style={{ whiteSpace: "pre-line", lineHeight: 1.35 }}>
+            {lines.map((line, index) => <div key={`${item.id || item._id || "row"}-adj-${index}`}>{line}</div>)}
+          </div>
+        );
+      }],
       ["warehouse", "Warehouse", (item) => (item.row_type === "closing" ? "" : getWarehouseName(item))],
       ["debit", "Debit", (item) => formatMoney(item.debit || 0)],
       ["credit", "Credit", (item) => formatMoney(item.credit || 0)],
@@ -3386,9 +3492,54 @@ export default function WarehouseTradingPage() {
     const entries = (Array.isArray(reportData) ? reportData : []).filter((row) => row.row_type !== "closing");
     const ledgerPartyName = (row) => activeReport === "purchase-party-ledger"
       ? (row.farmer_name || getFarmerName(row) || "Unknown Farmer")
-      : (row.party_name || row.buyer_name || row.company_name || row.consignee_name || "Unknown Party");
+      : (getBuyerName(row) || row.party_name || row.buyer_name || row.company_name || row.consignee_name || "Unknown Party");
     const ledgerGroupKey = (row) => `${ledgerPartyName(row)}::${row.company_account_id || row.company_account_name || row.account_name || ""}`;
-    const sorted = entries.slice().sort((a, b) => {
+    // Sale Party Ledger supports two views:
+    // 1) Normal: one Sale row with gross debit and all F2 deductions as one credit,
+    //    while receipts remain separate credit entries.
+    // 2) Detailed: every Claim/Shortage/CD/Freight/Others/Adjustment/TDS is shown separately.
+    const ledgerEntries = activeReport === "sale-party-ledger" && !reportFilters.details_of_deduction
+      ? (() => {
+          const saleRows = entries.filter((row) => String(row.voucher_type || "") === "Sale");
+          const deductionRows = entries.filter((row) => String(row.voucher_type || "").startsWith("Sale - ") && row.ledger_component);
+          const receiptRows = entries.filter((row) => String(row.voucher_type || "") === "Receipt");
+          const deductionsBySale = new Map();
+          deductionRows.forEach((row) => {
+            const key = String(row.sale_id || "");
+            if (!key) return;
+            const list = deductionsBySale.get(key) || [];
+            list.push(row);
+            deductionsBySale.set(key, list);
+          });
+          const normalSales = saleRows.map((sale) => {
+            const saleId = String(sale.sale_id || sale.id || sale._id || "");
+            const parts = deductionsBySale.get(saleId) || [];
+            const deductionTotal = parts.reduce((sum, row) => sum + toNumber(row.credit || row.journal_amount || 0), 0);
+            const deductionLabels = parts
+              .map((row) => String(row.voucher_type || "").replace(/^Sale\s*-\s*/, ""))
+              .filter(Boolean)
+              .join(", ");
+            return {
+              ...sale,
+              particulars: deductionLabels
+                ? `Sale Bill ${sale.voucher_no || ""} | Less: ${deductionLabels}`
+                : `Sale Bill ${sale.voucher_no || ""}`.trim(),
+              adjustment_details: deductionLabels
+                ? `Total deductions: Rs.${formatMoney(deductionTotal)}`
+                : "",
+              journal_amount: Number(deductionTotal.toFixed(2)),
+              deduction_total: Number(deductionTotal.toFixed(2)),
+              debit: Number(toNumber(sale.debit || sale.sale_amount || sale.amount || 0).toFixed(2)),
+              credit: Number(deductionTotal.toFixed(2)),
+              voucher_type: "Sale",
+              ledger_view: "normal",
+            };
+          });
+          return [...normalSales, ...receiptRows];
+        })()
+      : entries;
+
+    const sorted = ledgerEntries.slice().sort((a, b) => {
       const leftParty = ledgerGroupKey(a);
       const rightParty = ledgerGroupKey(b);
       const partyCmp = String(leftParty).localeCompare(String(rightParty));
@@ -3434,17 +3585,22 @@ export default function WarehouseTradingPage() {
       running += debit - credit;
       farmerDebit += debit;
       farmerCredit += credit;
+      const isRepeatedSaleParty = activeReport === "sale-party-ledger"
+        && grouped.length > 0
+        && grouped[grouped.length - 1]?.row_type === "entry"
+        && String(grouped[grouped.length - 1]?.party_name || "") === String(partyName || "")
+        && String(grouped[grouped.length - 1]?.company_account_id || grouped[grouped.length - 1]?.company_account_name || "") === String(row.company_account_id || row.company_account_name || row.account_name || "");
       grouped.push({
         ...row,
         farmer_name: activeReport === "purchase-party-ledger" ? partyName : row.farmer_name,
-        party_name: activeReport === "sale-party-ledger" ? partyName : row.party_name,
+        party_name: activeReport === "sale-party-ledger" ? (isRepeatedSaleParty ? "" : partyName) : row.party_name,
         balance: Number(running.toFixed(4)),
         row_type: "entry",
       });
     });
     pushClosing();
     return grouped;
-  }, [activeReport, currentReportRows, reportData, farmers, buyerNames, companyAccounts, saleFollowupFilter]);
+  }, [activeReport, currentReportRows, reportData, farmers, buyerNames, companyAccounts, saleFollowupFilter, reportFilters.details_of_deduction]);
   const saleFollowupRows = activeReport === "sale-followup" ? displayReportData : [];
   const purchasePartyLedgerCompanyAccounts = useMemo(() => {
     if (Array.isArray(reportFilterOptions.accounts) && reportFilterOptions.accounts.length) {
@@ -3474,12 +3630,22 @@ export default function WarehouseTradingPage() {
   const saleReportWarehouses = purchasePartyLedgerWarehouses;
   const saleReportFarmers = purchasePartyLedgerFarmers;
   const saleReportBuyers = useMemo(() => {
-    if (Array.isArray(reportFilterOptions.buyers) && reportFilterOptions.buyers.length) {
-      return reportFilterOptions.buyers;
-    }
+    const byId = new Map();
+    const add = (item) => {
+      const id = String(item?.id || item?._id || item?.legacy_id || "").trim();
+      const name = String(item?.name || item?.buyer_name || item?.company_name || item?.party_name || "").trim();
+      if (id && name && name !== "-") byId.set(id, { ...item, id, name });
+    };
+
+    (reportFilterOptions.buyers || []).forEach(add);
     const ids = new Set((reportFilterOptions.buyer_ids || []).map(String));
-    return buyerNames.filter((buyer) => ids.has(String(buyer.id || buyer._id || "")));
-  }, [buyerNames, reportFilterOptions.buyer_ids, reportFilterOptions.buyers]);
+    buyerNames.filter((buyer) => !ids.size || ids.has(String(buyer.id || buyer._id || ""))).forEach(add);
+    companies.filter((company) => !ids.size || ids.has(String(company.id || company._id || ""))).forEach((company) => {
+      add({ ...company, name: company.name || company.company_name });
+    });
+
+    return Array.from(byId.values()).sort((a, b) => String(a.name).localeCompare(String(b.name), undefined, { sensitivity: "base" }));
+  }, [buyerNames, companies, reportFilterOptions.buyer_ids, reportFilterOptions.buyers]);
 
   const normalizedGlobalSearch = String(globalSearch || "").trim().toLowerCase();
   const matchesGlobalSearch = (value) =>
@@ -3586,13 +3752,13 @@ export default function WarehouseTradingPage() {
         </div>
         <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
           <button type="button" onClick={onPrev} disabled={page <= 1} style={{ ...btnAction, background: page <= 1 ? "#cbd5e1" : "#64748b", color: page <= 1 ? "#64748b" : "#fff", cursor: page <= 1 ? "not-allowed" : "pointer", padding: "6px 12px" }}>
-            ← Prev
+                  ← Prev
           </button>
           <div style={{ alignSelf: "center", padding: "0 12px", fontWeight: 700, color: "#0f172a", whiteSpace: "nowrap", background: "#fff", border: "1px solid #cbd5e1", borderRadius: "6px", padding: "6px 12px" }}>
             Showing {totalItems === 0 ? 0 : `${start}-${end}`} | Page {page} / {totalPages}
           </div>
           <button type="button" onClick={onNext} disabled={page >= totalPages} style={{ ...btnAction, background: page >= totalPages ? "#cbd5e1" : "#0f766e", color: page >= totalPages ? "#64748b" : "#fff", cursor: page >= totalPages ? "not-allowed" : "pointer", padding: "6px 12px" }}>
-            Next →
+                  Next →
           </button>
         </div>
       </div>
@@ -3787,7 +3953,7 @@ export default function WarehouseTradingPage() {
     doc.setFont("helvetica", "normal");
     doc.setFontSize(6.2);
     doc.setTextColor(220, 245, 242);
-    doc.text("WAREHOUSE TRADING • ACCOUNTING REPORT", pageWidth - right, 6.3, { align: "right" });
+    doc.text("WAREHOUSE TRADING - ACCOUNTING REPORT", pageWidth - right, 6.3, { align: "right" });
 
     let y = 17;
     doc.setFont("helvetica", "bold");
@@ -3936,7 +4102,7 @@ export default function WarehouseTradingPage() {
         doc.setFont("helvetica", "normal");
         doc.setFontSize(5.8);
         doc.setTextColor(225, 245, 242);
-        doc.text(`Warehouse Trading  •  ${title}`, left, pageHeight - 3.1);
+      doc.text(`Warehouse Trading - ${title}`, left, pageHeight - 3.1);
         doc.text(`Page ${data.pageNumber} / ${doc.internal.getNumberOfPages()}`, pageWidth - right, pageHeight - 3.1, { align: "right" });
       },
     });
@@ -4775,7 +4941,7 @@ export default function WarehouseTradingPage() {
                           <h3 style={paymentHeroTitle}>Smart Payment Entry</h3>
                           <p style={paymentHeroSubtitle}>Select account, warehouse and pending farmer, then adjust purchase bills.</p>
                         </div>
-                        <div style={paymentBadge}>⚡ Smart Entry</div>
+                        <div style={paymentBadge}>Smart Entry</div>
                       </div>
 
                       <div style={paymentModeRow}>
@@ -4818,7 +4984,7 @@ export default function WarehouseTradingPage() {
                         <SearchableSelect
                           label="Warehouse"
                           value={formData.warehouse_id}
-                          options={paymentWarehouses.map((w) => ({
+                          options={paymentWarehouseOptions.map((w) => ({
                             value: w.id || w._id,
                             label: w.name,
                           }))}
@@ -4831,7 +4997,7 @@ export default function WarehouseTradingPage() {
                           value={formData.farmer_id}
                           options={accountFarmers.map((f) => ({
                             value: f.id || f._id,
-                            label: `${f.name}${f.outstanding !== undefined ? ` — Due Rs.${formatMoney(f.outstanding)}` : ""}`,
+                            label: `${f.name}${f.outstanding !== undefined ? ` - Due Rs.${formatMoney(f.outstanding)}` : ""}`,
                           }))}
                           onChange={(value) => handleChange({ target: { name: "farmer_id", value } })}
                           placeholder={formData.warehouse_id ? "Choose pending farmer" : "Choose warehouse first"}
@@ -4900,6 +5066,136 @@ export default function WarehouseTradingPage() {
                       </div>
                     </div>
                   )}
+                  {activeVoucherType === "receipt" && (
+                    <div className="payment-mobile-shell" style={paymentHeroCard}>
+                      <div style={paymentHeroHeader}>
+                        <div>
+                          <div style={paymentEyebrow}>RECEIPT VOUCHER</div>
+                          <h3 style={paymentHeroTitle}>Smart Receipt Entry</h3>
+                          <p style={paymentHeroSubtitle}>Select account, warehouse and pending buyer, then adjust sale bills.</p>
+                        </div>
+                        <div style={paymentBadge}>Smart Entry</div>
+                      </div>
+
+                      <div style={paymentModeRow}>
+                        {paymentModeOptions.map((option) => {
+                          const isActive = activePaymentMode === option.value;
+                          return (
+                            <button
+                              key={option.value}
+                              type="button"
+                              onClick={() => handleChange({ target: { name: "payment_mode", value: option.value } })}
+                              style={{
+                                ...paymentModeButton,
+                                ...(isActive ? paymentModeButtonActive : {}),
+                              }}
+                            >
+                              {option.label === "Against Purchase Bills" ? "Against Sale Bills" : option.label}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      <div style={paymentSelectorGrid}>
+                        <SearchableSelect
+                          label="Account"
+                          value={formData.company_account_id}
+                          options={companyAccounts.map((account) => ({
+                            value: account.id || account._id,
+                            label: account.account_name || account.name,
+                          }))}
+                          onChange={(value) => handleChange({ target: { name: "company_account_id", value } })}
+                          placeholder="Choose account"
+                        />
+                        <SearchableSelect
+                          label="Warehouse"
+                          value={formData.warehouse_id}
+                          options={warehouses.map((warehouse) => ({
+                            value: warehouse.id || warehouse._id,
+                            label: warehouse.name,
+                          }))}
+                          onChange={(value) => handleChange({ target: { name: "warehouse_id", value } })}
+                          placeholder={formData.company_account_id ? "Choose warehouse" : "Choose account first"}
+                          disabled={!formData.company_account_id}
+                        />
+                        <SearchableSelect
+                          label="Pending Buyer"
+                          value={formData.company_id}
+                          options={pendingReceiptBuyers.map((row) => {
+                            const buyerId = String(row.company_id || row.buyer_id || row.id || "");
+                            const buyer = buyerNames.find((item) => String(item.id || item._id) === buyerId);
+                            return {
+                              value: buyerId,
+                              label: `${buyer?.name || row.buyer_name || row.company_name || buyerId}${row.outstanding !== undefined ? ` - Due Rs.${formatMoney(row.outstanding)}` : ""}`,
+                            };
+                          })}
+                          onChange={(value) => handleChange({ target: { name: "company_id", value } })}
+                          placeholder={formData.warehouse_id ? "Choose pending buyer" : "Choose warehouse first"}
+                          disabled={!formData.warehouse_id}
+                        />
+                      </div>
+
+                      <div className="payment-financial-summary" style={paymentFinancialSummary}>
+                        <div style={paymentStatCard}>
+                          <span style={paymentStatLabel}>Total Bill</span>
+                          <strong style={paymentStatValue}>Rs.{formatMoney(partyOutstanding?.stats?.total_sale ?? partyOutstanding?.stats?.total_bill ?? 0)}</strong>
+                        </div>
+                        <div style={paymentStatCard}>
+                          <span style={paymentStatLabel}>Total Deduction</span>
+                          <strong style={paymentStatValue}>Rs.{formatMoney(partyOutstanding?.stats?.total_deduction ?? 0)}</strong>
+                        </div>
+                        <div style={paymentStatCard}>
+                          <span style={paymentStatLabel}>Total Received</span>
+                          <strong style={paymentStatValue}>Rs.{formatMoney(partyOutstanding?.stats?.total_receipt ?? partyOutstanding?.stats?.total_payment ?? 0)}</strong>
+                        </div>
+                        <div style={{ ...paymentStatCard, ...paymentDueCard }}>
+                          <span style={paymentStatLabel}>Total Due</span>
+                          <strong style={{ ...paymentStatValue, color: "#b91c1c" }}>Rs.{formatMoney(partyOutstanding?.stats?.outstanding ?? partyOutstanding?.outstanding ?? 0)}</strong>
+                        </div>
+                      </div>
+
+                      <div className="payment-entry-row" style={paymentEntryRow}>
+                        <Field label="Receipt Amount">
+                          <input
+                            name="amount"
+                            type="number"
+                            step="0.0001"
+                            value={formData.amount}
+                            onChange={(event) => {
+                              handleChange(event);
+                              setReceiptAdjustments([]);
+                            }}
+                            style={paymentAmountInput}
+                            required
+                          />
+                        </Field>
+                        <div style={paymentAdjustmentAction}>
+                          <button
+                            type="button"
+                            onClick={openReceiptAdjustmentPopup}
+                            style={{ ...btnAction, background: "#2563eb", minHeight: 42 }}
+                            disabled={
+                              !formData.company_account_id ||
+                              !formData.warehouse_id ||
+                              !formData.company_id ||
+                              toNumber(formData.amount) <= 0
+                            }
+                          >
+                            Open Adjustment
+                          </button>
+                          <span style={paymentAdjustedText}>
+                            Adjusted: <strong>Rs.{formatMoney(receiptAdjustmentTotal)}</strong>
+                          </span>
+                        </div>
+                      </div>
+
+                      <div style={paymentSelectedBar}>
+                        <span><b>Account:</b> {getAccountName(formData) || "Choose account"}</span>
+                        <span><b>Warehouse:</b> {getWarehouseName(formData) || "Choose warehouse"}</span>
+                        <span><b>Buyer:</b> {getBuyerName({ company_id: formData.company_id }) || "Pick the pending buyer"}</span>
+                      </div>
+                    </div>
+                  )}
                   <div style={formGrid}>
                 <Field label="Voucher No">
                   <input name="voucher_no" value={formData.voucher_no} onChange={handleChange} placeholder="Voucher No *" style={inp} required />
@@ -4915,7 +5211,7 @@ export default function WarehouseTradingPage() {
                     </select>
                   </Field>
                 )}
-                {(activeVoucherType !== "payment" && (activeVoucherType !== "sale" || formData.sale_type !== "direct")) && (
+                {(activeVoucherType !== "payment" && activeVoucherType !== "receipt" && (activeVoucherType !== "sale" || formData.sale_type !== "direct")) && (
                   <Field label="Warehouse">
                     <select name="warehouse_id" value={formData.warehouse_id} onChange={handleChange} style={inp}>
                       <option value="">Select Warehouse</option>
@@ -4925,7 +5221,7 @@ export default function WarehouseTradingPage() {
                     </select>
                   </Field>
                 )}
-                {activeVoucherType !== "payment" && (
+                {activeVoucherType !== "payment" && activeVoucherType !== "receipt" && (
                   <>
                     <Field label="Location">
                       <select name="location_id" value={formData.location_id} onChange={handleChange} style={inp}>
@@ -4945,7 +5241,7 @@ export default function WarehouseTradingPage() {
                     </Field>
                   </>
                 )}
-                {activeVoucherType !== "payment" && <Field label="Account">
+                {activeVoucherType !== "payment" && activeVoucherType !== "receipt" && <Field label="Account">
                   {renderAccountSelect(inp)}
                 </Field>}
                 {activeVoucherType === "sale" && formData.sale_type === "direct" && (
@@ -5021,7 +5317,7 @@ export default function WarehouseTradingPage() {
                   </>
                 )}
 
-                {(activeVoucherType === "sale" || activeVoucherType === "receipt") && (
+                {activeVoucherType === "sale" && (
                   <>
                     {activeVoucherType === "sale" ? (
                       <Field label="Buyer Name">
@@ -5245,33 +5541,9 @@ export default function WarehouseTradingPage() {
                   </>
                 )}
                 {activeVoucherType === "receipt" && (
-                  <>
-                    <Field label="Reference Type">
-                      <select
-                        name="reference_type"
-                        value={formData.reference_type}
-                        onChange={handleChange}
-                        style={inp}
-                      >
-                        <option value="">Select Reference</option>
-                        <option value="purchase">Purchase Bill</option>
-                        <option value="sale">Sale Bill</option>
-                        <option value="other">Other</option>
-                      </select>
-                    </Field>
-                    <Field label="Reference ID">
-                      <input
-                        name="reference_id"
-                        value={formData.reference_id}
-                        onChange={handleChange}
-                        style={inp}
-                        placeholder="Optional bill ID"
-                      />
-                    </Field>
-                    <Field label="Amount">
-                      <input name="amount" type="number" step="0.0001" value={formData.amount} onChange={handleChange} style={inp} required />
-                    </Field>
-                  </>
+                  <Field label="Reference / Note">
+                    <input name="reference_id" value={formData.reference_id} onChange={handleChange} style={inp} placeholder="Optional reference note" />
+                  </Field>
                 )}
 
                 {activeVoucherType === "journal" && (
@@ -5409,7 +5681,7 @@ export default function WarehouseTradingPage() {
               <h3 style={{ marginTop: 0 }}>{activeVoucherType.charAt(0).toUpperCase() + activeVoucherType.slice(1)} Vouchers</h3>
               <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
                 <button type="button" onClick={() => setVoucherSortAsc((prev) => !prev)} style={{ ...btnAction, background: voucherSortAsc ? "#0f766e" : "#64748b", padding: "6px 12px", fontSize: 12 }}>
-                  📅 {voucherSortAsc ? "Oldest First" : "Newest First"}
+                  {voucherSortAsc ? "Oldest First" : "Newest First"}
                 </button>
                 {activeVoucherType === "sale" && (
                   <button type="button" onClick={() => setShowSaleAdjustedModal(true)} style={{ ...btnAction, background: "#0f766e" }}>
@@ -5521,6 +5793,7 @@ export default function WarehouseTradingPage() {
                   <div><strong>Date:</strong> {selectedVoucher.date || "-"}</div>
                   <div><strong>Account:</strong> {getAccountName(selectedVoucher)}</div>
                   <div><strong>Farmer:</strong> {getFarmerName(selectedVoucher)}</div>
+                  <div><strong>Warehouse:</strong> {getWarehouseName(selectedVoucher)}</div>
                   <div><strong>Amount:</strong> Rs.{formatMoney(selectedVoucher.amount || selectedVoucher.net_amount || selectedVoucher.amount || 0)}</div>
                   <div><strong>Reference:</strong> {selectedVoucher.reference_id || selectedVoucher.reference_type || "-"}</div>
                 </div>
@@ -5696,7 +5969,20 @@ export default function WarehouseTradingPage() {
                   onChange={(value) => setReportFilters((prev) => ({ ...prev, sale_buyer_id: value }))}
                   placeholder="All Buyers"
                 />
-                {(reportFilters.warehouse_id || reportFilters.company_account_id || reportFilters.sale_buyer_id) && (
+                {activeReport === "sale-party-ledger" && (
+                  <label style={{ display: "flex", flexDirection: "column", gap: 5, minWidth: 170, fontSize: 12, fontWeight: 700, color: "#334155" }}>
+                    Ledger View
+                    <select
+                      value={reportFilters.details_of_deduction ? "details" : "normal"}
+                      onChange={(event) => updateReportFilter("details_of_deduction", event.target.value === "details")}
+                      style={{ ...inp, minHeight: 38 }}
+                    >
+                      <option value="normal">Normal Ledger</option>
+                      <option value="details">Detailed Ledger</option>
+                    </select>
+                  </label>
+                )}
+                {(reportFilters.warehouse_id || reportFilters.company_account_id || reportFilters.sale_buyer_id || (activeReport === "sale-party-ledger" && reportFilters.details_of_deduction)) && (
                   <button
                     type="button"
                     onClick={() => setReportFilters((prev) => ({ ...prev, farmer_id: "", warehouse_id: "", company_account_id: "", sale_buyer_id: "" }))}
@@ -6091,7 +6377,7 @@ export default function WarehouseTradingPage() {
         <div style={modalOverlayStyle}>
           <WarehouseAdjustModal
             title="Payment Adjustment"
-            subtitle="Account → Warehouse → Pending Farmer → Purchase Bills"
+          subtitle="Account → Warehouse → Pending Farmer → Purchase Bills"
             actionButton={btnAction}
             controls={
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10, marginTop: 12 }}>
@@ -6105,7 +6391,7 @@ export default function WarehouseTradingPage() {
                 <SearchableSelect
                   label="Warehouse"
                   value={formData.warehouse_id}
-                  options={paymentWarehouses.map((w) => ({ value: w.id || w._id, label: w.name }))}
+                  options={paymentWarehouseOptions.map((w) => ({ value: w.id || w._id, label: w.name }))}
                   onChange={(value) => handleChange({ target: { name: "warehouse_id", value } })}
                   placeholder={formData.company_account_id ? "Choose warehouse" : "Choose account first"}
                   disabled={!formData.company_account_id}
@@ -6113,7 +6399,7 @@ export default function WarehouseTradingPage() {
                 <SearchableSelect
                   label="Pending Farmer"
                   value={formData.farmer_id}
-                  options={accountFarmers.map((f) => ({ value: f.id || f._id, label: `${f.name}${f.outstanding !== undefined ? ` — Pending Rs.${formatMoney(f.outstanding)}` : ""}` }))}
+              options={accountFarmers.map((f) => ({ value: f.id || f._id, label: `${f.name}${f.outstanding !== undefined ? ` - Pending Rs.${formatMoney(f.outstanding)}` : ""}` }))}
                   onChange={(value) => handleChange({ target: { name: "farmer_id", value } })}
                   placeholder={formData.warehouse_id ? "Choose pending farmer" : "Choose warehouse first"}
                   disabled={!formData.warehouse_id}
@@ -6203,7 +6489,7 @@ export default function WarehouseTradingPage() {
                     step="0.0001"
                     min="0"
                     max={row.row.pending_amount || row.row.amount || 0}
-                    value={selectedAdjustmentFor(row.key)}
+                    value={selectedAdjustmentForReceipt(row.key)}
                     onChange={(event) => setReceiptAdjustmentAmount(row.row, event.target.value)}
                     style={{ ...inp, padding: "7px 8px" }}
                   />
@@ -6211,10 +6497,12 @@ export default function WarehouseTradingPage() {
               },
             ]}
             emptyText="No pending sale bills found."
+            onAutoAdjust={autoFillReceiptAdjustments}
+            autoAdjustLabel={`Auto Adjust Rs.${formatMoney(formData.amount)}`}
             onClose={() => setShowReceiptAdjustPopup(false)}
             onClear={() => setReceiptAdjustments([])}
             onConfirm={() => setShowReceiptAdjustPopup(false)}
-            confirmDisabled={false}
+            confirmDisabled={Math.abs(receiptAdjustmentTotal - toNumber(formData.amount)) > 0.0001}
           />
         </div>
       )}
@@ -6260,8 +6548,8 @@ export default function WarehouseTradingPage() {
           toNumber={toNumber}
           selectSaleVoucherForPass={selectSaleVoucherForPass}
           saveSaleVoucherPass={saveSaleVoucherPass}
-          saveSaleVoucherPassAndNew={saveSaleVoucherPassAndNew}
           saleQualityDeduction={saleQualityDeduction}
+          saleTransportCharge={saleTransportCharge}
           saleCashDiscountAmount={saleCashDiscountAmount}
           saleBillAmountFromData={saleBillAmountFromData}
           tdsEligible={tdsEligible}
@@ -6547,7 +6835,7 @@ export default function WarehouseTradingPage() {
           formatDecimal4={formatDecimal4}
           toNumber={toNumber}
           getSalePreviewDataForRow={getSalePreviewDataForRow}
-          axios={axios}
+          axios={API}
         />
       )}
       </div>
