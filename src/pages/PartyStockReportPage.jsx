@@ -17,6 +17,7 @@ export default function PartyStockReportPage() {
   const [warehouses, setWarehouses] = useState([]);
   const [products, setProducts] = useState([]);
   const [visibleSections, setVisibleSections] = useState(["totals", "summary", "details"]);
+  const [filtersReady, setFiltersReady] = useState(false);
 
   const [filters, setFilters] = useState({
     from_date: "",
@@ -76,6 +77,7 @@ export default function PartyStockReportPage() {
       employee_id: employeeId,
       product_id: productId,
     }));
+    setFiltersReady(true);
   }, [location.search]);
 
   const dashboardView = useMemo(() => {
@@ -174,6 +176,8 @@ export default function PartyStockReportPage() {
   }, []);
 
   useEffect(() => {
+    if (!filtersReady) return undefined;
+    const controller = new AbortController();
     let cancelled = false;
     const run = async () => {
       try {
@@ -199,7 +203,7 @@ export default function PartyStockReportPage() {
           console.debug("Fetching /reports/party-stock with params:", params);
         } catch (e) {}
 
-        const res = await axios.get(`${API_BASE}/reports/party-stock`, { params });
+        const res = await axios.get(`${API_BASE}/reports/party-stock`, { params, signal: controller.signal });
         if (!cancelled) {
           const normalizedSummary = (res.data.summary || []).map(normalizePartyStockRow);
           const normalizedDetails = (res.data.details || []).map(normalizePartyStockRow);
@@ -207,6 +211,7 @@ export default function PartyStockReportPage() {
           setDetails(normalizedDetails);
         }
       } catch (err) {
+        if (err?.code === "ERR_CANCELED" || err?.name === "CanceledError") return;
         if (!cancelled) {
           console.error(err);
           setSummary([]);
@@ -218,8 +223,9 @@ export default function PartyStockReportPage() {
     run();
     return () => {
       cancelled = true;
+      controller.abort();
     };
-  }, [filters]);
+  }, [filters, filtersReady]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
