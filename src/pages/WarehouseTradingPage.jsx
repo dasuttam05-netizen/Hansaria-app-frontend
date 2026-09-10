@@ -944,27 +944,14 @@ export default function WarehouseTradingPage() {
     }
   }, [activeTab, activeVoucherType]);
 
-  // Report rows: filters/report changes load the data. Client-paged Party
-  // Ledgers must NOT re-fetch when the user clicks Next/Prev; their rows are
-  // already in memory and pagination is handled locally.
+  // Report rows: page/filter changes only.
   useEffect(() => {
     if (activeTab !== "reports") return;
     const timer = window.setTimeout(() => {
       loadReport();
-    }, 150);
+    }, 300);
     return () => window.clearTimeout(timer);
-  }, [activeTab, activeReport, globalSearch, reportFilters.farmer_id, reportFilters.company_account_id, reportFilters.warehouse_id, reportFilters.sale_buyer_id, reportFilters.sale_company_account_id, reportFilters.sale_journey_token, reportFilters.sale_lorry_no, reportFilters.sale_bill_no, reportFilters.details_of_deduction]);
-
-  // Only server-paged reports need an API call when reportPage changes.
-  useEffect(() => {
-    if (activeTab !== "reports") return;
-    const serverPagedReport = activeReport === "sale" || activeReport === "purchase" || activeReport === "warehouse-stock";
-    if (!serverPagedReport || reportPage <= 1) return;
-    const timer = window.setTimeout(() => {
-      loadReport(activeReport, reportPage, reportFilters);
-    }, 80);
-    return () => window.clearTimeout(timer);
-  }, [activeTab, activeReport, reportPage]);
+  }, [activeTab, activeReport, reportPage, globalSearch, reportFilters.farmer_id, reportFilters.company_account_id, reportFilters.warehouse_id, reportFilters.sale_buyer_id, reportFilters.sale_company_account_id, reportFilters.sale_journey_token, reportFilters.sale_lorry_no, reportFilters.sale_bill_no, reportFilters.details_of_deduction]);
 
   // Filter options are independent of pagination. Never reload them just
   // because the user moves from page 1 to page 2.
@@ -1517,6 +1504,11 @@ export default function WarehouseTradingPage() {
     const isSaleReport = ["sale", "sale-party-ledger", "sale-followup", "sale-journey"].includes(reportType);
     const hasActivePurchaseFilters = Boolean(filters.farmer_id || filters.warehouse_id || filters.company_account_id);
     const normalizedSearch = String(globalSearch || "").trim();
+
+    // Do not keep stale Purchase rows visible while Sale Report is loading.
+    if (token === reportLoadTokenRef.current) {
+      setReportData([]);
+    }
 
     try {
       if (!hasPermission(user, reportPermissionMap[reportType])) {
@@ -3162,7 +3154,7 @@ export default function WarehouseTradingPage() {
   const setPaymentAdjustmentAmount = (purchase, value) => {
     const purchaseId = String(purchase.id || purchase._id);
     const amount = Math.max(0, toNumber(value));
-    const pending = toNumber(purchase.pending_amount ?? purchase.amount);
+    const pending = toNumber(purchase.pending_amount ?? purchase.net_amount_payable ?? purchase.amount);
     const safeAmount = Math.min(amount, pending);
     setPaymentAdjustments((prev) => {
       const others = prev.filter((item) => String(item.purchase_id) !== purchaseId);
@@ -6452,9 +6444,9 @@ export default function WarehouseTradingPage() {
               date: row.date || "-",
               voucher_no: row.voucher_no || "-",
               warehouse: getWarehouseName(row),
-              amount: formatMoney(row.amount || 0),
+              amount: formatMoney(row.net_amount_payable ?? row.amount ?? 0),
               adjusted: formatMoney(row.adjusted_amount || 0),
-              pending: formatMoney(row.pending_amount || 0),
+              pending: formatMoney(row.pending_amount ?? row.net_amount_payable ?? row.amount ?? 0),
               row,
             }))}
             columns={[
@@ -6472,7 +6464,7 @@ export default function WarehouseTradingPage() {
                     type="number"
                     step="0.0001"
                     min="0"
-                    max={row.row.pending_amount || row.row.amount || 0}
+                    max={row.row.pending_amount ?? row.row.net_amount_payable ?? row.row.amount ?? 0}
                     value={selectedAdjustmentFor(row.key)}
                     onChange={(event) => setPaymentAdjustmentAmount(row.row, event.target.value)}
                     style={{ ...inp, padding: "7px 8px" }}
