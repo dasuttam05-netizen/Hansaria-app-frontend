@@ -2406,46 +2406,65 @@ export default function WarehouseTradingPage() {
     }
   };
 
+  const getPurchaseDeductionDetailsForPdf = (purchase = {}) => {
+    const claim = toNumber(purchase.claim_amount || purchase.bags_claim);
+    const rows = [
+      ["TDS", toNumber(purchase.tds_amount)],
+      ["Cash Discount", toNumber(purchase.cd_amount)],
+      ["Claim", claim],
+      ["Labour", toNumber(purchase.labour)],
+      ["Freight / Transport", toNumber(purchase.transport_charge)],
+      ["Other Deduction", toNumber(purchase.other_deduction)],
+      ["Adjustment", toNumber(purchase.adjustment_amount)],
+    ];
+    return rows.filter(([, value]) => value > 0).map(([label, amount]) => ({ label, amount }));
+  };
+
   const buildPaymentVoucherPdf = (row) => {
     const doc = new jsPDF({ unit: "mm", format: "a4" });
     const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
     const margin = 14;
     const contentWidth = pageWidth - margin * 2;
     const amount = toNumber(row.amount);
-    const adjusted = (row.adjustments || []).reduce((sum, entry) => sum + toNumber(entry.adjusted_amount), 0);
+    const adjustments = Array.isArray(row.adjustments) ? row.adjustments : [];
+    const adjusted = adjustments.reduce((sum, entry) => sum + toNumber(entry.adjusted_amount), 0);
+    const onAccount = Math.max(amount - adjusted, 0);
     const mode = titleCase(String(row.payment_mode || row.reference_type || "on_account").replace(/_/g, "-"));
     const farmerName = row.farmer_name || row.party_name || getFarmerName(row) || "-";
     const accountName = row.company_account_name || row.account_name || getAccountName(row) || "-";
     const warehouseName = row.warehouse_name || getWarehouseName(row) || "-";
 
-    doc.setFillColor(15, 118, 110);
-    doc.roundedRect(margin, 12, contentWidth, 24, 4, 4, "F");
-    doc.setTextColor(255, 255, 255);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(17);
-    doc.text("PAYMENT VOUCHER", margin + 8, 23);
-    doc.setFontSize(8.5);
-    doc.setFont("helvetica", "normal");
-    doc.text("Warehouse Trading", margin + 8, 30);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(11);
-    doc.text(`Voucher No: ${row.voucher_no || "-"}`, pageWidth - margin - 8, 23, { align: "right" });
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8.5);
-    doc.text(`Date: ${formatLedgerDate(row.date)}`, pageWidth - margin - 8, 30, { align: "right" });
+    const header = () => {
+      doc.setFillColor(15, 118, 110);
+      doc.roundedRect(margin, 10, contentWidth, 25, 4, 4, "F");
+      doc.setTextColor(255, 255, 255);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(17);
+      doc.text("PAYMENT VOUCHER", margin + 8, 21);
+      doc.setFontSize(8.5);
+      doc.setFont("helvetica", "normal");
+      doc.text("Warehouse Trading • Payment Against Purchase Bill", margin + 8, 28);
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10.5);
+      doc.text(`Voucher No: ${row.voucher_no || "-"}`, pageWidth - margin - 8, 21, { align: "right" });
+      doc.setFont("helvetica", "normal");
+      doc.text(`Date: ${formatLedgerDate(row.date)}`, pageWidth - margin - 8, 28, { align: "right" });
+    };
 
-    let y = 44;
+    header();
+    let y = 43;
     doc.setTextColor(15, 23, 42);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(10);
-    doc.text("PAYMENT DETAILS", margin, y);
+    doc.text("PARTY & PAYMENT DETAILS", margin, y);
     y += 5;
     autoTable(doc, {
       startY: y,
       margin: { left: margin, right: margin },
       theme: "grid",
       headStyles: { fillColor: [241, 245, 249], textColor: [15, 23, 42], fontStyle: "bold", lineColor: [203, 213, 225] },
-      bodyStyles: { textColor: [30, 41, 59], lineColor: [226, 232, 240], cellPadding: 3.2 },
+      bodyStyles: { textColor: [30, 41, 59], lineColor: [226, 232, 240], cellPadding: 3 },
       columnStyles: { 0: { cellWidth: 43, fontStyle: "bold" }, 1: { cellWidth: contentWidth - 43 } },
       body: [
         ["Farmer Name", farmerName],
@@ -2457,59 +2476,99 @@ export default function WarehouseTradingPage() {
       ],
     });
 
-    y = (doc.lastAutoTable?.finalY || y) + 8;
+    y = (doc.lastAutoTable?.finalY || y) + 7;
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(10);
-    doc.text("AMOUNT SUMMARY", margin, y);
+    doc.text("PAYMENT SUMMARY", margin, y);
     y += 5;
     autoTable(doc, {
       startY: y,
       margin: { left: margin, right: margin },
       theme: "grid",
       headStyles: { fillColor: [15, 118, 110], textColor: [255, 255, 255], fontStyle: "bold" },
-      bodyStyles: { lineColor: [226, 232, 240], cellPadding: 3.5 },
+      bodyStyles: { lineColor: [226, 232, 240], cellPadding: 3.2 },
       columnStyles: { 1: { halign: "right", fontStyle: "bold" } },
       head: [["Particular", "Amount (Rs.)"]],
       body: [
-        ["Payment Amount", formatMoney(amount)],
-        ["Adjusted Against Purchase", formatMoney(adjusted)],
-        ["On Account / Unadjusted", formatMoney(Math.max(amount - adjusted, 0))],
+        ["Total Payment", formatMoney(amount)],
+        ["Against Purchase Bills", formatMoney(adjusted)],
+        ["Balance / On Account", formatMoney(onAccount)],
       ],
     });
 
-    y = (doc.lastAutoTable?.finalY || y) + 8;
-    const adjustments = Array.isArray(row.adjustments) ? row.adjustments : [];
-    if (adjustments.length) {
+    const purchaseDetails = adjustments
+      .filter((entry) => entry.purchase_details)
+      .map((entry) => ({ ...entry.purchase_details, adjusted_amount: entry.adjusted_amount, balance_after_adjustment: entry.balance_after_adjustment }));
+
+    purchaseDetails.forEach((purchase, index) => {
+      const deductions = Array.isArray(purchase.deduction_details) ? purchase.deduction_details : getPurchaseDeductionDetailsForPdf(purchase);
+      const deductionTotal = toNumber(purchase.total_deduction_calculated ?? purchase.total_deduction);
+      const gross = toNumber(purchase.gross_amount_calculated ?? purchase.gross_amount ?? purchase.amount);
+      const net = toNumber(purchase.net_payable_calculated ?? purchase.net_amount_payable ?? purchase.amount);
+      const roundOff = toNumber(purchase.round_off);
+      const qty = toNumber(purchase.total_qty ?? purchase.total_quantity ?? purchase.net_weight ?? purchase.quantity);
+      const rate = toNumber(purchase.rate);
+      if (y > pageHeight - 70) { doc.addPage(); header(); y = 43; }
+      y += 7;
       doc.setFont("helvetica", "bold");
       doc.setFontSize(10);
-      doc.text("PURCHASE BILL ADJUSTMENTS", margin, y);
+      doc.text(`PURCHASE BILL ${index + 1} — ${purchase.voucher_no || "-"}`, margin, y);
       y += 5;
       autoTable(doc, {
         startY: y,
         margin: { left: margin, right: margin },
-        theme: "striped",
+        theme: "grid",
         headStyles: { fillColor: [226, 232, 240], textColor: [15, 23, 42], fontStyle: "bold" },
-        bodyStyles: { lineColor: [226, 232, 240], cellPadding: 3 },
-        columnStyles: { 2: { halign: "right" } },
-        head: [["Sl", "Purchase Voucher", "Adjusted Amount (Rs.)"]],
-        body: adjustments.map((entry, index) => [index + 1, entry.voucher_no || entry.purchase_voucher_no || entry.purchase_id || "-", formatMoney(entry.adjusted_amount)]),
+        bodyStyles: { lineColor: [226, 232, 240], cellPadding: 2.7 },
+        columnStyles: { 1: { halign: "right" } },
+        body: [
+          ["Bill Date", formatLedgerDate(purchase.date)],
+          ["Product", purchase.product_name || "-"],
+          ["Quantity × Rate", `${formatDecimal4(qty)} × Rs.${formatMoney(rate)}`],
+          ["Gross Amount", formatMoney(gross)],
+          ...deductions.map((d) => [d.label || d.account_label || "Deduction", `- Rs.${formatMoney(d.amount)}`]),
+          ["Total Deduction", `- Rs.${formatMoney(deductionTotal)}`],
+          ["Round Off", formatMoney(roundOff)],
+          ["Net Payable", formatMoney(net)],
+          ["Payment Adjusted", formatMoney(purchase.adjusted_amount)],
+          ["Balance After Payment", formatMoney(Math.max(toNumber(purchase.balance_after_adjustment), 0))],
+        ],
       });
-      y = (doc.lastAutoTable?.finalY || y) + 8;
+      y = (doc.lastAutoTable?.finalY || y) + 2;
+    });
+
+    if (!purchaseDetails.length) {
+      if (y > pageHeight - 70) { doc.addPage(); header(); y = 43; }
+      y += 8;
+      doc.setFont("helvetica", "bold");
+      doc.text("PURCHASE BILL ADJUSTMENT", margin, y);
+      y += 5;
+      autoTable(doc, {
+        startY: y,
+        margin: { left: margin, right: margin },
+        theme: "grid",
+        headStyles: { fillColor: [226, 232, 240], textColor: [15, 23, 42], fontStyle: "bold" },
+        body: adjustments.map((entry, index) => [index + 1, entry.voucher_no || entry.purchase_voucher_no || entry.purchase_id || "-", formatMoney(entry.adjusted_amount)]),
+        head: [["Sl", "Purchase Voucher", "Adjusted Amount (Rs.)"]],
+      });
+      y = (doc.lastAutoTable?.finalY || y) + 5;
     }
 
+    if (y > pageHeight - 45) { doc.addPage(); header(); y = 43; }
     doc.setFillColor(240, 253, 250);
     doc.setDrawColor(153, 246, 228);
-    doc.roundedRect(margin, y, contentWidth, 22, 4, 4, "FD");
+    doc.roundedRect(margin, y + 3, contentWidth, 23, 4, 4, "FD");
     doc.setTextColor(15, 118, 110);
     doc.setFont("helvetica", "bold");
     doc.setFontSize(10);
-    doc.text("TOTAL PAYMENT", margin + 7, y + 9);
+    doc.text("FINAL PAYMENT", margin + 7, y + 13);
     doc.setFontSize(16);
-    doc.text(`Rs. ${formatMoney(amount)}`, pageWidth - margin - 7, y + 13, { align: "right" });
+    doc.text(`Rs. ${formatMoney(amount)}`, pageWidth - margin - 7, y + 16, { align: "right" });
+    doc.setFontSize(8.5);
+    doc.text(`Balance / On Account: Rs. ${formatMoney(onAccount)}`, margin + 7, y + 21);
 
-    const footerY = 282;
+    const footerY = pageHeight - 10;
     doc.setDrawColor(203, 213, 225);
-    doc.line(margin, footerY - 5, pageWidth - margin, footerY - 5);
+    doc.line(margin, footerY - 4, pageWidth - margin, footerY - 4);
     doc.setTextColor(100, 116, 139);
     doc.setFont("helvetica", "normal");
     doc.setFontSize(7.5);
@@ -2517,7 +2576,6 @@ export default function WarehouseTradingPage() {
     doc.text(`Voucher ${row.voucher_no || "-"}`, pageWidth - margin, footerY, { align: "right" });
     return doc;
   };
-
   const handlePaymentReportPDF = async (item) => {
     try {
       const row = await getPaymentVoucherDetails(item);
@@ -2536,14 +2594,25 @@ export default function WarehouseTradingPage() {
       const blob = doc.output("blob");
       const fileName = `Payment-Voucher-${row.voucher_no || row.id || "voucher"}.pdf`;
       const file = new File([blob], fileName, { type: "application/pdf" });
+      const adjustments = Array.isArray(row.adjustments) ? row.adjustments : [];
+      const adjusted = adjustments.reduce((sum, entry) => sum + toNumber(entry.adjusted_amount), 0);
+      const balance = Math.max(toNumber(row.amount) - adjusted, 0);
+      const billLines = adjustments.map((entry) => {
+        const purchase = entry.purchase_details || {};
+        return `${entry.voucher_no || purchase.voucher_no || "Bill"}: Net Rs.${formatMoney(purchase.net_payable_calculated ?? purchase.net_amount_payable ?? purchase.amount ?? 0)} | Paid Rs.${formatMoney(entry.adjusted_amount)} | Balance Rs.${formatMoney(entry.balance_after_adjustment ?? 0)}`;
+      });
       const message = [
-        "Payment Voucher",
+        "PAYMENT VOUCHER",
         `Farmer: ${row.farmer_name || row.party_name || "-"}`,
         `Voucher No: ${row.voucher_no || "-"}`,
         `Date: ${formatLedgerDate(row.date)}`,
-        `Amount: Rs.${formatMoney(row.amount)}`,
-        "Payment voucher PDF is attached.",
-      ].join("\n");
+        `Total Payment: Rs.${formatMoney(row.amount)}`,
+        `Adjusted Against Bills: Rs.${formatMoney(adjusted)}`,
+        `Balance / On Account: Rs.${formatMoney(balance)}`,
+        billLines.length ? "Purchase Bills:" : "",
+        ...billLines,
+        "Detailed PDF is attached.",
+      ].filter(Boolean).join("\n");
 
       if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
         await navigator.share({ title: "Payment Voucher", text: message, files: [file] });
