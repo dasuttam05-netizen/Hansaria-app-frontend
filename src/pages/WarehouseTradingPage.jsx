@@ -1535,7 +1535,7 @@ export default function WarehouseTradingPage() {
       }
       // Search must be executed by MongoDB before pagination. Otherwise the
       // old UI searched only the currently loaded 15 rows.
-      if ((reportType === "sale" || reportType === "purchase") && normalizedSearch) {
+      if (["sale", "purchase", "payment"].includes(reportType) && normalizedSearch) {
         params.search = normalizedSearch;
       }
       if (reportType === "sale-journey") {
@@ -2388,6 +2388,178 @@ export default function WarehouseTradingPage() {
     } catch (err) {
       console.error(err);
       alert("Failed to generate PDF");
+    }
+  };
+
+  const getPaymentVoucherDetails = async (item) => {
+    const id = getRecordId(item);
+    if (!id) return item || {};
+    try {
+      const response = await API.get(`/api/wh-vouchers/payment/${id}`);
+      return { ...(item || {}), ...(response.data || {}) };
+    } catch (err) {
+      console.error("Failed to load payment voucher details:", err);
+      return item || {};
+    }
+  };
+
+  const buildPaymentVoucherPdf = (row) => {
+    const doc = new jsPDF({ unit: "mm", format: "a4" });
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const margin = 14;
+    const contentWidth = pageWidth - margin * 2;
+    const amount = toNumber(row.amount);
+    const adjusted = (row.adjustments || []).reduce((sum, entry) => sum + toNumber(entry.adjusted_amount), 0);
+    const mode = titleCase(String(row.payment_mode || row.reference_type || "on_account").replace(/_/g, "-"));
+    const farmerName = row.farmer_name || row.party_name || getFarmerName(row) || "-";
+    const accountName = row.company_account_name || row.account_name || getAccountName(row) || "-";
+    const warehouseName = row.warehouse_name || getWarehouseName(row) || "-";
+
+    doc.setFillColor(15, 118, 110);
+    doc.roundedRect(margin, 12, contentWidth, 24, 4, 4, "F");
+    doc.setTextColor(255, 255, 255);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(17);
+    doc.text("PAYMENT VOUCHER", margin + 8, 23);
+    doc.setFontSize(8.5);
+    doc.setFont("helvetica", "normal");
+    doc.text("Warehouse Trading", margin + 8, 30);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(11);
+    doc.text(`Voucher No: ${row.voucher_no || "-"}`, pageWidth - margin - 8, 23, { align: "right" });
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8.5);
+    doc.text(`Date: ${formatLedgerDate(row.date)}`, pageWidth - margin - 8, 30, { align: "right" });
+
+    let y = 44;
+    doc.setTextColor(15, 23, 42);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.text("PAYMENT DETAILS", margin, y);
+    y += 5;
+    autoTable(doc, {
+      startY: y,
+      margin: { left: margin, right: margin },
+      theme: "grid",
+      headStyles: { fillColor: [241, 245, 249], textColor: [15, 23, 42], fontStyle: "bold", lineColor: [203, 213, 225] },
+      bodyStyles: { textColor: [30, 41, 59], lineColor: [226, 232, 240], cellPadding: 3.2 },
+      columnStyles: { 0: { cellWidth: 43, fontStyle: "bold" }, 1: { cellWidth: contentWidth - 43 } },
+      body: [
+        ["Farmer Name", farmerName],
+        ["Company / Account", accountName],
+        ["Warehouse", warehouseName],
+        ["Payment Mode", mode],
+        ["Reference", row.reference_id || row.reference_type || "-"],
+        ["Narration", row.description || "-"],
+      ],
+    });
+
+    y = (doc.lastAutoTable?.finalY || y) + 8;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.text("AMOUNT SUMMARY", margin, y);
+    y += 5;
+    autoTable(doc, {
+      startY: y,
+      margin: { left: margin, right: margin },
+      theme: "grid",
+      headStyles: { fillColor: [15, 118, 110], textColor: [255, 255, 255], fontStyle: "bold" },
+      bodyStyles: { lineColor: [226, 232, 240], cellPadding: 3.5 },
+      columnStyles: { 1: { halign: "right", fontStyle: "bold" } },
+      head: [["Particular", "Amount (Rs.)"]],
+      body: [
+        ["Payment Amount", formatMoney(amount)],
+        ["Adjusted Against Purchase", formatMoney(adjusted)],
+        ["On Account / Unadjusted", formatMoney(Math.max(amount - adjusted, 0))],
+      ],
+    });
+
+    y = (doc.lastAutoTable?.finalY || y) + 8;
+    const adjustments = Array.isArray(row.adjustments) ? row.adjustments : [];
+    if (adjustments.length) {
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(10);
+      doc.text("PURCHASE BILL ADJUSTMENTS", margin, y);
+      y += 5;
+      autoTable(doc, {
+        startY: y,
+        margin: { left: margin, right: margin },
+        theme: "striped",
+        headStyles: { fillColor: [226, 232, 240], textColor: [15, 23, 42], fontStyle: "bold" },
+        bodyStyles: { lineColor: [226, 232, 240], cellPadding: 3 },
+        columnStyles: { 2: { halign: "right" } },
+        head: [["Sl", "Purchase Voucher", "Adjusted Amount (Rs.)"]],
+        body: adjustments.map((entry, index) => [index + 1, entry.voucher_no || entry.purchase_voucher_no || entry.purchase_id || "-", formatMoney(entry.adjusted_amount)]),
+      });
+      y = (doc.lastAutoTable?.finalY || y) + 8;
+    }
+
+    doc.setFillColor(240, 253, 250);
+    doc.setDrawColor(153, 246, 228);
+    doc.roundedRect(margin, y, contentWidth, 22, 4, 4, "FD");
+    doc.setTextColor(15, 118, 110);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.text("TOTAL PAYMENT", margin + 7, y + 9);
+    doc.setFontSize(16);
+    doc.text(`Rs. ${formatMoney(amount)}`, pageWidth - margin - 7, y + 13, { align: "right" });
+
+    const footerY = 282;
+    doc.setDrawColor(203, 213, 225);
+    doc.line(margin, footerY - 5, pageWidth - margin, footerY - 5);
+    doc.setTextColor(100, 116, 139);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.5);
+    doc.text("Computer generated payment voucher", margin, footerY);
+    doc.text(`Voucher ${row.voucher_no || "-"}`, pageWidth - margin, footerY, { align: "right" });
+    return doc;
+  };
+
+  const handlePaymentReportPDF = async (item) => {
+    try {
+      const row = await getPaymentVoucherDetails(item);
+      const doc = buildPaymentVoucherPdf(row);
+      doc.save(`Payment-Voucher-${row.voucher_no || row.id || "voucher"}.pdf`);
+    } catch (err) {
+      console.error(err);
+      alert("Failed to generate payment voucher PDF");
+    }
+  };
+
+  const sharePaymentPdfOnWhatsapp = async (item) => {
+    try {
+      const row = await getPaymentVoucherDetails(item);
+      const doc = buildPaymentVoucherPdf(row);
+      const blob = doc.output("blob");
+      const fileName = `Payment-Voucher-${row.voucher_no || row.id || "voucher"}.pdf`;
+      const file = new File([blob], fileName, { type: "application/pdf" });
+      const message = [
+        "Payment Voucher",
+        `Farmer: ${row.farmer_name || row.party_name || "-"}`,
+        `Voucher No: ${row.voucher_no || "-"}`,
+        `Date: ${formatLedgerDate(row.date)}`,
+        `Amount: Rs.${formatMoney(row.amount)}`,
+        "Payment voucher PDF is attached.",
+      ].join("\n");
+
+      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({ title: "Payment Voucher", text: message, files: [file] });
+        return;
+      }
+
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      window.open(buildWhatsappShareUrl(message + "\nPlease attach the downloaded PDF in WhatsApp."), "_blank", "noopener,noreferrer");
+    } catch (err) {
+      if (err?.name === "AbortError") return;
+      console.error(err);
+      alert("Failed to prepare payment voucher for WhatsApp");
     }
   };
 
@@ -3304,13 +3476,35 @@ export default function WarehouseTradingPage() {
     payment: [
       ["date", "Date", (item) => formatLedgerDate(item.date)],
       ["voucher_no", "Voucher No", (item) => item.voucher_no || "-"],
-      ["party", "Party", (item) => item.party_name || item.farmer_name || "-"],
+      ["party", "Farmer Name", (item) => item.farmer_name || item.party_name || getFarmerName(item) || "-"],
       ["account", "Account", (item) => item.company_account_name || getAccountName(item)],
       ["warehouse", "Warehouse", (item) => item.warehouse_name || getWarehouseName(item)],
       ["amount", "Amount", (item) => formatMoney(item.amount || 0)],
       ["adjusted", "Adjusted", (item) => formatMoney((item.adjustments || []).reduce((sum, entry) => sum + toNumber(entry.adjusted_amount), 0))],
       ["reference", "Reference", (item) => item.reference_id || item.reference_type || "-"],
       ["description", "Narration", (item) => item.description || "-"],
+      ["actions", "Actions", (item) => (
+        <div style={{ display: "flex", gap: 7, alignItems: "center", justifyContent: "center" }} onClick={(event) => event.stopPropagation()}>
+          <button
+            type="button"
+            onClick={() => handlePaymentReportPDF(item)}
+            title="Download Payment Voucher PDF"
+            aria-label="Download Payment Voucher PDF"
+            style={{ width: 34, height: 34, border: "none", borderRadius: 8, background: "#dc2626", color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", boxShadow: "0 2px 6px rgba(0,0,0,.12)" }}
+          >
+            <FaFilePdf size={16} />
+          </button>
+          <button
+            type="button"
+            onClick={() => sharePaymentPdfOnWhatsapp(item)}
+            title="Share Payment Voucher on WhatsApp"
+            aria-label="Share Payment Voucher on WhatsApp"
+            style={{ width: 34, height: 34, border: "none", borderRadius: 8, background: "#16a34a", color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", boxShadow: "0 2px 6px rgba(0,0,0,.12)" }}
+          >
+            <FaWhatsapp size={17} />
+          </button>
+        </div>
+      )],
     ],
     "purchase-party-ledger": [
       ["date", "Date", (item) => (item.row_type === "closing" ? "" : formatLedgerDate(item.date))],
