@@ -2476,10 +2476,10 @@ export default function WarehouseTradingPage() {
       ],
     });
 
-    y = (doc.lastAutoTable?.finalY || y) + 10;
+    y = (doc.lastAutoTable?.finalY || y) + 7;
     doc.setFont("helvetica", "bold");
     doc.text("PAYMENT SUMMARY", margin, y);
-    y += 6;
+    y += 5;
     autoTable(doc, {
       startY: y,
       margin: { left: margin, right: margin },
@@ -2495,13 +2495,9 @@ export default function WarehouseTradingPage() {
       ],
     });
 
-    // Bill details are resolved by the backend even for older "Against"
-    // payments that have no PaymentAdjustment row.
     const purchaseDetails = adjustments
-      .filter((entry) => entry && entry.purchase_details && (entry.purchase_details.voucher_no || entry.voucher_no))
+      .filter((entry) => entry.purchase_details)
       .map((entry) => ({ ...entry.purchase_details, adjusted_amount: entry.adjusted_amount, balance_after_adjustment: entry.balance_after_adjustment }));
-
-    y = Math.max(y, (doc.lastAutoTable?.finalY || y) + 9);
 
     purchaseDetails.forEach((purchase, index) => {
       const deductions = Array.isArray(purchase.deduction_details) ? purchase.deduction_details : getPurchaseDeductionDetailsForPdf(purchase);
@@ -2545,7 +2541,7 @@ export default function WarehouseTradingPage() {
       y += 8;
       doc.setFont("helvetica", "bold");
       doc.text("PURCHASE BILL ADJUSTMENT", margin, y);
-      y += 6;
+      y += 5;
       autoTable(doc, {
         startY: y,
         margin: { left: margin, right: margin },
