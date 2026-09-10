@@ -2588,28 +2588,45 @@ export default function WarehouseTradingPage() {
   };
   const handlePaymentReportPDF = async (item) => {
     try {
-      const row = await getPaymentVoucherDetails(item);
-      const doc = buildPaymentVoucherPdf(row);
-      doc.save(`Payment-Voucher-${row.voucher_no || row.id || "voucher"}.pdf`);
+      const id = getRecordId(item);
+      if (!id) throw new Error("Payment voucher ID is missing");
+      // Generate the PDF on the backend. This avoids blocking/crashing the browser
+      // renderer when a voucher contains large purchase/deduction details.
+      const response = await API.get(`/api/wh-vouchers/payment/${id}/pdf`, { responseType: "blob" });
+      const blob = response.data instanceof Blob ? response.data : new Blob([response.data], { type: "application/pdf" });
+      const fileName = `Payment-Voucher-${item.voucher_no || id}.pdf`;
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => window.URL.revokeObjectURL(url), 1000);
     } catch (err) {
-      console.error(err);
+      console.error("Failed to generate payment voucher PDF:", err);
       alert("Failed to generate payment voucher PDF");
     }
   };
 
   const sharePaymentPdfOnWhatsapp = async (item) => {
     try {
-      const row = await getPaymentVoucherDetails(item);
-      const doc = buildPaymentVoucherPdf(row);
-      const blob = doc.output("blob");
-      const fileName = `Payment-Voucher-${row.voucher_no || row.id || "voucher"}.pdf`;
+      const id = getRecordId(item);
+      if (!id) throw new Error("Payment voucher ID is missing");
+      const [detailResponse, pdfResponse] = await Promise.all([
+        API.get(`/api/wh-vouchers/payment/${id}`),
+        API.get(`/api/wh-vouchers/payment/${id}/pdf`, { responseType: "blob" }),
+      ]);
+      const row = { ...(item || {}), ...(detailResponse.data || {}) };
+      const blob = pdfResponse.data instanceof Blob ? pdfResponse.data : new Blob([pdfResponse.data], { type: "application/pdf" });
+      const fileName = `Payment-Voucher-${row.voucher_no || id}.pdf`;
       const file = new File([blob], fileName, { type: "application/pdf" });
       const adjustments = Array.isArray(row.adjustments) ? row.adjustments : [];
       const adjusted = adjustments.reduce((sum, entry) => sum + toNumber(entry.adjusted_amount), 0);
       const balance = Math.max(toNumber(row.amount) - adjusted, 0);
       const billLines = adjustments.map((entry) => {
         const purchase = entry.purchase_details || {};
-        return `${entry.voucher_no || purchase.voucher_no || "Bill"}: Net Rs.${formatMoney(purchase.net_payable_calculated ?? purchase.net_amount_payable ?? purchase.amount ?? 0)} | Paid Rs.${formatMoney(entry.adjusted_amount)} | Balance Rs.${formatMoney(entry.balance_after_adjustment ?? 0)}`;
+        return `${entry.voucher_no || purchase.voucher_no || "Bill"}: Qty ${formatDecimal4(purchase.total_qty ?? purchase.net_weight ?? purchase.quantity ?? 0)} | Net Rs.${formatMoney(purchase.net_payable_calculated ?? purchase.net_amount_payable ?? purchase.amount ?? 0)} | Paid Rs.${formatMoney(entry.adjusted_amount)} | Balance Rs.${formatMoney(entry.balance_after_adjustment ?? 0)}`;
       });
       const message = [
         "PAYMENT VOUCHER",
@@ -2636,11 +2653,11 @@ export default function WarehouseTradingPage() {
       document.body.appendChild(link);
       link.click();
       link.remove();
-      window.URL.revokeObjectURL(url);
+      window.setTimeout(() => window.URL.revokeObjectURL(url), 1000);
       window.open(buildWhatsappShareUrl(message + "\nPlease attach the downloaded PDF in WhatsApp."), "_blank", "noopener,noreferrer");
     } catch (err) {
       if (err?.name === "AbortError") return;
-      console.error(err);
+      console.error("Failed to prepare payment voucher for WhatsApp:", err);
       alert("Failed to prepare payment voucher for WhatsApp");
     }
   };
