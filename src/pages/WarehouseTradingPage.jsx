@@ -947,11 +947,14 @@ export default function WarehouseTradingPage() {
   // Report rows: page/filter changes only.
   useEffect(() => {
     if (activeTab !== "reports") return;
+    // Party ledgers are loaded once per filter/search change. Pagination is
+    // intentionally client-side so clicking Next/Prev never re-requests the
+    // expensive ledger endpoint. This keeps page changes effectively instant.
     const timer = window.setTimeout(() => {
       loadReport();
-    }, 300);
+    }, 120);
     return () => window.clearTimeout(timer);
-  }, [activeTab, activeReport, reportPage, globalSearch, reportFilters.farmer_id, reportFilters.company_account_id, reportFilters.warehouse_id, reportFilters.sale_buyer_id, reportFilters.sale_company_account_id, reportFilters.sale_journey_token, reportFilters.sale_lorry_no, reportFilters.sale_bill_no, reportFilters.details_of_deduction]);
+  }, [activeTab, activeReport, globalSearch, reportFilters.farmer_id, reportFilters.company_account_id, reportFilters.warehouse_id, reportFilters.sale_buyer_id, reportFilters.sale_company_account_id, reportFilters.sale_journey_token, reportFilters.sale_lorry_no, reportFilters.sale_bill_no, reportFilters.details_of_deduction]);
 
   // Filter options are independent of pagination. Never reload them just
   // because the user moves from page 1 to page 2.
@@ -3512,7 +3515,19 @@ export default function WarehouseTradingPage() {
       ["voucher_type", "Type", (item) => (item.row_type === "closing" ? "" : (item.voucher_type || "-"))],
       ["voucher_no", "Voucher No", (item) => (item.row_type === "closing" ? "" : (item.voucher_no || "-"))],
       ["particulars", "Particulars", (item) => (item.row_type === "closing" ? "" : (item.particulars || "-"))],
-      ["adjustment_details", "Adjustment Details", (item) => (item.row_type === "closing" ? "" : (item.adjustment_details || "-"))],
+      ["adjustment_details", "Adjustment Details", (item) => {
+        if (item.row_type === "closing") return "";
+        if (item.adjustment_details) return item.adjustment_details;
+        const details = Array.isArray(item.payment_details) ? item.payment_details : [];
+        if (details.length) {
+          return details.map((entry) => {
+            const voucher = entry.payment_voucher_no || entry.voucher_no || "Payment";
+            return `${voucher}: Rs.${formatMoney(entry.adjusted_amount || 0)}`;
+          }).join("; ");
+        }
+        if (item.voucher_type === "Payment" && item.reference_id) return String(item.reference_id);
+        return "-";
+      }],
       ["warehouse", "Warehouse", (item) => (item.row_type === "closing" ? "" : getWarehouseName(item))],
       ["debit", "Debit", (item) => formatMoney(item.debit || 0)],
       ["credit", "Credit", (item) => {
