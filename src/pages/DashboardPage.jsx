@@ -3,7 +3,6 @@ import API from "./axiosInstance";
 import { useNavigate } from "react-router-dom";
 import logo from "./logo.png";
 import { clearSession, hasAnyPermission, hasPermission, loadSession } from "../utils/auth";
-import { formatLocalMonthInput } from "../utils/date";
 import "./Dashboard.css";
 
 const LocationManagementPage = lazy(() => import("./LocationManagementPage"));
@@ -106,22 +105,9 @@ export default function DashboardPage() {
   const [searchText, setSearchText] = useState("");
 
   const API_BASE = "/api";
-  const currentMonth = formatLocalMonthInput();
-
-  const fetchRentLedgerForDashboard = async () => {
-    const response = await API.get(`${API_BASE}/reports/warehouse-rent-month-end`, {
-      params: { month: currentMonth },
-    });
-    const payload = response?.data || {};
-    return Array.isArray(payload.details) ? payload.details : [];
-  };
-
   const fetchData = async (currentUser, isActive) => {
     try {
-      const [payload, rentLedgerRows] = await Promise.all([
-        API.get(`${API_BASE}/dashboard`),
-        fetchRentLedgerForDashboard(),
-      ]);
+      const payload = await API.get(`${API_BASE}/dashboard`);
 
       if (!isActive()) {
         return;
@@ -140,12 +126,9 @@ export default function DashboardPage() {
       const normalizedWarehouseStock = Array.isArray(data.warehouseStock) ? data.warehouseStock : [];
       // Dashboard Party Rent must use the exact same rent calculation as the
       // existing Warehouse Rent Ledger report. Do not duplicate/recalculate rent here.
-      const normalizedMonthEndRentSummary = (Array.isArray(rentLedgerRows) ? rentLedgerRows : []).map((row) => ({
-        party_name: row.party_name || "Unknown",
-        warehouse_name: row.warehouse_name || "Unknown",
-        total_rent: Number(row.rent_amount || 0),
-        total_entries: 1,
-      }));
+      const normalizedMonthEndRentSummary = Array.isArray(data.monthEndRentSummary)
+        ? data.monthEndRentSummary
+        : [];
       const normalizedTotalStock = Number(data.totalStock ?? 0);
 
       setLocations(normalizedLocations);
@@ -204,19 +187,8 @@ export default function DashboardPage() {
 
     initDashboard();
 
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        refreshDashboard();
-      }
-    };
-
-    window.addEventListener("visibilitychange", handleVisibilityChange);
-    window.addEventListener("focus", refreshDashboard);
-
     return () => {
       alive = false;
-      window.removeEventListener("visibilitychange", handleVisibilityChange);
-      window.removeEventListener("focus", refreshDashboard);
     };
   }, [navigate, refreshDashboard]);
 
