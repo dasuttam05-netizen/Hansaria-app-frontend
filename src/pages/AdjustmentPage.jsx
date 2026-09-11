@@ -7,7 +7,7 @@ import { formatDisplayDate } from "../utils/date";
 
 export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose }) {
   const [companyList, setCompanyList] = useState([]);
-  const [locationList, setLocationList] = useState([]);
+  const [locations, setLocations] = useState([]);
   const [selectedLocationId, setSelectedLocationId] = useState("");
   const [companyId, setCompanyId] = useState("");
   const [sourceType, setSourceType] = useState("inward");
@@ -197,9 +197,8 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
 
   const getAdjustmentScope = () => {
     const locationId = String(selectedLocationId || outward?.location_id || "").trim();
-    const useLocation = !!locationId;
     return {
-      warehouse_id: useLocation ? "" : outward?.warehouse_id || "",
+      warehouse_id: locationId ? "" : outward?.warehouse_id || "",
       location_id: locationId,
     };
   };
@@ -224,10 +223,10 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
 
   const selectedInwardCount = selectedInwardIds.length;
 
-  const loadCompanyList = async () => {
-    if (!outward?.warehouse_id && !outward?.location_id && !selectedLocationId) return setCompanyList([]);
+  const loadCompanyList = async (locationOverride = "") => {
+    if (!outward?.warehouse_id && !outward?.location_id && !locationOverride) return setCompanyList([]);
     try {
-      const scope = getAdjustmentScope();
+      const scope = locationOverride ? { warehouse_id: "", location_id: String(locationOverride).trim() } : getAdjustmentScope();
       const res = await API.get("/api/adjustment/parties", {
         params: {
           ...scope,
@@ -318,6 +317,8 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
   };
 
   useEffect(() => {
+    const defaultLocationId = String(outward?.location_id || "").trim();
+    setSelectedLocationId(defaultLocationId);
     setCompanyId("");
     setSourceType("inward");
     setInwardList([]);
@@ -330,34 +331,23 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
     setAlreadyAdjusted(0);
     setEditingLogId(null);
     setEditingQty("");
-    setSelectedLocationId(String(outward?.location_id || "").trim());
 
     if (outward) {
-      loadCompanyList();
+      loadLocations();
+      loadCompanyList(defaultLocationId);
       loadAdjustmentLog();
       loadBuyerAdjustmentDetails();
     }
   }, [outward]);
 
-  useEffect(() => {
-    let active = true;
-    const loadLocations = async () => {
-      try {
-        const res = await API.get("/api/locations", {
-          signal: abortControllerRef.current.signal,
-        });
-        if (active && isMountedRef.current) {
-          setLocationList(Array.isArray(res.data) ? res.data : []);
-        }
-      } catch (err) {
-        if (active && isMountedRef.current && err.name !== "CanceledError") {
-          setLocationList([]);
-        }
-      }
-    };
-    void loadLocations();
-    return () => { active = false; };
-  }, []);
+  const loadLocations = async () => {
+    try {
+      const res = await API.get("/api/locations", { signal: abortControllerRef.current.signal });
+      if (isMountedRef.current) setLocations(Array.isArray(res.data) ? res.data : []);
+    } catch (err) {
+      if (isMountedRef.current && err.name !== "CanceledError") setLocations([]);
+    }
+  };
 
   // Cleanup on component unmount
   useEffect(() => {
@@ -813,24 +803,31 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
         <h3 style={sectionTitle}>Select Location</h3>
         <select
           value={selectedLocationId}
-          onChange={(e) => setSelectedLocationId(String(e.target.value || ""))}
+          onChange={(e) => {
+            const nextLocationId = String(e.target.value || "");
+            setSelectedLocationId(nextLocationId);
+            setCompanyId("");
+            setSourceType("inward");
+            setCompanyList([]);
+            setInwardList([]);
+            setSelectedInward(null);
+            setSelectedInwardIds([]);
+            setAdjustQty("");
+            if (nextLocationId) loadCompanyList(nextLocationId);
+          }}
           style={{ ...inputStyle, minWidth: 280 }}
         >
           <option value="">Select Location</option>
-          {locationList.map((location) => {
-            const id = String(location?.id ?? location?._id ?? "").trim();
-            if (!id) return null;
-            return (
-              <option key={id} value={id}>
-                {location?.name || id}
-              </option>
-            );
-          })}
+          {locations.map((location) => (
+            <option key={location.id || location._id} value={location.id || location._id}>
+              {location.name}
+            </option>
+          ))}
         </select>
       </div>
 
       <div style={cardStyle}>
-        <h3 style={sectionTitle}>Select Company</h3>
+        <h3 style={sectionTitle}>Select Company / Party</h3>
         <select
           value={companyId ? `${sourceType}:${companyId}` : ""}
           onChange={(e) => {
