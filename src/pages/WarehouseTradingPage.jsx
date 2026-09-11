@@ -944,28 +944,17 @@ export default function WarehouseTradingPage() {
     }
   }, [activeTab, activeVoucherType]);
 
-  // Report loading is split into two paths:
-  // 1) Filter/search changes always start from page 1.
-  // 2) Purchase/Sale/Stock reports fetch the newly selected server page.
-  // Party ledgers stay client-paginated so Next/Prev is instant and does not
-  // re-run the expensive ledger calculation.
+  // Report rows: page/filter changes only.
   useEffect(() => {
     if (activeTab !== "reports") return;
+    // Party ledgers are loaded once per filter/search change. Pagination is
+    // intentionally client-side so clicking Next/Prev never re-requests the
+    // expensive ledger endpoint. This keeps page changes effectively instant.
     const timer = window.setTimeout(() => {
-      loadReport(activeReport, 1, reportFilters);
+      loadReport();
     }, 120);
     return () => window.clearTimeout(timer);
   }, [activeTab, activeReport, globalSearch, reportFilters.farmer_id, reportFilters.company_account_id, reportFilters.warehouse_id, reportFilters.sale_buyer_id, reportFilters.sale_company_account_id, reportFilters.sale_journey_token, reportFilters.sale_lorry_no, reportFilters.sale_bill_no, reportFilters.details_of_deduction]);
-
-  useEffect(() => {
-    if (activeTab !== "reports") return;
-    const serverPagedReport = ["sale", "purchase", "warehouse-stock"].includes(activeReport);
-    if (!serverPagedReport || reportPage <= 1) return;
-    const timer = window.setTimeout(() => {
-      loadReport(activeReport, reportPage, reportFilters);
-    }, 80);
-    return () => window.clearTimeout(timer);
-  }, [activeTab, activeReport, reportPage]);
 
   // Filter options are independent of pagination. Never reload them just
   // because the user moves from page 1 to page 2.
@@ -3594,7 +3583,16 @@ export default function WarehouseTradingPage() {
       ["reference", "Reference", (item) => item.reference_id || item.reference_type || "-"],
       ["description", "Narration", (item) => item.description || "-"],
       ["actions", "Actions", (item) => (
-        <div style={{ display: "flex", gap: 7, alignItems: "center", justifyContent: "center" }} onClick={(event) => event.stopPropagation()}>
+        <div style={{ display: "flex", gap: 7, alignItems: "center", justifyContent: "center", flexWrap: "wrap" }} onClick={(event) => event.stopPropagation()}>
+          <button
+            type="button"
+            onClick={() => handleEditVoucher(item.id || item._id)}
+            title="Edit Payment Voucher"
+            aria-label="Edit Payment Voucher"
+            style={{ width: 34, height: 34, border: "none", borderRadius: 8, background: "#2563eb", color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", cursor: "pointer", boxShadow: "0 2px 6px rgba(0,0,0,.12)", fontSize: 12, fontWeight: 700 }}
+          >
+            Edit
+          </button>
           <button
             type="button"
             onClick={() => handlePaymentReportPDF(item)}
