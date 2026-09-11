@@ -8,8 +8,6 @@ import { formatDisplayDate } from "../utils/date";
 export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose }) {
   const [companyList, setCompanyList] = useState([]);
   const [companyId, setCompanyId] = useState("");
-  const [locationList, setLocationList] = useState([]);
-  const [selectedLocationId, setSelectedLocationId] = useState("");
   const [sourceType, setSourceType] = useState("inward");
   const [inwardList, setInwardList] = useState([]);
   const [selectedInward, setSelectedInward] = useState(null);
@@ -196,10 +194,10 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
   const isPaltiSource = sourceType === "palti_lorry";
 
   const getAdjustmentScope = () => {
-    const useLocation = !!(selectedLocationId || outward?.location_id);
+    const useLocation = !!outward?.location_id;
     return {
       warehouse_id: useLocation ? "" : outward?.warehouse_id || "",
-      location_id: selectedLocationId || outward?.location_id || "",
+      location_id: outward?.location_id || "",
     };
   };
 
@@ -223,27 +221,10 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
 
   const selectedInwardCount = selectedInwardIds.length;
 
-  const loadLocationList = async () => {
+  const loadCompanyList = async () => {
+    if (!outward?.warehouse_id && !outward?.location_id) return setCompanyList([]);
     try {
-      const res = await API.get("/api/locations", {
-        signal: abortControllerRef.current.signal,
-      });
-      if (isMountedRef.current) {
-        setLocationList(Array.isArray(res.data) ? res.data : []);
-      }
-    } catch (err) {
-      if (isMountedRef.current && err.name !== "CanceledError") {
-        setLocationList([]);
-      }
-    }
-  };
-
-  const loadCompanyList = async (locationId = selectedLocationId) => {
-    if (!outward?.warehouse_id && !outward?.location_id && !locationId) return setCompanyList([]);
-    try {
-      const scope = locationId
-        ? { warehouse_id: "", location_id: locationId }
-        : getAdjustmentScope();
+      const scope = getAdjustmentScope();
       const res = await API.get("/api/adjustment/parties", {
         params: {
           ...scope,
@@ -334,7 +315,6 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
   };
 
   useEffect(() => {
-    setSelectedLocationId(outward?.location_id || "");
     setCompanyId("");
     setSourceType("inward");
     setInwardList([]);
@@ -349,7 +329,6 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
     setEditingQty("");
 
     if (outward) {
-      loadLocationList();
       loadCompanyList();
       loadAdjustmentLog();
       loadBuyerAdjustmentDetails();
@@ -807,42 +786,8 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
       </div>
 
       <div style={cardStyle}>
-        <h3 style={sectionTitle}>Adjustment Source</h3>
-        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
-          <div style={{ minWidth: 280 }}>
-            <div style={{ fontWeight: 800, color: "#14532d", marginBottom: 6 }}>Location</div>
-            <select
-              value={selectedLocationId}
-              onChange={(e) => {
-                const nextLocationId = String(e.target.value || "");
-                setSelectedLocationId(nextLocationId);
-                setCompanyId("");
-                setSourceType("inward");
-                setSelectedInward(null);
-                setSelectedInwardIds([]);
-                setAdjustQty("");
-                setInwardList([]);
-                if (nextLocationId) {
-                  void loadCompanyList(nextLocationId);
-                } else {
-                  setCompanyList([]);
-                }
-              }}
-              style={{ ...inputStyle, minWidth: 280 }}
-            >
-              <option value="">Select Location</option>
-              {locationList.map((location) => {
-                const id = location?.id || location?._id;
-                const name = location?.name || location?.location_name || location?.title;
-                if (!id || !name) return null;
-                return <option key={String(id)} value={String(id)}>{name}</option>;
-              })}
-            </select>
-          </div>
-
-          <div style={{ minWidth: 280 }}>
-            <div style={{ fontWeight: 800, color: "#14532d", marginBottom: 6 }}>Party / Lorry Party</div>
-            <select
+        <h3 style={sectionTitle}>Select Company</h3>
+        <select
           value={companyId ? `${sourceType}:${companyId}` : ""}
           onChange={(e) => {
             const [nextSourceType, nextCompanyId] = String(e.target.value || "").split(":");
@@ -854,21 +799,18 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
             if (nextCompanyId) loadInwardStock(nextCompanyId, nextSourceType || "inward");
             else setInwardList([]);
           }}
-              style={{ ...inputStyle, minWidth: 280 }}
-              disabled={!selectedLocationId && !!outward?.location_id}
-            >
-              <option value="">Select Party / Lorry Party</option>
-              {companyList.map((company) => (
-                <option
+          style={{ ...inputStyle, minWidth: 280 }}
+        >
+          <option value="">Select Company</option>
+          {companyList.map((company) => (
+            <option
               key={`${company.source_type}-${company.id}`}
               value={`${company.source_type}:${company.id}`}
             >
               {company.name} {company.source_type === "palti_lorry" ? "(Palti Lorry)" : "(Inward)"}
             </option>
-              ))}
-            </select>
-          </div>
-        </div>
+          ))}
+        </select>
 
         <div style={{ marginTop: 14, fontWeight: 800, color: "#14532d" }}>
           Draft Adjusted: <span style={strongText}>{num(totalDraftAdjusted)}</span> | Draft Remaining: <span style={strongText}>{num(remainingQty)}</span>
