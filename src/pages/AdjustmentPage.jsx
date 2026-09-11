@@ -7,6 +7,8 @@ import { formatDisplayDate } from "../utils/date";
 
 export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose }) {
   const [companyList, setCompanyList] = useState([]);
+  const [locations, setLocations] = useState([]);
+  const [selectedLocationId, setSelectedLocationId] = useState("");
   const [companyId, setCompanyId] = useState("");
   const [sourceType, setSourceType] = useState("inward");
   const [inwardList, setInwardList] = useState([]);
@@ -20,8 +22,6 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
   const [editingLogId, setEditingLogId] = useState(null);
   const [editingQty, setEditingQty] = useState("");
   const [isSaving, setIsSaving] = useState(false);
-  const [locations, setLocations] = useState([]);
-  const [selectedLocationId, setSelectedLocationId] = useState("");
   
   // For cleanup on unmount
   const isMountedRef = React.useRef(true);
@@ -275,7 +275,7 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
         params: {
           ...scope,
           company_id: selectedCompanyId,
-          product_id: outward.product_id,
+          product_id: outward?.product_id || outward?.productId || '',
           outward_date: outward.date,
           source_type: selectedSourceType,
         },
@@ -328,8 +328,7 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
   };
 
   useEffect(() => {
-    const nextLocationId = String(outward?.location_id || "").trim();
-    setSelectedLocationId(nextLocationId);
+    setSelectedLocationId(String(outward?.location_id || "").trim());
     setCompanyId("");
     setSourceType("inward");
     setInwardList([]);
@@ -345,7 +344,7 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
 
     if (outward) {
       loadLocations();
-      loadCompanyList(nextLocationId);
+      loadCompanyList(String(outward.location_id || "").trim());
       loadAdjustmentLog();
       loadBuyerAdjustmentDetails();
     }
@@ -822,7 +821,7 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
           <option value="">Select Location</option>
           {locations.map((location) => (
             <option key={location.id || location._id} value={location.id || location._id}>
-              {location.name || location.location_name || location.title || `Location ${location.id || location._id}`}
+              {location.name}
             </option>
           ))}
         </select>
