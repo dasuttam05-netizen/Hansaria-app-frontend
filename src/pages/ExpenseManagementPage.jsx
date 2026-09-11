@@ -279,9 +279,9 @@ export default function ExpenseManagementPage() {
       return accountCompanyIds.includes(selectedCompanyId);
     });
 
-    // Do not make the Party Account dropdown empty just because legacy
-    // Company Account rows use a different company-id representation.
-    return matched.length ? matched : companyAccounts;
+    // Once a company is selected, ONLY that company's accounts are allowed.
+    // Never fall back to showing accounts from other companies.
+    return matched;
   }, [companyAccounts, formData.company_id]);
 
   const accessibleLocations = useMemo(() => {
