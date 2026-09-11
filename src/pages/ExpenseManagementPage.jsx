@@ -262,15 +262,27 @@ export default function ExpenseManagementPage() {
   const [editLabels, setEditLabels] = useState({});
   const activeEditRequestRef = useRef(0);
 
-  const filteredAccounts = useMemo(
-    () =>
-      formData.company_id
-        ? companyAccounts.filter((account) =>
-            sameId(account.company_id, formData.company_id)
-          )
-        : companyAccounts,
-    [companyAccounts, formData.company_id]
-  );
+  const filteredAccounts = useMemo(() => {
+    if (!formData.company_id) return companyAccounts;
+
+    const selectedCompanyId = String(formData.company_id || "").trim();
+    const matched = companyAccounts.filter((account) => {
+      const accountCompanyIds = [
+        account?.company_id,
+        account?.companyId,
+        account?.company?._id,
+        account?.company?.id,
+      ]
+        .map((value) => String(value ?? "").trim())
+        .filter(Boolean);
+
+      return accountCompanyIds.includes(selectedCompanyId);
+    });
+
+    // Do not make the Party Account dropdown empty just because legacy
+    // Company Account rows use a different company-id representation.
+    return matched.length ? matched : companyAccounts;
+  }, [companyAccounts, formData.company_id]);
 
   const accessibleLocations = useMemo(() => {
     const allowedIds = new Set(
