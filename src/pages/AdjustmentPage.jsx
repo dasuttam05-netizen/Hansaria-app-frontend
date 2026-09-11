@@ -7,6 +7,8 @@ import { formatDisplayDate } from "../utils/date";
 
 export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose }) {
   const [companyList, setCompanyList] = useState([]);
+  const [locationList, setLocationList] = useState([]);
+  const [selectedLocationId, setSelectedLocationId] = useState("");
   const [companyId, setCompanyId] = useState("");
   const [sourceType, setSourceType] = useState("inward");
   const [inwardList, setInwardList] = useState([]);
@@ -194,10 +196,11 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
   const isPaltiSource = sourceType === "palti_lorry";
 
   const getAdjustmentScope = () => {
-    const useLocation = !!outward?.location_id;
+    const locationId = String(selectedLocationId || outward?.location_id || "").trim();
+    const useLocation = !!locationId;
     return {
       warehouse_id: useLocation ? "" : outward?.warehouse_id || "",
-      location_id: outward?.location_id || "",
+      location_id: locationId,
     };
   };
 
@@ -222,7 +225,7 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
   const selectedInwardCount = selectedInwardIds.length;
 
   const loadCompanyList = async () => {
-    if (!outward?.warehouse_id && !outward?.location_id) return setCompanyList([]);
+    if (!outward?.warehouse_id && !outward?.location_id && !selectedLocationId) return setCompanyList([]);
     try {
       const scope = getAdjustmentScope();
       const res = await API.get("/api/adjustment/parties", {
@@ -327,6 +330,7 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
     setAlreadyAdjusted(0);
     setEditingLogId(null);
     setEditingQty("");
+    setSelectedLocationId(String(outward?.location_id || "").trim());
 
     if (outward) {
       loadCompanyList();
@@ -334,6 +338,26 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
       loadBuyerAdjustmentDetails();
     }
   }, [outward]);
+
+  useEffect(() => {
+    let active = true;
+    const loadLocations = async () => {
+      try {
+        const res = await API.get("/api/locations", {
+          signal: abortControllerRef.current.signal,
+        });
+        if (active && isMountedRef.current) {
+          setLocationList(Array.isArray(res.data) ? res.data : []);
+        }
+      } catch (err) {
+        if (active && isMountedRef.current && err.name !== "CanceledError") {
+          setLocationList([]);
+        }
+      }
+    };
+    void loadLocations();
+    return () => { active = false; };
+  }, []);
 
   // Cleanup on component unmount
   useEffect(() => {
@@ -783,6 +807,26 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
             <div>{num(currentRemaining)}</div>
           </div>
         </div>
+      </div>
+
+      <div style={cardStyle}>
+        <h3 style={sectionTitle}>Select Location</h3>
+        <select
+          value={selectedLocationId}
+          onChange={(e) => setSelectedLocationId(String(e.target.value || ""))}
+          style={{ ...inputStyle, minWidth: 280 }}
+        >
+          <option value="">Select Location</option>
+          {locationList.map((location) => {
+            const id = String(location?.id ?? location?._id ?? "").trim();
+            if (!id) return null;
+            return (
+              <option key={id} value={id}>
+                {location?.name || id}
+              </option>
+            );
+          })}
+        </select>
       </div>
 
       <div style={cardStyle}>
