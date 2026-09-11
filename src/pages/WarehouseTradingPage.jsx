@@ -1269,12 +1269,15 @@ export default function WarehouseTradingPage() {
     const key = `${account}::${warehouse}::${excludePayment}`;
     const cached = paymentFarmersCacheRef.current.get(key);
     if (cached && Date.now() - cached.time < 60000) {
-      setAccountFarmers(cached.farmers || []);
+      const filteredFarmers = (cached.farmers || []).filter((farmer) =>
+        toNumber(farmer?.outstanding ?? farmer?.pending_amount ?? farmer?.balance ?? farmer?.due ?? farmer?.stats?.outstanding) > 0
+      );
+      setAccountFarmers(filteredFarmers);
       if (!warehouse && Array.isArray(cached.warehouse_ids)) {
         const ids = new Set(cached.warehouse_ids.map(String));
         setPaymentWarehouses(warehouses.filter((w) => ids.has(String(w.id || w._id))));
       }
-      return cached.farmers || [];
+      return filteredFarmers;
     }
     const inFlight = paymentFarmersInFlightRef.current.get(key);
     if (inFlight) return inFlight;
@@ -1285,8 +1288,11 @@ export default function WarehouseTradingPage() {
       },
     })
       .then((res) => {
-        const farmersResult = Array.isArray(res.data) ? res.data : [];
-        const warehouseIds = [...new Set(farmersResult.flatMap((f) => Array.isArray(f.warehouse_ids) ? f.warehouse_ids : []))];
+        const rawFarmers = Array.isArray(res.data) ? res.data : [];
+        const farmersResult = rawFarmers.filter((farmer) =>
+          toNumber(farmer?.outstanding ?? farmer?.pending_amount ?? farmer?.balance ?? farmer?.due ?? farmer?.stats?.outstanding) > 0
+        );
+        const warehouseIds = [...new Set(rawFarmers.flatMap((f) => Array.isArray(f.warehouse_ids) ? f.warehouse_ids : []))];
         const data = { farmers: farmersResult, warehouse_ids: warehouseIds, time: Date.now() };
         paymentFarmersCacheRef.current.set(key, data);
         setAccountFarmers(farmersResult);
@@ -1355,9 +1361,34 @@ export default function WarehouseTradingPage() {
     });
 
     const cached = outstandingCacheRef.current.get(key);
-    if (cached && Date.now() - cached.time < 10000) {
+    if (cached && Date.now() - cached.time < 60000) {
       setPartyOutstanding(cached.data || null);
       return cached.data || null;
+    }
+
+    // Show any farmer-level totals immediately while the authoritative outstanding
+    // endpoint refreshes them in the background. This removes the empty 0/0/0/0 flash.
+    if (partyType === "farmer") {
+      const known = accountFarmers.find((farmer) => String(farmer?.id || farmer?._id) === String(partyId));
+      if (known) {
+        const ks = known?.stats || {};
+        const knownDue = toNumber(known?.outstanding ?? known?.pending_amount ?? known?.balance ?? known?.due ?? ks?.outstanding);
+        const optimistic = {
+          ...known,
+          party_id: partyId,
+          farmer_id: partyId,
+          warehouse_id: warehouse,
+          company_account_id: companyAccountId || "",
+          stats: {
+            ...ks,
+            total_bill: toNumber(ks?.total_bill ?? known?.total_bill ?? known?.total_purchase),
+            total_deduction: toNumber(ks?.total_deduction ?? known?.total_deduction ?? known?.deduction),
+            total_payment: toNumber(ks?.total_payment ?? known?.total_payment ?? known?.paid),
+            outstanding: knownDue,
+          },
+        };
+        setPartyOutstanding(optimistic);
+      }
     }
 
     const inFlight = outstandingInFlightRef.current.get(key);
@@ -1554,8 +1585,10 @@ export default function WarehouseTradingPage() {
         params.company_account_id = filters.sale_company_account_id;
       }
 
+      const serverPagedReportPreview = reportType === "sale" || reportType === "warehouse-stock";
       const reportCacheKey = JSON.stringify({
         reportType,
+        page: serverPagedReportPreview ? page : 1,
         params,
         search: normalizedSearch,
       });
