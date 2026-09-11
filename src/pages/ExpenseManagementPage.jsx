@@ -263,26 +263,50 @@ export default function ExpenseManagementPage() {
   const activeEditRequestRef = useRef(0);
 
   const filteredAccounts = useMemo(() => {
-    if (!formData.company_id) return companyAccounts;
-
     const selectedCompanyId = String(formData.company_id || "").trim();
-    const matched = companyAccounts.filter((account) => {
+    if (!selectedCompanyId) return [];
+
+    const selectedCompany = companies.find((company) =>
+      [company?.id, company?._id, company?.legacy_id]
+        .map((value) => String(value ?? "").trim())
+        .filter(Boolean)
+        .includes(selectedCompanyId)
+    );
+
+    const selectedCompanyIds = new Set(
+      [
+        selectedCompanyId,
+        selectedCompany?.id,
+        selectedCompany?._id,
+        selectedCompany?.legacy_id,
+      ]
+        .map((value) => String(value ?? "").trim())
+        .filter(Boolean)
+    );
+
+    const selectedCompanyName = String(selectedCompany?.name || "").trim().toLowerCase();
+
+    return companyAccounts.filter((account) => {
       const accountCompanyIds = [
         account?.company_id,
         account?.companyId,
         account?.company?._id,
         account?.company?.id,
+        account?.company?.legacy_id,
       ]
         .map((value) => String(value ?? "").trim())
         .filter(Boolean);
 
-      return accountCompanyIds.includes(selectedCompanyId);
-    });
+      if (accountCompanyIds.some((id) => selectedCompanyIds.has(id))) {
+        return true;
+      }
 
-    // Once a company is selected, ONLY that company's accounts are allowed.
-    // Never fall back to showing accounts from other companies.
-    return matched;
-  }, [companyAccounts, formData.company_id]);
+      return Boolean(
+        selectedCompanyName &&
+        String(account?.company_name || "").trim().toLowerCase() === selectedCompanyName
+      );
+    });
+  }, [companyAccounts, companies, formData.company_id]);
 
   const accessibleLocations = useMemo(() => {
     const allowedIds = new Set(
@@ -1094,8 +1118,9 @@ export default function ExpenseManagementPage() {
                     value={formData.company_account_id}
                     onChange={handleFieldChange}
                     style={inputStyle}
+                    disabled={!formData.company_id}
                   >
-                    <option value="">Select Account</option>
+                    <option value="">{formData.company_id ? "Select Account" : "Select company first"}</option>
                     {accountOptions.map((account) => (
                       <option key={getRecordId(account)} value={getRecordId(account)}>
                         {account.account_name}
