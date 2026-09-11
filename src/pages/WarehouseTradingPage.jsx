@@ -367,6 +367,8 @@ export default function WarehouseTradingPage() {
   const [purchasePreviewRow, setPurchasePreviewRow] = useState(null);
   const [purchasePreviewLoading, setPurchasePreviewLoading] = useState(false);
   const [purchasePreviewOpenedFromLedger, setPurchasePreviewOpenedFromLedger] = useState(false);
+  const purchasePreviewCacheRef = useRef(new Map());
+  const purchasePreviewInFlightRef = useRef(new Map());
   const [purchaseBaseline, setPurchaseBaseline] = useState(null);
   const [showSalePreview, setShowSalePreview] = useState(false);
   const [salePreviewRow, setSalePreviewRow] = useState(null);
@@ -386,6 +388,8 @@ export default function WarehouseTradingPage() {
   const masterLoadPromiseRef = useRef(null);
   const reportFilterCacheRef = useRef(new Map());
   const reportFilterInFlightRef = useRef(new Map());
+  const reportDataCacheRef = useRef(new Map());
+  const reportDataInFlightRef = useRef(new Map());
   const outstandingCacheRef = useRef(new Map());
   const outstandingInFlightRef = useRef(new Map());
   const paymentFarmersCacheRef = useRef(new Map());
@@ -1510,10 +1514,8 @@ export default function WarehouseTradingPage() {
     const hasActivePurchaseFilters = Boolean(filters.farmer_id || filters.warehouse_id || filters.company_account_id);
     const normalizedSearch = String(globalSearch || "").trim();
 
-    // Do not keep stale Purchase rows visible while Sale Report is loading.
-    if (token === reportLoadTokenRef.current) {
-      setReportData([]);
-    }
+    // Keep the currently rendered report visible while the fresh report loads.
+    // This avoids a blank flash when switching reports.
 
     try {
       if (!hasPermission(user, reportPermissionMap[reportType])) {
@@ -1551,6 +1553,33 @@ export default function WarehouseTradingPage() {
       if (!params.company_account_id && filters.sale_company_account_id) {
         params.company_account_id = filters.sale_company_account_id;
       }
+
+      const reportCacheKey = JSON.stringify({
+        reportType,
+        params,
+        search: normalizedSearch,
+      });
+      const cachedReport = reportDataCacheRef.current.get(reportCacheKey);
+      if (cachedReport && Date.now() - cachedReport.time < 5 * 60 * 1000) {
+        if (token === reportLoadTokenRef.current) {
+          setReportData(cachedReport.rows);
+          if (reportType === "warehouse-stock") setWarehouseStockReport(cachedReport.rows);
+          setReportPageInfo(cachedReport.pageInfo);
+        }
+        return;
+      }
+
+      const inFlightReport = reportDataInFlightRef.current.get(reportCacheKey);
+      if (inFlightReport) {
+        const shared = await inFlightReport;
+        if (token === reportLoadTokenRef.current && shared) {
+          setReportData(shared.rows);
+          if (reportType === "warehouse-stock") setWarehouseStockReport(shared.rows);
+          setReportPageInfo(shared.pageInfo);
+        }
+        return;
+      }
+
       // Sale and warehouse stock remain server-paged.
       // Purchase Detail is loaded once and paged locally for instant Next/Prev.
       const serverPagedReport = reportType === "sale" || reportType === "warehouse-stock";
@@ -1563,42 +1592,58 @@ export default function WarehouseTradingPage() {
         params.page_size = 10000;
         params.limit = 10000;
       }
-      const res = await API.get(`/api/wh-vouchers/report/${endpoint}`, { params });
+      const reportRequest = API.get(`/api/wh-vouchers/report/${endpoint}`, { params });
+      reportDataInFlightRef.current.set(reportCacheKey, reportRequest);
+      const res = await reportRequest.finally(() => {
+        reportDataInFlightRef.current.delete(reportCacheKey);
+      });
       if (token !== reportLoadTokenRef.current) return;
       const payload = res.data || [];
       const rows = Array.isArray(payload) ? payload : Array.isArray(payload.data) ? payload.data : [];
       const pagination = Array.isArray(payload) ? null : payload.pagination || null;
       if (reportType === "warehouse-stock") {
-        setWarehouseStockReport(rows);
-        setReportData(rows);
-        setReportPageInfo({
+        const nextPageInfo = {
           page: pagination?.page || page,
           pageSize: pagination?.pageSize || PAGE_SIZE,
           total: pagination?.total ?? rows.length,
           hasMore: Boolean(pagination?.hasMore),
-        });
+        };
+        reportDataCacheRef.current.set(reportCacheKey, { time: Date.now(), rows, pageInfo: nextPageInfo });
+        setWarehouseStockReport(rows);
+        setReportData(rows);
+        setReportPageInfo(nextPageInfo);
         return;
       }
       if (reportType === "purchase" && rows.length === 0 && hasActivePurchaseFilters && hasPermission(user, voucherPermissionMap.purchase)) {
         setReportData([]);
         return;
       }
-      setReportData(rows);
+      let nextPageInfo;
       if (reportType === "purchase") {
-        setReportPageInfo({
+        nextPageInfo = {
           page: 1,
           pageSize: PAGE_SIZE,
           total: rows.length,
           hasMore: false,
-        });
+        };
       } else if (serverPagedReport) {
-        setReportPageInfo({
+        nextPageInfo = {
           page: pagination?.page || page,
           pageSize: pagination?.pageSize || PAGE_SIZE,
           total: pagination?.total ?? rows.length,
           hasMore: Boolean(pagination?.hasMore),
-        });
+        };
+      } else {
+        nextPageInfo = {
+          page: 1,
+          pageSize: PAGE_SIZE,
+          total: rows.length,
+          hasMore: false,
+        };
       }
+      reportDataCacheRef.current.set(reportCacheKey, { time: Date.now(), rows, pageInfo: nextPageInfo });
+      setReportData(rows);
+      setReportPageInfo(nextPageInfo);
     } catch (err) {
       if (token !== reportLoadTokenRef.current) return;
       console.error(err);
@@ -2708,15 +2753,53 @@ export default function WarehouseTradingPage() {
     setPurchasePreviewRow(baseRow);
     setPurchasePreviewOpenedFromLedger(fromLedger);
     setShowPurchasePreview(true);
-    setPurchasePreviewLoading(Boolean(recordId));
 
-    if (!recordId) return;
+    if (!recordId) {
+      setPurchasePreviewLoading(false);
+      return;
+    }
+
+    const cacheKey = String(recordId);
+    const cached = purchasePreviewCacheRef.current.get(cacheKey);
+    if (cached && Date.now() - cached.time < 5 * 60 * 1000) {
+      setPurchasePreviewRow(cached.data);
+      setPurchasePreviewLoading(false);
+      return;
+    }
+
+    const inFlight = purchasePreviewInFlightRef.current.get(cacheKey);
+    if (inFlight) {
+      setPurchasePreviewLoading(true);
+      try {
+        const data = await inFlight;
+        if (data) setPurchasePreviewRow(data);
+      } finally {
+        setPurchasePreviewLoading(false);
+      }
+      return;
+    }
+
+    setPurchasePreviewLoading(true);
+    const request = API.get(`/api/wh-vouchers/purchase/${recordId}`)
+      .then((res) => {
+        if (res?.data) {
+          purchasePreviewCacheRef.current.set(cacheKey, {
+            time: Date.now(),
+            data: res.data,
+          });
+          return res.data;
+        }
+        return null;
+      })
+      .finally(() => {
+        purchasePreviewInFlightRef.current.delete(cacheKey);
+      });
+
+    purchasePreviewInFlightRef.current.set(cacheKey, request);
 
     try {
-      const res = await API.get(`/api/wh-vouchers/purchase/${recordId}`);
-      if (res?.data) {
-        setPurchasePreviewRow(res.data);
-      }
+      const data = await request;
+      if (data) setPurchasePreviewRow(data);
     } catch (err) {
       console.error("Failed to load full purchase voucher preview:", err);
       setPurchasePreviewRow(baseRow);
