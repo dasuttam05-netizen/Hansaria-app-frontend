@@ -49,7 +49,7 @@ export default function PaltiLorryPage() {
               <tr>
                 <th style={thStyle}>Voucher</th>
                 <th style={thStyle}>Date</th>
-                <th style={thStyle}>Warehouse</th>
+                <th style={thStyle}>Location</th>
                 <th style={thStyle}>Employee</th>
                 <th style={thStyle}>Product</th>
                 <th style={thStyle}>Company</th>
@@ -85,7 +85,7 @@ export default function PaltiLorryPage() {
                     >
                       <td style={cellBase}>{row.voucher_no || "-"}</td>
                       <td style={cellBase}>{formatDisplayDate(row.expense_date)}</td>
-                      <td style={cellBase}>{row.warehouse_name || "-"}</td>
+                      <td style={cellBase}>{row.location_name || "-"}</td>
                       <td style={cellBase}>{row.employee_name || "-"}</td>
                       <td style={cellBase}>{row.product_name || "-"}</td>
                       <td style={cellBase}>{row.company_name || "-"}</td>
