@@ -345,6 +345,8 @@ export default function WarehouseTradingPage() {
   const [showPaymentAdjustPopup, setShowPaymentAdjustPopup] = useState(false);
   const [paymentAdjustments, setPaymentAdjustments] = useState([]);
   const [selectedPaymentId, setSelectedPaymentId] = useState(null);
+  const [paymentBillSearch, setPaymentBillSearch] = useState("");
+  const [selectedPaymentBillId, setSelectedPaymentBillId] = useState("");
   const [showReceiptAdjustPopup, setShowReceiptAdjustPopup] = useState(false);
   const [receiptAdjustments, setReceiptAdjustments] = useState([]);
   const [selectedReceiptId, setSelectedReceiptId] = useState(null);
@@ -936,6 +938,8 @@ export default function WarehouseTradingPage() {
       setPaymentAdjustments([]);
       setSelectedPaymentId(null);
       setShowPaymentAdjustPopup(false);
+      setPaymentBillSearch("");
+      setSelectedPaymentBillId("");
       setReceiptAdjustments([]);
       setSelectedReceiptId(null);
       setShowReceiptAdjustPopup(false);
@@ -1549,10 +1553,18 @@ export default function WarehouseTradingPage() {
       if (!params.company_account_id && filters.sale_company_account_id) {
         params.company_account_id = filters.sale_company_account_id;
       }
-      const serverPagedReport = reportType === "sale" || reportType === "purchase" || reportType === "warehouse-stock";
+      // Sale and Warehouse Stock remain server-paged.
+      // Purchase Detail loads the filtered dataset once and paginates locally,
+      // matching the smooth Purchase Party Ledger Next / Prev behaviour.
+      const serverPagedReport = reportType === "sale" || reportType === "warehouse-stock";
       if (serverPagedReport) {
         params.page = page;
         params.page_size = PAGE_SIZE;
+      }
+      if (reportType === "purchase") {
+        params.page = 1;
+        params.page_size = 10000;
+        params.limit = 10000;
       }
       const res = await API.get(`/api/wh-vouchers/report/${endpoint}`, { params });
       if (token !== reportLoadTokenRef.current) return;
@@ -1575,7 +1587,14 @@ export default function WarehouseTradingPage() {
         return;
       }
       setReportData(rows);
-      if (serverPagedReport) {
+      if (reportType === "purchase") {
+        setReportPageInfo({
+          page: 1,
+          pageSize: PAGE_SIZE,
+          total: rows.length,
+          hasMore: false,
+        });
+      } else if (serverPagedReport) {
         setReportPageInfo({
           page: pagination?.page || page,
           pageSize: pagination?.pageSize || PAGE_SIZE,
@@ -1593,7 +1612,7 @@ export default function WarehouseTradingPage() {
       }
       if (reportType === "purchase" && hasPermission(user, voucherPermissionMap.purchase) && !hasActivePurchaseFilters) {
         try {
-          const fallbackRes = await API.get("/api/wh-vouchers/purchase", { params: { page: 1, limit: PAGE_SIZE, order: "desc" } });
+          const fallbackRes = await API.get("/api/wh-vouchers/purchase", { params: { page: 1, limit: 10000, page_size: 10000, order: "desc" } });
           if (token !== reportLoadTokenRef.current) return;
           const fallbackPayload = fallbackRes.data || [];
           setReportData(Array.isArray(fallbackPayload) ? fallbackPayload : (fallbackPayload.data || []));
@@ -3422,6 +3441,31 @@ export default function WarehouseTradingPage() {
     }
   };
 
+  const pendingPaymentBills = useMemo(() => {
+    const search = String(paymentBillSearch || "").trim().toLowerCase();
+    return (partyOutstanding?.purchases || [])
+      .filter((row) => toNumber(row.pending_amount) > 0)
+      .filter((row) => {
+        if (!search) return true;
+        const billNo = String(row.voucher_no || row.bill_no || "").toLowerCase();
+        return billNo.includes(search);
+      });
+  }, [partyOutstanding?.purchases, paymentBillSearch]);
+
+  const selectPaymentBillById = (purchaseId) => {
+    const id = String(purchaseId || "");
+    if (!id) return;
+    setSelectedPaymentBillId(id);
+  };
+
+  const applySelectedPaymentBillAdjustment = (purchase) => {
+    if (!purchase) return;
+    const paymentAmount = toNumber(formData.amount);
+    const pending = toNumber(purchase.pending_amount ?? purchase.net_amount_payable ?? purchase.amount);
+    const adjusted = Math.min(Math.max(paymentAmount, 0), Math.max(pending, 0));
+    setPaymentAdjustmentAmount(purchase, adjusted);
+  };
+
   const setPaymentAdjustmentAmount = (purchase, value) => {
     const purchaseId = String(purchase.id || purchase._id);
     const amount = Math.max(0, toNumber(value));
@@ -3442,27 +3486,96 @@ export default function WarehouseTradingPage() {
   };
 
   const autoFillPaymentAdjustments = () => {
+    // When a bill is selected, Auto Adjust applies the payment amount to that
+    // bill only. Without a selected bill, preserve the existing FIFO-style
+    // allocation across all pending bills.
+    const selected = pendingPaymentBills.find((row) => String(row.id || row._id) === String(selectedPaymentBillId));
+    if (selected) {
+      applySelectedPaymentBillAdjustment(selected);
+      return;
+    }
+
     let remaining = toNumber(formData.amount);
     const next = [];
-    (partyOutstanding?.purchases || [])
-      .filter((row) => toNumber(row.pending_amount) > 0)
-      .forEach((row) => {
-        if (remaining <= 0) return;
-        const adjusted = Math.min(remaining, toNumber(row.pending_amount));
-        if (adjusted > 0) {
-          next.push({
-            purchase_id: String(row.id || row._id),
-            voucher_no: row.voucher_no,
-            adjusted_amount: adjusted,
-          });
-          remaining -= adjusted;
-        }
-      });
+    pendingPaymentBills.forEach((row) => {
+      if (remaining <= 0) return;
+      const adjusted = Math.min(remaining, toNumber(row.pending_amount));
+      if (adjusted > 0) {
+        next.push({
+          purchase_id: String(row.id || row._id),
+          voucher_no: row.voucher_no,
+          adjusted_amount: adjusted,
+        });
+        remaining -= adjusted;
+      }
+    });
     setPaymentAdjustments(next);
   };
 
   const selectedAdjustmentFor = (purchaseId) =>
     paymentAdjustments.find((item) => String(item.purchase_id) === String(purchaseId))?.adjusted_amount || "";
+
+  useEffect(() => {
+    if (!showPaymentAdjustPopup) return;
+
+    const handlePaymentBillKey = (event) => {
+      if (!["ArrowUp", "ArrowDown", "Enter"].includes(event.key)) return;
+
+      const target = event.target;
+      const isSearchField = target?.dataset?.paymentBillSearch === "true";
+      const isAdjustmentInput = target?.dataset?.paymentAdjustmentInput === "true";
+
+      if (isAdjustmentInput && event.key !== "Enter") return;
+      if (!isSearchField && !isAdjustmentInput && target?.matches?.("input, select, textarea")) return;
+
+      if (!pendingPaymentBills.length) return;
+
+      const currentIndex = pendingPaymentBills.findIndex((row) => String(row.id || row._id) === String(selectedPaymentBillId));
+      let nextIndex = currentIndex < 0 ? 0 : currentIndex;
+
+      if (event.key === "ArrowDown") {
+        event.preventDefault();
+        nextIndex = Math.min(pendingPaymentBills.length - 1, nextIndex + 1);
+        selectPaymentBillById(pendingPaymentBills[nextIndex].id || pendingPaymentBills[nextIndex]._id);
+        return;
+      }
+
+      if (event.key === "ArrowUp") {
+        event.preventDefault();
+        nextIndex = Math.max(0, nextIndex - 1);
+        selectPaymentBillById(pendingPaymentBills[nextIndex].id || pendingPaymentBills[nextIndex]._id);
+        return;
+      }
+
+      if (event.key === "Enter") {
+        event.preventDefault();
+        const selected = pendingPaymentBills[currentIndex >= 0 ? currentIndex : 0];
+        if (selected) {
+          selectPaymentBillById(selected.id || selected._id);
+          applySelectedPaymentBillAdjustment(selected);
+        }
+      }
+    };
+
+    document.addEventListener("keydown", handlePaymentBillKey);
+    return () => document.removeEventListener("keydown", handlePaymentBillKey);
+  }, [showPaymentAdjustPopup, pendingPaymentBills, selectedPaymentBillId, formData.amount]);
+
+  useEffect(() => {
+    if (!showPaymentAdjustPopup) {
+      setPaymentBillSearch("");
+      setSelectedPaymentBillId("");
+      return;
+    }
+    if (!pendingPaymentBills.length) {
+      setSelectedPaymentBillId("");
+      return;
+    }
+    const exists = pendingPaymentBills.some((row) => String(row.id || row._id) === String(selectedPaymentBillId));
+    if (!exists) {
+      setSelectedPaymentBillId(String(pendingPaymentBills[0].id || pendingPaymentBills[0]._id));
+    }
+  }, [showPaymentAdjustPopup, pendingPaymentBills, selectedPaymentBillId]);
 
   const setReceiptAdjustmentAmount = (sale, value) => {
     const saleId = String(sale.id || sale._id);
@@ -4033,11 +4146,11 @@ export default function WarehouseTradingPage() {
     );
   }, [displayReportData, normalizedGlobalSearch]);
   const filteredReportData = useMemo(() => {
-    const serverPagedReport = activeReport === "sale" || activeReport === "purchase" || activeReport === "warehouse-stock";
+    const serverPagedReport = activeReport === "sale" || activeReport === "warehouse-stock";
     if (serverPagedReport) return filteredReportDataAll;
     const start = (reportPage - 1) * PAGE_SIZE;
     return filteredReportDataAll.slice(start, start + PAGE_SIZE);
-  }, [filteredReportDataAll, reportPage]);
+  }, [filteredReportDataAll, reportPage, activeReport]);
   useEffect(() => {
     setVoucherPage(1);
   }, [activeVoucherType, normalizedGlobalSearch]);
@@ -4048,7 +4161,7 @@ export default function WarehouseTradingPage() {
     setVoucherPage((current) => Math.min(current, Math.max(1, Number(voucherPageInfo.totalPages || 1))));
   }, [voucherPageInfo.totalPages]);
   useEffect(() => {
-    const serverPagedReport = activeReport === "sale" || activeReport === "purchase" || activeReport === "warehouse-stock";
+    const serverPagedReport = activeReport === "sale" || activeReport === "warehouse-stock";
     const totalPages = serverPagedReport
       ? Math.max(1, Math.ceil(Number(reportPageInfo.total || 0) / Number(reportPageInfo.pageSize || PAGE_SIZE)))
       : Math.max(1, Math.ceil(filteredReportDataAll.length / PAGE_SIZE));
@@ -4081,7 +4194,7 @@ export default function WarehouseTradingPage() {
     }
   };
   const totalVoucherPages = Math.max(1, Number(voucherPageInfo.totalPages || 1));
-  const totalReportPages = activeReport === "sale" || activeReport === "purchase" || activeReport === "warehouse-stock"
+  const totalReportPages = activeReport === "sale" || activeReport === "warehouse-stock"
     ? (reportPageInfo.hasMore ? reportPage + 1 : reportPage)
     : Math.max(1, Math.ceil(filteredReportDataAll.length / PAGE_SIZE));
   const renderPaginationBar = (page, totalPages, onPrev, onNext, totalItems, label = "rows") => {
@@ -6708,7 +6821,7 @@ export default function WarehouseTradingPage() {
               totalReportPages,
               () => setReportPage((prev) => Math.max(1, prev - 1)),
               () => setReportPage((prev) => Math.min(totalReportPages, prev + 1)),
-              (activeReport === "sale" || activeReport === "purchase" || activeReport === "warehouse-stock")
+              (activeReport === "sale" || activeReport === "warehouse-stock")
                 ? Number(reportPageInfo.total || 0)
                 : filteredReportDataAll.length,
               "rows"
@@ -6720,7 +6833,7 @@ export default function WarehouseTradingPage() {
         <div style={modalOverlayStyle}>
           <WarehouseAdjustModal
             title="Payment Adjustment"
-          subtitle="Account → Warehouse → Pending Farmer → Purchase Bills"
+            subtitle="Account → Warehouse → Pending Farmer → Purchase Bills"
             actionButton={btnAction}
             controls={
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 10, marginTop: 12 }}>
@@ -6747,13 +6860,27 @@ export default function WarehouseTradingPage() {
                   placeholder={formData.warehouse_id ? "Choose pending farmer" : "Choose warehouse first"}
                   disabled={!formData.warehouse_id}
                 />
+                <div style={{ gridColumn: "1 / -1", display: "grid", gridTemplateColumns: "1fr auto", gap: 8, alignItems: "end" }}>
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: "#334155", marginBottom: 5 }}>Bill No Search</div>
+                    <input
+                      value={paymentBillSearch}
+                      onChange={(event) => setPaymentBillSearch(event.target.value)}
+                      data-payment-bill-search="true"
+                      placeholder="Type Bill No..."
+                      style={{ ...inp, width: "100%", boxSizing: "border-box" }}
+                      autoComplete="off"
+                    />
+                  </div>
+                  <div style={{ fontSize: 12, color: "#475569", paddingBottom: 8 }}>↑ / ↓ Select &nbsp; Enter = Adjust</div>
+                </div>
               </div>
             }
             tableCard={{ ...paymentAdjustModalStyle, ...tableCard }}
             reportHeaderRowStyle={reportHeaderRowStyle}
             th={th}
             td={td}
-            rows={(partyOutstanding?.purchases || []).filter((row) => toNumber(row.pending_amount) > 0).map((row) => ({
+            rows={pendingPaymentBills.map((row) => ({
               key: row.id || row._id,
               date: row.date || "-",
               voucher_no: row.voucher_no || "-",
@@ -6761,11 +6888,22 @@ export default function WarehouseTradingPage() {
               amount: formatMoney(row.net_amount_payable ?? row.amount ?? 0),
               adjusted: formatMoney(row.adjusted_amount || 0),
               pending: formatMoney(row.pending_amount ?? row.net_amount_payable ?? row.amount ?? 0),
+              selected: String(row.id || row._id) === String(selectedPaymentBillId),
               row,
             }))}
             columns={[
+              { key: "select", label: "", render: (row) => (
+                <button
+                  type="button"
+                  onClick={() => selectPaymentBillById(row.key)}
+                  style={{ border: "none", background: "transparent", color: row.selected ? "#0f766e" : "transparent", fontWeight: 900, fontSize: 17, cursor: "pointer", padding: 0 }}
+                  aria-label="Select bill"
+                >
+                  ▶
+                </button>
+              )},
               { key: "date", label: "Date", render: (row) => row.date },
-              { key: "voucher", label: "Voucher No", render: (row) => row.voucher_no },
+              { key: "voucher", label: "Bill No", render: (row) => row.voucher_no },
               { key: "warehouse", label: "Warehouse", render: (row) => row.warehouse },
               { key: "amount", label: "Bill Amount", render: (row) => row.amount },
               { key: "adjusted", label: "Adjusted", render: (row) => row.adjusted },
@@ -6781,6 +6919,8 @@ export default function WarehouseTradingPage() {
                     max={row.row.pending_amount ?? row.row.net_amount_payable ?? row.row.amount ?? 0}
                     value={selectedAdjustmentFor(row.key)}
                     onChange={(event) => setPaymentAdjustmentAmount(row.row, event.target.value)}
+                    data-payment-adjustment-input="true"
+                    onFocus={() => selectPaymentBillById(row.key)}
                     style={{ ...inp, padding: "7px 8px" }}
                   />
                 ),
@@ -6789,8 +6929,15 @@ export default function WarehouseTradingPage() {
             emptyText="No pending purchase bills found."
             onAutoAdjust={autoFillPaymentAdjustments}
             autoAdjustLabel={`Auto Adjust Rs.${formatMoney(formData.amount)}`}
-            onClose={() => setShowPaymentAdjustPopup(false)}
-            onClear={() => setPaymentAdjustments([])}
+            onClose={() => {
+              setShowPaymentAdjustPopup(false);
+              setPaymentBillSearch("");
+              setSelectedPaymentBillId("");
+            }}
+            onClear={() => {
+              setPaymentAdjustments([]);
+              setSelectedPaymentBillId("");
+            }}
             onConfirm={() => setShowPaymentAdjustPopup(false)}
             confirmDisabled={Math.abs(paymentAdjustmentTotal - toNumber(formData.amount)) > 0.0001}
           />
