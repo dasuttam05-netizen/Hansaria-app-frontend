@@ -788,7 +788,7 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
       </div>
 
       <div style={cardStyle}>
-        <h3 style={sectionTitle}>Select Company</h3>
+        <h3 style={sectionTitle}>Select Party</h3>
         <select
           value={companyId ? `${sourceType}:${companyId}` : ""}
           onChange={(e) => {
@@ -803,13 +803,13 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
           }}
           style={{ ...inputStyle, minWidth: 280 }}
         >
-          <option value="">Select Company</option>
+          <option value="">Select Party</option>
           {companyList.map((company) => (
             <option
               key={`${company.source_type}-${company.id}`}
               value={`${company.source_type}:${company.id}`}
             >
-              {company.name} {company.source_type === "palti_lorry" ? "(Palti Lorry)" : "(Inward)"}
+              {company.name} {company.source_type === "palti_lorry" ? "(Palti)" : "(Inward)"}
             </option>
           ))}
         </select>
