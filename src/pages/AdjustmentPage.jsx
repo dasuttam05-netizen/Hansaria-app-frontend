@@ -194,11 +194,23 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
   const isPaltiSource = sourceType === "palti_lorry";
 
   const getAdjustmentScope = () => {
-    const useLocation = !!outward?.location_id;
-    return {
-      warehouse_id: useLocation ? "" : outward?.warehouse_id || "",
-      location_id: outward?.location_id || "",
-    };
+    const locationId = String(outward?.location_id ?? "").trim();
+    const warehouseId = String(outward?.warehouse_id ?? "").trim();
+
+    // A location-based outward must never send a warehouse filter.
+    if (locationId) {
+      return {
+        location_id: locationId,
+      };
+    }
+
+    if (warehouseId) {
+      return {
+        warehouse_id: warehouseId,
+      };
+    }
+
+    return {};
   };
 
   const visibleInwardList = useMemo(() => {
@@ -222,9 +234,18 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
   const selectedInwardCount = selectedInwardIds.length;
 
   const loadCompanyList = async () => {
-    if (!outward?.warehouse_id && !outward?.location_id) return setCompanyList([]);
+    const scope = getAdjustmentScope();
+    if (!scope.location_id && !scope.warehouse_id) {
+      setCompanyList([]);
+      return;
+    }
+
+    if (!String(outward?.product_id ?? "").trim()) {
+      setCompanyList([]);
+      return;
+    }
+
     try {
-      const scope = getAdjustmentScope();
       const res = await API.get("/api/adjustment/parties", {
         params: {
           ...scope,
@@ -788,7 +809,7 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
       </div>
 
       <div style={cardStyle}>
-        <h3 style={sectionTitle}>Select Party</h3>
+        <h3 style={sectionTitle}>Select Company</h3>
         <select
           value={companyId ? `${sourceType}:${companyId}` : ""}
           onChange={(e) => {
@@ -803,13 +824,13 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
           }}
           style={{ ...inputStyle, minWidth: 280 }}
         >
-          <option value="">Select Party</option>
+          <option value="">Select Company</option>
           {companyList.map((company) => (
             <option
               key={`${company.source_type}-${company.id}`}
               value={`${company.source_type}:${company.id}`}
             >
-              {company.name} {company.source_type === "palti_lorry" ? "(Palti)" : "(Inward)"}
+              {company.name} {company.source_type === "palti_lorry" ? "(Palti Lorry)" : "(Inward)"}
             </option>
           ))}
         </select>
