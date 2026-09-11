@@ -6,10 +6,10 @@ import "react-toastify/dist/ReactToastify.css";
 import { formatDisplayDate } from "../utils/date";
 
 export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose }) {
-  const [warehouseList, setWarehouseList] = useState([]);
-  const [selectedWarehouseId, setSelectedWarehouseId] = useState("");
   const [companyList, setCompanyList] = useState([]);
   const [companyId, setCompanyId] = useState("");
+  const [locationList, setLocationList] = useState([]);
+  const [selectedLocationId, setSelectedLocationId] = useState("");
   const [sourceType, setSourceType] = useState("inward");
   const [inwardList, setInwardList] = useState([]);
   const [selectedInward, setSelectedInward] = useState(null);
@@ -196,10 +196,10 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
   const isPaltiSource = sourceType === "palti_lorry";
 
   const getAdjustmentScope = () => {
-    const useLocation = !!outward?.location_id && !selectedWarehouseId;
+    const useLocation = !!(selectedLocationId || outward?.location_id);
     return {
-      warehouse_id: useLocation ? "" : selectedWarehouseId || outward?.warehouse_id || "",
-      location_id: useLocation ? outward?.location_id || "" : "",
+      warehouse_id: useLocation ? "" : outward?.warehouse_id || "",
+      location_id: selectedLocationId || outward?.location_id || "",
     };
   };
 
@@ -223,29 +223,27 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
 
   const selectedInwardCount = selectedInwardIds.length;
 
-  const loadWarehouseList = async () => {
+  const loadLocationList = async () => {
     try {
-      const res = await API.get("/api/warehouses", {
+      const res = await API.get("/api/locations", {
         signal: abortControllerRef.current.signal,
       });
       if (isMountedRef.current) {
-        const rows = Array.isArray(res.data) ? res.data : [];
-        setWarehouseList(rows);
+        setLocationList(Array.isArray(res.data) ? res.data : []);
       }
     } catch (err) {
       if (isMountedRef.current && err.name !== "CanceledError") {
-        setWarehouseList([]);
+        setLocationList([]);
       }
     }
   };
 
-  const loadCompanyList = async (warehouseId = selectedWarehouseId) => {
-    if (!warehouseId && !outward?.location_id) return setCompanyList([]);
+  const loadCompanyList = async (locationId = selectedLocationId) => {
+    if (!outward?.warehouse_id && !outward?.location_id && !locationId) return setCompanyList([]);
     try {
-      const scope = {
-        warehouse_id: warehouseId || "",
-        location_id: warehouseId ? "" : outward?.location_id || "",
-      };
+      const scope = locationId
+        ? { warehouse_id: "", location_id: locationId }
+        : getAdjustmentScope();
       const res = await API.get("/api/adjustment/parties", {
         params: {
           ...scope,
@@ -270,7 +268,7 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
     } catch (err) {
       if (isMountedRef.current && err.name !== "CanceledError") {
         setCompanyList([]);
-        toast.error("Party load failed", { theme: "colored", autoClose: 2000 });
+        toast.error("Company load failed", { theme: "colored", autoClose: 2000 });
       }
     }
   };
@@ -336,7 +334,7 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
   };
 
   useEffect(() => {
-    setSelectedWarehouseId(String(outward?.warehouse_id || ""));
+    setSelectedLocationId(outward?.location_id || "");
     setCompanyId("");
     setSourceType("inward");
     setInwardList([]);
@@ -351,8 +349,8 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
     setEditingQty("");
 
     if (outward) {
-      loadWarehouseList();
-      loadCompanyList(String(outward?.warehouse_id || ""));
+      loadLocationList();
+      loadCompanyList();
       loadAdjustmentLog();
       loadBuyerAdjustmentDetails();
     }
@@ -810,62 +808,63 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
 
       <div style={cardStyle}>
         <h3 style={sectionTitle}>Adjustment Source</h3>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: 12 }}>
-          <div>
-            <div style={{ fontWeight: 800, color: "#14532d", marginBottom: 6 }}>Warehouse</div>
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap", alignItems: "center" }}>
+          <div style={{ minWidth: 280 }}>
+            <div style={{ fontWeight: 800, color: "#14532d", marginBottom: 6 }}>Location</div>
             <select
-              value={selectedWarehouseId}
+              value={selectedLocationId}
               onChange={(e) => {
-                const nextWarehouseId = String(e.target.value || "");
-                setSelectedWarehouseId(nextWarehouseId);
+                const nextLocationId = String(e.target.value || "");
+                setSelectedLocationId(nextLocationId);
                 setCompanyId("");
                 setSourceType("inward");
-                setInwardList([]);
                 setSelectedInward(null);
                 setSelectedInwardIds([]);
                 setAdjustQty("");
-                loadCompanyList(nextWarehouseId);
+                setInwardList([]);
+                if (nextLocationId) {
+                  void loadCompanyList(nextLocationId);
+                } else {
+                  setCompanyList([]);
+                }
               }}
-              style={{ ...inputStyle, minWidth: 280, width: "100%" }}
+              style={{ ...inputStyle, minWidth: 280 }}
             >
-              <option value="">Select Warehouse</option>
-              {warehouseList.map((warehouse) => {
-                const id = warehouse.id ?? warehouse._id ?? warehouse.legacy_id;
-                const name = warehouse.name || warehouse.warehouse_name || warehouse.title || String(id || "");
-                return (
-                  <option key={String(id)} value={String(id)}>
-                    {name}
-                  </option>
-                );
+              <option value="">Select Location</option>
+              {locationList.map((location) => {
+                const id = location?.id || location?._id;
+                const name = location?.name || location?.location_name || location?.title;
+                if (!id || !name) return null;
+                return <option key={String(id)} value={String(id)}>{name}</option>;
               })}
             </select>
           </div>
 
-          <div>
-            <div style={{ fontWeight: 800, color: "#14532d", marginBottom: 6 }}>Party</div>
+          <div style={{ minWidth: 280 }}>
+            <div style={{ fontWeight: 800, color: "#14532d", marginBottom: 6 }}>Party / Lorry Party</div>
             <select
-              value={companyId ? `${sourceType}:${companyId}` : ""}
-              onChange={(e) => {
-                const [nextSourceType, nextCompanyId] = String(e.target.value || "").split(":");
-                setSourceType(nextSourceType || "inward");
-                setCompanyId(nextCompanyId || "");
-                setSelectedInward(null);
-                setSelectedInwardIds([]);
-                setAdjustQty("");
-                if (nextCompanyId) loadInwardStock(nextCompanyId, nextSourceType || "inward");
-                else setInwardList([]);
-              }}
-              style={{ ...inputStyle, minWidth: 280, width: "100%" }}
-              disabled={!selectedWarehouseId && !outward?.location_id}
+          value={companyId ? `${sourceType}:${companyId}` : ""}
+          onChange={(e) => {
+            const [nextSourceType, nextCompanyId] = String(e.target.value || "").split(":");
+            setSourceType(nextSourceType || "inward");
+            setCompanyId(nextCompanyId || "");
+            setSelectedInward(null);
+            setSelectedInwardIds([]);
+            setAdjustQty("");
+            if (nextCompanyId) loadInwardStock(nextCompanyId, nextSourceType || "inward");
+            else setInwardList([]);
+          }}
+              style={{ ...inputStyle, minWidth: 280 }}
+              disabled={!selectedLocationId && !!outward?.location_id}
             >
-              <option value="">Select Party</option>
+              <option value="">Select Party / Lorry Party</option>
               {companyList.map((company) => (
                 <option
-                  key={`${company.source_type}-${company.id}`}
-                  value={`${company.source_type}:${company.id}`}
-                >
-                  {company.name} {company.source_type === "palti_lorry" ? "(Palti Lorry)" : "(Inward)"}
-                </option>
+              key={`${company.source_type}-${company.id}`}
+              value={`${company.source_type}:${company.id}`}
+            >
+              {company.name} {company.source_type === "palti_lorry" ? "(Palti Lorry)" : "(Inward)"}
+            </option>
               ))}
             </select>
           </div>
@@ -881,7 +880,7 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
 
       <div style={cardStyle}>
         <h3 style={sectionTitle}>
-          {isPaltiSource ? "Available Palti Lorry Details" : "Available Inward Lorry Details"}
+          {isPaltiSource ? "Available Palti Lorry List" : "Available Inward Lorry List"}
         </h3>
         <table style={tableStyle}>
           <thead>
