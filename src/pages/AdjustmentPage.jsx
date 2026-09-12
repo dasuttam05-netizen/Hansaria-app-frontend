@@ -197,11 +197,20 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
     const locationId = String(outward?.location_id ?? "").trim();
     const warehouseId = String(outward?.warehouse_id ?? "").trim();
 
-    // Send both scopes. Backend uses warehouse for Inward and location for Palti.
-    return {
-      ...(warehouseId ? { warehouse_id: warehouseId } : {}),
-      ...(locationId ? { location_id: locationId } : {}),
-    };
+    // A location-based outward must never send a warehouse filter.
+    if (locationId) {
+      return {
+        location_id: locationId,
+      };
+    }
+
+    if (warehouseId) {
+      return {
+        warehouse_id: warehouseId,
+      };
+    }
+
+    return {};
   };
 
   const visibleInwardList = useMemo(() => {
@@ -400,7 +409,8 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
       updated[existingIndex].qty = nextQty;
       setAdjustments(updated);
     } else {
-      const selectedCompany = companyList.find((c) => String(c.id) === String(companyId));
+      const sourceCompanyId = selectedInward?.company_id ?? companyId;
+      const selectedCompany = companyList.find((c) => String(c.id) === String(sourceCompanyId));
 
       setAdjustments((prev) => [
         ...prev,
@@ -411,9 +421,9 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
           source_type: selectedInward.source_type || sourceType,
           voucher_no: selectedInward.voucher_no,
           lorry_no: selectedInward.lorry_no,
-          company_id: /^-?\d+(?:\.0+)?$/.test(String(companyId).trim())
-            ? Number(companyId)
-            : String(companyId).trim(),
+          company_id: /^-?\d+(?:\.0+)?$/.test(String(sourceCompanyId).trim())
+            ? Number(sourceCompanyId)
+            : String(sourceCompanyId).trim(),
           company_name: selectedCompany?.name || "",
           qty,
         },
@@ -452,7 +462,6 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
       return;
     }
 
-    const selectedCompany = companyList.find((c) => String(c.id) === String(companyId));
     const nextAdjustments = [...adjustments];
 
     for (const row of rowsToAdd) {
@@ -476,8 +485,10 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
           source_type: row.source_type || sourceType,
           voucher_no: row.voucher_no,
           lorry_no: row.lorry_no,
-          company_id: Number(companyId),
-          company_name: selectedCompany?.name || "",
+          company_id: /^-?\d+(?:\.0+)?$/.test(String(row.company_id ?? companyId).trim())
+            ? Number(row.company_id ?? companyId)
+            : String(row.company_id ?? companyId).trim(),
+          company_name: row.company_name || "",
           qty,
         });
       }
