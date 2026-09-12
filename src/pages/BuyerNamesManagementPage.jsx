@@ -52,6 +52,13 @@ export default function BuyerNamesManagementPage() {
   }, [location.state]);
 
   useEffect(() => {
+    const requestedId = String(location.state?.editId || "");
+    if (!requestedId || !rows.length) return;
+    const buyer = rows.find((item) => String(item.id || item._id) === requestedId);
+    if (buyer) handleEdit(buyer);
+  }, [location.state, rows]);
+
+  useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
         fetchRows();
@@ -107,13 +114,13 @@ export default function BuyerNamesManagementPage() {
     try {
       let savedBuyer = null;
       if (editId) {
-        await axios.put(`${API_URL}/${editId}`, formData);
+        savedBuyer = (await axios.put(`${API_URL}/${editId}`, formData))?.data || { ...formData, id: editId };
         alert("Buyer updated");
       } else {
         savedBuyer = (await axios.post(API_URL, formData))?.data || null;
         alert("Buyer saved");
       }
-      if (!editId && location.state?.returnTo && location.state.returnField === "buyer" && savedBuyer) {
+      if (location.state?.returnTo && location.state.returnField === "buyer" && savedBuyer) {
         navigate(location.state.returnTo, {
           replace: true,
           state: { masterCreated: savedBuyer, returnField: "buyer" },
