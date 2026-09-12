@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import axios from "axios";
+import { useLocation, useNavigate } from "react-router-dom";
 import { loadSession, hasPermission } from "../utils/auth";
 import MasterPartyDetailForm from "../components/MasterPartyDetailForm";
 
@@ -22,6 +23,8 @@ export default function BuyerNamesManagementPage() {
   const [importing, setImporting] = useState(false);
 
   const API_URL = "/api/buyer-names";
+  const location = useLocation();
+  const navigate = useNavigate();
   const { user } = loadSession();
   const isAdmin = hasPermission(user, "all");
   const canCreate = hasPermission(user, "buyerNames.create");
@@ -41,6 +44,12 @@ export default function BuyerNamesManagementPage() {
   useEffect(() => {
     fetchRows();
   }, [fetchRows]);
+
+  useEffect(() => {
+    if (!location.state?.returnTo || location.state.returnField !== "buyer") return;
+    setFormData((prev) => ({ ...prev, name: location.state.draftName || prev.name }));
+    setView("form");
+  }, [location.state]);
 
   useEffect(() => {
     const handleVisibilityChange = () => {
@@ -96,12 +105,20 @@ export default function BuyerNamesManagementPage() {
       return;
     }
     try {
+      let savedBuyer = null;
       if (editId) {
         await axios.put(`${API_URL}/${editId}`, formData);
         alert("Buyer updated");
       } else {
-        await axios.post(API_URL, formData);
+        savedBuyer = (await axios.post(API_URL, formData))?.data || null;
         alert("Buyer saved");
+      }
+      if (!editId && location.state?.returnTo && location.state.returnField === "buyer" && savedBuyer) {
+        navigate(location.state.returnTo, {
+          replace: true,
+          state: { masterCreated: savedBuyer, returnField: "buyer" },
+        });
+        return;
       }
       goList();
       fetchRows();
