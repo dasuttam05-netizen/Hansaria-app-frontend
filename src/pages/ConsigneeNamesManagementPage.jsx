@@ -62,6 +62,13 @@ export default function ConsigneeNamesManagementPage() {
   }, [location.state]);
 
   useEffect(() => {
+    const requestedId = String(location.state?.editId || "");
+    if (!requestedId || !rows.length) return;
+    const consignee = rows.find((item) => String(item.id || item._id) === requestedId);
+    if (consignee) handleEdit(consignee);
+  }, [location.state, rows]);
+
+  useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === "visible") {
         fetchRows();
@@ -138,13 +145,13 @@ export default function ConsigneeNamesManagementPage() {
     try {
       let savedConsignee = null;
       if (editId) {
-        await axios.put(`${API}/consignee-names/${editId}`, payload);
+        savedConsignee = (await axios.put(`${API}/consignee-names/${editId}`, payload))?.data || { ...payload, id: editId };
         alert("Consignee updated");
       } else {
         savedConsignee = (await axios.post(`${API}/consignee-names`, payload))?.data || null;
         alert("Consignee saved");
       }
-      if (!editId && location.state?.returnTo && location.state.returnField === "consignee" && savedConsignee) {
+      if (location.state?.returnTo && location.state.returnField === "consignee" && savedConsignee) {
         navigate(location.state.returnTo, {
           replace: true,
           state: { masterCreated: savedConsignee, returnField: "consignee", buyerId: payload.buyer_id },
