@@ -197,8 +197,7 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
     const locationId = String(outward?.location_id ?? "").trim();
     const warehouseId = String(outward?.warehouse_id ?? "").trim();
 
-    // Send both scopes so the single party dropdown can load both groups:
-    // Inward => warehouse based, Palti => location based.
+    // Send both scopes. Backend uses warehouse for Inward and location for Palti.
     return {
       ...(warehouseId ? { warehouse_id: warehouseId } : {}),
       ...(locationId ? { location_id: locationId } : {}),
@@ -814,33 +813,17 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
             if (nextCompanyId) loadInwardStock(nextCompanyId, nextSourceType || "inward");
             else setInwardList([]);
           }}
-          style={{ ...inputStyle, minWidth: 320 }}
+          style={{ ...inputStyle, minWidth: 280 }}
         >
-          <option value="">Select Party</option>
-          <optgroup label="Party (Inward) — Warehouse">
-            {companyList
-              .filter((company) => company.source_type !== "palti_lorry")
-              .map((company) => (
-                <option
-                  key={`inward-${company.id}`}
-                  value={`inward:${company.id}`}
-                >
-                  {company.name}
-                </option>
-              ))}
-          </optgroup>
-          <optgroup label="Party (Palti) — Location">
-            {companyList
-              .filter((company) => company.source_type === "palti_lorry")
-              .map((company) => (
-                <option
-                  key={`palti-${company.palti_source || "palti"}-${company.id}`}
-                  value={`palti_lorry:${company.id}`}
-                >
-                  {company.name}
-                </option>
-              ))}
-          </optgroup>
+          <option value="">Select Company</option>
+          {companyList.map((company) => (
+            <option
+              key={`${company.source_type}-${company.id}`}
+              value={`${company.source_type}:${company.id}`}
+            >
+              {company.name} {company.source_type === "palti_lorry" ? "(Palti Lorry)" : "(Inward)"}
+            </option>
+          ))}
         </select>
 
         <div style={{ marginTop: 14, fontWeight: 800, color: "#14532d" }}>
