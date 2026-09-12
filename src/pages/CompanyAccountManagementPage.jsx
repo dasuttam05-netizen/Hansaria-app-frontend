@@ -354,7 +354,7 @@ export default function CompanyAccountsPage() {
             </>
           )}
           <button type="button" onClick={goAdd} style={{ ...btnPrimary, background: "#0f766e" }}>
-            Add New Account
+            Add Company Account
           </button>
         </div>
       </div>
