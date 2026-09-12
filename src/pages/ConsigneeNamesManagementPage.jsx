@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import axios from "axios";
+import { useLocation, useNavigate } from "react-router-dom";
 import { loadSession, hasPermission } from "../utils/auth";
 import MasterPartyDetailForm from "../components/MasterPartyDetailForm";
 
@@ -24,6 +25,8 @@ export default function ConsigneeNamesManagementPage() {
   const [importing, setImporting] = useState(false);
 
   const API = "/api";
+  const location = useLocation();
+  const navigate = useNavigate();
   const { user } = loadSession();
   const isAdmin = hasPermission(user, "all");
   const canCreate = hasPermission(user, "consigneeNames.create");
@@ -47,6 +50,16 @@ export default function ConsigneeNamesManagementPage() {
   useEffect(() => {
     fetchRows();
   }, [fetchRows]);
+
+  useEffect(() => {
+    if (!location.state?.returnTo || location.state.returnField !== "consignee") return;
+    setFormData((prev) => ({
+      ...prev,
+      buyer_ids: location.state.buyerId ? [String(location.state.buyerId)] : prev.buyer_ids,
+      name: location.state.draftName || prev.name,
+    }));
+    setView("form");
+  }, [location.state]);
 
   useEffect(() => {
     const handleVisibilityChange = () => {
@@ -123,12 +136,20 @@ export default function ConsigneeNamesManagementPage() {
       buyer_id: buyer_ids[0] || null,
     };
     try {
+      let savedConsignee = null;
       if (editId) {
         await axios.put(`${API}/consignee-names/${editId}`, payload);
         alert("Consignee updated");
       } else {
-        await axios.post(`${API}/consignee-names`, payload);
+        savedConsignee = (await axios.post(`${API}/consignee-names`, payload))?.data || null;
         alert("Consignee saved");
+      }
+      if (!editId && location.state?.returnTo && location.state.returnField === "consignee" && savedConsignee) {
+        navigate(location.state.returnTo, {
+          replace: true,
+          state: { masterCreated: savedConsignee, returnField: "consignee", buyerId: payload.buyer_id },
+        });
+        return;
       }
       goList();
       fetchRows();
