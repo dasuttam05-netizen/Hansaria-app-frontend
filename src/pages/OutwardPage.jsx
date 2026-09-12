@@ -30,6 +30,17 @@ const inp = {
   background: "#fff",
 };
 
+const miniEdit = {
+  border: "1px solid #2563eb",
+  background: "#eff6ff",
+  color: "#1d4ed8",
+  padding: "8px 10px",
+  borderRadius: "6px",
+  cursor: "pointer",
+  fontSize: "12px",
+  fontWeight: 700,
+};
+
 function Field({ label, children }) {
   return (
     <div>
@@ -1303,7 +1314,7 @@ Consignee: ${row.consignee_name}`;
     whiteSpace: "nowrap",
   };
 
-  const openMasterPage = (path, returnField, draftName, companyId = "") => {
+  const openMasterPage = (path, returnField, draftName, companyId = "", editId = "") => {
     setShowForm(false);
     navigate(path, {
       state: {
@@ -1311,6 +1322,7 @@ Consignee: ${row.consignee_name}`;
         returnField,
         draftName: String(draftName || "").trim(),
         companyId: String(companyId || ""),
+        editId: String(editId || ""),
       },
     });
   };
@@ -1329,10 +1341,20 @@ Consignee: ${row.consignee_name}`;
   const handleMasterInputKeyDown = (event, path, returnField, value, companyId = "", items = [], nameKey = "name") => {
     if (event.altKey && event.key.toLowerCase() === "c") {
       event.preventDefault();
-      if ((items || []).some((item) => sameText(item?.[nameKey], value))) return;
-      openMasterPage(path, returnField, value, companyId);
+      const selectedItem = (items || []).find((item) => sameText(item?.[nameKey], value));
+      openMasterPage(path, returnField, value, companyId, selectedItem ? getRecordId(selectedItem) : "");
     }
   };
+
+  const openSelectedMasterForEdit = (path, returnField, item, companyId = "", nameKey = "name") => {
+    if (!item) return;
+    openMasterPage(path, returnField, item?.[nameKey], companyId, getRecordId(item));
+  };
+
+  const selectedCompany = companies.find((item) => sameId(getRecordId(item), formData.company_id));
+  const selectedAccount = companyAccounts.find((item) => sameId(getRecordId(item), formData.company_account_id));
+  const selectedBuyer = buyerNames.find((item) => sameId(getRecordId(item), formData.buyer_id));
+  const selectedConsignee = consigneeNames.find((item) => sameId(getRecordId(item), formData.consignee_id));
 
   const closeFormModal = () => {
     setShowForm(false);
@@ -1663,14 +1685,17 @@ Consignee: ${row.consignee_name}`;
                 </Field>
 
                 <Field label="Select Company">
-                  <input
-                    list="outward-company-names"
-                    value={formData.company_name || companies.find((item) => sameId(getRecordId(item), formData.company_id))?.name || ""}
-                    onChange={(e) => handleMasterInputChange("company_id", "company_name", companies, "name", e.target.value)}
-                    onKeyDown={(e) => handleMasterInputKeyDown(e, "/companies", "company", e.currentTarget.value, "", companies)}
-                    placeholder="Type company name (Alt+C to create)"
-                    style={inp}
-                  />
+                  <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                    <input
+                      list="outward-company-names"
+                      value={formData.company_name || selectedCompany?.name || ""}
+                      onChange={(e) => handleMasterInputChange("company_id", "company_name", companies, "name", e.target.value)}
+                      onKeyDown={(e) => handleMasterInputKeyDown(e, "/companies", "company", e.currentTarget.value, "", companies)}
+                      placeholder="Type company name (Alt+C to create)"
+                      style={{ ...inp, flex: 1 }}
+                    />
+                    {selectedCompany && <button type="button" onClick={() => openSelectedMasterForEdit("/companies", "company", selectedCompany)} style={miniEdit}>Edit</button>}
+                  </div>
                   <datalist id="outward-company-names">
                     {companies.map((c) => (
                       <option key={getRecordId(c)} value={c.name} />
@@ -1679,14 +1704,17 @@ Consignee: ${row.consignee_name}`;
                 </Field>
 
                 <Field label="Select Account">
-                  <input
-                    list="outward-account-names"
-                    value={formData.account_name || companyAccounts.find((item) => sameId(getRecordId(item), formData.company_account_id))?.account_name || ""}
-                    onChange={(e) => handleMasterInputChange("company_account_id", "account_name", companyAccounts.filter((item) => accountBelongsToCompany(item, formData.company_id, companyLookup.get(String(formData.company_id)))), "account_name", e.target.value)}
-                    onKeyDown={(e) => handleMasterInputKeyDown(e, "/company-accounts", "account", e.currentTarget.value, formData.company_id, companyAccounts, "account_name")}
-                    placeholder="Type account name (Alt+C to create)"
-                    style={inp}
-                  />
+                  <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                    <input
+                      list="outward-account-names"
+                      value={formData.account_name || selectedAccount?.account_name || ""}
+                      onChange={(e) => handleMasterInputChange("company_account_id", "account_name", companyAccounts.filter((item) => accountBelongsToCompany(item, formData.company_id, companyLookup.get(String(formData.company_id)))), "account_name", e.target.value)}
+                      onKeyDown={(e) => handleMasterInputKeyDown(e, "/company-accounts", "account", e.currentTarget.value, formData.company_id, companyAccounts, "account_name")}
+                      placeholder="Type account name (Alt+C to create)"
+                      style={{ ...inp, flex: 1 }}
+                    />
+                    {selectedAccount && <button type="button" onClick={() => openSelectedMasterForEdit("/company-accounts", "account", selectedAccount, formData.company_id, "account_name")} style={miniEdit}>Edit</button>}
+                  </div>
                   <datalist id="outward-account-names">
                     {formData.company_id && companyAccounts
                       .filter((acc) => accountBelongsToCompany(
@@ -1756,29 +1784,35 @@ Consignee: ${row.consignee_name}`;
                 </Field>
 
                 <Field label="Select buyer name">
-                  <input
-                    list="outward-buyer-names"
-                    value={formData.buyer_name || buyerNames.find((item) => sameId(getRecordId(item), formData.buyer_id))?.name || ""}
-                    onChange={(e) => handleMasterInputChange("buyer_id", "buyer_name", buyerNames, "name", e.target.value)}
-                    onKeyDown={(e) => handleMasterInputKeyDown(e, "/buyer-names", "buyer", e.currentTarget.value, "", buyerNames)}
-                    placeholder="Type buyer name (Alt+C to create)"
-                    style={inp}
-                  />
+                  <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                    <input
+                      list="outward-buyer-names"
+                      value={formData.buyer_name || selectedBuyer?.name || ""}
+                      onChange={(e) => handleMasterInputChange("buyer_id", "buyer_name", buyerNames, "name", e.target.value)}
+                      onKeyDown={(e) => handleMasterInputKeyDown(e, "/buyer-names", "buyer", e.currentTarget.value, "", buyerNames)}
+                      placeholder="Type buyer name (Alt+C to create)"
+                      style={{ ...inp, flex: 1 }}
+                    />
+                    {selectedBuyer && <button type="button" onClick={() => openSelectedMasterForEdit("/buyer-names", "buyer", selectedBuyer)} style={miniEdit}>Edit</button>}
+                  </div>
                   <datalist id="outward-buyer-names">
                     {buyerNames.map((b) => <option key={getRecordId(b)} value={b.name} />)}
                   </datalist>
                 </Field>
 
                 <Field label="Select consignee">
-                  <input
-                    list="outward-consignee-names"
-                    value={formData.consignee_name || consigneeNames.find((item) => sameId(getRecordId(item), formData.consignee_id))?.name || ""}
-                    onChange={(e) => handleMasterInputChange("consignee_id", "consignee_name", consigneesForBuyer, "name", e.target.value)}
-                    onKeyDown={(e) => handleMasterInputKeyDown(e, "/consignee-names", "consignee", e.currentTarget.value, formData.buyer_id, consigneesForBuyer)}
-                    placeholder={formData.buyer_id ? "Type consignee name (Alt+C to create)" : "Select buyer first"}
-                    disabled={!formData.buyer_id}
-                    style={{ ...inp, opacity: formData.buyer_id ? 1 : 0.65 }}
-                  />
+                  <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                    <input
+                      list="outward-consignee-names"
+                      value={formData.consignee_name || selectedConsignee?.name || ""}
+                      onChange={(e) => handleMasterInputChange("consignee_id", "consignee_name", consigneesForBuyer, "name", e.target.value)}
+                      onKeyDown={(e) => handleMasterInputKeyDown(e, "/consignee-names", "consignee", e.currentTarget.value, formData.buyer_id, consigneesForBuyer)}
+                      placeholder={formData.buyer_id ? "Type consignee name (Alt+C to create)" : "Select buyer first"}
+                      disabled={!formData.buyer_id}
+                      style={{ ...inp, flex: 1, opacity: formData.buyer_id ? 1 : 0.65 }}
+                    />
+                    {selectedConsignee && <button type="button" onClick={() => openSelectedMasterForEdit("/consignee-names", "consignee", selectedConsignee, formData.buyer_id)} style={miniEdit}>Edit</button>}
+                  </div>
                   <datalist id="outward-consignee-names">
                       {consigneesForBuyer.map((c) => (
                         <option key={getRecordId(c)} value={c.name} />
