@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback } from "react";
 import axios from "axios";
+import { useLocation, useNavigate } from "react-router-dom";
 import { loadSession, hasPermission } from "../utils/auth";
 const emptyForm = () => ({
   account_name: "",
@@ -10,10 +11,18 @@ const emptyForm = () => ({
 });
 
 export default function CompanyAccountsPage() {
+  const location = useLocation();
+  const navigate = useNavigate();
   const [accounts, setAccounts] = useState([]);
   const [companies, setCompanies] = useState([]);
-  const [view, setView] = useState("list");
-  const [formData, setFormData] = useState(emptyForm);
+  const [view, setView] = useState(() => (
+    location.state?.returnTo && location.state.returnField === "account" ? "form" : "list"
+  ));
+  const [formData, setFormData] = useState(() => ({
+    ...emptyForm(),
+    company_id: location.state?.companyId || "",
+    account_name: location.state?.draftName || "",
+  }));
   const [editId, setEditId] = useState(null);
   const [importing, setImporting] = useState(false);
 
@@ -50,6 +59,23 @@ export default function CompanyAccountsPage() {
     fetchCompanies();
   }, [fetchAccounts, fetchCompanies]);
 
+  useEffect(() => {
+    if (!location.state?.returnTo || location.state.returnField !== "account") return;
+    setFormData((prev) => ({
+      ...prev,
+      company_id: location.state.companyId || prev.company_id,
+      account_name: location.state.draftName || prev.account_name,
+    }));
+    setView("form");
+  }, [location.state]);
+
+  useEffect(() => {
+    const requestedId = String(location.state?.editId || "");
+    if (!requestedId || !accounts.length) return;
+    const account = accounts.find((item) => String(item._id || item.id) === requestedId);
+    if (account) handleEdit(account);
+  }, [accounts, location.state]);
+
   const handleChange = (e) => {
     setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
   };
@@ -74,12 +100,20 @@ export default function CompanyAccountsPage() {
     }
 
     try {
+      let savedAccount = null;
       if (editId) {
-        await axios.put(`${API_URL}/${editId}`, formData);
+        savedAccount = (await axios.put(`${API_URL}/${editId}`, formData))?.data || { ...formData, _id: editId };
         alert("Account updated successfully");
       } else {
-        await axios.post(API_URL, formData);
+        savedAccount = (await axios.post(API_URL, formData))?.data || null;
         alert("Account added successfully");
+      }
+      if (location.state?.returnTo && location.state.returnField === "account" && savedAccount) {
+        navigate(location.state.returnTo, {
+          replace: true,
+          state: { masterCreated: savedAccount, returnField: "account", companyId: formData.company_id },
+        });
+        return;
       }
       goList();
       fetchAccounts();
