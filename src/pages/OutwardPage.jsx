@@ -1124,6 +1124,21 @@ export default function OutwardPage() {
     setShowForm(true);
   };
 
+  useEffect(() => {
+    const handleOutwardEditShortcut = (event) => {
+      if (!event.altKey || event.key.toLowerCase() !== "e") return;
+      event.preventDefault();
+      if (selectedUnloadingOutward) {
+        handleEdit(selectedUnloadingOutward);
+      } else {
+        toast.info("Select an outward entry first, then press Alt+E.", { theme: "colored" });
+      }
+    };
+
+    window.addEventListener("keydown", handleOutwardEditShortcut);
+    return () => window.removeEventListener("keydown", handleOutwardEditShortcut);
+  }, [selectedUnloadingOutward, canEdit]);
+
   const handleDelete = async (id) => {
     if (!canDelete) {
       toast.error("Delete is not allowed for this user.", { theme: "colored" });
@@ -1962,6 +1977,7 @@ Consignee: ${row.consignee_name}`;
                                 style={{ ...actionBtnStyle, background: "#3b82f6", color: "#fff", boxShadow: "0 10px 18px rgba(59, 130, 246, 0.28)" }}
                               >
                                 <span style={actionIconStyle}>✎</span>
+                                <span>Edit</span>
                               </button>
                             ) : null}
                             {canDelete ? (
