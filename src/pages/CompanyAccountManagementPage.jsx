@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from "react";
 import axios from "axios";
-import { loadSession } from "../utils/auth";
+import { useLocation, useNavigate } from "react-router-dom";
+import { loadSession, hasPermission } from "../utils/auth";
 const emptyForm = () => ({
   account_name: "",
   address: "",
@@ -18,6 +19,8 @@ export default function CompanyAccountsPage() {
   const [importing, setImporting] = useState(false);
 
   const API_URL = "/api/company-accounts";
+  const location = useLocation();
+  const navigate = useNavigate();
   const { user } = loadSession();
   const isAdmin = hasPermission(user, "all");
   const COMP_API = "/api/companies";
@@ -47,6 +50,16 @@ export default function CompanyAccountsPage() {
     fetchCompanies();
   }, [fetchAccounts, fetchCompanies]);
 
+  useEffect(() => {
+    if (!location.state?.returnTo || location.state.returnField !== "account") return;
+    setFormData((prev) => ({
+      ...prev,
+      company_id: location.state.companyId || prev.company_id,
+      account_name: location.state.draftName || prev.account_name,
+    }));
+    setView("form");
+  }, [location.state]);
+
   const handleChange = (e) => {
     setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
   };
@@ -71,12 +84,20 @@ export default function CompanyAccountsPage() {
     }
 
     try {
+      let savedAccount = null;
       if (editId) {
         await axios.put(`${API_URL}/${editId}`, formData);
         alert("Account updated successfully");
       } else {
-        await axios.post(API_URL, formData);
+        savedAccount = (await axios.post(API_URL, formData))?.data || null;
         alert("Account added successfully");
+      }
+      if (!editId && location.state?.returnTo && location.state.returnField === "account" && savedAccount) {
+        navigate(location.state.returnTo, {
+          replace: true,
+          state: { masterCreated: savedAccount, returnField: "account", companyId: formData.company_id },
+        });
+        return;
       }
       goList();
       fetchAccounts();
