@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import axios from "axios";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import { ToastContainer, toast, Slide } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 import AdjustmentPage from "./AdjustmentPage";
@@ -167,6 +167,7 @@ export default function OutwardPage() {
   };
   const API_BASE = "/api";
   const navigate = useNavigate();
+  const location = useLocation();
   const { user } = loadSession();
 
   const [outwards, setOutwards] = useState([]);
@@ -517,6 +518,40 @@ export default function OutwardPage() {
     : warehouses;
 
   const noWarehousesAvailable = formData.location_id && warehousesForLocation.length === 0;
+
+  useEffect(() => {
+    const createdRecord = location.state?.masterCreated;
+    const returnField = location.state?.returnField;
+    if (!createdRecord || !returnField) return;
+
+    const createdId = getRecordId(createdRecord);
+    const createdName = String(
+      createdRecord.name || createdRecord.account_name || createdRecord.company_name || ""
+    ).trim();
+    if (!createdId || !createdName) return;
+
+    if (returnField === "company") {
+      setCompanies((prev) => [createdRecord, ...prev.filter((item) => !sameId(getRecordId(item), createdId))]);
+      setFormData((prev) => ({ ...prev, company_id: createdId, company_name: createdName }));
+    } else if (returnField === "account") {
+      setCompanyAccounts((prev) => [createdRecord, ...prev.filter((item) => !sameId(getRecordId(item), createdId))]);
+      setFormData((prev) => ({
+        ...prev,
+        company_id: String(createdRecord.company_id || location.state?.companyId || prev.company_id || ""),
+        company_account_id: createdId,
+        account_name: createdName,
+      }));
+    } else if (returnField === "buyer") {
+      setBuyerNames((prev) => [createdRecord, ...prev.filter((item) => !sameId(getRecordId(item), createdId))]);
+      setFormData((prev) => ({ ...prev, buyer_id: createdId, buyer_name: createdName, consignee_id: "", consignee_name: "" }));
+    } else if (returnField === "consignee") {
+      setConsigneeNames((prev) => [createdRecord, ...prev.filter((item) => !sameId(getRecordId(item), createdId))]);
+      setFormData((prev) => ({ ...prev, consignee_id: createdId, consignee_name: createdName }));
+    }
+
+    setShowForm(true);
+    navigate(location.pathname, { replace: true, state: {} });
+  }, [location.pathname, location.state, navigate]);
 
   const totalSettlementsCount = useMemo(() => {
     // count unique outward_ids in settlement rows
@@ -1268,8 +1303,35 @@ Consignee: ${row.consignee_name}`;
     whiteSpace: "nowrap",
   };
 
-  const openMasterPage = (path) => {
-    navigate(path);
+  const openMasterPage = (path, returnField, draftName, companyId = "") => {
+    setShowForm(false);
+    navigate(path, {
+      state: {
+        returnTo: "/outward",
+        returnField,
+        draftName: String(draftName || "").trim(),
+        companyId: String(companyId || ""),
+      },
+    });
+  };
+
+  const handleMasterInputChange = (field, nameField, items, nameKey, value) => {
+    const typedName = String(value || "");
+    const match = items.find((item) => sameText(item?.[nameKey], typedName));
+    setFormData((prev) => ({
+      ...prev,
+      [field]: match ? getRecordId(match) : "",
+      [nameField]: typedName,
+      ...(field === "buyer_id" ? { consignee_id: "", consignee_name: "" } : {}),
+    }));
+  };
+
+  const handleMasterInputKeyDown = (event, path, returnField, value, companyId = "", items = [], nameKey = "name") => {
+    if (event.altKey && event.key.toLowerCase() === "c") {
+      event.preventDefault();
+      if ((items || []).some((item) => sameText(item?.[nameKey], value))) return;
+      openMasterPage(path, returnField, value, companyId);
+    }
   };
 
   const closeFormModal = () => {
@@ -1601,29 +1663,31 @@ Consignee: ${row.consignee_name}`;
                 </Field>
 
                 <Field label="Select Company">
-                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  <select name="company_id" value={formData.company_id} onChange={handleChange} style={inp}>
-                    <option value="">Select Company</option>
+                  <input
+                    list="outward-company-names"
+                    value={formData.company_name || companies.find((item) => sameId(getRecordId(item), formData.company_id))?.name || ""}
+                    onChange={(e) => handleMasterInputChange("company_id", "company_name", companies, "name", e.target.value)}
+                    onKeyDown={(e) => handleMasterInputKeyDown(e, "/companies", "company", e.currentTarget.value, "", companies)}
+                    placeholder="Type company name (Alt+C to create)"
+                    style={inp}
+                  />
+                  <datalist id="outward-company-names">
                     {companies.map((c) => (
-                      <option key={getRecordId(c)} value={getRecordId(c)}>
-                        {c.name}
-                      </option>
+                      <option key={getRecordId(c)} value={c.name} />
                     ))}
-                  </select>
-                  <button type="button" onClick={() => setShowCompanyModal(true)} style={{ ...btnStyle, background: "#0f766e", color: "#fff", whiteSpace: "nowrap" }}>+ Create</button>
-                  <button type="button" onClick={() => openMasterPage("/companies")} style={quickLinkButton}>Open</button>
-                  </div>
+                  </datalist>
                 </Field>
 
                 <Field label="Select Account">
-                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  <select
-                    name="company_account_id"
-                    value={formData.company_account_id}
-                    onChange={handleChange}
+                  <input
+                    list="outward-account-names"
+                    value={formData.account_name || companyAccounts.find((item) => sameId(getRecordId(item), formData.company_account_id))?.account_name || ""}
+                    onChange={(e) => handleMasterInputChange("company_account_id", "account_name", companyAccounts.filter((item) => accountBelongsToCompany(item, formData.company_id, companyLookup.get(String(formData.company_id)))), "account_name", e.target.value)}
+                    onKeyDown={(e) => handleMasterInputKeyDown(e, "/company-accounts", "account", e.currentTarget.value, formData.company_id, companyAccounts, "account_name")}
+                    placeholder="Type account name (Alt+C to create)"
                     style={inp}
-                  >
-                    <option value="">Select Account</option>
+                  />
+                  <datalist id="outward-account-names">
                     {formData.company_id && companyAccounts
                       .filter((acc) => accountBelongsToCompany(
                         acc,
@@ -1631,23 +1695,9 @@ Consignee: ${row.consignee_name}`;
                         companyLookup.get(String(formData.company_id))
                       ))
                       .map((acc) => (
-                        <option key={getRecordId(acc)} value={getRecordId(acc)}>
-                          {acc.account_name}
-                        </option>
+                        <option key={getRecordId(acc)} value={acc.account_name} />
                       ))}
-                  </select>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAccountForm((prev) => ({ ...prev, company_id: formData.company_id || prev.company_id }));
-                      setShowAccountModal(true);
-                    }}
-                    style={{ ...btnStyle, background: "#16a34a", color: "#fff", whiteSpace: "nowrap" }}
-                  >
-                    + Create
-                  </button>
-                  <button type="button" onClick={() => openMasterPage("/company-accounts")} style={quickLinkButton}>Open</button>
-                  </div>
+                  </datalist>
                 </Field>
 
                 <Field label="Lorry No">
@@ -1706,54 +1756,34 @@ Consignee: ${row.consignee_name}`;
                 </Field>
 
                 <Field label="Select buyer name">
-                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                    <select name="buyer_id" value={formData.buyer_id} onChange={handleChange} style={inp}>
-                      <option value="">Select buyer name</option>
-                      {buyerNames.map((b) => (
-                        <option key={getRecordId(b)} value={getRecordId(b)}>
-                          {b.name}
-                        </option>
-                      ))}
-                    </select>
-                    <button type="button" onClick={() => setShowBuyerModal(true)} style={{ ...btnStyle, background: "#2563eb", color: "#fff", whiteSpace: "nowrap" }}>+ Create</button>
-                    <button type="button" onClick={() => openMasterPage("/buyer-names")} style={quickLinkButton}>Open</button>
-                  </div>
+                  <input
+                    list="outward-buyer-names"
+                    value={formData.buyer_name || buyerNames.find((item) => sameId(getRecordId(item), formData.buyer_id))?.name || ""}
+                    onChange={(e) => handleMasterInputChange("buyer_id", "buyer_name", buyerNames, "name", e.target.value)}
+                    onKeyDown={(e) => handleMasterInputKeyDown(e, "/buyer-names", "buyer", e.currentTarget.value, "", buyerNames)}
+                    placeholder="Type buyer name (Alt+C to create)"
+                    style={inp}
+                  />
+                  <datalist id="outward-buyer-names">
+                    {buyerNames.map((b) => <option key={getRecordId(b)} value={b.name} />)}
+                  </datalist>
                 </Field>
 
                 <Field label="Select consignee">
-                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                    <select
-                      name="consignee_id"
-                      value={formData.consignee_id}
-                      onChange={handleChange}
-                      style={{
-                        ...inp,
-                        opacity: formData.buyer_id ? 1 : 0.65,
-                      }}
-                      disabled={!formData.buyer_id}
-                    >
-                      <option value="">
-                        {formData.buyer_id ? "Select consignee name" : "Select buyer first"}
-                      </option>
+                  <input
+                    list="outward-consignee-names"
+                    value={formData.consignee_name || consigneeNames.find((item) => sameId(getRecordId(item), formData.consignee_id))?.name || ""}
+                    onChange={(e) => handleMasterInputChange("consignee_id", "consignee_name", consigneesForBuyer, "name", e.target.value)}
+                    onKeyDown={(e) => handleMasterInputKeyDown(e, "/consignee-names", "consignee", e.currentTarget.value, formData.buyer_id, consigneesForBuyer)}
+                    placeholder={formData.buyer_id ? "Type consignee name (Alt+C to create)" : "Select buyer first"}
+                    disabled={!formData.buyer_id}
+                    style={{ ...inp, opacity: formData.buyer_id ? 1 : 0.65 }}
+                  />
+                  <datalist id="outward-consignee-names">
                       {consigneesForBuyer.map((c) => (
-                        <option key={getRecordId(c)} value={getRecordId(c)}>
-                          {c.name}
-                        </option>
+                        <option key={getRecordId(c)} value={c.name} />
                       ))}
-                    </select>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        const prefill = formData.buyer_id ? [String(formData.buyer_id)] : [];
-                        setConsigneeForm((prev) => ({ ...prev, buyer_ids: prefill.length ? prefill : prev.buyer_ids || [] }));
-                        setShowConsigneeModal(true);
-                      }}
-                      style={{ ...btnStyle, background: "#7c3aed", color: "#fff", whiteSpace: "nowrap" }}
-                    >
-                      + Create
-                    </button>
-                    <button type="button" onClick={() => openMasterPage("/consignee-names")} style={quickLinkButton}>Open</button>
-                  </div>
+                  </datalist>
                 </Field>
 
                 <div style={{ gridColumn: "1 / -1", display: "flex", flexDirection: "column", gap: "8px", marginTop: "6px" }}>
