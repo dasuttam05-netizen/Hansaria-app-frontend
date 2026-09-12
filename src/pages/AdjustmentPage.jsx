@@ -6,8 +6,7 @@ import "react-toastify/dist/ReactToastify.css";
 import { formatDisplayDate } from "../utils/date";
 
 export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose }) {
-  const [inwardCompanyList, setInwardCompanyList] = useState([]);
-  const [paltiCompanyList, setPaltiCompanyList] = useState([]);
+  const [companyList, setCompanyList] = useState([]);
   const [companyId, setCompanyId] = useState("");
   const [sourceType, setSourceType] = useState("inward");
   const [inwardList, setInwardList] = useState([]);
@@ -194,11 +193,24 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
 
   const isPaltiSource = sourceType === "palti_lorry";
 
-  const getAdjustmentScope = (scopeType = sourceType) => {
-    if (scopeType === "palti_lorry") {
-      return { warehouse_id: "", location_id: outward?.location_id || "" };
+  const getAdjustmentScope = () => {
+    const locationId = String(outward?.location_id ?? "").trim();
+    const warehouseId = String(outward?.warehouse_id ?? "").trim();
+
+    // A location-based outward must never send a warehouse filter.
+    if (locationId) {
+      return {
+        location_id: locationId,
+      };
     }
-    return { warehouse_id: outward?.warehouse_id || "", location_id: "" };
+
+    if (warehouseId) {
+      return {
+        warehouse_id: warehouseId,
+      };
+    }
+
+    return {};
   };
 
   const visibleInwardList = useMemo(() => {
@@ -222,70 +234,43 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
   const selectedInwardCount = selectedInwardIds.length;
 
   const loadCompanyList = async () => {
-    if (!outward?.warehouse_id && !outward?.location_id) {
-      setInwardCompanyList([]);
-      setPaltiCompanyList([]);
+    const scope = getAdjustmentScope();
+    if (!scope.location_id && !scope.warehouse_id) {
+      setCompanyList([]);
+      return;
+    }
+
+    if (!String(outward?.product_id ?? "").trim()) {
+      setCompanyList([]);
       return;
     }
 
     try {
-      const requests = [];
-
-      // INWARD PARTY -> warehouse based only
-      if (outward?.warehouse_id) {
-        requests.push(
-          API.get("/api/adjustment/parties", {
-            params: {
-              warehouse_id: outward.warehouse_id,
-              product_id: outward.product_id,
-              source_type: "inward",
-            },
-            signal: abortControllerRef.current.signal,
-          })
-        );
-      } else {
-        requests.push(Promise.resolve({ data: [] }));
-      }
-
-      // PALTI PARTY -> location based only
-      if (outward?.location_id) {
-        requests.push(
-          API.get("/api/adjustment/parties", {
-            params: {
-              location_id: outward.location_id,
-              product_id: outward.product_id,
-              source_type: "palti_lorry",
-            },
-            signal: abortControllerRef.current.signal,
-          })
-        );
-      } else {
-        requests.push(Promise.resolve({ data: [] }));
-      }
-
-      const [inwardRes, paltiRes] = await Promise.all(requests);
-
-      if (!isMountedRef.current) return;
-
-      const normalizeList = (rows) => {
-        const out = [];
+      const res = await API.get("/api/adjustment/parties", {
+        params: {
+          ...scope,
+          product_id: outward.product_id,
+        },
+        signal: abortControllerRef.current.signal,
+      });
+      if (isMountedRef.current) {
+        const rows = Array.isArray(res.data) ? res.data : [];
+        const deduped = [];
         const seen = new Set();
-        (Array.isArray(rows) ? rows : []).forEach((row) => {
-          const id = String(row?.id ?? "").trim();
-          if (!id || seen.has(id)) return;
-          seen.add(id);
-          out.push(row);
+        rows.forEach((row) => {
+          const id = String(row?.id || "").trim();
+          const source = String(row?.source_type || "inward").trim();
+          const key = `${source}:${id}`;
+          if (!id || seen.has(key)) return;
+          seen.add(key);
+          deduped.push(row);
         });
-        return out;
-      };
-
-      setInwardCompanyList(normalizeList(inwardRes?.data));
-      setPaltiCompanyList(normalizeList(paltiRes?.data));
+        setCompanyList(deduped);
+      }
     } catch (err) {
       if (isMountedRef.current && err.name !== "CanceledError") {
-        setInwardCompanyList([]);
-        setPaltiCompanyList([]);
-        toast.error("Party load failed", { theme: "colored", autoClose: 2000 });
+        setCompanyList([]);
+        toast.error("Company load failed", { theme: "colored", autoClose: 2000 });
       }
     }
   };
@@ -293,7 +278,7 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
   const loadInwardStock = async (selectedCompanyId, selectedSourceType = sourceType) => {
     if (!outward || !selectedCompanyId) return setInwardList([]);
     try {
-      const scope = getAdjustmentScope(selectedSourceType);
+      const scope = getAdjustmentScope();
       const res = await API.get("/api/adjustment/inward/report", {
         params: {
           ...scope,
@@ -353,8 +338,6 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
   useEffect(() => {
     setCompanyId("");
     setSourceType("inward");
-    setInwardCompanyList([]);
-    setPaltiCompanyList([]);
     setInwardList([]);
     setSelectedInward(null);
     setSelectedInwardIds([]);
@@ -426,7 +409,7 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
       updated[existingIndex].qty = nextQty;
       setAdjustments(updated);
     } else {
-      const selectedCompany = (sourceType === "palti_lorry" ? paltiCompanyList : inwardCompanyList).find((c) => String(c.id) === String(companyId));
+      const selectedCompany = companyList.find((c) => String(c.id) === String(companyId));
 
       setAdjustments((prev) => [
         ...prev,
@@ -478,7 +461,7 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
       return;
     }
 
-    const selectedCompany = (sourceType === "palti_lorry" ? paltiCompanyList : inwardCompanyList).find((c) => String(c.id) === String(companyId));
+    const selectedCompany = companyList.find((c) => String(c.id) === String(companyId));
     const nextAdjustments = [...adjustments];
 
     for (const row of rowsToAdd) {
@@ -671,8 +654,6 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
     setAdjustments([]);
     setCompanyId("");
     setSourceType("inward");
-    setInwardCompanyList([]);
-    setPaltiCompanyList([]);
     setInwardList([]);
     setSelectedInward(null);
     setAdjustQty("");
@@ -828,46 +809,46 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
       </div>
 
       <div style={cardStyle}>
-        <h3 style={sectionTitle}>Party (Inward)</h3>
+        <h3 style={sectionTitle}>Select Company</h3>
         <select
-          value={sourceType === "inward" ? companyId : ""}
+          value={companyId ? `${sourceType}:${companyId}` : ""}
           onChange={(e) => {
-            const nextCompanyId = String(e.target.value || "");
-            setSourceType("inward");
-            setCompanyId(nextCompanyId);
+            const [nextSourceType, nextCompanyId] = String(e.target.value || "").split(":");
+            setSourceType(nextSourceType || "inward");
+            setCompanyId(nextCompanyId || "");
             setSelectedInward(null);
             setSelectedInwardIds([]);
             setAdjustQty("");
-            if (nextCompanyId) loadInwardStock(nextCompanyId, "inward");
-            else setInwardList([]);
-          }}
-          style={{ ...inputStyle, minWidth: 280, marginRight: 12 }}
-        >
-          <option value="">Select Inward Party</option>
-          {inwardCompanyList.map((company) => (
-            <option key={`inward-${company.id}`} value={company.id}>{company.name}</option>
-          ))}
-        </select>
-
-        <h3 style={{ ...sectionTitle, marginTop: 16 }}>Party (Palti)</h3>
-        <select
-          value={sourceType === "palti_lorry" ? companyId : ""}
-          onChange={(e) => {
-            const nextCompanyId = String(e.target.value || "");
-            setSourceType("palti_lorry");
-            setCompanyId(nextCompanyId);
-            setSelectedInward(null);
-            setSelectedInwardIds([]);
-            setAdjustQty("");
-            if (nextCompanyId) loadInwardStock(nextCompanyId, "palti_lorry");
+            if (nextCompanyId) loadInwardStock(nextCompanyId, nextSourceType || "inward");
             else setInwardList([]);
           }}
           style={{ ...inputStyle, minWidth: 280 }}
         >
-          <option value="">Select Palti Party</option>
-          {paltiCompanyList.map((company) => (
-            <option key={`palti-${company.id}-${company.palti_source || "paltilorryentries"}`} value={company.id}>{company.name}</option>
-          ))}
+          <option value="">Select Party</option>
+          <optgroup label="Party (Inward) — Warehouse">
+            {companyList
+              .filter((company) => company.source_type !== "palti_lorry")
+              .map((company) => (
+                <option
+                  key={`inward-${company.id}`}
+                  value={`inward:${company.id}`}
+                >
+                  {company.name}
+                </option>
+              ))}
+          </optgroup>
+          <optgroup label="Party (Palti) — Location">
+            {companyList
+              .filter((company) => company.source_type === "palti_lorry")
+              .map((company) => (
+                <option
+                  key={`palti-${company.palti_source || "palti"}-${company.id}`}
+                  value={`palti_lorry:${company.id}`}
+                >
+                  {company.name}
+                </option>
+              ))}
+          </optgroup>
         </select>
 
         <div style={{ marginTop: 14, fontWeight: 800, color: "#14532d" }}>
