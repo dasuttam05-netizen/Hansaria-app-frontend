@@ -197,20 +197,12 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
     const locationId = String(outward?.location_id ?? "").trim();
     const warehouseId = String(outward?.warehouse_id ?? "").trim();
 
-    // A location-based outward must never send a warehouse filter.
-    if (locationId) {
-      return {
-        location_id: locationId,
-      };
-    }
-
-    if (warehouseId) {
-      return {
-        warehouse_id: warehouseId,
-      };
-    }
-
-    return {};
+    // Send both scopes so the single party dropdown can load both groups:
+    // Inward => warehouse based, Palti => location based.
+    return {
+      ...(warehouseId ? { warehouse_id: warehouseId } : {}),
+      ...(locationId ? { location_id: locationId } : {}),
+    };
   };
 
   const visibleInwardList = useMemo(() => {
@@ -822,7 +814,7 @@ export default function AdjustmentPage({ outward, onSaved, onDeleted, onClose })
             if (nextCompanyId) loadInwardStock(nextCompanyId, nextSourceType || "inward");
             else setInwardList([]);
           }}
-          style={{ ...inputStyle, minWidth: 280 }}
+          style={{ ...inputStyle, minWidth: 320 }}
         >
           <option value="">Select Party</option>
           <optgroup label="Party (Inward) — Warehouse">
