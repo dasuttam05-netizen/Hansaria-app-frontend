@@ -11,16 +11,22 @@ const emptyForm = () => ({
 });
 
 export default function CompanyAccountsPage() {
+  const location = useLocation();
+  const navigate = useNavigate();
   const [accounts, setAccounts] = useState([]);
   const [companies, setCompanies] = useState([]);
-  const [view, setView] = useState("list");
-  const [formData, setFormData] = useState(emptyForm);
+  const [view, setView] = useState(() => (
+    location.state?.returnTo && location.state.returnField === "account" ? "form" : "list"
+  ));
+  const [formData, setFormData] = useState(() => ({
+    ...emptyForm(),
+    company_id: location.state?.companyId || "",
+    account_name: location.state?.draftName || "",
+  }));
   const [editId, setEditId] = useState(null);
   const [importing, setImporting] = useState(false);
 
   const API_URL = "/api/company-accounts";
-  const location = useLocation();
-  const navigate = useNavigate();
   const { user } = loadSession();
   const isAdmin = hasPermission(user, "all");
   const COMP_API = "/api/companies";
