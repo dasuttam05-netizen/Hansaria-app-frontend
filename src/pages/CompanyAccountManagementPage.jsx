@@ -66,6 +66,13 @@ export default function CompanyAccountsPage() {
     setView("form");
   }, [location.state]);
 
+  useEffect(() => {
+    const requestedId = String(location.state?.editId || "");
+    if (!requestedId || !accounts.length) return;
+    const account = accounts.find((item) => String(item._id || item.id) === requestedId);
+    if (account) handleEdit(account);
+  }, [accounts, location.state]);
+
   const handleChange = (e) => {
     setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
   };
@@ -92,13 +99,13 @@ export default function CompanyAccountsPage() {
     try {
       let savedAccount = null;
       if (editId) {
-        await axios.put(`${API_URL}/${editId}`, formData);
+        savedAccount = (await axios.put(`${API_URL}/${editId}`, formData))?.data || { ...formData, _id: editId };
         alert("Account updated successfully");
       } else {
         savedAccount = (await axios.post(API_URL, formData))?.data || null;
         alert("Account added successfully");
       }
-      if (!editId && location.state?.returnTo && location.state.returnField === "account" && savedAccount) {
+      if (location.state?.returnTo && location.state.returnField === "account" && savedAccount) {
         navigate(location.state.returnTo, {
           replace: true,
           state: { masterCreated: savedAccount, returnField: "account", companyId: formData.company_id },
