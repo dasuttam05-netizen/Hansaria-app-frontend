@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import axios from "axios";
+import { useLocation, useNavigate } from "react-router-dom";
 import { loadSession, hasPermission } from "../utils/auth";
 
 const emptyForm = () => ({
@@ -17,6 +18,8 @@ export default function CompanyManagementPage() {
   const [formData, setFormData] = useState(emptyForm);
   const [editId, setEditId] = useState(null);
   const API_URL = "/api/companies";
+  const location = useLocation();
+  const navigate = useNavigate();
   const { user } = loadSession();
   const canCreate = hasPermission(user, "companies.create");
   const canEdit = hasPermission(user, "companies.edit");
@@ -35,6 +38,12 @@ export default function CompanyManagementPage() {
   useEffect(() => {
     fetchCompanies();
   }, []);
+
+  useEffect(() => {
+    if (!location.state?.returnTo || location.state.returnField !== "company") return;
+    setFormData((prev) => ({ ...prev, name: location.state.draftName || prev.name }));
+    setShowForm(true);
+  }, [location.state]);
 
   const handleChange = (e) => setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
 
@@ -78,6 +87,13 @@ export default function CompanyManagementPage() {
           const others = prev.filter((item) => String(item._id) !== String(normalizedSaved._id));
           return [normalizedSaved, ...others];
         });
+      }
+      if (!editId && location.state?.returnTo && location.state.returnField === "company" && savedCompany) {
+        navigate(location.state.returnTo, {
+          replace: true,
+          state: { masterCreated: savedCompany, returnField: "company" },
+        });
+        return;
       }
       resetForm();
       fetchCompanies();
