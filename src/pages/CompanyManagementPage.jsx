@@ -45,6 +45,13 @@ export default function CompanyManagementPage() {
     setShowForm(true);
   }, [location.state]);
 
+  useEffect(() => {
+    const requestedId = String(location.state?.editId || "");
+    if (!requestedId || !companies.length) return;
+    const company = companies.find((item) => String(item._id || item.id) === requestedId);
+    if (company) handleEdit(company);
+  }, [companies, location.state]);
+
   const handleChange = (e) => setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
 
   const resetForm = () => {
@@ -88,7 +95,7 @@ export default function CompanyManagementPage() {
           return [normalizedSaved, ...others];
         });
       }
-      if (!editId && location.state?.returnTo && location.state.returnField === "company" && savedCompany) {
+      if (location.state?.returnTo && location.state.returnField === "company" && savedCompany) {
         navigate(location.state.returnTo, {
           replace: true,
           state: { masterCreated: savedCompany, returnField: "company" },
