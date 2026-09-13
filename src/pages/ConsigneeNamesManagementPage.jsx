@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useRef, useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import { useLocation, useNavigate } from "react-router-dom";
 import { loadSession, hasPermission } from "../utils/auth";
@@ -22,6 +22,7 @@ export default function ConsigneeNamesManagementPage() {
   const [view, setView] = useState("list");
   const [formData, setFormData] = useState(emptyForm);
   const [editId, setEditId] = useState(null);
+  const submitLockRef = useRef(false);
   const [importing, setImporting] = useState(false);
 
   const API = "/api";
@@ -130,6 +131,7 @@ export default function ConsigneeNamesManagementPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (submitLockRef.current) return;
     if (!(formData.name || "").trim()) {
       alert("Name is required");
       return;
@@ -142,6 +144,7 @@ export default function ConsigneeNamesManagementPage() {
       buyer_ids,
       buyer_id: buyer_ids[0] || null,
     };
+    submitLockRef.current = true;
     try {
       let savedConsignee = null;
       if (editId) {
@@ -163,6 +166,8 @@ export default function ConsigneeNamesManagementPage() {
     } catch (err) {
       console.error(err);
       alert(err.response?.data?.error || "Save failed");
+    } finally {
+      submitLockRef.current = false;
     }
   };
 
