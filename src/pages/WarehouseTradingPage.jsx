@@ -879,9 +879,10 @@ export default function WarehouseTradingPage() {
   // so the first voucher table paint is not competing with nine master requests.
   useEffect(() => {
     if (activeTab !== "vouchers") return;
+    masterDataLoadedRef.current = false;
     const timer = window.setTimeout(() => { loadData(); }, 900);
     return () => window.clearTimeout(timer);
-  }, [activeTab]);
+  }, [activeTab, activeVoucherType]);
 
   // Load voucher list when type changes
   useEffect(() => {
@@ -1133,7 +1134,8 @@ export default function WarehouseTradingPage() {
       // one in-flight request group so React effects cannot fire the same 9 calls twice.
       if (!force) {
         try {
-          const cached = JSON.parse(sessionStorage.getItem("warehouseTradingMasterData:v3") || "null");
+          const cacheKey = `warehouseTradingMasterData:v4:${activeVoucherType}`;
+          const cached = JSON.parse(sessionStorage.getItem(cacheKey) || "null");
           if (cached?.data && Date.now() - Number(cached.time || 0) < 30 * 60 * 1000) {
             const data = cached.data;
             setWarehouses(Array.isArray(data.warehouses) ? data.warehouses : []);
@@ -1153,29 +1155,43 @@ export default function WarehouseTradingPage() {
 
       const token = ++masterLoadTokenRef.current;
       try {
-        const [wRes, fRes, bRes, cRes, caRes, coRes, pRes, eRes, lRes] = await Promise.allSettled([
-          API.get("/api/warehouses"),
-          API.get("/api/farmers"),
-          API.get("/api/buyer-names"),
-          API.get("/api/companies"),
-          API.get("/api/company-accounts"),
-          API.get("/api/consignee-names"),
-          API.get("/api/products"),
-          API.get("/api/employees"),
-          API.get("/api/locations"),
-        ]);
-        const dataOf = (result) => (result.status === "fulfilled" ? result.value.data : []);
+        const masterRequests = {
+          warehouses: API.get("/api/warehouses"),
+          farmers: API.get("/api/farmers"),
+          buyerNames: API.get("/api/buyer-names"),
+          companies: API.get("/api/companies"),
+          companyAccounts: API.get("/api/company-accounts"),
+          consignees: API.get("/api/consignee-names"),
+          products: API.get("/api/products"),
+          employees: API.get("/api/employees"),
+          locations: API.get("/api/locations"),
+        };
+        const requiredMasters = activeVoucherType === "purchase"
+          ? ["warehouses", "farmers", "companyAccounts", "products", "employees", "locations"]
+          : activeVoucherType === "sale"
+            ? ["warehouses", "farmers", "buyerNames", "companies", "companyAccounts", "consignees", "products", "employees", "locations"]
+            : activeVoucherType === "payment"
+              ? ["warehouses", "farmers", "companyAccounts", "employees", "locations"]
+              : activeVoucherType === "receipt"
+                ? ["warehouses", "buyerNames", "companies", "companyAccounts"]
+                : [];
+        const results = await Promise.allSettled(requiredMasters.map((key) => masterRequests[key]));
+        const dataOf = (index) => {
+          const result = results[index];
+          return result?.status === "fulfilled" ? result.value.data : [];
+        };
+        const dataByKey = Object.fromEntries(requiredMasters.map((key, index) => [key, dataOf(index)]));
         if (token !== masterLoadTokenRef.current) return;
         const data = {
-          warehouses: Array.isArray(dataOf(wRes)) ? dataOf(wRes) : [],
-          farmers: Array.isArray(dataOf(fRes)) ? dataOf(fRes) : [],
-          buyerNames: Array.isArray(dataOf(bRes)) ? dataOf(bRes) : [],
-          companies: Array.isArray(dataOf(cRes)) ? dataOf(cRes) : [],
-          companyAccounts: Array.isArray(dataOf(caRes)) ? dataOf(caRes) : [],
-          consignees: Array.isArray(dataOf(coRes)) ? dataOf(coRes) : [],
-          products: Array.isArray(dataOf(pRes)) ? dataOf(pRes) : [],
-          employees: Array.isArray(dataOf(eRes)) ? dataOf(eRes) : [],
-          locations: Array.isArray(dataOf(lRes)) ? dataOf(lRes) : [],
+          warehouses: Array.isArray(dataByKey.warehouses) ? dataByKey.warehouses : [],
+          farmers: Array.isArray(dataByKey.farmers) ? dataByKey.farmers : [],
+          buyerNames: Array.isArray(dataByKey.buyerNames) ? dataByKey.buyerNames : [],
+          companies: Array.isArray(dataByKey.companies) ? dataByKey.companies : [],
+          companyAccounts: Array.isArray(dataByKey.companyAccounts) ? dataByKey.companyAccounts : [],
+          consignees: Array.isArray(dataByKey.consignees) ? dataByKey.consignees : [],
+          products: Array.isArray(dataByKey.products) ? dataByKey.products : [],
+          employees: Array.isArray(dataByKey.employees) ? dataByKey.employees : [],
+          locations: Array.isArray(dataByKey.locations) ? dataByKey.locations : [],
         };
         setWarehouses(data.warehouses);
         setFarmers(data.farmers);
@@ -1188,7 +1204,7 @@ export default function WarehouseTradingPage() {
         setLocations(data.locations);
         masterDataLoadedRef.current = true;
         try {
-          sessionStorage.setItem("warehouseTradingMasterData:v3", JSON.stringify({
+          sessionStorage.setItem(`warehouseTradingMasterData:v4:${activeVoucherType}`, JSON.stringify({
             time: Date.now(),
             data,
           }));
