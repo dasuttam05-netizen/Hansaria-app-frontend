@@ -972,7 +972,11 @@ export default function OutwardPage() {
       setIsSaving(true);
 
       if (editData) {
-        await axios.put(`${API_BASE}/outward/${editData.id}`, payload);
+        const outwardId = getRecordId(editData);
+        if (!outwardId) {
+          throw new Error("Outward record ID is missing");
+        }
+        await axios.put(`${API_BASE}/outward/${outwardId}`, payload);
         toast.info("Outward updated successfully", { theme: "colored" });
       } else {
         await axios.post(`${API_BASE}/outward`, payload);
@@ -2194,7 +2198,10 @@ Consignee: ${row.consignee_name}`;
                         {canEdit ? (
                           <button
                             type="button"
-                            onClick={() => handleEdit(row)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleEdit(row);
+                            }}
                             style={{ background: "#3b82f6", color: "#fff", border: "none", padding: "8px 12px", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 700 }}
                           >
                             Edit
