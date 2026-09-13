@@ -1846,7 +1846,6 @@ export default function WarehouseTradingPage() {
       if (activeVoucherType === "sale" && name === "sale_type") {
         next.against_purchase_enabled = false;
         next.against_purchase_farmer_id = "";
-        if (value === "direct") next.warehouse_id = "";
       }
       return next;
     });
