@@ -17,6 +17,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { hasPermission, loadSession } from "../utils/auth";
 import { consigneeHasBuyer, getConsigneeBuyerIds } from "../utils/consigneeBuyers";
+import { buildSalePurchaseTag, filterAvailablePurchaseTags } from "./salePurchaseTagging";
 
 const defaultForm = () => ({
   voucher_no: "",
@@ -744,22 +745,52 @@ export default function WarehouseTradingPage() {
     const purchaseId = String(purchase.id || purchase._id || "");
     const quantity = Math.max(0, toNumber(quantityValue));
     const rate = toNumber(purchase.rate);
+    const tag = buildSalePurchaseTag(purchase, purchase.farmer_id || formData.against_purchase_farmer_id || formData.farmer_id || "");
     setSalePurchaseLinks((prev) => {
       const others = prev.filter((item) => String(item.purchase_id) !== purchaseId);
       if (!purchaseId || quantity <= 0) return others;
       return [
         ...others,
         {
+          ...tag,
           purchase_id: purchaseId,
-          voucher_no: purchase.voucher_no || "",
-          farmer_id: String(purchase.farmer_id || formData.against_purchase_farmer_id || ""),
+          voucher_no: purchase.voucher_no || tag.voucher_no || "",
+          farmer_id: String(purchase.farmer_id || formData.against_purchase_farmer_id || formData.farmer_id || ""),
           quantity,
           rate,
           amount: Number((quantity * rate).toFixed(2)),
+          weight: quantity,
         },
       ];
     });
   };
+
+  const tagDirectSalePurchase = (purchase) => {
+    const tag = buildSalePurchaseTag(purchase, formData.farmer_id || formData.against_purchase_farmer_id || "");
+    if (!tag.purchase_id) return;
+
+    setSalePurchaseLinks((prev) => {
+      const others = prev.filter((item) => String(item.purchase_id) !== tag.purchase_id);
+      return [
+        ...others,
+        {
+          ...tag,
+          purchase_id: tag.purchase_id,
+          voucher_no: tag.voucher_no,
+          farmer_id: String(tag.farmer_id || formData.farmer_id || ""),
+          quantity: tag.weight,
+          weight: tag.weight,
+          rate: tag.rate,
+          amount: Number((tag.weight * tag.rate).toFixed(2)),
+        },
+      ];
+    });
+  };
+
+  const directSaleAvailablePurchaseRows = useMemo(
+    () => filterAvailablePurchaseTags(salePurchaseRows, salePurchaseLinks),
+    [salePurchaseRows, salePurchaseLinks]
+  );
   const saleVoucherPassBills = list.filter((item) => {
     const sameWarehouse = !formData.warehouse_id || String(item.warehouse_id || "") === String(formData.warehouse_id);
     const sameAccount = !formData.company_account_id || String(item.company_account_id || "") === String(formData.company_account_id);
@@ -927,16 +958,17 @@ export default function WarehouseTradingPage() {
     formData.warehouse_id,
   ]);
 
-  // Report rows: reload whenever the report page or its filters change.
-  // Purchase/Sale/Warehouse Stock reports are server-paged, so changing page
-  // must trigger a fresh request for that page. Party ledgers remain client-paged.
+  // Report rows: page/filter changes only.
   useEffect(() => {
     if (activeTab !== "reports") return;
+    // Party ledgers are loaded once per filter/search change. Pagination is
+    // intentionally client-side so clicking Next/Prev never re-requests the
+    // expensive ledger endpoint. This keeps page changes effectively instant.
     const timer = window.setTimeout(() => {
-      loadReport(activeReport, reportPage, reportFilters);
+      loadReport();
     }, 120);
     return () => window.clearTimeout(timer);
-  }, [activeTab, activeReport, reportPage, globalSearch, reportFilters.farmer_id, reportFilters.company_account_id, reportFilters.warehouse_id, reportFilters.sale_buyer_id, reportFilters.sale_company_account_id, reportFilters.sale_journey_token, reportFilters.sale_lorry_no, reportFilters.sale_bill_no, reportFilters.details_of_deduction]);
+  }, [activeTab, activeReport, globalSearch, reportFilters.farmer_id, reportFilters.company_account_id, reportFilters.warehouse_id, reportFilters.sale_buyer_id, reportFilters.sale_company_account_id, reportFilters.sale_journey_token, reportFilters.sale_lorry_no, reportFilters.sale_bill_no, reportFilters.details_of_deduction]);
 
   // Filter options are independent of pagination. Never reload them just
   // because the user moves from page 1 to page 2.
@@ -1038,6 +1070,21 @@ export default function WarehouseTradingPage() {
     window.addEventListener("keydown", handleF2Key);
     return () => window.removeEventListener("keydown", handleF2Key);
   }, [activeTab, activeVoucherType]);
+
+  useEffect(() => {
+    const handleF10TagPurchaseKey = (event) => {
+      if (event.key !== "F10" || activeTab !== "vouchers" || activeVoucherType !== "sale" || formData.sale_type !== "direct") return;
+      event.preventDefault();
+      const firstAvailable = directSaleAvailablePurchaseRows[0];
+      if (!firstAvailable) {
+        alert("No untagged purchase bill is available for this direct sale.");
+        return;
+      }
+      tagDirectSalePurchase(firstAvailable);
+    };
+    window.addEventListener("keydown", handleF10TagPurchaseKey);
+    return () => window.removeEventListener("keydown", handleF10TagPurchaseKey);
+  }, [activeTab, activeVoucherType, formData.sale_type, directSaleAvailablePurchaseRows, formData.farmer_id]);
 
   useEffect(() => {
     const loadSaleTransportCharge = async () => {
@@ -1553,15 +1600,6 @@ export default function WarehouseTradingPage() {
         params.company_account_id = filters.sale_company_account_id;
       }
 
-      // Server-paged reports need page in both the API params and cache key.
-      // Previously the cache key was created before params.page was added, so
-      // page 2/3 could incorrectly reuse page 1 data.
-      const serverPagedReport = ["sale", "purchase", "warehouse-stock"].includes(reportType);
-      if (serverPagedReport) {
-        params.page = page;
-        params.page_size = PAGE_SIZE;
-      }
-
       const reportCacheKey = JSON.stringify({
         reportType,
         params,
@@ -1588,6 +1626,12 @@ export default function WarehouseTradingPage() {
         return;
       }
 
+      // Keep large reports server-paged so the first click only loads one page.
+      const serverPagedReport = ["sale", "purchase", "warehouse-stock"].includes(reportType);
+      if (serverPagedReport) {
+        params.page = page;
+        params.page_size = PAGE_SIZE;
+      }
       const reportRequest = API.get(`/api/wh-vouchers/report/${endpoint}`, { params });
       reportDataInFlightRef.current.set(reportCacheKey, reportRequest);
       const res = await reportRequest.finally(() => {
@@ -2099,9 +2143,9 @@ export default function WarehouseTradingPage() {
         payload.direct_purchase_amount = payload.sale_type === "direct"
           ? Number((payload.quantity * toNumber(formData.direct_purchase_rate)).toFixed(2))
           : 0;
-        payload.against_purchase_enabled = payload.sale_type !== "direct" && Boolean(formData.against_purchase_enabled && salePurchaseLinks.length);
+        payload.against_purchase_enabled = Boolean((payload.sale_type === "direct" || formData.against_purchase_enabled) && salePurchaseLinks.length);
         payload.against_purchase_farmer_id = payload.sale_type === "direct" ? formData.farmer_id : (formData.against_purchase_farmer_id || "");
-        payload.against_purchase_links = payload.against_purchase_enabled ? salePurchaseLinks : [];
+        payload.against_purchase_links = salePurchaseLinks;
         payload.create_against_purchase = payload.sale_type === "direct" && !editId;
         if (payload.sale_type === "direct") payload.warehouse_id = "";
       }
@@ -5190,6 +5234,54 @@ export default function WarehouseTradingPage() {
                           <div style={erpRow}>
                             <label style={erpLabel}>Purchase Amount</label>
                             <input value={formatMoney(saleDispatchQtyFromData(formData) * toNumber(formData.direct_purchase_rate))} readOnly style={erpInput} />
+                          </div>
+                          <div style={{ ...erpRow, display: "block" }}>
+                            <label style={erpLabel}>Purchase Bill Tagging (F10)</label>
+                            <div style={{ border: "1px solid #dbe3ef", borderRadius: 8, background: "#f8fafc", padding: 10 }}>
+                              <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center", marginBottom: 8 }}>
+                                <span style={{ fontSize: 12, color: "#475569", fontWeight: 700 }}>Available Purchase Bills</span>
+                                <button type="button" onClick={() => directSaleAvailablePurchaseRows[0] && tagDirectSalePurchase(directSaleAvailablePurchaseRows[0])} style={{ ...btnAction, background: "#0f766e", padding: "6px 10px", fontSize: 12 }} disabled={!directSaleAvailablePurchaseRows.length}>Tag First Bill</button>
+                              </div>
+                              {directSaleAvailablePurchaseRows.length === 0 ? (
+                                <div style={{ fontSize: 12, color: "#64748b", padding: 8 }}>No untagged purchase bill available.</div>
+                              ) : (
+                                <div style={{ overflowX: "auto" }}>
+                                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                                    <thead>
+                                      <tr style={reportHeaderRowStyle}>
+                                        <th style={th}>Bill</th>
+                                        <th style={th}>Date</th>
+                                        <th style={th}>Farmer</th>
+                                        <th style={th}>Lorry</th>
+                                        <th style={th}>Weight</th>
+                                        <th style={th}>Consignee</th>
+                                        <th style={th}>Rate</th>
+                                        <th style={th}>Amount</th>
+                                        <th style={th}>Tag</th>
+                                      </tr>
+                                    </thead>
+                                    <tbody>
+                                      {directSaleAvailablePurchaseRows.slice(0, 8).map((purchase) => {
+                                        const tag = buildSalePurchaseTag(purchase, formData.farmer_id || formData.against_purchase_farmer_id || "");
+                                        return (
+                                          <tr key={purchase.id || purchase._id}>
+                                            <td style={td}>{purchase.voucher_no || "-"}</td>
+                                            <td style={td}>{formatLedgerDate(purchase.date)}</td>
+                                            <td style={td}>{tag.farmer_name || getFarmerName(purchase)}</td>
+                                            <td style={td}>{tag.lorry_no || purchase.lorry_no || "-"}</td>
+                                            <td style={td}>{formatDecimal4(tag.weight || purchase.total_qty || purchase.quantity || 0)}</td>
+                                            <td style={td}>{tag.consignee_name || purchase.consignee_name || "-"}</td>
+                                            <td style={td}>{formatMoney(tag.rate || purchase.rate || 0)}</td>
+                                            <td style={td}>{formatMoney(tag.amount || purchase.amount || 0)}</td>
+                                            <td style={td}><button type="button" onClick={() => tagDirectSalePurchase(purchase)} style={{ ...btnAction, background: "#1d4ed8", padding: "4px 8px", fontSize: 11 }}>Tag</button></td>
+                                          </tr>
+                                        );
+                                      })}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              )}
+                            </div>
                           </div>
                         </>
                       )}
