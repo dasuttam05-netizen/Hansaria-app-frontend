@@ -400,6 +400,7 @@ export default function WarehouseTradingPage() {
   const voucherPanelRef = useRef(null);
   const reportPanelRef = useRef(null);
   const voucherLoadTokenRef = useRef(0);
+  const voucherInFlightRef = useRef(new Map());
   const reportLoadTokenRef = useRef(0);
   const warehouseById = useMemo(() => buildLookupMap(warehouses), [warehouses]);
   const farmerById = useMemo(() => buildLookupMap(farmers), [farmers]);
@@ -882,49 +883,6 @@ export default function WarehouseTradingPage() {
     return () => window.clearTimeout(timer);
   }, [activeTab]);
 
-  // Refresh farmers whenever Purchase/New Sale voucher is opened so a farmer
-  // created in the master screen is immediately available. The master bundle
-  // intentionally uses a session cache for performance, but farmers are a
-  // frequently-created master and must not remain stale for 30 minutes.
-  useEffect(() => {
-    if (activeTab !== "vouchers") return;
-    if (!["purchase", "sale"].includes(activeVoucherType)) return;
-
-    let cancelled = false;
-    const refreshFarmers = async () => {
-      try {
-        const res = await API.get("/api/farmers", {
-          
-          params: { _refresh: Date.now() },
-        });
-        const freshFarmers = Array.isArray(res.data) ? res.data : [];
-        if (cancelled) return;
-        setFarmers(freshFarmers);
-
-        // Keep the other cached master data, but replace only the farmers list.
-        try {
-          const cached = JSON.parse(sessionStorage.getItem("warehouseTradingMasterData:v3") || "null");
-          if (cached?.data) {
-            sessionStorage.setItem("warehouseTradingMasterData:v3", JSON.stringify({
-              ...cached,
-              time: Date.now(),
-              data: { ...cached.data, farmers: freshFarmers },
-            }));
-          }
-        } catch {}
-      } catch (err) {
-        // Keep the cached farmer list if the refresh endpoint is temporarily unavailable.
-        if (!cancelled) console.warn("Fresh farmer list unavailable; using cached farmers", err);
-      }
-    };
-
-    const timer = window.setTimeout(refreshFarmers, 120);
-    return () => {
-      cancelled = true;
-      window.clearTimeout(timer);
-    };
-  }, [activeTab, activeVoucherType]);
-
   // Load voucher list when type changes
   useEffect(() => {
     if (activeTab !== "vouchers") return;
@@ -933,12 +891,6 @@ export default function WarehouseTradingPage() {
     }, 250);
     return () => window.clearTimeout(timer);
   }, [activeTab, activeVoucherType, voucherSortAsc, voucherPage, globalSearch]);
-
-  useEffect(() => {
-    if (activeTab === "vouchers" && activeVoucherType === "sale") {
-      loadSalePurchaseRows();
-    }
-  }, [activeTab, activeVoucherType]);
 
   useEffect(() => {
     if (activeTab === "vouchers") {
@@ -954,6 +906,25 @@ export default function WarehouseTradingPage() {
       setFormData((prev) => ({ ...prev, reference_type: "", reference_id: "" }));
     }
   }, [activeTab, activeVoucherType]);
+
+  useEffect(() => {
+    if (
+      activeTab !== "vouchers" ||
+      activeVoucherType !== "sale" ||
+      !formData.against_purchase_enabled
+    ) {
+      return;
+    }
+    loadSalePurchaseRows();
+  }, [
+    activeTab,
+    activeVoucherType,
+    formData.against_purchase_enabled,
+    formData.against_purchase_farmer_id,
+    formData.company_account_id,
+    formData.product_id,
+    formData.warehouse_id,
+  ]);
 
   // Report rows: page/filter changes only.
   useEffect(() => {
@@ -1410,7 +1381,15 @@ export default function WarehouseTradingPage() {
       const search = String(globalSearch || "").trim();
       if (search) params.search = search;
 
-      const res = await API.get(`/api/wh-vouchers/${activeVoucherType}`, { params });
+      const requestKey = JSON.stringify({ type: activeVoucherType, params });
+      let request = voucherInFlightRef.current.get(requestKey);
+      if (!request) {
+        request = API.get(`/api/wh-vouchers/${activeVoucherType}`, { params }).finally(() => {
+          voucherInFlightRef.current.delete(requestKey);
+        });
+        voucherInFlightRef.current.set(requestKey, request);
+      }
+      const res = await request;
       if (token !== voucherLoadTokenRef.current) return;
 
       const payload = res.data || {};
