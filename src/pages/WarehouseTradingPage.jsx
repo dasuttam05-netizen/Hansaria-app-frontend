@@ -940,17 +940,20 @@ export default function WarehouseTradingPage() {
   }, [activeTab, activeVoucherType]);
 
   useEffect(() => {
-    if (
-      activeTab !== "vouchers" ||
-      activeVoucherType !== "sale" ||
-      !formData.against_purchase_enabled
-    ) {
+    if (activeTab !== "vouchers" || activeVoucherType !== "sale") return;
+
+    const shouldLoadPurchaseRows = formData.sale_type === "direct" || formData.against_purchase_enabled;
+    if (!shouldLoadPurchaseRows) {
+      setSalePurchaseRows([]);
       return;
     }
+
     loadSalePurchaseRows();
   }, [
     activeTab,
     activeVoucherType,
+    formData.sale_type,
+    formData.farmer_id,
     formData.against_purchase_enabled,
     formData.against_purchase_farmer_id,
     formData.company_account_id,
@@ -1479,9 +1482,23 @@ export default function WarehouseTradingPage() {
         setSalePurchaseRows([]);
         return;
       }
+
+      const isDirectSale = formData.sale_type === "direct";
+      const farmerId = isDirectSale ? (formData.farmer_id || undefined) : (formData.against_purchase_farmer_id || undefined);
+      const warehouseId = isDirectSale ? undefined : (formData.warehouse_id || undefined);
+
       // This is a form lookup, not the main voucher table. Keep it explicit so
       // the table itself remains strictly paginated.
-      const res = await API.get("/api/wh-vouchers/purchase", { params: { page: 1, limit: 100, lookup: 1, order: "asc", warehouse_id: formData.warehouse_id || undefined, farmer_id: formData.against_purchase_farmer_id || undefined, company_account_id: formData.company_account_id || undefined, product_id: formData.product_id || undefined } });
+      const res = await API.get("/api/wh-vouchers/purchase", { params: {
+        page: 1,
+        limit: 100,
+        lookup: 1,
+        order: "asc",
+        warehouse_id: warehouseId,
+        farmer_id: farmerId,
+        company_account_id: formData.company_account_id || undefined,
+        product_id: formData.product_id || undefined,
+      } });
       const payload = res.data || {};
       const rows = Array.isArray(payload) ? payload : (Array.isArray(payload.data) ? payload.data : []);
       setSalePurchaseRows(rows);
