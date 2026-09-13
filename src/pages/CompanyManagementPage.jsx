@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import axios from "axios";
 import { useLocation, useNavigate } from "react-router-dom";
 import { loadSession, hasPermission } from "../utils/auth";
@@ -17,6 +17,7 @@ export default function CompanyManagementPage() {
   const [showForm, setShowForm] = useState(false);
   const [formData, setFormData] = useState(emptyForm);
   const [editId, setEditId] = useState(null);
+  const submitLockRef = useRef(false);
   const API_URL = "/api/companies";
   const location = useLocation();
   const navigate = useNavigate();
@@ -62,10 +63,12 @@ export default function CompanyManagementPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (submitLockRef.current) return;
     if (!formData.name || !formData.mobile) {
       alert("Company Name and Mobile No. are required");
       return;
     }
+    submitLockRef.current = true;
     try {
       const payload = {
         ...formData,
@@ -107,6 +110,8 @@ export default function CompanyManagementPage() {
     } catch (err) {
       console.error(err);
       alert(err?.response?.data?.error || "Error saving company");
+    } finally {
+      submitLockRef.current = false;
     }
   };
 
@@ -119,7 +124,7 @@ export default function CompanyManagementPage() {
       opening_balance: String(comp.opening_balance ?? 0),
       opening_balance_type: String(comp.opening_balance_type || "dr"),
     });
-    setEditId(comp._id);
+    setEditId(comp._id || comp.id);
     setShowForm(true);
   };
 
