@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useRef, useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import { useLocation, useNavigate } from "react-router-dom";
 import { loadSession, hasPermission } from "../utils/auth";
@@ -24,6 +24,7 @@ export default function CompanyAccountsPage() {
     account_name: location.state?.draftName || "",
   }));
   const [editId, setEditId] = useState(null);
+  const submitLockRef = useRef(false);
   const [importing, setImporting] = useState(false);
 
   const API_URL = "/api/company-accounts";
@@ -94,11 +95,13 @@ export default function CompanyAccountsPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (submitLockRef.current) return;
     if (!formData.account_name || !formData.company_id || !formData.pan_no || !formData.mobile) {
       alert("Account Name, Company, PAN & Mobile are required");
       return;
     }
 
+    submitLockRef.current = true;
     try {
       let savedAccount = null;
       if (editId) {
@@ -120,6 +123,8 @@ export default function CompanyAccountsPage() {
     } catch (err) {
       console.error(err);
       alert(err?.response?.data?.error || "Error saving account");
+    } finally {
+      submitLockRef.current = false;
     }
   };
 
@@ -131,7 +136,7 @@ export default function CompanyAccountsPage() {
       pan_no: acc.pan_no || "",
       mobile: acc.mobile || "",
     });
-    setEditId(acc._id);
+    setEditId(acc._id || acc.id);
     setView("form");
   };
 
