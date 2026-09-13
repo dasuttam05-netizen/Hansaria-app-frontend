@@ -1485,16 +1485,15 @@ export default function WarehouseTradingPage() {
 
       const isDirectSale = formData.sale_type === "direct";
       const farmerId = isDirectSale ? (formData.farmer_id || undefined) : (formData.against_purchase_farmer_id || undefined);
-      const warehouseId = isDirectSale ? undefined : (formData.warehouse_id || undefined);
 
-      // This is a form lookup, not the main voucher table. Keep it explicit so
-      // the table itself remains strictly paginated.
+      // Direct sale still keeps a warehouse selected, but the purchase lookup should
+      // be filtered by that warehouse and the direct farmer when relevant.
       const res = await API.get("/api/wh-vouchers/purchase", { params: {
         page: 1,
         limit: 100,
         lookup: 1,
         order: "asc",
-        warehouse_id: warehouseId,
+        warehouse_id: formData.warehouse_id || undefined,
         farmer_id: farmerId,
         company_account_id: formData.company_account_id || undefined,
         product_id: formData.product_id || undefined,
@@ -2034,7 +2033,7 @@ export default function WarehouseTradingPage() {
       }
     }
     if (activeVoucherType === "sale") {
-      if (formData.sale_type !== "direct" && !formData.warehouse_id) {
+      if (!formData.warehouse_id) {
         alert("Please select warehouse");
         return;
       }
@@ -2164,7 +2163,7 @@ export default function WarehouseTradingPage() {
         payload.against_purchase_farmer_id = payload.sale_type === "direct" ? formData.farmer_id : (formData.against_purchase_farmer_id || "");
         payload.against_purchase_links = salePurchaseLinks;
         payload.create_against_purchase = payload.sale_type === "direct" && !editId;
-        if (payload.sale_type === "direct") payload.warehouse_id = "";
+        payload.warehouse_id = formData.warehouse_id || "";
       }
       if (activeVoucherType === "payment") {
         const paymentMode = normalizePaymentMode(formData.payment_mode);
@@ -5305,17 +5304,15 @@ export default function WarehouseTradingPage() {
                     </div>
 
                     <div style={erpPanelWide}>
-                      {formData.sale_type !== "direct" && (
-                        <div style={erpRow}>
-                          <label style={erpLabel}>Warehouse Name</label>
-                          <select name="warehouse_id" value={formData.warehouse_id} onChange={handleChange} style={erpInput}>
-                            <option value="">Select Warehouse</option>
-                            {warehouses.map((w) => (
-                              <option key={w.id || w._id} value={w.id || w._id}>{w.name}</option>
-                            ))}
-                          </select>
-                        </div>
-                      )}
+                      <div style={erpRow}>
+                        <label style={erpLabel}>Warehouse Name</label>
+                        <select name="warehouse_id" value={formData.warehouse_id} onChange={handleChange} style={erpInput}>
+                          <option value="">Select Warehouse</option>
+                          {warehouses.map((w) => (
+                            <option key={w.id || w._id} value={w.id || w._id}>{w.name}</option>
+                          ))}
+                        </select>
+                      </div>
                       <div style={erpRow}>
                         <label style={erpLabel}>Employee Name</label>
                         <select name="employee_id" value={formData.employee_id} onChange={handleChange} style={erpInput}>
