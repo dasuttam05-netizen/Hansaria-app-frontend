@@ -927,17 +927,16 @@ export default function WarehouseTradingPage() {
     formData.warehouse_id,
   ]);
 
-  // Report rows: page/filter changes only.
+  // Report rows: reload whenever the report page or its filters change.
+  // Purchase/Sale/Warehouse Stock reports are server-paged, so changing page
+  // must trigger a fresh request for that page. Party ledgers remain client-paged.
   useEffect(() => {
     if (activeTab !== "reports") return;
-    // Party ledgers are loaded once per filter/search change. Pagination is
-    // intentionally client-side so clicking Next/Prev never re-requests the
-    // expensive ledger endpoint. This keeps page changes effectively instant.
     const timer = window.setTimeout(() => {
-      loadReport();
+      loadReport(activeReport, reportPage, reportFilters);
     }, 120);
     return () => window.clearTimeout(timer);
-  }, [activeTab, activeReport, globalSearch, reportFilters.farmer_id, reportFilters.company_account_id, reportFilters.warehouse_id, reportFilters.sale_buyer_id, reportFilters.sale_company_account_id, reportFilters.sale_journey_token, reportFilters.sale_lorry_no, reportFilters.sale_bill_no, reportFilters.details_of_deduction]);
+  }, [activeTab, activeReport, reportPage, globalSearch, reportFilters.farmer_id, reportFilters.company_account_id, reportFilters.warehouse_id, reportFilters.sale_buyer_id, reportFilters.sale_company_account_id, reportFilters.sale_journey_token, reportFilters.sale_lorry_no, reportFilters.sale_bill_no, reportFilters.details_of_deduction]);
 
   // Filter options are independent of pagination. Never reload them just
   // because the user moves from page 1 to page 2.
@@ -1554,6 +1553,15 @@ export default function WarehouseTradingPage() {
         params.company_account_id = filters.sale_company_account_id;
       }
 
+      // Server-paged reports need page in both the API params and cache key.
+      // Previously the cache key was created before params.page was added, so
+      // page 2/3 could incorrectly reuse page 1 data.
+      const serverPagedReport = ["sale", "purchase", "warehouse-stock"].includes(reportType);
+      if (serverPagedReport) {
+        params.page = page;
+        params.page_size = PAGE_SIZE;
+      }
+
       const reportCacheKey = JSON.stringify({
         reportType,
         params,
@@ -1580,12 +1588,6 @@ export default function WarehouseTradingPage() {
         return;
       }
 
-      // Keep large reports server-paged so the first click only loads one page.
-      const serverPagedReport = ["sale", "purchase", "warehouse-stock"].includes(reportType);
-      if (serverPagedReport) {
-        params.page = page;
-        params.page_size = PAGE_SIZE;
-      }
       const reportRequest = API.get(`/api/wh-vouchers/report/${endpoint}`, { params });
       reportDataInFlightRef.current.set(reportCacheKey, reportRequest);
       const res = await reportRequest.finally(() => {
