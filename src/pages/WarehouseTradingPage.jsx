@@ -267,7 +267,7 @@ export default function WarehouseTradingPage() {
   const { user } = loadSession();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
-  const [activeTab, setActiveTab] = useState("vouchers");
+  const [activeTab, setActiveTab] = useState(null);
   const [activeVoucherType, setActiveVoucherType] = useState("purchase");
   const [activeReport, setActiveReport] = useState("sale");
 
@@ -846,6 +846,11 @@ export default function WarehouseTradingPage() {
     const requestedReport = searchParams.get("report");
     const validVoucherTypes = allowedVoucherTypes;
     const validReports = allowedReports;
+    const hasExplicitSection = Boolean(
+      validVoucherTypes.includes(requestedType) ||
+      requestedTab === "reports" ||
+      validReports.includes(requestedReport)
+    );
     const nextTab = validVoucherTypes.includes(requestedType)
       ? "vouchers"
       : requestedTab === "reports" || validReports.includes(requestedReport)
@@ -858,7 +863,7 @@ export default function WarehouseTradingPage() {
     const nextVoucherType = validVoucherTypes.includes(requestedType) ? requestedType : validVoucherTypes[0] || "purchase";
     const nextReport = validReports.includes(requestedReport) ? requestedReport : validReports[0] || "sale";
 
-    setActiveTab(nextTab);
+    setActiveTab(hasExplicitSection ? nextTab : null);
     setActiveVoucherType(nextVoucherType);
     setActiveReport(nextReport);
     if (nextTab === "reports") {
@@ -1580,17 +1585,11 @@ export default function WarehouseTradingPage() {
         return;
       }
 
-      // Sale and warehouse stock remain server-paged.
-      // Purchase Detail is loaded once and paged locally for instant Next/Prev.
-      const serverPagedReport = reportType === "sale" || reportType === "warehouse-stock";
+      // Keep large reports server-paged so the first click only loads one page.
+      const serverPagedReport = ["sale", "purchase", "warehouse-stock"].includes(reportType);
       if (serverPagedReport) {
         params.page = page;
         params.page_size = PAGE_SIZE;
-      }
-      if (reportType === "purchase") {
-        params.page = 1;
-        params.page_size = 10000;
-        params.limit = 10000;
       }
       const reportRequest = API.get(`/api/wh-vouchers/report/${endpoint}`, { params });
       reportDataInFlightRef.current.set(reportCacheKey, reportRequest);
@@ -1619,14 +1618,7 @@ export default function WarehouseTradingPage() {
         return;
       }
       let nextPageInfo;
-      if (reportType === "purchase") {
-        nextPageInfo = {
-          page: 1,
-          pageSize: PAGE_SIZE,
-          total: rows.length,
-          hasMore: false,
-        };
-      } else if (serverPagedReport) {
+      if (serverPagedReport) {
         nextPageInfo = {
           page: pagination?.page || page,
           pageSize: pagination?.pageSize || PAGE_SIZE,
@@ -4120,7 +4112,7 @@ export default function WarehouseTradingPage() {
   const filteredVoucherList = list;
 
   const filteredReportDataAll = useMemo(() => {
-    const serverPagedReport = activeReport === "sale" || activeReport === "warehouse-stock";
+    const serverPagedReport = ["sale", "purchase", "warehouse-stock"].includes(activeReport);
     // Sale/Purchase search is already applied in MongoDB before pagination.
     if (serverPagedReport || !normalizedGlobalSearch) return displayReportData;
     return displayReportData.filter((item) =>
@@ -4153,7 +4145,7 @@ export default function WarehouseTradingPage() {
     );
   }, [displayReportData, normalizedGlobalSearch]);
   const filteredReportData = useMemo(() => {
-    const serverPagedReport = activeReport === "sale" || activeReport === "warehouse-stock";
+    const serverPagedReport = ["sale", "purchase", "warehouse-stock"].includes(activeReport);
     if (serverPagedReport) return filteredReportDataAll;
     const start = (reportPage - 1) * PAGE_SIZE;
     return filteredReportDataAll.slice(start, start + PAGE_SIZE);
@@ -4168,7 +4160,7 @@ export default function WarehouseTradingPage() {
     setVoucherPage((current) => Math.min(current, Math.max(1, Number(voucherPageInfo.totalPages || 1))));
   }, [voucherPageInfo.totalPages]);
   useEffect(() => {
-    const serverPagedReport = activeReport === "sale" || activeReport === "warehouse-stock";
+    const serverPagedReport = ["sale", "purchase", "warehouse-stock"].includes(activeReport);
     const totalPages = serverPagedReport
       ? Math.max(1, Math.ceil(Number(reportPageInfo.total || 0) / Number(reportPageInfo.pageSize || PAGE_SIZE)))
       : Math.max(1, Math.ceil(filteredReportDataAll.length / PAGE_SIZE));
@@ -4201,7 +4193,7 @@ export default function WarehouseTradingPage() {
     }
   };
   const totalVoucherPages = Math.max(1, Number(voucherPageInfo.totalPages || 1));
-  const totalReportPages = activeReport === "sale" || activeReport === "warehouse-stock"
+  const totalReportPages = ["sale", "purchase", "warehouse-stock"].includes(activeReport)
     ? (reportPageInfo.hasMore ? reportPage + 1 : reportPage)
     : Math.max(1, Math.ceil(filteredReportDataAll.length / PAGE_SIZE));
   const renderPaginationBar = (page, totalPages, onPrev, onNext, totalItems, label = "rows") => {
@@ -4849,8 +4841,12 @@ export default function WarehouseTradingPage() {
         onGlobalSearchChange={setGlobalSearch}
         showMobileTradingTabs={showMobileTradingTabs}
         onToggleTradingTabs={() => setShowMobileTradingTabs((prev) => !prev)}
-        onShowVouchers={() => setActiveTab("vouchers")}
-        onShowReports={() => setActiveTab("reports")}
+        onShowVouchers={() => {
+          setActiveTab("vouchers");
+        }}
+        onShowReports={() => {
+          setActiveTab("reports");
+        }}
         subtitleStyle={subtitleStyle}
         tabRow={tabRow}
         tabStyle={tabStyle}
@@ -6278,7 +6274,7 @@ export default function WarehouseTradingPage() {
             {renderPaginationBar(voucherPage, totalVoucherPages, () => setVoucherPage((prev) => Math.max(1, prev - 1)), () => setVoucherPage((prev) => Math.min(totalVoucherPages, prev + 1)), voucherPageInfo.total, "vouchers")}
           </div>
         </div>
-      ) : (
+      ) : activeTab === "reports" ? (
         <div ref={reportPanelRef}>
           <WarehouseReportPanel
             activeReport={activeReport}
@@ -6828,12 +6824,16 @@ export default function WarehouseTradingPage() {
               totalReportPages,
               () => setReportPage((prev) => Math.max(1, prev - 1)),
               () => setReportPage((prev) => Math.min(totalReportPages, prev + 1)),
-              (activeReport === "sale" || activeReport === "warehouse-stock")
+              (["sale", "purchase", "warehouse-stock"].includes(activeReport))
                 ? Number(reportPageInfo.total || 0)
                 : filteredReportDataAll.length,
               "rows"
             )}
           </WarehouseReportPanel>
+        </div>
+      ) : (
+        <div style={{ padding: "28px 20px", border: "1px solid #e2e8f0", borderRadius: 12, background: "#fff", color: "#475569", textAlign: "center" }}>
+          Click Vouchers or Reports to load that section.
         </div>
       )}
       {showPaymentAdjustPopup && (
