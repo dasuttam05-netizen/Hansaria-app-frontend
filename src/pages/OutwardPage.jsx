@@ -30,17 +30,6 @@ const inp = {
   background: "#fff",
 };
 
-const miniEdit = {
-  border: "1px solid #2563eb",
-  background: "#eff6ff",
-  color: "#1d4ed8",
-  padding: "8px 10px",
-  borderRadius: "6px",
-  cursor: "pointer",
-  fontSize: "12px",
-  fontWeight: 700,
-};
-
 function Field({ label, children }) {
   return (
     <div>
@@ -1127,6 +1116,7 @@ export default function OutwardPage() {
   useEffect(() => {
     const handleOutwardEditShortcut = (event) => {
       if (!event.altKey || event.key.toLowerCase() !== "e") return;
+      if (event.target instanceof HTMLElement && event.target.closest("input, textarea, select")) return;
       event.preventDefault();
       if (selectedUnloadingOutward) {
         handleEdit(selectedUnloadingOutward);
@@ -1358,6 +1348,14 @@ Consignee: ${row.consignee_name}`;
       event.preventDefault();
       const selectedItem = (items || []).find((item) => sameText(item?.[nameKey], value));
       openMasterPage(path, returnField, value, companyId, selectedItem ? getRecordId(selectedItem) : "");
+      return;
+    }
+    if (event.altKey && event.key.toLowerCase() === "e") {
+      const selectedItem = (items || []).find((item) => sameText(item?.[nameKey], value));
+      if (selectedItem) {
+        event.preventDefault();
+        openSelectedMasterForEdit(path, returnField, selectedItem, companyId, nameKey);
+      }
     }
   };
 
@@ -1700,16 +1698,15 @@ Consignee: ${row.consignee_name}`;
                 </Field>
 
                 <Field label="Select Company">
-                  <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                  <div>
                     <input
                       list="outward-company-names"
                       value={formData.company_name || selectedCompany?.name || ""}
                       onChange={(e) => handleMasterInputChange("company_id", "company_name", companies, "name", e.target.value)}
                       onKeyDown={(e) => handleMasterInputKeyDown(e, "/companies", "company", e.currentTarget.value, "", companies)}
-                      placeholder="Type company name (Alt+C to create)"
-                      style={{ ...inp, flex: 1 }}
+                      placeholder="Type company name (Alt+C to create, Alt+E to edit)"
+                      style={inp}
                     />
-                    {selectedCompany && <button type="button" onClick={() => openSelectedMasterForEdit("/companies", "company", selectedCompany)} style={miniEdit}>Edit</button>}
                   </div>
                   <datalist id="outward-company-names">
                     {companies.map((c) => (
@@ -1719,16 +1716,15 @@ Consignee: ${row.consignee_name}`;
                 </Field>
 
                 <Field label="Select Account">
-                  <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                  <div>
                     <input
                       list="outward-account-names"
                       value={formData.account_name || selectedAccount?.account_name || ""}
                       onChange={(e) => handleMasterInputChange("company_account_id", "account_name", companyAccounts.filter((item) => accountBelongsToCompany(item, formData.company_id, companyLookup.get(String(formData.company_id)))), "account_name", e.target.value)}
                       onKeyDown={(e) => handleMasterInputKeyDown(e, "/company-accounts", "account", e.currentTarget.value, formData.company_id, companyAccounts, "account_name")}
-                      placeholder="Type account name (Alt+C to create)"
-                      style={{ ...inp, flex: 1 }}
+                      placeholder="Type account name (Alt+C to create, Alt+E to edit)"
+                      style={inp}
                     />
-                    {selectedAccount && <button type="button" onClick={() => openSelectedMasterForEdit("/company-accounts", "account", selectedAccount, formData.company_id, "account_name")} style={miniEdit}>Edit</button>}
                   </div>
                   <datalist id="outward-account-names">
                     {formData.company_id && companyAccounts
@@ -1799,16 +1795,15 @@ Consignee: ${row.consignee_name}`;
                 </Field>
 
                 <Field label="Select buyer name">
-                  <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                  <div>
                     <input
                       list="outward-buyer-names"
                       value={formData.buyer_name || selectedBuyer?.name || ""}
                       onChange={(e) => handleMasterInputChange("buyer_id", "buyer_name", buyerNames, "name", e.target.value)}
                       onKeyDown={(e) => handleMasterInputKeyDown(e, "/buyer-names", "buyer", e.currentTarget.value, "", buyerNames)}
-                      placeholder="Type buyer name (Alt+C to create)"
-                      style={{ ...inp, flex: 1 }}
+                      placeholder="Type buyer name (Alt+C to create, Alt+E to edit)"
+                      style={inp}
                     />
-                    {selectedBuyer && <button type="button" onClick={() => openSelectedMasterForEdit("/buyer-names", "buyer", selectedBuyer)} style={miniEdit}>Edit</button>}
                   </div>
                   <datalist id="outward-buyer-names">
                     {buyerNames.map((b) => <option key={getRecordId(b)} value={b.name} />)}
@@ -1816,17 +1811,16 @@ Consignee: ${row.consignee_name}`;
                 </Field>
 
                 <Field label="Select consignee">
-                  <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                  <div>
                     <input
                       list="outward-consignee-names"
                       value={formData.consignee_name || selectedConsignee?.name || ""}
                       onChange={(e) => handleMasterInputChange("consignee_id", "consignee_name", consigneesForBuyer, "name", e.target.value)}
                       onKeyDown={(e) => handleMasterInputKeyDown(e, "/consignee-names", "consignee", e.currentTarget.value, formData.buyer_id, consigneesForBuyer)}
-                      placeholder={formData.buyer_id ? "Type consignee name (Alt+C to create)" : "Select buyer first"}
+                      placeholder={formData.buyer_id ? "Type consignee name (Alt+C to create, Alt+E to edit)" : "Select buyer first"}
                       disabled={!formData.buyer_id}
-                      style={{ ...inp, flex: 1, opacity: formData.buyer_id ? 1 : 0.65 }}
+                      style={{ ...inp, opacity: formData.buyer_id ? 1 : 0.65 }}
                     />
-                    {selectedConsignee && <button type="button" onClick={() => openSelectedMasterForEdit("/consignee-names", "consignee", selectedConsignee, formData.buyer_id)} style={miniEdit}>Edit</button>}
                   </div>
                   <datalist id="outward-consignee-names">
                       {consigneesForBuyer.map((c) => (
