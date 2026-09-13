@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useRef, useState, useEffect, useCallback } from "react";
 import axios from "axios";
 import { useLocation, useNavigate } from "react-router-dom";
 import { loadSession, hasPermission } from "../utils/auth";
@@ -20,6 +20,7 @@ export default function BuyerNamesManagementPage() {
   const [view, setView] = useState("list");
   const [formData, setFormData] = useState(emptyForm);
   const [editId, setEditId] = useState(null);
+  const submitLockRef = useRef(false);
   const [importing, setImporting] = useState(false);
 
   const API_URL = "/api/buyer-names";
@@ -107,10 +108,12 @@ export default function BuyerNamesManagementPage() {
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    if (submitLockRef.current) return;
     if (!(formData.name || "").trim()) {
       alert("Name is required");
       return;
     }
+    submitLockRef.current = true;
     try {
       let savedBuyer = null;
       if (editId) {
@@ -132,6 +135,8 @@ export default function BuyerNamesManagementPage() {
     } catch (err) {
       console.error(err);
       alert(err.response?.data?.error || "Save failed");
+    } finally {
+      submitLockRef.current = false;
     }
   };
 
