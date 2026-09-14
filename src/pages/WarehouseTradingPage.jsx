@@ -5572,69 +5572,54 @@ export default function WarehouseTradingPage() {
                     </div>
 
                     <div>
-                      <div style={{ marginBottom: 8, fontSize: 16, fontWeight: 900, color: "#0f172a" }}>Sale Summary</div>
-                      <div style={{ border: "1px solid #dbe4ef", borderRadius: 8, padding: 12, background: "#fff", marginBottom: 10 }}>
-                        <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 0.7, color: "#64748b", marginBottom: 4 }}>Farmer</div>
-                        <div style={{ fontSize: 16, fontWeight: 800, color: "#14532d" }}>
-                          {getFarmerName(formData) !== "-"
-                            ? getFarmerName(formData)
-                            : (salePurchaseLinks.find((item) => item?.farmer_name)?.farmer_name || "-")}
-                        </div>
-                      </div>
+                      <table style={erpMiniTable}>
+                        <thead>
+                          <tr><th style={erpTh}>Sale Summary</th><th style={erpTh}>Amount</th></tr>
+                        </thead>
+                        <tbody>
+                          <tr><td style={erpTd}>Purchase: Qty × Rate</td><td style={erpTd}>{formatDecimal4(againstPurchaseTotalQty)} × {formatMoney(againstPurchaseTotalQty ? againstPurchaseTotalAmount / againstPurchaseTotalQty : 0)}</td></tr>
+                          <tr><td style={erpTd}>Purchase Amount</td><td style={erpTd}>{formatMoney(againstPurchaseTotalAmount)}</td></tr>
+                          <tr><td style={{ ...erpTd, fontWeight: 800, background: "#f8fafc" }}>Purchase Deductions</td><td style={{ ...erpTd, fontWeight: 800, background: "#f8fafc" }}>Auto / Manual</td></tr>
+                          <tr><td style={erpTd}>Claim</td><td style={erpTd}>{formatMoney(purchaseTaggedDeductionDetails.reduce((sum, d) => sum + d.claim, 0))}</td></tr>
+                          <tr><td style={erpTd}>Shortage</td><td style={erpTd}>{formatMoney(purchaseTaggedDeductionDetails.reduce((sum, d) => sum + d.shortage, 0))}</td></tr>
+                          <tr><td style={erpTd}>Freight / Transport</td><td style={erpTd}>{formatMoney(purchaseTaggedDeductionDetails.reduce((sum, d) => sum + d.freight, 0))}</td></tr>
+                          <tr><td style={erpTd}>Others</td><td style={erpTd}>{formatMoney(purchaseTaggedDeductionDetails.reduce((sum, d) => sum + d.others, 0))}</td></tr>
+                          <tr><td style={erpTd}>Labour / Quality</td><td style={erpTd}>{formatMoney(purchaseTaggedDeductionDetails.reduce((sum, d) => sum + d.labour + d.moisture + d.dunki + d.fungus + d.discolour + d.lessBags, 0))}</td></tr>
+                          <tr><td style={{ ...erpTd, fontWeight: 700 }}>Purchase Total Deduction</td><td style={{ ...erpTd, fontWeight: 700 }}>{formatMoney(purchaseTaggedDeductionTotal)}</td></tr>
+                          <tr><td style={{ ...erpTd, fontWeight: 700 }}>Net Purchase Value</td><td style={{ ...erpTd, fontWeight: 700 }}>{formatMoney(netPurchaseSummaryValue)}</td></tr>
+                          <tr><td style={erpTd}>Sale: Qty × Rate</td><td style={erpTd}>{formatDecimal4(saleDispatchQtyFromData(formData))} × {formatMoney(toNumber(formData.rate))}</td></tr>
+                          <tr><td style={erpTd}>Sale Amount</td><td style={erpTd}>{formatMoney(saleGrossAmountFromData(formData))}</td></tr>
+                          <tr><td style={{ ...erpTd, fontWeight: 800, background: "#f8fafc" }}>Sale Deductions</td><td style={{ ...erpTd, fontWeight: 800, background: "#f8fafc" }}>Auto / Manual</td></tr>
+                          <tr><td style={erpTd}>Shortage</td><td style={erpTd}>{formatMoney(saleShortageAmount)}</td></tr>
+                          <tr><td style={erpTd}>Claim</td><td style={erpTd}>{formatMoney(saleEffectiveClaimAmount)}</td></tr>
+                          <tr><td style={erpTd}>Freight</td><td style={erpTd}>{formatMoney(saleTransportCharge)}</td></tr>
+                          <tr><td style={erpTd}>Others</td><td style={erpTd}>{formatMoney(saleEffectiveOtherDeduction)}</td></tr>
+                          <tr><td style={erpTd}>CD / Adjustment / TDS</td><td style={erpTd}>{formatMoney(saleCashDiscountAmount + toNumber(formData.adjustment_amount) + saleEffectiveTdsAmount)}</td></tr>
+                          <tr><td style={{ ...erpTd, fontWeight: 700 }}>Sale Total Deduction</td><td style={{ ...erpTd, fontWeight: 700 }}>{formatMoney(saleDeductionTotal)}</td></tr>
+                          <tr><td style={erpTd}>Round Off</td><td style={erpTd}>{formatMoney(toNumber(formData.round_off))}</td></tr>
+                          <tr><td style={{ ...erpTd, fontWeight: 800 }}>Net Sale Value</td><td style={{ ...erpTd, fontWeight: 800 }}>{formatMoney(saleNetReceivablePreview)}</td></tr>
+                          <tr><td style={{ ...erpTd, fontWeight: 800 }}>Net Purchase Value</td><td style={{ ...erpTd, fontWeight: 800 }}>{formatMoney(netPurchaseSummaryValue)}</td></tr>
+                          <tr><td style={{ ...erpTd, fontWeight: 800, color: (saleNetReceivablePreview - netPurchaseSummaryValue) >= 0 ? "#047857" : "#b91c1c" }}>Profit / Loss</td><td style={{ ...erpTd, fontWeight: 800, color: (saleNetReceivablePreview - netPurchaseSummaryValue) >= 0 ? "#047857" : "#b91c1c" }}>{formatMoney(saleNetReceivablePreview - netPurchaseSummaryValue)}</td></tr>
+                        </tbody>
+                      </table>
 
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(2, minmax(0, 1fr))", gap: 10 }}>
-                        <div style={{ border: "1px solid #b7e4d8", borderRadius: 8, overflow: "hidden", background: "#fff" }}>
-                          <div style={{ padding: "8px 10px", background: "#e8f7f1", fontWeight: 800, color: "#166534" }}>Purchase Details</div>
-                          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                      <div style={{ marginTop: 12, border: "1px solid #dbe4ef", borderRadius: 8, overflow: "hidden" }}>
+                        <div style={{ padding: "8px 10px", background: "#eef4ff", fontWeight: 800 }}>F10 Tagged Purchase Details</div>
+                        <div style={{ overflowX: "auto" }}>
+                          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                            <thead><tr><th style={erpTh}>Bill</th><th style={erpTh}>Consignee</th><th style={erpTh}>Qty</th><th style={erpTh}>Rate</th><th style={erpTh}>Amount</th><th style={erpTh}>Source</th></tr></thead>
                             <tbody>
-                              <tr><td style={erpTd}>Qty × Rate</td><td style={erpTd}>{formatDecimal4(againstPurchaseTotalQty)} × {formatMoney(againstPurchaseTotalQty ? againstPurchaseTotalAmount / againstPurchaseTotalQty : 0)}</td></tr>
-                              <tr><td style={erpTd}>Purchase Amount</td><td style={erpTd}>{formatMoney(againstPurchaseTotalAmount)}</td></tr>
-                            </tbody>
-                          </table>
-                          <div style={{ padding: "7px 10px", background: "#f5fbf8", fontWeight: 800, color: "#166534", borderTop: "1px solid #d7eee6" }}>Purchase Deduction</div>
-                          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                            <tbody>
-                              <tr><td style={erpTd}>Shortage</td><td style={erpTd}>{formatMoney(purchaseTaggedDeductionDetails.reduce((sum, d) => sum + d.shortage, 0))}</td></tr>
-                              <tr><td style={erpTd}>Claim</td><td style={erpTd}>{formatMoney(purchaseTaggedDeductionDetails.reduce((sum, d) => sum + d.claim, 0))}</td></tr>
-                              <tr><td style={erpTd}>Freight / Transport</td><td style={erpTd}>{formatMoney(purchaseTaggedDeductionDetails.reduce((sum, d) => sum + d.freight, 0))}</td></tr>
-                              <tr><td style={erpTd}>Others</td><td style={erpTd}>{formatMoney(purchaseTaggedDeductionDetails.reduce((sum, d) => sum + d.others, 0))}</td></tr>
-                              <tr><td style={erpTd}>Labour / Quality</td><td style={erpTd}>{formatMoney(purchaseTaggedDeductionDetails.reduce((sum, d) => sum + d.labour + d.moisture + d.dunki + d.fungus + d.discolour + d.lessBags, 0))}</td></tr>
-                              <tr><td style={{ ...erpTd, fontWeight: 800 }}>Total Purchase Deduction</td><td style={{ ...erpTd, fontWeight: 800 }}>{formatMoney(purchaseTaggedDeductionTotal)}</td></tr>
-                              <tr><td style={{ ...erpTd, fontWeight: 800, background: "#f5fbf8" }}>Net Purchase Value</td><td style={{ ...erpTd, fontWeight: 800, background: "#f5fbf8" }}>{formatMoney(netPurchaseSummaryValue)}</td></tr>
-                            </tbody>
-                          </table>
-                        </div>
-
-                        <div style={{ border: "1px solid #c9d7f0", borderRadius: 8, overflow: "hidden", background: "#fff" }}>
-                          <div style={{ padding: "8px 10px", background: "#eef4ff", fontWeight: 800, color: "#1e40af" }}>Sale Details</div>
-                          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                            <tbody>
-                              <tr><td style={erpTd}>Qty × Rate</td><td style={erpTd}>{formatDecimal4(saleDispatchQtyFromData(formData))} × {formatMoney(toNumber(formData.rate))}</td></tr>
-                              <tr><td style={erpTd}>Sale Amount</td><td style={erpTd}>{formatMoney(saleGrossAmountFromData(formData))}</td></tr>
-                            </tbody>
-                          </table>
-                          <div style={{ padding: "7px 10px", background: "#f5f8ff", fontWeight: 800, color: "#1e40af", borderTop: "1px solid #d8e3f7" }}>Sale Deduction</div>
-                          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                            <tbody>
-                              <tr><td style={erpTd}>Shortage</td><td style={erpTd}>{formatMoney(saleShortageAmount)}</td></tr>
-                              <tr><td style={erpTd}>Claim</td><td style={erpTd}>{formatMoney(saleEffectiveClaimAmount)}</td></tr>
-                              <tr><td style={erpTd}>Freight</td><td style={erpTd}>{formatMoney(saleTransportCharge)}</td></tr>
-                              <tr><td style={erpTd}>Others</td><td style={erpTd}>{formatMoney(saleEffectiveOtherDeduction)}</td></tr>
-                              <tr><td style={erpTd}>CD / Adjustment / TDS</td><td style={erpTd}>{formatMoney(saleCashDiscountAmount + toNumber(formData.adjustment_amount) + saleEffectiveTdsAmount)}</td></tr>
-                              <tr><td style={{ ...erpTd, fontWeight: 800 }}>Total Sale Deduction</td><td style={{ ...erpTd, fontWeight: 800 }}>{formatMoney(saleDeductionTotal)}</td></tr>
-                              <tr><td style={erpTd}>Round Off</td><td style={erpTd}>{formatMoney(toNumber(formData.round_off))}</td></tr>
-                              <tr><td style={{ ...erpTd, fontWeight: 800, background: "#f5f8ff" }}>Net Sale Value</td><td style={{ ...erpTd, fontWeight: 800, background: "#f5f8ff" }}>{formatMoney(saleNetReceivablePreview)}</td></tr>
+                              {salePurchaseLinks.map((item) => <tr key={item.purchase_id}><td style={erpTd}>{item.voucher_no || "-"}</td><td style={erpTd}>{item.consignee_name || "-"}</td><td style={erpTd}>{formatDecimal4(item.quantity)}</td><td style={erpTd}>{formatMoney(item.rate)}</td><td style={erpTd}>{formatMoney(item.amount)}</td><td style={erpTd}>{item.source === "auto" ? "Auto" : "Manual"}</td></tr>)}
+                              {salePurchaseLinks.length === 0 && <tr><td style={{ ...erpTd, textAlign: "center", color: "#64748b" }} colSpan={6}>Press F10 to tag a purchase bill. Tagged bills will appear here.</td></tr>}
                             </tbody>
                           </table>
                         </div>
                       </div>
 
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 10, marginTop: 10 }}>
-                        <div style={{ ...erpTotalPanel, marginTop: 0, background: "#eef4ff" }}><span style={erpTotalLabel}>NET SALE</span><strong style={erpTotalAmount}>{formatMoney(saleNetReceivablePreview)}</strong></div>
-                        <div style={{ ...erpTotalPanel, marginTop: 0, background: "#e8f7f1" }}><span style={erpTotalLabel}>NET PURCHASE</span><strong style={erpTotalAmount}>{formatMoney(netPurchaseSummaryValue)}</strong></div>
-                        <div style={{ ...erpTotalPanel, marginTop: 0, background: (saleNetReceivablePreview - netPurchaseSummaryValue) >= 0 ? "#ecfdf5" : "#fef2f2" }}><span style={erpTotalLabel}>PROFIT / LOSS</span><strong style={{ ...erpTotalAmount, color: (saleNetReceivablePreview - netPurchaseSummaryValue) >= 0 ? "#047857" : "#b91c1c" }}>{formatMoney(saleNetReceivablePreview - netPurchaseSummaryValue)}</strong></div>
+                      <div style={erpTotalPanel}>
+                        <span style={erpTotalLabel}>T O T A L</span>
+                        <strong style={erpTotalAmount}>{formatMoney(saleNetReceivablePreview)}</strong>
                       </div>
-
                     </div>
                   </div>
                 </div>
@@ -7607,6 +7592,7 @@ export default function WarehouseTradingPage() {
           formatDecimal4={formatDecimal4}
           toNumber={toNumber}
           getSalePreviewDataForRow={getSalePreviewDataForRow}
+          formData={formData}
           axios={API}
         />
       )}
