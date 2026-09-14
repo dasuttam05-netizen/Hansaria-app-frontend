@@ -781,7 +781,12 @@ export default function WarehouseTradingPage() {
   };
 
   const tagDirectSalePurchase = (purchase) => {
-    const tag = buildSalePurchaseTag(purchase, formData.farmer_id || formData.against_purchase_farmer_id || "");
+    const saleConsigneeName = selectedConsignee?.name || formData.consignee_name || "";
+    const tag = buildSalePurchaseTag(
+      purchase,
+      formData.farmer_id || formData.against_purchase_farmer_id || "",
+      saleConsigneeName
+    );
     if (!tag.purchase_id) return;
 
     setSalePurchaseLinks((prev) => {
@@ -793,6 +798,8 @@ export default function WarehouseTradingPage() {
           purchase_id: tag.purchase_id,
           voucher_no: tag.voucher_no,
           farmer_id: String(tag.farmer_id || formData.farmer_id || ""),
+          consignee_id: String(tag.consignee_id || formData.consignee_id || ""),
+          consignee_name: tag.consignee_name || saleConsigneeName,
           quantity: tag.weight,
           weight: tag.weight,
           rate: tag.rate,
@@ -801,6 +808,14 @@ export default function WarehouseTradingPage() {
         },
       ];
     });
+
+    setShowTaggedSalePurchases(true);
+  };
+
+  const untagDirectSalePurchase = (purchaseId) => {
+    const id = String(purchaseId || "").trim();
+    if (!id) return;
+    setSalePurchaseLinks((prev) => prev.filter((item) => String(item.purchase_id || "") !== id));
   };
 
   const directSaleAvailablePurchaseRows = useMemo(
@@ -1111,7 +1126,7 @@ export default function WarehouseTradingPage() {
 
   useEffect(() => {
     const handleF10TagPurchaseKey = (event) => {
-      if (event.key !== "F10" || activeTab !== "vouchers" || activeVoucherType !== "sale" || formData.sale_type !== "direct") return;
+      if (!(event.key === "F10" || event.code === "F10") || activeTab !== "vouchers" || activeVoucherType !== "sale" || String(formData.sale_type || "").toLowerCase() !== "direct") return;
       event.preventDefault();
       setShowTaggedSalePurchases(false);
       setSalePurchaseTagSearch("");
@@ -1131,16 +1146,6 @@ export default function WarehouseTradingPage() {
     window.addEventListener("keydown", handleF5TaggedPurchaseKey);
     return () => window.removeEventListener("keydown", handleF5TaggedPurchaseKey);
   }, [showSalePurchaseTagModal]);
-
-  useEffect(() => {
-    const handleSalePreviewF10 = (event) => {
-      if (event.key !== "F10" || !showSalePreview || activeVoucherType !== "sale") return;
-      event.preventDefault();
-      void openSalePurchaseTagging();
-    };
-    window.addEventListener("keydown", handleSalePreviewF10);
-    return () => window.removeEventListener("keydown", handleSalePreviewF10);
-  }, [showSalePreview, activeVoucherType, formData.sale_type, formData.farmer_id, formData.against_purchase_farmer_id, formData.company_account_id, formData.product_id, formData.warehouse_id]);
 
   useEffect(() => {
     const loadSaleTransportCharge = async () => {
@@ -1529,13 +1534,6 @@ export default function WarehouseTradingPage() {
     }
   };
 
-  const openSalePurchaseTagging = async () => {
-    setShowTaggedSalePurchases(false);
-    setSalePurchaseTagSearch("");
-    await loadSalePurchaseRows();
-    setShowSalePurchaseTagModal(true);
-  };
-
   const loadSalePurchaseRows = async () => {
     try {
       if (!hasPermission(user, voucherPermissionMap.purchase)) {
@@ -1559,6 +1557,7 @@ export default function WarehouseTradingPage() {
         farmer_id: farmerId,
         company_account_id: formData.company_account_id || undefined,
         product_id: formData.product_id || undefined,
+        consignee_id: formData.consignee_id || undefined,
       } });
       const payload = res.data || {};
       const rows = Array.isArray(payload) ? payload : (Array.isArray(payload.data) ? payload.data : []);
@@ -2443,7 +2442,8 @@ export default function WarehouseTradingPage() {
                 farmer_name: item.farmer_name || "",
                 date: item.date || "",
                 lorry_no: item.lorry_no || "",
-                consignee_name: item.consignee_name || "",
+                consignee_id: String(item.consignee_id || voucher.consignee_id || ""),
+                consignee_name: item.consignee_name || voucher.consignee_name || selectedConsignee?.name || "",
                 weight: toNumber(item.weight),
                 quantity: toNumber(item.quantity),
                 rate: toNumber(item.rate),
@@ -5335,7 +5335,7 @@ export default function WarehouseTradingPage() {
                             <input value={formatMoney(saleDispatchQtyFromData(formData) * toNumber(formData.direct_purchase_rate))} readOnly style={erpInput} />
                           </div>
                           <div style={{ ...erpRow, display: "block" }}>
-                            <button type="button" onClick={() => { void openSalePurchaseTagging(); }} style={{ ...btnAction, background: "#0f766e" }}>
+                            <button type="button" onClick={() => { setShowTaggedSalePurchases(false); setSalePurchaseTagSearch(""); void loadSalePurchaseRows(); setShowSalePurchaseTagModal(true); }} style={{ ...btnAction, background: "#0f766e" }}>
                               F10 Purchase Bill Tagging
                             </button>
                           </div>
@@ -5538,10 +5538,10 @@ export default function WarehouseTradingPage() {
                         <div style={{ padding: "8px 10px", background: "#eef4ff", fontWeight: 800 }}>F10 Tagged Purchase Details</div>
                         <div style={{ overflowX: "auto" }}>
                           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-                            <thead><tr><th style={erpTh}>Bill</th><th style={erpTh}>Consignee</th><th style={erpTh}>Qty</th><th style={erpTh}>Rate</th><th style={erpTh}>Amount</th><th style={erpTh}>Source</th></tr></thead>
+                            <thead><tr><th style={erpTh}>Bill</th><th style={erpTh}>Consignee</th><th style={erpTh}>Qty</th><th style={erpTh}>Rate</th><th style={erpTh}>Amount</th><th style={erpTh}>Source</th><th style={erpTh}>Action</th></tr></thead>
                             <tbody>
-                              {salePurchaseLinks.map((item) => <tr key={item.purchase_id}><td style={erpTd}>{item.voucher_no || "-"}</td><td style={erpTd}>{item.consignee_name || "-"}</td><td style={erpTd}>{formatDecimal4(item.quantity)}</td><td style={erpTd}>{formatMoney(item.rate)}</td><td style={erpTd}>{formatMoney(item.amount)}</td><td style={erpTd}>{item.source === "auto" ? "Auto" : "Manual"}</td></tr>)}
-                              {salePurchaseLinks.length === 0 && <tr><td style={{ ...erpTd, textAlign: "center", color: "#64748b" }} colSpan={6}>Press F10 to tag a purchase bill. Tagged bills will appear here.</td></tr>}
+                              {salePurchaseLinks.map((item) => <tr key={item.purchase_id}><td style={erpTd}>{item.voucher_no || "-"}</td><td style={erpTd}>{item.consignee_name || selectedConsignee?.name || formData.consignee_name || "-"}</td><td style={erpTd}>{formatDecimal4(item.quantity)}</td><td style={erpTd}>{formatMoney(item.rate)}</td><td style={erpTd}>{formatMoney(item.amount)}</td><td style={erpTd}>{item.source === "auto" ? "Auto" : "Manual"}</td><td style={erpTd}><button type="button" onClick={() => untagDirectSalePurchase(item.purchase_id)} style={{ ...btnAction, background: "#dc2626", padding: "4px 8px", fontSize: 11 }}>Untag</button></td></tr>)}
+                              {salePurchaseLinks.length === 0 && <tr><td style={{ ...erpTd, textAlign: "center", color: "#64748b" }} colSpan={7}>Press F10 to tag a purchase bill. Tagged bills will appear here.</td></tr>}
                             </tbody>
                           </table>
                         </div>
@@ -7184,7 +7184,13 @@ export default function WarehouseTradingPage() {
                     const tag = buildSalePurchaseTag(purchase, formData.farmer_id || formData.against_purchase_farmer_id || "");
                     return <tr key={purchase.purchase_id || purchase.id || purchase._id}>
                       <td style={td}>{purchase.voucher_no || tag.voucher_no || "-"}</td><td style={td}>{formatLedgerDate(purchase.date || tag.date)}</td><td style={td}>{purchase.farmer_name || tag.farmer_name || "-"}</td><td style={td}>{purchase.lorry_no || tag.lorry_no || "-"}</td><td style={td}>{formatDecimal4(purchase.weight || purchase.quantity || tag.weight || 0)}</td><td style={td}>{purchase.consignee_name || tag.consignee_name || "-"}</td><td style={td}>{formatMoney(purchase.rate || tag.rate || 0)}</td><td style={td}>{formatMoney(purchase.amount || tag.amount || 0)}</td>
-                      <td style={td}>{showTaggedSalePurchases ? <span style={{ color: "#047857", fontWeight: 700 }}>Tagged</span> : <button type="button" onClick={() => tagDirectSalePurchase(purchase)} style={{ ...btnAction, background: "#1d4ed8", padding: "4px 8px", fontSize: 11 }}>Tag</button>}</td>
+                      <td style={td}>
+                        {showTaggedSalePurchases ? (
+                          <button type="button" onClick={() => untagDirectSalePurchase(purchase.purchase_id || purchase.id || purchase._id)} style={{ ...btnAction, background: "#dc2626", padding: "4px 8px", fontSize: 11 }}>Untag</button>
+                        ) : (
+                          <button type="button" onClick={() => tagDirectSalePurchase(purchase)} style={{ ...btnAction, background: "#1d4ed8", padding: "4px 8px", fontSize: 11 }}>Tag</button>
+                        )}
+                      </td>
                     </tr>;
                   })}
                   {filteredSalePurchaseTagRows.length === 0 && <tr><td style={{ ...td, textAlign: "center", color: "#64748b" }} colSpan={9}>{salePurchaseTagSearch ? "No purchase bill matches your search." : showTaggedSalePurchases ? "No purchase bill has been tagged for this sale." : "No matching purchase bill is available."}</td></tr>}
@@ -7524,7 +7530,6 @@ export default function WarehouseTradingPage() {
           toNumber={toNumber}
           getSalePreviewDataForRow={getSalePreviewDataForRow}
           axios={API}
-          onOpenPurchaseTagging={openSalePurchaseTagging}
         />
       )}
       </div>
