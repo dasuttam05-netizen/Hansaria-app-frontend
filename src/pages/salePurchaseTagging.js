@@ -1,4 +1,4 @@
-export function buildSalePurchaseTag(purchase, fallbackFarmerId = "") {
+export function buildSalePurchaseTag(purchase, fallbackFarmerId = "", fallbackConsignee = "") {
   const purchaseId = String(purchase?._id || purchase?.id || "").trim();
   const farmerId = String(purchase?.farmer_id || fallbackFarmerId || "").trim();
   const quantity = Number(purchase?.total_qty ?? purchase?.quantity ?? purchase?.net_weight ?? purchase?.weight ?? 0) || 0;
@@ -13,7 +13,8 @@ export function buildSalePurchaseTag(purchase, fallbackFarmerId = "") {
     date: String(purchase?.date || "").trim(),
     lorry_no: String(purchase?.lorry_no || purchase?.transport_lorry_no || purchase?.vehicle_no || "").trim(),
     weight: Number.isFinite(quantity) ? quantity : 0,
-    consignee_name: String(purchase?.consignee_name || purchase?.consignee || "").trim(),
+    consignee_name: String(purchase?.consignee_name || purchase?.consignee || fallbackConsignee || "").trim(),
+    consignee_id: String(purchase?.consignee_id || "").trim(),
     rate,
     amount,
     quantity,
