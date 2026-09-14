@@ -1102,6 +1102,7 @@ export default function WarehouseTradingPage() {
       event.preventDefault();
       setShowTaggedSalePurchases(false);
       setSalePurchaseTagSearch("");
+      void loadSalePurchaseRows();
       setShowSalePurchaseTagModal(true);
     };
     window.addEventListener("keydown", handleF10TagPurchaseKey);
@@ -1515,8 +1516,10 @@ export default function WarehouseTradingPage() {
       const isDirectSale = formData.sale_type === "direct";
       const farmerId = isDirectSale ? (formData.farmer_id || undefined) : (formData.against_purchase_farmer_id || undefined);
 
-      // Direct sale still keeps a warehouse selected, but the purchase lookup should
-      // be filtered by that warehouse and the direct farmer when relevant.
+      // Direct sale can be tagged against any matching purchase bill. Do not
+      // request only untagged auto-direct rows here: those rows are usually
+      // already linked by the time the user presses F10, which left the popup
+      // empty even though matching purchase vouchers existed.
       const res = await API.get("/api/wh-vouchers/purchase", { params: {
         page: 1,
         limit: 100,
@@ -1526,8 +1529,6 @@ export default function WarehouseTradingPage() {
         farmer_id: farmerId,
         company_account_id: formData.company_account_id || undefined,
         product_id: formData.product_id || undefined,
-        untagged_direct_purchase: isDirectSale ? 1 : undefined,
-        exclude_sale_id: isDirectSale && editId ? editId : undefined,
       } });
       const payload = res.data || {};
       const rows = Array.isArray(payload) ? payload : (Array.isArray(payload.data) ? payload.data : []);
@@ -5300,7 +5301,7 @@ export default function WarehouseTradingPage() {
                             <input value={formatMoney(saleDispatchQtyFromData(formData) * toNumber(formData.direct_purchase_rate))} readOnly style={erpInput} />
                           </div>
                           <div style={{ ...erpRow, display: "block" }}>
-                            <button type="button" onClick={() => { setShowTaggedSalePurchases(false); setSalePurchaseTagSearch(""); setShowSalePurchaseTagModal(true); }} style={{ ...btnAction, background: "#0f766e" }}>
+                            <button type="button" onClick={() => { setShowTaggedSalePurchases(false); setSalePurchaseTagSearch(""); void loadSalePurchaseRows(); setShowSalePurchaseTagModal(true); }} style={{ ...btnAction, background: "#0f766e" }}>
                               F10 Purchase Bill Tagging
                             </button>
                           </div>
@@ -7103,7 +7104,7 @@ export default function WarehouseTradingPage() {
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 12 }}>
               <div>
                 <h3 style={{ margin: 0 }}>Purchase Bill Tagging</h3>
-                <span style={{ fontSize: 12, color: "#64748b" }}>{showTaggedSalePurchases ? "Tagged purchase bills for this sale" : "Available direct-loading purchase bills"}</span>
+                <span style={{ fontSize: 12, color: "#64748b" }}>{showTaggedSalePurchases ? "Tagged purchase bills for this sale" : "Available matching purchase bills"}</span>
               </div>
               <div style={{ display: "flex", gap: 8 }}>
                 <button type="button" onClick={() => setShowTaggedSalePurchases(false)} style={{ ...btnAction, background: "#0f766e" }}>Available Bills</button>
@@ -7131,7 +7132,7 @@ export default function WarehouseTradingPage() {
                       <td style={td}>{showTaggedSalePurchases ? <span style={{ color: "#047857", fontWeight: 700 }}>Tagged</span> : <button type="button" onClick={() => tagDirectSalePurchase(purchase)} style={{ ...btnAction, background: "#1d4ed8", padding: "4px 8px", fontSize: 11 }}>Tag</button>}</td>
                     </tr>;
                   })}
-                  {filteredSalePurchaseTagRows.length === 0 && <tr><td style={{ ...td, textAlign: "center", color: "#64748b" }} colSpan={9}>{salePurchaseTagSearch ? "No purchase bill matches your search." : showTaggedSalePurchases ? "No purchase bill has been tagged for this sale." : "No untagged direct-loading purchase bill is available."}</td></tr>}
+                  {filteredSalePurchaseTagRows.length === 0 && <tr><td style={{ ...td, textAlign: "center", color: "#64748b" }} colSpan={9}>{salePurchaseTagSearch ? "No purchase bill matches your search." : showTaggedSalePurchases ? "No purchase bill has been tagged for this sale." : "No matching purchase bill is available."}</td></tr>}
                 </tbody>
               </table>
             </div>
