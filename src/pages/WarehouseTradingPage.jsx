@@ -734,15 +734,26 @@ export default function WarehouseTradingPage() {
   const againstPurchaseLinkMap = new Map(salePurchaseLinks.map((item) => [String(item.purchase_id), item]));
   const againstPurchaseTotalQty = salePurchaseLinks.reduce((sum, item) => sum + toNumber(item.quantity), 0);
   const againstPurchaseTotalAmount = salePurchaseLinks.reduce((sum, item) => sum + toNumber(item.amount), 0);
+  const saleAutoClaimAmount = saleShortageAmount;
+  const saleAutoOtherDeduction = saleQualityDeduction;
+  const saleEffectiveClaimAmount = String(formData.claim_amount ?? "").trim() === "" ? saleAutoClaimAmount : toNumber(formData.claim_amount);
+  const saleEffectiveOtherDeduction = String(formData.other_deduction ?? "").trim() === "" ? saleAutoOtherDeduction : toNumber(formData.other_deduction);
+  const saleEffectiveTdsAmount = String(formData.tds_amount ?? "").trim() === "" && tdsEligible ? autoTdsAmount : toNumber(formData.tds_amount);
+  const saleDeductionTotal = saleEffectiveClaimAmount + saleEffectiveOtherDeduction + saleTransportCharge + saleCashDiscountAmount + toNumber(formData.adjustment_amount) + saleEffectiveTdsAmount;
   const saleNetReceivablePreview =
     saleGrossAmountFromData(formData) -
-    toNumber(formData.claim_amount) -
-    toNumber(formData.other_deduction) -
-    saleTransportCharge -
-    saleCashDiscountAmount -
-    toNumber(formData.adjustment_amount) -
-    (tdsEligible ? autoTdsAmount : toNumber(formData.tds_amount)) +
+    saleDeductionTotal +
     toNumber(formData.round_off);
+  const saleProfitLossPreview = saleNetReceivablePreview - againstPurchaseTotalAmount;
+
+  const resetSaleDeductionsToAuto = () => {
+    setFormData((prev) => ({
+      ...prev,
+      claim_amount: saleAutoClaimAmount ? saleAutoClaimAmount.toFixed(2) : "",
+      other_deduction: saleAutoOtherDeduction ? saleAutoOtherDeduction.toFixed(2) : "",
+      tds_amount: tdsEligible && autoTdsAmount ? autoTdsAmount.toFixed(2) : "",
+    }));
+  };
 
   const updateSalePurchaseLink = (purchase, quantityValue) => {
     const purchaseId = String(purchase.id || purchase._id || "");
@@ -763,6 +774,7 @@ export default function WarehouseTradingPage() {
           rate,
           amount: Number((quantity * rate).toFixed(2)),
           weight: quantity,
+          source: "manual",
         },
       ];
     });
@@ -785,6 +797,7 @@ export default function WarehouseTradingPage() {
           weight: tag.weight,
           rate: tag.rate,
           amount: Number((tag.weight * tag.rate).toFixed(2)),
+          source: "manual",
         },
       ];
     });
@@ -1118,6 +1131,16 @@ export default function WarehouseTradingPage() {
     window.addEventListener("keydown", handleF5TaggedPurchaseKey);
     return () => window.removeEventListener("keydown", handleF5TaggedPurchaseKey);
   }, [showSalePurchaseTagModal]);
+
+  useEffect(() => {
+    const handleSalePreviewF10 = (event) => {
+      if (event.key !== "F10" || !showSalePreview || activeVoucherType !== "sale") return;
+      event.preventDefault();
+      void openSalePurchaseTagging();
+    };
+    window.addEventListener("keydown", handleSalePreviewF10);
+    return () => window.removeEventListener("keydown", handleSalePreviewF10);
+  }, [showSalePreview, activeVoucherType, formData.sale_type, formData.farmer_id, formData.against_purchase_farmer_id, formData.company_account_id, formData.product_id, formData.warehouse_id]);
 
   useEffect(() => {
     const loadSaleTransportCharge = async () => {
@@ -1504,6 +1527,13 @@ export default function WarehouseTradingPage() {
       setList([]);
       setVoucherPageInfo({ page: voucherPage, pageSize: PAGE_SIZE, total: 0, totalPages: 1, hasMore: false });
     }
+  };
+
+  const openSalePurchaseTagging = async () => {
+    setShowTaggedSalePurchases(false);
+    setSalePurchaseTagSearch("");
+    await loadSalePurchaseRows();
+    setShowSalePurchaseTagModal(true);
   };
 
   const loadSalePurchaseRows = async () => {
@@ -2175,13 +2205,17 @@ export default function WarehouseTradingPage() {
         payload.unloading_qty = payload.quantity;
         payload.amount = saleGrossAmountFromData(formData);
         const grossAmount = payload.amount;
-        const claimAmount = Number(formData.claim_amount) || 0;
-        const otherDeduction = Number(formData.other_deduction) || 0;
+        const claimAmount = saleEffectiveClaimAmount;
+        const otherDeduction = saleEffectiveOtherDeduction;
         const cdAmount = Number(payload.cd_amount) || Number((grossAmount * (Number(formData.cd_percent) || 0) / 100).toFixed(2)) || 0;
         const adjustmentAmount = Number(formData.adjustment_amount) || 0;
-        const tdsAmount = Number(formData.tds_amount) || 0;
+        const tdsAmount = saleEffectiveTdsAmount;
         const roundOff = Number(formData.round_off) || 0;
         payload.cd_amount = cdAmount;
+        payload.claim_amount = claimAmount;
+        payload.other_deduction = otherDeduction;
+        payload.tds_amount = tdsAmount;
+        payload.total_deduction = claimAmount + otherDeduction + toNumber(formData.transport_charge) + cdAmount + adjustmentAmount + tdsAmount;
         const netAmount = grossAmount - claimAmount - otherDeduction - cdAmount - adjustmentAmount - tdsAmount + roundOff;
         payload.net_amount = netAmount;
         payload.net_amount_payable = netAmount;
@@ -5301,7 +5335,7 @@ export default function WarehouseTradingPage() {
                             <input value={formatMoney(saleDispatchQtyFromData(formData) * toNumber(formData.direct_purchase_rate))} readOnly style={erpInput} />
                           </div>
                           <div style={{ ...erpRow, display: "block" }}>
-                            <button type="button" onClick={() => { setShowTaggedSalePurchases(false); setSalePurchaseTagSearch(""); void loadSalePurchaseRows(); setShowSalePurchaseTagModal(true); }} style={{ ...btnAction, background: "#0f766e" }}>
+                            <button type="button" onClick={() => { void openSalePurchaseTagging(); }} style={{ ...btnAction, background: "#0f766e" }}>
                               F10 Purchase Bill Tagging
                             </button>
                           </div>
@@ -5434,7 +5468,9 @@ export default function WarehouseTradingPage() {
                             style={erpCellInput}
                             placeholder="Manual add qty"
                           /></td></tr>
-                          <tr><td style={erpTd}>Other Deduction</td><td style={erpTd}><input name="other_deduction" type="number" step="0.0001" value={formData.other_deduction} onChange={handleChange} style={erpCellInput} /></td></tr>
+                          <tr><td style={erpTd}>Other Deduction</td><td style={erpTd}><input name="other_deduction" type="number" step="0.0001" value={formData.other_deduction} onChange={handleChange} placeholder={`Auto: ${formatMoney(saleAutoOtherDeduction)}`} style={erpCellInput} /></td></tr>
+                          <tr><td style={erpTd}>Shortage (Auto)</td><td style={erpTd}>{formatMoney(saleShortageAmount)}</td></tr>
+                          <tr><td style={erpTd}>Freight</td><td style={erpTd}><input name="transport_charge" type="number" step="0.0001" value={formData.transport_charge} onChange={handleChange} style={erpCellInput} /></td></tr>
                           <tr>
                             <td style={erpTd}>CD %</td>
                             <td style={erpTd}>
@@ -5444,9 +5480,10 @@ export default function WarehouseTradingPage() {
                               </div>
                             </td>
                           </tr>
-                          <tr><td style={erpTd}>Claim/TDS</td><td style={erpTd}><input name="claim_amount" type="number" step="0.0001" value={formData.claim_amount} onChange={handleChange} style={erpCellInput} /></td></tr>
-                          <tr><td style={{ ...erpTd, fontWeight: 700 }}>Total Deduction</td><td style={{ ...erpTd, fontWeight: 700 }}>{formatMoney(toNumber(formData.other_deduction) + toNumber(formData.claim_amount) + saleCashDiscountAmount)}</td></tr>
+                          <tr><td style={erpTd}>Claim</td><td style={erpTd}><input name="claim_amount" type="number" step="0.0001" value={formData.claim_amount} onChange={handleChange} placeholder={`Auto: ${formatMoney(saleAutoClaimAmount)}`} style={erpCellInput} /></td></tr>
+                          <tr><td style={{ ...erpTd, fontWeight: 700 }}>Total Deduction</td><td style={{ ...erpTd, fontWeight: 700 }}>{formatMoney(saleDeductionTotal)}</td></tr>
                           <tr><td style={erpTd}>Round Off</td><td style={erpTd}><input name="round_off" type="number" step="0.0001" value={formData.round_off} onChange={handleChange} style={erpCellInput} /></td></tr>
+                          <tr><td style={erpTd}>Auto / Reset</td><td style={erpTd}><button type="button" onClick={resetSaleDeductionsToAuto} style={{ ...btnAction, background: "#64748b", width: "100%" }}>Auto Fill / Reset</button></td></tr>
                           <tr><td style={erpTd}>F2 Voucher Pass</td><td style={erpTd}><button type="button" onClick={() => setShowSaleDeductionModal(true)} style={{ ...btnAction, background: "#0f766e", width: "100%" }}>F2 Voucher Pass</button></td></tr>
                         </tbody>
                       </table>
@@ -5484,13 +5521,31 @@ export default function WarehouseTradingPage() {
                           <tr><th style={erpTh}>Sale Summary</th><th style={erpTh}>Amount</th></tr>
                         </thead>
                         <tbody>
-                          <tr><td style={erpTd}>Gross Amount</td><td style={erpTd}>{formatMoney(saleGrossAmountFromData(formData))}</td></tr>
-                          <tr><td style={erpTd}>Cash Discount</td><td style={erpTd}>{formatMoney(saleCashDiscountAmount)}</td></tr>
-                          <tr><td style={erpTd}>Total Deduction</td><td style={erpTd}>{formatMoney(toNumber(formData.other_deduction) + toNumber(formData.claim_amount) + saleCashDiscountAmount)}</td></tr>
+                          <tr><td style={erpTd}>Purchase: Qty × Rate</td><td style={erpTd}>{formatDecimal4(againstPurchaseTotalQty)} × {formatMoney(againstPurchaseTotalQty ? againstPurchaseTotalAmount / againstPurchaseTotalQty : 0)}</td></tr>
+                          <tr><td style={erpTd}>Purchase Amount</td><td style={erpTd}>{formatMoney(againstPurchaseTotalAmount)}</td></tr>
+                          <tr><td style={erpTd}>Sale: Qty × Rate</td><td style={erpTd}>{formatDecimal4(saleDispatchQtyFromData(formData))} × {formatMoney(toNumber(formData.rate))}</td></tr>
+                          <tr><td style={erpTd}>Sale Amount</td><td style={erpTd}>{formatMoney(saleGrossAmountFromData(formData))}</td></tr>
+                          <tr><td style={erpTd}>Shortage / Claim / Freight / Others</td><td style={erpTd}>{formatMoney(saleShortageAmount + saleEffectiveClaimAmount + saleTransportCharge + saleEffectiveOtherDeduction)}</td></tr>
+                          <tr><td style={erpTd}>Total Deduction</td><td style={erpTd}>{formatMoney(saleDeductionTotal)}</td></tr>
                           <tr><td style={erpTd}>Round Off</td><td style={erpTd}>{formatMoney(toNumber(formData.round_off))}</td></tr>
-                          <tr><td style={erpTd}>Net Amount Payable</td><td style={erpTd}>{formatMoney(saleNetReceivablePreview)}</td></tr>
+                          <tr><td style={{ ...erpTd, fontWeight: 800 }}>Net Sale Value</td><td style={{ ...erpTd, fontWeight: 800 }}>{formatMoney(saleNetReceivablePreview)}</td></tr>
+                          <tr><td style={{ ...erpTd, fontWeight: 800 }}>Net Purchase Value</td><td style={{ ...erpTd, fontWeight: 800 }}>{formatMoney(againstPurchaseTotalAmount)}</td></tr>
+                          <tr><td style={{ ...erpTd, fontWeight: 800, color: saleProfitLossPreview >= 0 ? "#047857" : "#b91c1c" }}>Profit / Loss</td><td style={{ ...erpTd, fontWeight: 800, color: saleProfitLossPreview >= 0 ? "#047857" : "#b91c1c" }}>{formatMoney(saleProfitLossPreview)}</td></tr>
                         </tbody>
                       </table>
+
+                      <div style={{ marginTop: 12, border: "1px solid #dbe4ef", borderRadius: 8, overflow: "hidden" }}>
+                        <div style={{ padding: "8px 10px", background: "#eef4ff", fontWeight: 800 }}>F10 Tagged Purchase Details</div>
+                        <div style={{ overflowX: "auto" }}>
+                          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                            <thead><tr><th style={erpTh}>Bill</th><th style={erpTh}>Consignee</th><th style={erpTh}>Qty</th><th style={erpTh}>Rate</th><th style={erpTh}>Amount</th><th style={erpTh}>Source</th></tr></thead>
+                            <tbody>
+                              {salePurchaseLinks.map((item) => <tr key={item.purchase_id}><td style={erpTd}>{item.voucher_no || "-"}</td><td style={erpTd}>{item.consignee_name || "-"}</td><td style={erpTd}>{formatDecimal4(item.quantity)}</td><td style={erpTd}>{formatMoney(item.rate)}</td><td style={erpTd}>{formatMoney(item.amount)}</td><td style={erpTd}>{item.source === "auto" ? "Auto" : "Manual"}</td></tr>)}
+                              {salePurchaseLinks.length === 0 && <tr><td style={{ ...erpTd, textAlign: "center", color: "#64748b" }} colSpan={6}>Press F10 to tag a purchase bill. Tagged bills will appear here.</td></tr>}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
 
                       <div style={erpTotalPanel}>
                         <span style={erpTotalLabel}>T O T A L</span>
@@ -7469,6 +7524,7 @@ export default function WarehouseTradingPage() {
           toNumber={toNumber}
           getSalePreviewDataForRow={getSalePreviewDataForRow}
           axios={API}
+          onOpenPurchaseTagging={openSalePurchaseTagging}
         />
       )}
       </div>
