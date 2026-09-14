@@ -362,6 +362,8 @@ export default function WarehouseTradingPage() {
   const [saleBillSearch, setSaleBillSearch] = useState("");
   const [journeyTemplateId, setJourneyTemplateId] = useState("");
   const [showSaleAdjustedModal, setShowSaleAdjustedModal] = useState(false);
+  const [showSalePurchaseTagModal, setShowSalePurchaseTagModal] = useState(false);
+  const [showTaggedSalePurchases, setShowTaggedSalePurchases] = useState(false);
   const [salePurchaseRows, setSalePurchaseRows] = useState([]);
   const [salePurchaseLinks, setSalePurchaseLinks] = useState([]);
   const [showPurchasePreview, setShowPurchasePreview] = useState(false);
@@ -959,6 +961,7 @@ export default function WarehouseTradingPage() {
     formData.company_account_id,
     formData.product_id,
     formData.warehouse_id,
+    editId,
   ]);
 
   // Report rows: page/filter changes only.
@@ -1078,16 +1081,22 @@ export default function WarehouseTradingPage() {
     const handleF10TagPurchaseKey = (event) => {
       if (event.key !== "F10" || activeTab !== "vouchers" || activeVoucherType !== "sale" || formData.sale_type !== "direct") return;
       event.preventDefault();
-      const firstAvailable = directSaleAvailablePurchaseRows[0];
-      if (!firstAvailable) {
-        alert("No untagged purchase bill is available for this direct sale.");
-        return;
-      }
-      tagDirectSalePurchase(firstAvailable);
+      setShowTaggedSalePurchases(false);
+      setShowSalePurchaseTagModal(true);
     };
     window.addEventListener("keydown", handleF10TagPurchaseKey);
     return () => window.removeEventListener("keydown", handleF10TagPurchaseKey);
-  }, [activeTab, activeVoucherType, formData.sale_type, directSaleAvailablePurchaseRows, formData.farmer_id]);
+  }, [activeTab, activeVoucherType, formData.sale_type]);
+
+  useEffect(() => {
+    const handleF5TaggedPurchaseKey = (event) => {
+      if (event.key !== "F5" || !showSalePurchaseTagModal) return;
+      event.preventDefault();
+      setShowTaggedSalePurchases(true);
+    };
+    window.addEventListener("keydown", handleF5TaggedPurchaseKey);
+    return () => window.removeEventListener("keydown", handleF5TaggedPurchaseKey);
+  }, [showSalePurchaseTagModal]);
 
   useEffect(() => {
     const loadSaleTransportCharge = async () => {
@@ -1139,13 +1148,13 @@ export default function WarehouseTradingPage() {
 
   useEffect(() => {
     const handleF5SaleKey = (event) => {
-      if (event.key !== "F5" || activeTab !== "vouchers" || activeVoucherType !== "sale") return;
+      if (event.key !== "F5" || showSalePurchaseTagModal || activeTab !== "vouchers" || activeVoucherType !== "sale") return;
       event.preventDefault();
       setShowSaleAdjustedModal(true);
     };
     window.addEventListener("keydown", handleF5SaleKey);
     return () => window.removeEventListener("keydown", handleF5SaleKey);
-  }, [activeTab, activeVoucherType]);
+  }, [activeTab, activeVoucherType, showSalePurchaseTagModal]);
 
   useEffect(() => {
     if (activeTab !== "vouchers" || activeVoucherType !== "sale" || formData.sale_type === "direct" || !formData.warehouse_id || !formData.product_id) {
@@ -1497,6 +1506,8 @@ export default function WarehouseTradingPage() {
         farmer_id: farmerId,
         company_account_id: formData.company_account_id || undefined,
         product_id: formData.product_id || undefined,
+        untagged_direct_purchase: isDirectSale ? 1 : undefined,
+        exclude_sale_id: isDirectSale && editId ? editId : undefined,
       } });
       const payload = res.data || {};
       const rows = Array.isArray(payload) ? payload : (Array.isArray(payload.data) ? payload.data : []);
@@ -5251,52 +5262,9 @@ export default function WarehouseTradingPage() {
                             <input value={formatMoney(saleDispatchQtyFromData(formData) * toNumber(formData.direct_purchase_rate))} readOnly style={erpInput} />
                           </div>
                           <div style={{ ...erpRow, display: "block" }}>
-                            <label style={erpLabel}>Purchase Bill Tagging (F10)</label>
-                            <div style={{ border: "1px solid #dbe3ef", borderRadius: 8, background: "#f8fafc", padding: 10 }}>
-                              <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center", marginBottom: 8 }}>
-                                <span style={{ fontSize: 12, color: "#475569", fontWeight: 700 }}>Available Purchase Bills</span>
-                                <button type="button" onClick={() => directSaleAvailablePurchaseRows[0] && tagDirectSalePurchase(directSaleAvailablePurchaseRows[0])} style={{ ...btnAction, background: "#0f766e", padding: "6px 10px", fontSize: 12 }} disabled={!directSaleAvailablePurchaseRows.length}>Tag First Bill</button>
-                              </div>
-                              {directSaleAvailablePurchaseRows.length === 0 ? (
-                                <div style={{ fontSize: 12, color: "#64748b", padding: 8 }}>No untagged purchase bill available.</div>
-                              ) : (
-                                <div style={{ overflowX: "auto" }}>
-                                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-                                    <thead>
-                                      <tr style={reportHeaderRowStyle}>
-                                        <th style={th}>Bill</th>
-                                        <th style={th}>Date</th>
-                                        <th style={th}>Farmer</th>
-                                        <th style={th}>Lorry</th>
-                                        <th style={th}>Weight</th>
-                                        <th style={th}>Consignee</th>
-                                        <th style={th}>Rate</th>
-                                        <th style={th}>Amount</th>
-                                        <th style={th}>Tag</th>
-                                      </tr>
-                                    </thead>
-                                    <tbody>
-                                      {directSaleAvailablePurchaseRows.slice(0, 8).map((purchase) => {
-                                        const tag = buildSalePurchaseTag(purchase, formData.farmer_id || formData.against_purchase_farmer_id || "");
-                                        return (
-                                          <tr key={purchase.id || purchase._id}>
-                                            <td style={td}>{purchase.voucher_no || "-"}</td>
-                                            <td style={td}>{formatLedgerDate(purchase.date)}</td>
-                                            <td style={td}>{tag.farmer_name || getFarmerName(purchase)}</td>
-                                            <td style={td}>{tag.lorry_no || purchase.lorry_no || "-"}</td>
-                                            <td style={td}>{formatDecimal4(tag.weight || purchase.total_qty || purchase.quantity || 0)}</td>
-                                            <td style={td}>{tag.consignee_name || purchase.consignee_name || "-"}</td>
-                                            <td style={td}>{formatMoney(tag.rate || purchase.rate || 0)}</td>
-                                            <td style={td}>{formatMoney(tag.amount || purchase.amount || 0)}</td>
-                                            <td style={td}><button type="button" onClick={() => tagDirectSalePurchase(purchase)} style={{ ...btnAction, background: "#1d4ed8", padding: "4px 8px", fontSize: 11 }}>Tag</button></td>
-                                          </tr>
-                                        );
-                                      })}
-                                    </tbody>
-                                  </table>
-                                </div>
-                              )}
-                            </div>
+                            <button type="button" onClick={() => { setShowTaggedSalePurchases(false); setShowSalePurchaseTagModal(true); }} style={{ ...btnAction, background: "#0f766e" }}>
+                              F10 Purchase Bill Tagging
+                            </button>
                           </div>
                         </>
                       )}
@@ -7089,6 +7057,38 @@ export default function WarehouseTradingPage() {
             onConfirm={() => setShowReceiptAdjustPopup(false)}
             confirmDisabled={Math.abs(receiptAdjustmentTotal - toNumber(formData.amount)) > 0.0001}
           />
+        </div>
+      )}
+      {showSalePurchaseTagModal && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 1200, background: "rgba(15, 23, 42, 0.5)", display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+          <div style={{ width: "min(1080px, 100%)", maxHeight: "88vh", overflow: "auto", background: "#fff", borderRadius: 10, padding: 18, boxShadow: "0 20px 50px rgba(15, 23, 42, 0.28)" }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 12 }}>
+              <div>
+                <h3 style={{ margin: 0 }}>Purchase Bill Tagging</h3>
+                <span style={{ fontSize: 12, color: "#64748b" }}>{showTaggedSalePurchases ? "Tagged purchase bills for this sale" : "Available direct-loading purchase bills"}</span>
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button type="button" onClick={() => setShowTaggedSalePurchases(false)} style={{ ...btnAction, background: "#0f766e" }}>Available Bills</button>
+                <button type="button" onClick={() => setShowTaggedSalePurchases(true)} style={{ ...btnAction, background: "#1d4ed8" }}>F5 Tagged Bills</button>
+                <button type="button" onClick={() => setShowSalePurchaseTagModal(false)} style={{ ...btnAction, background: "#64748b" }}>Close</button>
+              </div>
+            </div>
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                <thead><tr style={reportHeaderRowStyle}><th style={th}>Bill</th><th style={th}>Date</th><th style={th}>Farmer</th><th style={th}>Lorry</th><th style={th}>Weight</th><th style={th}>Consignee</th><th style={th}>Rate</th><th style={th}>Amount</th><th style={th}>{showTaggedSalePurchases ? "Status" : "Action"}</th></tr></thead>
+                <tbody>
+                  {(showTaggedSalePurchases ? salePurchaseLinks : directSaleAvailablePurchaseRows).map((purchase) => {
+                    const tag = buildSalePurchaseTag(purchase, formData.farmer_id || formData.against_purchase_farmer_id || "");
+                    return <tr key={purchase.purchase_id || purchase.id || purchase._id}>
+                      <td style={td}>{purchase.voucher_no || tag.voucher_no || "-"}</td><td style={td}>{formatLedgerDate(purchase.date || tag.date)}</td><td style={td}>{purchase.farmer_name || tag.farmer_name || "-"}</td><td style={td}>{purchase.lorry_no || tag.lorry_no || "-"}</td><td style={td}>{formatDecimal4(purchase.weight || purchase.quantity || tag.weight || 0)}</td><td style={td}>{purchase.consignee_name || tag.consignee_name || "-"}</td><td style={td}>{formatMoney(purchase.rate || tag.rate || 0)}</td><td style={td}>{formatMoney(purchase.amount || tag.amount || 0)}</td>
+                      <td style={td}>{showTaggedSalePurchases ? <span style={{ color: "#047857", fontWeight: 700 }}>Tagged</span> : <button type="button" onClick={() => tagDirectSalePurchase(purchase)} style={{ ...btnAction, background: "#1d4ed8", padding: "4px 8px", fontSize: 11 }}>Tag</button>}</td>
+                    </tr>;
+                  })}
+                  {(showTaggedSalePurchases ? salePurchaseLinks : directSaleAvailablePurchaseRows).length === 0 && <tr><td style={{ ...td, textAlign: "center", color: "#64748b" }} colSpan={9}>{showTaggedSalePurchases ? "No purchase bill has been tagged for this sale." : "No untagged direct-loading purchase bill is available."}</td></tr>}
+                </tbody>
+              </table>
+            </div>
+          </div>
         </div>
       )}
       {showSaleDeductionModal && (
