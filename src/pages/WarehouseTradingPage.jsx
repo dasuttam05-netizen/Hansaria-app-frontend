@@ -737,6 +737,30 @@ export default function WarehouseTradingPage() {
   const againstPurchaseLinkMap = new Map(salePurchaseLinks.map((item) => [String(item.purchase_id), item]));
   const againstPurchaseTotalQty = salePurchaseLinks.reduce((sum, item) => sum + toNumber(item.quantity), 0);
   const againstPurchaseTotalAmount = salePurchaseLinks.reduce((sum, item) => sum + toNumber(item.amount), 0);
+  const purchaseTaggedDeductionDetails = salePurchaseLinks.map((item) => {
+    const qty = toNumber(item.quantity || item.weight);
+    const fullQty = toNumber(item.purchase_total_qty || item.total_qty || item.purchase_quantity || qty);
+    const ratio = fullQty > 0 ? Math.min(qty / fullQty, 1) : 1;
+    const getAuto = (key, altKey = null) => toNumber(item[key] ?? (altKey ? item[altKey] : 0)) * ratio;
+    const claim = getAuto("claim_amount", "bags_claim");
+    const shortage = getAuto("shortage_amount", "shortage_qty");
+    const freight = getAuto("transport_charge");
+    const others = getAuto("other_deduction", "others");
+    const labour = getAuto("labour");
+    const moisture = getAuto("moisture");
+    const dunki = getAuto("dunki");
+    const fungus = getAuto("fungus");
+    const discolour = getAuto("discolour");
+    const lessBags = getAuto("less_bags_weight");
+    const cd = getAuto("cd_amount");
+    const adjustment = getAuto("adjustment_amount");
+    const tds = getAuto("tds_amount");
+    const roundOff = getAuto("round_off");
+    const total = toNumber(item.total_deduction ?? item.total_deduct_amount ?? (claim + shortage + freight + others + labour + moisture + dunki + fungus + discolour + lessBags + cd + adjustment + tds));
+    return { item, claim, shortage, freight, others, labour, moisture, dunki, fungus, discolour, lessBags, cd, adjustment, tds, roundOff, total };
+  });
+  const purchaseTaggedDeductionTotal = purchaseTaggedDeductionDetails.reduce((sum, d) => sum + d.total, 0);
+  const netPurchaseSummaryValue = Math.max(againstPurchaseTotalAmount - purchaseTaggedDeductionTotal, 0);
   const saleAutoClaimAmount = saleShortageAmount;
   const saleAutoOtherDeduction = saleQualityDeduction;
   const saleEffectiveClaimAmount = String(formData.claim_amount ?? "").trim() === "" ? saleAutoClaimAmount : toNumber(formData.claim_amount);
@@ -747,7 +771,7 @@ export default function WarehouseTradingPage() {
     saleGrossAmountFromData(formData) -
     saleDeductionTotal +
     toNumber(formData.round_off);
-  const saleProfitLossPreview = saleNetReceivablePreview - againstPurchaseTotalAmount;
+  const saleProfitLossPreview = saleNetReceivablePreview - netPurchaseSummaryValue;
 
   const resetSaleDeductionsToAuto = () => {
     setFormData((prev) => ({
@@ -5500,7 +5524,7 @@ export default function WarehouseTradingPage() {
                             style={erpCellInput}
                             placeholder="Manual add qty"
                           /></td></tr>
-                          <tr><td style={erpTd}>Other Deduction</td><td style={erpTd}><input name="other_deduction" type="number" step="0.0001" value={formData.other_deduction} onChange={handleChange} placeholder={`Auto: ${formatMoney(saleAutoOtherDeduction)}`} style={erpCellInput} /></td></tr>
+                          <tr><td style={erpTd}>Other Deduction</td><td style={erpTd}><input name="other_deduction" type="number" step="0.0001" value={String(formData.other_deduction ?? "").trim() === "" ? (saleAutoOtherDeduction ? saleAutoOtherDeduction.toFixed(2) : "0.00") : formData.other_deduction} onChange={handleChange} style={erpCellInput} /></td></tr>
                           <tr><td style={erpTd}>Shortage (Auto)</td><td style={erpTd}>{formatMoney(saleShortageAmount)}</td></tr>
                           <tr><td style={erpTd}>Freight</td><td style={erpTd}><input name="transport_charge" type="number" step="0.0001" value={formData.transport_charge} onChange={handleChange} style={erpCellInput} /></td></tr>
                           <tr>
@@ -5512,7 +5536,7 @@ export default function WarehouseTradingPage() {
                               </div>
                             </td>
                           </tr>
-                          <tr><td style={erpTd}>Claim</td><td style={erpTd}><input name="claim_amount" type="number" step="0.0001" value={formData.claim_amount} onChange={handleChange} placeholder={`Auto: ${formatMoney(saleAutoClaimAmount)}`} style={erpCellInput} /></td></tr>
+                          <tr><td style={erpTd}>Claim</td><td style={erpTd}><input name="claim_amount" type="number" step="0.0001" value={String(formData.claim_amount ?? "").trim() === "" ? (saleAutoClaimAmount ? saleAutoClaimAmount.toFixed(2) : "0.00") : formData.claim_amount} onChange={handleChange} style={erpCellInput} /></td></tr>
                           <tr><td style={{ ...erpTd, fontWeight: 700 }}>Total Deduction</td><td style={{ ...erpTd, fontWeight: 700 }}>{formatMoney(saleDeductionTotal)}</td></tr>
                           <tr><td style={erpTd}>Round Off</td><td style={erpTd}><input name="round_off" type="number" step="0.0001" value={formData.round_off} onChange={handleChange} style={erpCellInput} /></td></tr>
                           <tr><td style={erpTd}>Auto / Reset</td><td style={erpTd}><button type="button" onClick={resetSaleDeductionsToAuto} style={{ ...btnAction, background: "#64748b", width: "100%" }}>Auto Fill / Reset</button></td></tr>
@@ -5555,14 +5579,27 @@ export default function WarehouseTradingPage() {
                         <tbody>
                           <tr><td style={erpTd}>Purchase: Qty × Rate</td><td style={erpTd}>{formatDecimal4(againstPurchaseTotalQty)} × {formatMoney(againstPurchaseTotalQty ? againstPurchaseTotalAmount / againstPurchaseTotalQty : 0)}</td></tr>
                           <tr><td style={erpTd}>Purchase Amount</td><td style={erpTd}>{formatMoney(againstPurchaseTotalAmount)}</td></tr>
+                          <tr><td style={{ ...erpTd, fontWeight: 800, background: "#f8fafc" }}>Purchase Deductions</td><td style={{ ...erpTd, fontWeight: 800, background: "#f8fafc" }}>Auto / Manual</td></tr>
+                          <tr><td style={erpTd}>Claim</td><td style={erpTd}>{formatMoney(purchaseTaggedDeductionDetails.reduce((sum, d) => sum + d.claim, 0))}</td></tr>
+                          <tr><td style={erpTd}>Shortage</td><td style={erpTd}>{formatMoney(purchaseTaggedDeductionDetails.reduce((sum, d) => sum + d.shortage, 0))}</td></tr>
+                          <tr><td style={erpTd}>Freight / Transport</td><td style={erpTd}>{formatMoney(purchaseTaggedDeductionDetails.reduce((sum, d) => sum + d.freight, 0))}</td></tr>
+                          <tr><td style={erpTd}>Others</td><td style={erpTd}>{formatMoney(purchaseTaggedDeductionDetails.reduce((sum, d) => sum + d.others, 0))}</td></tr>
+                          <tr><td style={erpTd}>Labour / Quality</td><td style={erpTd}>{formatMoney(purchaseTaggedDeductionDetails.reduce((sum, d) => sum + d.labour + d.moisture + d.dunki + d.fungus + d.discolour + d.lessBags, 0))}</td></tr>
+                          <tr><td style={{ ...erpTd, fontWeight: 700 }}>Purchase Total Deduction</td><td style={{ ...erpTd, fontWeight: 700 }}>{formatMoney(purchaseTaggedDeductionTotal)}</td></tr>
+                          <tr><td style={{ ...erpTd, fontWeight: 700 }}>Net Purchase Value</td><td style={{ ...erpTd, fontWeight: 700 }}>{formatMoney(netPurchaseSummaryValue)}</td></tr>
                           <tr><td style={erpTd}>Sale: Qty × Rate</td><td style={erpTd}>{formatDecimal4(saleDispatchQtyFromData(formData))} × {formatMoney(toNumber(formData.rate))}</td></tr>
                           <tr><td style={erpTd}>Sale Amount</td><td style={erpTd}>{formatMoney(saleGrossAmountFromData(formData))}</td></tr>
-                          <tr><td style={erpTd}>Shortage / Claim / Freight / Others</td><td style={erpTd}>{formatMoney(saleShortageAmount + saleEffectiveClaimAmount + saleTransportCharge + saleEffectiveOtherDeduction)}</td></tr>
-                          <tr><td style={erpTd}>Total Deduction</td><td style={erpTd}>{formatMoney(saleDeductionTotal)}</td></tr>
+                          <tr><td style={{ ...erpTd, fontWeight: 800, background: "#f8fafc" }}>Sale Deductions</td><td style={{ ...erpTd, fontWeight: 800, background: "#f8fafc" }}>Auto / Manual</td></tr>
+                          <tr><td style={erpTd}>Shortage</td><td style={erpTd}>{formatMoney(saleShortageAmount)}</td></tr>
+                          <tr><td style={erpTd}>Claim</td><td style={erpTd}>{formatMoney(saleEffectiveClaimAmount)}</td></tr>
+                          <tr><td style={erpTd}>Freight</td><td style={erpTd}>{formatMoney(saleTransportCharge)}</td></tr>
+                          <tr><td style={erpTd}>Others</td><td style={erpTd}>{formatMoney(saleEffectiveOtherDeduction)}</td></tr>
+                          <tr><td style={erpTd}>CD / Adjustment / TDS</td><td style={erpTd}>{formatMoney(saleCashDiscountAmount + toNumber(formData.adjustment_amount) + saleEffectiveTdsAmount)}</td></tr>
+                          <tr><td style={{ ...erpTd, fontWeight: 700 }}>Sale Total Deduction</td><td style={{ ...erpTd, fontWeight: 700 }}>{formatMoney(saleDeductionTotal)}</td></tr>
                           <tr><td style={erpTd}>Round Off</td><td style={erpTd}>{formatMoney(toNumber(formData.round_off))}</td></tr>
                           <tr><td style={{ ...erpTd, fontWeight: 800 }}>Net Sale Value</td><td style={{ ...erpTd, fontWeight: 800 }}>{formatMoney(saleNetReceivablePreview)}</td></tr>
-                          <tr><td style={{ ...erpTd, fontWeight: 800 }}>Net Purchase Value</td><td style={{ ...erpTd, fontWeight: 800 }}>{formatMoney(againstPurchaseTotalAmount)}</td></tr>
-                          <tr><td style={{ ...erpTd, fontWeight: 800, color: saleProfitLossPreview >= 0 ? "#047857" : "#b91c1c" }}>Profit / Loss</td><td style={{ ...erpTd, fontWeight: 800, color: saleProfitLossPreview >= 0 ? "#047857" : "#b91c1c" }}>{formatMoney(saleProfitLossPreview)}</td></tr>
+                          <tr><td style={{ ...erpTd, fontWeight: 800 }}>Net Purchase Value</td><td style={{ ...erpTd, fontWeight: 800 }}>{formatMoney(netPurchaseSummaryValue)}</td></tr>
+                          <tr><td style={{ ...erpTd, fontWeight: 800, color: (saleNetReceivablePreview - netPurchaseSummaryValue) >= 0 ? "#047857" : "#b91c1c" }}>Profit / Loss</td><td style={{ ...erpTd, fontWeight: 800, color: (saleNetReceivablePreview - netPurchaseSummaryValue) >= 0 ? "#047857" : "#b91c1c" }}>{formatMoney(saleNetReceivablePreview - netPurchaseSummaryValue)}</td></tr>
                         </tbody>
                       </table>
 
