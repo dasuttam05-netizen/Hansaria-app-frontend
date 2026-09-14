@@ -7592,7 +7592,6 @@ export default function WarehouseTradingPage() {
           formatDecimal4={formatDecimal4}
           toNumber={toNumber}
           getSalePreviewDataForRow={getSalePreviewDataForRow}
-          formData={formData}
           axios={API}
         />
       )}
