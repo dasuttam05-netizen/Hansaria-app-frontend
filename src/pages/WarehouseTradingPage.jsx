@@ -364,6 +364,7 @@ export default function WarehouseTradingPage() {
   const [showSaleAdjustedModal, setShowSaleAdjustedModal] = useState(false);
   const [showSalePurchaseTagModal, setShowSalePurchaseTagModal] = useState(false);
   const [showTaggedSalePurchases, setShowTaggedSalePurchases] = useState(false);
+  const [salePurchaseTagSearch, setSalePurchaseTagSearch] = useState("");
   const [salePurchaseRows, setSalePurchaseRows] = useState([]);
   const [salePurchaseLinks, setSalePurchaseLinks] = useState([]);
   const [showPurchasePreview, setShowPurchasePreview] = useState(false);
@@ -793,6 +794,24 @@ export default function WarehouseTradingPage() {
     () => filterAvailablePurchaseTags(salePurchaseRows, salePurchaseLinks),
     [salePurchaseRows, salePurchaseLinks]
   );
+  const filteredSalePurchaseTagRows = useMemo(() => {
+    const query = salePurchaseTagSearch.trim().toLowerCase();
+    const rows = showTaggedSalePurchases ? salePurchaseLinks : directSaleAvailablePurchaseRows;
+    if (!query) return rows;
+    return rows.filter((purchase) => {
+      const tag = buildSalePurchaseTag(purchase, formData.farmer_id || formData.against_purchase_farmer_id || "");
+      return [
+        purchase.voucher_no,
+        tag.voucher_no,
+        purchase.farmer_name,
+        tag.farmer_name,
+        purchase.lorry_no,
+        tag.lorry_no,
+        purchase.consignee_name,
+        tag.consignee_name,
+      ].some((value) => String(value || "").toLowerCase().includes(query));
+    });
+  }, [directSaleAvailablePurchaseRows, formData.against_purchase_farmer_id, formData.farmer_id, salePurchaseLinks, salePurchaseTagSearch, showTaggedSalePurchases]);
   const saleVoucherPassBills = list.filter((item) => {
     const sameWarehouse = !formData.warehouse_id || String(item.warehouse_id || "") === String(formData.warehouse_id);
     const sameAccount = !formData.company_account_id || String(item.company_account_id || "") === String(formData.company_account_id);
@@ -1082,6 +1101,7 @@ export default function WarehouseTradingPage() {
       if (event.key !== "F10" || activeTab !== "vouchers" || activeVoucherType !== "sale" || formData.sale_type !== "direct") return;
       event.preventDefault();
       setShowTaggedSalePurchases(false);
+      setSalePurchaseTagSearch("");
       setShowSalePurchaseTagModal(true);
     };
     window.addEventListener("keydown", handleF10TagPurchaseKey);
@@ -4984,16 +5004,25 @@ export default function WarehouseTradingPage() {
                         {renderAccountSelect(erpInput)}
                       </div>
                       <div className="purchase-voucher-row" style={erpRow}>
+                        <label style={erpLabel}>Consignee</label>
+                        <select name="consignee_id" value={formData.consignee_id} onChange={handleChange} style={erpInput}>
+                          <option value="">Select Consignee</option>
+                          {consignees.map((c) => (
+                            <option key={c.id || c._id} value={c.id || c._id}>{c.name}</option>
+                          ))}
+                        </select>
+                      </div>
+                      <div className="purchase-voucher-row" style={erpRow}>
                         <label style={erpLabel}>GSTIN</label>
-                        <input value={selectedFarmerGst} readOnly style={erpInput} />
+                        <input value={selectedConsignee?.gst_no || selectedFarmerGst} readOnly style={erpInput} />
                         <label style={{ ...erpLabel, width: 42, textAlign: "right" }}>State</label>
-                        <input value={selectedFarmerState} readOnly style={{ ...erpInput, width: 90 }} />
+                        <input value={selectedConsignee?.state || selectedFarmerState} readOnly style={{ ...erpInput, width: 90 }} />
                       </div>
                       <div className="purchase-voucher-row" style={erpRow}>
                         <label style={erpLabel}>PAN No.</label>
-                        <input value={selectedFarmerPan} readOnly style={erpInput} />
+                        <input value={selectedConsignee?.pan_no || selectedFarmerPan} readOnly style={erpInput} />
                         <label style={{ ...erpLabel, width: 50, textAlign: "right" }}>Mobile</label>
-                        <input value={selectedFarmerMobile} readOnly style={{ ...erpInput, width: 110 }} />
+                        <input value={selectedConsignee?.mobile || selectedFarmerMobile} readOnly style={{ ...erpInput, width: 110 }} />
                       </div>
                     </div>
 
@@ -5267,7 +5296,7 @@ export default function WarehouseTradingPage() {
                             <input value={formatMoney(saleDispatchQtyFromData(formData) * toNumber(formData.direct_purchase_rate))} readOnly style={erpInput} />
                           </div>
                           <div style={{ ...erpRow, display: "block" }}>
-                            <button type="button" onClick={() => { setShowTaggedSalePurchases(false); setShowSalePurchaseTagModal(true); }} style={{ ...btnAction, background: "#0f766e" }}>
+                            <button type="button" onClick={() => { setShowTaggedSalePurchases(false); setSalePurchaseTagSearch(""); setShowSalePurchaseTagModal(true); }} style={{ ...btnAction, background: "#0f766e" }}>
                               F10 Purchase Bill Tagging
                             </button>
                           </div>
@@ -7075,21 +7104,30 @@ export default function WarehouseTradingPage() {
               <div style={{ display: "flex", gap: 8 }}>
                 <button type="button" onClick={() => setShowTaggedSalePurchases(false)} style={{ ...btnAction, background: "#0f766e" }}>Available Bills</button>
                 <button type="button" onClick={() => setShowTaggedSalePurchases(true)} style={{ ...btnAction, background: "#1d4ed8" }}>F5 Tagged Bills</button>
-                <button type="button" onClick={() => setShowSalePurchaseTagModal(false)} style={{ ...btnAction, background: "#64748b" }}>Close</button>
+                <button type="button" onClick={() => { setShowSalePurchaseTagModal(false); setSalePurchaseTagSearch(""); }} style={{ ...btnAction, background: "#64748b" }}>Close</button>
               </div>
+            </div>
+            <div style={{ marginBottom: 12 }}>
+              <input
+                autoFocus
+                value={salePurchaseTagSearch}
+                onChange={(event) => setSalePurchaseTagSearch(event.target.value)}
+                placeholder="Search by bill, farmer, lorry or consignee"
+                style={{ ...inp, width: "100%" }}
+              />
             </div>
             <div style={{ overflowX: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
                 <thead><tr style={reportHeaderRowStyle}><th style={th}>Bill</th><th style={th}>Date</th><th style={th}>Farmer</th><th style={th}>Lorry</th><th style={th}>Weight</th><th style={th}>Consignee</th><th style={th}>Rate</th><th style={th}>Amount</th><th style={th}>{showTaggedSalePurchases ? "Status" : "Action"}</th></tr></thead>
                 <tbody>
-                  {(showTaggedSalePurchases ? salePurchaseLinks : directSaleAvailablePurchaseRows).map((purchase) => {
+                  {filteredSalePurchaseTagRows.map((purchase) => {
                     const tag = buildSalePurchaseTag(purchase, formData.farmer_id || formData.against_purchase_farmer_id || "");
                     return <tr key={purchase.purchase_id || purchase.id || purchase._id}>
                       <td style={td}>{purchase.voucher_no || tag.voucher_no || "-"}</td><td style={td}>{formatLedgerDate(purchase.date || tag.date)}</td><td style={td}>{purchase.farmer_name || tag.farmer_name || "-"}</td><td style={td}>{purchase.lorry_no || tag.lorry_no || "-"}</td><td style={td}>{formatDecimal4(purchase.weight || purchase.quantity || tag.weight || 0)}</td><td style={td}>{purchase.consignee_name || tag.consignee_name || "-"}</td><td style={td}>{formatMoney(purchase.rate || tag.rate || 0)}</td><td style={td}>{formatMoney(purchase.amount || tag.amount || 0)}</td>
                       <td style={td}>{showTaggedSalePurchases ? <span style={{ color: "#047857", fontWeight: 700 }}>Tagged</span> : <button type="button" onClick={() => tagDirectSalePurchase(purchase)} style={{ ...btnAction, background: "#1d4ed8", padding: "4px 8px", fontSize: 11 }}>Tag</button>}</td>
                     </tr>;
                   })}
-                  {(showTaggedSalePurchases ? salePurchaseLinks : directSaleAvailablePurchaseRows).length === 0 && <tr><td style={{ ...td, textAlign: "center", color: "#64748b" }} colSpan={9}>{showTaggedSalePurchases ? "No purchase bill has been tagged for this sale." : "No untagged direct-loading purchase bill is available."}</td></tr>}
+                  {filteredSalePurchaseTagRows.length === 0 && <tr><td style={{ ...td, textAlign: "center", color: "#64748b" }} colSpan={9}>{salePurchaseTagSearch ? "No purchase bill matches your search." : showTaggedSalePurchases ? "No purchase bill has been tagged for this sale." : "No untagged direct-loading purchase bill is available."}</td></tr>}
                 </tbody>
               </table>
             </div>
