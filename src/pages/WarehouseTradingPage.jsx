@@ -1212,7 +1212,7 @@ export default function WarehouseTradingPage() {
       // one in-flight request group so React effects cannot fire the same 9 calls twice.
       if (!force) {
         try {
-          const cacheKey = `warehouseTradingMasterData:v4:${activeVoucherType}`;
+          const cacheKey = `warehouseTradingMasterData:v5:${activeVoucherType}`;
           const cached = JSON.parse(sessionStorage.getItem(cacheKey) || "null");
           if (cached?.data && Date.now() - Number(cached.time || 0) < 30 * 60 * 1000) {
             const data = cached.data;
@@ -1245,7 +1245,7 @@ export default function WarehouseTradingPage() {
           locations: API.get("/api/locations"),
         };
         const requiredMasters = activeVoucherType === "purchase"
-          ? ["warehouses", "farmers", "companyAccounts", "products", "employees", "locations"]
+          ? ["warehouses", "farmers", "companyAccounts", "consignees", "products", "employees", "locations"]
           : activeVoucherType === "sale"
             ? ["warehouses", "farmers", "buyerNames", "companies", "companyAccounts", "consignees", "products", "employees", "locations"]
             : activeVoucherType === "payment"
@@ -2074,6 +2074,10 @@ export default function WarehouseTradingPage() {
         }
         if (!formData.farmer_id) {
           alert("Please select farmer for direct sale purchase entry");
+          return;
+        }
+        if (!formData.consignee_id) {
+          alert("Please select consignee for direct sale purchase entry");
           return;
         }
         if (toNumber(formData.direct_purchase_rate) <= 0) {
