@@ -465,22 +465,6 @@ export default function OutwardPage() {
   }, []);
 
   useEffect(() => {
-    const fetchSettlements = async () => {
-      setSummaryLoading(true);
-      try {
-        const res = await axios.get(`${API_BASE}/outward-settlement/report/list`);
-        setSettlementRows(Array.isArray(res.data) ? res.data : []);
-      } catch (err) {
-        setSettlementRows([]);
-      } finally {
-        setSummaryLoading(false);
-      }
-    };
-
-    fetchSettlements();
-  }, []);
-
-  useEffect(() => {
     if (formData.employee_id) {
       const employeeId = String(formData.employee_id);
       const emp = employees.find((e) => sameId(getRecordId(e), employeeId));
