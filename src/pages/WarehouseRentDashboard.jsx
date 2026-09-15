@@ -11,9 +11,9 @@ export default function WarehouseRentDashboard() {
   const [companies, setCompanies] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
   const [locations, setLocations] = useState([]);
+  const [locationId, setLocationId] = useState("");
   const [companyId, setCompanyId] = useState("");
   const [warehouseId, setWarehouseId] = useState("");
-  const [locationId, setLocationId] = useState("");
   const [summary, setSummary] = useState([]);
   const [details, setDetails] = useState([]);
 
@@ -182,17 +182,17 @@ export default function WarehouseRentDashboard() {
             ))}
           </select>
 
-          <select value={locationId} onChange={(e) => setLocationId(e.target.value)} style={input}>
-            <option value="">All Locations</option>
-            {locations.map((l) => (
-              <option key={l.id} value={l.id}>{l.name}</option>
-            ))}
-          </select>
-
           <select value={warehouseId} onChange={(e) => setWarehouseId(e.target.value)} style={input}>
             <option value="">All Warehouses</option>
             {warehouses.map((w) => (
               <option key={w.id} value={w.id}>{w.name}</option>
+            ))}
+          </select>
+
+          <select value={locationId} onChange={(e) => setLocationId(e.target.value)} style={input}>
+            <option value="">All Locations</option>
+            {locations.map((l) => (
+              <option key={l.id} value={l.id}>{l.name}</option>
             ))}
           </select>
 
