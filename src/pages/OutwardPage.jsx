@@ -235,7 +235,7 @@ export default function OutwardPage() {
   const productLookup = useMemo(() => buildLookupMap(products), [products]);
   const companyLookup = useMemo(() => buildLookupMap(companies), [companies]);
   const accountLookup = useMemo(() => buildLookupMap(companyAccounts), [companyAccounts]);
-  const [warehouseStock, setWarehouseStock] = useState({ currentStock: 0, reservedStock: 0, availableStock: 0, loading: false, error: "" });
+  const [warehouseStock, setWarehouseStock] = useState({ currentStock: 0, reservedStock: 0, availableStock: 0, adjustedQtyForCurrentOutward: 0, pendingAdjustmentQtyForCurrentOutward: 0, loading: false, error: "" });
 
   const consigneesForBuyer = useMemo(() => {
     if (!formData.buyer_id) return [];
@@ -657,7 +657,7 @@ export default function OutwardPage() {
   useEffect(() => {
     const loadWarehouseStock = async () => {
       if (isSelfLoading || !formData.warehouse_id || !formData.product_id) {
-        setWarehouseStock({ currentStock: 0, reservedStock: 0, availableStock: 0, loading: false, error: "" });
+        setWarehouseStock({ currentStock: 0, reservedStock: 0, availableStock: 0, adjustedQtyForCurrentOutward: 0, pendingAdjustmentQtyForCurrentOutward: 0, loading: false, error: "" });
         return;
       }
 
@@ -675,6 +675,8 @@ export default function OutwardPage() {
           currentStock: Number(data.currentStock) || 0,
           reservedStock: Number(data.reservedStock) || 0,
           availableStock: Number(data.availableStock) || 0,
+          adjustedQtyForCurrentOutward: Number(data.adjustedQtyForCurrentOutward) || 0,
+          pendingAdjustmentQtyForCurrentOutward: Number(data.pendingAdjustmentQtyForCurrentOutward) || 0,
           loading: false,
           error: "",
         });
@@ -684,6 +686,8 @@ export default function OutwardPage() {
           currentStock: 0,
           reservedStock: 0,
           availableStock: 0,
+          adjustedQtyForCurrentOutward: 0,
+          pendingAdjustmentQtyForCurrentOutward: 0,
           loading: false,
           error: err?.response?.data?.error || "Failed to load stock",
         });
@@ -1774,7 +1778,12 @@ Consignee: ${row.consignee_name}`;
                     />
                     {!isSelfLoading && hasStockSelection ? (
                       <div style={{ marginTop: "6px", fontSize: "12px", color: hasInsufficientStock ? "#dc2626" : warehouseStock.error ? "#dc2626" : "#475569" }}>
-                        {warehouseStock.error || `Current: ${warehouseStock.currentStock.toFixed(2)} | Reserved: ${warehouseStock.reservedStock.toFixed(2)} | Available: ${availableStock.toFixed(2)}`}
+                        {warehouseStock.error || `Current: ${warehouseStock.currentStock.toFixed(2)} | Outward Entry: ${requestedQty.toFixed(2)} | Available: ${availableStock.toFixed(2)}`}
+                        {!warehouseStock.error ? (
+                          <div style={{ marginTop: "3px", color: "#475569", fontWeight: 600 }}>
+                            Pending Adjustment: {(editData ? warehouseStock.pendingAdjustmentQtyForCurrentOutward : requestedQty).toFixed(2)}
+                          </div>
+                        ) : null}
                       </div>
                     ) : null}
                   </div>
