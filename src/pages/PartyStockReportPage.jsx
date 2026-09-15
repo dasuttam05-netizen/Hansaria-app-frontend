@@ -152,6 +152,7 @@ export default function PartyStockReportPage() {
     ...row,
     company_name: row.company_name || row.party_name || row.company_name || row.account_name || "",
     account_name: row.account_name || "",
+    company_address: row.company_address || row.address || "",
     lorry_no: row.lorry_no || "",
     employee_name: row.employee_name || "",
     warehouse_name: row.warehouse_name || row.warehouse || "",
