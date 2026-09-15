@@ -10,8 +10,10 @@ export default function WarehouseRentDashboard() {
   const [month, setMonth] = useState(() => formatLocalMonthInput());
   const [companies, setCompanies] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
+  const [locations, setLocations] = useState([]);
   const [companyId, setCompanyId] = useState("");
   const [warehouseId, setWarehouseId] = useState("");
+  const [locationId, setLocationId] = useState("");
   const [summary, setSummary] = useState([]);
   const [details, setDetails] = useState([]);
 
@@ -20,10 +22,12 @@ export default function WarehouseRentDashboard() {
     const queryMonth = params.get("month");
     const queryCompanyId = params.get("company_id");
     const queryWarehouseId = params.get("warehouse_id");
+    const queryLocationId = params.get("location_id");
 
     if (queryMonth) setMonth(queryMonth);
     if (queryCompanyId) setCompanyId(queryCompanyId);
     if (queryWarehouseId) setWarehouseId(queryWarehouseId);
+    if (queryLocationId) setLocationId(queryLocationId);
   }, [location.search]);
 
   const dashboardView = useMemo(() => {
@@ -106,6 +110,7 @@ export default function WarehouseRentDashboard() {
   useEffect(() => {
     axios.get(`${API_BASE}/companies`).then((res) => setCompanies(res.data || []));
     axios.get(`${API_BASE}/warehouses`).then((res) => setWarehouses(res.data || []));
+    axios.get(`${API_BASE}/locations`).then((res) => setLocations(res.data || []));
   }, []);
 
   const fetchReport = async () => {
@@ -114,6 +119,7 @@ export default function WarehouseRentDashboard() {
         month,
         company_id: companyId,
         warehouse_id: warehouseId,
+        location_id: locationId,
       };
 
       const res = await axios.get(`${API_BASE}/reports/warehouse-rent-month-end`, {
@@ -130,7 +136,7 @@ export default function WarehouseRentDashboard() {
 
   useEffect(() => {
     fetchReport();
-  }, [month, companyId, warehouseId]);
+  }, [month, companyId, warehouseId, locationId]);
 
   const totals = useMemo(
     () =>
@@ -173,6 +179,13 @@ export default function WarehouseRentDashboard() {
             <option value="">All Parties</option>
             {companies.map((c) => (
               <option key={c.id} value={c.id}>{c.name}</option>
+            ))}
+          </select>
+
+          <select value={locationId} onChange={(e) => setLocationId(e.target.value)} style={input}>
+            <option value="">All Locations</option>
+            {locations.map((l) => (
+              <option key={l.id} value={l.id}>{l.name}</option>
             ))}
           </select>
 
