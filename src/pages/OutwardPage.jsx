@@ -253,15 +253,13 @@ export default function OutwardPage() {
   const isSelfLoading = String(formData.self_loading || "No").trim().toLowerCase() === "yes";
   const requestedQty = Number(formData.weight) || 0;
   const availableStock = Number(warehouseStock.availableStock) || 0;
-  const adjustedQtyForCurrentOutward = Number(warehouseStock.adjustedQtyForCurrentOutward) || 0;
-  const additionalQtyRequired = Math.max(requestedQty - adjustedQtyForCurrentOutward, 0);
   const hasStockSelection = !isSelfLoading && Boolean(formData.warehouse_id && formData.product_id);
   const hasInsufficientStock =
     !isSelfLoading &&
     !warehouseStock.loading &&
     hasStockSelection &&
     requestedQty > 0 &&
-    additionalQtyRequired > availableStock;
+    requestedQty > availableStock;
 
   const downloadOutwardTemplate = async () => {
     try {
