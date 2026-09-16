@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import axios from "axios";
 import { ToastContainer, toast, Slide } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
+import { useLocation, useNavigate } from "react-router-dom";
 import { hasPermission, loadSession } from "../utils/auth";
 
 const lbl = {
@@ -68,6 +69,8 @@ const warehouseHasEmployee = (warehouse, employeeId, employees = []) => {
 export default function InwardPage() {
   const API_BASE = "/api";
   const { user } = loadSession();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [inwards, setInwards] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [editData, setEditData] = useState(null);
@@ -223,6 +226,63 @@ export default function InwardPage() {
     : warehouses;
 
   const noWarehousesAvailable = formData.location_id && warehousesForLocation.length === 0;
+
+  const openMasterPage = (path, returnField, draftName, companyId = "", editId = "") => {
+    setShowForm(false);
+    navigate(path, {
+      state: {
+        returnTo: "/inward",
+        returnField,
+        draftName: String(draftName || "").trim(),
+        companyId: String(companyId || ""),
+        editId: String(editId || ""),
+      },
+    });
+  };
+
+  const handleMasterInputKeyDown = (event, path, returnField, value, companyId = "", items = [], nameKey = "name") => {
+    if (event.altKey && event.key.toLowerCase() === "c") {
+      event.preventDefault();
+      const selectedItem = (items || []).find((item) => sameText(item?.[nameKey], value));
+      openMasterPage(path, returnField, value, companyId, selectedItem ? getRecordId(selectedItem) : "");
+      return;
+    }
+    if (event.altKey && event.key.toLowerCase() === "e") {
+      const selectedItem = (items || []).find((item) => sameText(item?.[nameKey], value));
+      if (selectedItem) {
+        event.preventDefault();
+        openMasterPage(path, returnField, value, companyId, getRecordId(selectedItem));
+      }
+    }
+  };
+
+  useEffect(() => {
+    const createdRecord = location.state?.masterCreated;
+    const returnField = location.state?.returnField;
+    if (!createdRecord || !returnField) return;
+
+    const createdId = getRecordId(createdRecord);
+    const createdName = String(
+      createdRecord.name || createdRecord.account_name || createdRecord.company_name || ""
+    ).trim();
+    if (!createdId || !createdName) return;
+
+    if (returnField === "company") {
+      setCompanies((prev) => [createdRecord, ...prev.filter((item) => !sameId(getRecordId(item), createdId))]);
+      setFormData((prev) => ({ ...prev, company_id: createdId, company_name: createdName }));
+    } else if (returnField === "account") {
+      setCompanyAccounts((prev) => [createdRecord, ...prev.filter((item) => !sameId(getRecordId(item), createdId))]);
+      setFormData((prev) => ({
+        ...prev,
+        company_id: String(createdRecord.company_id || location.state?.companyId || prev.company_id || ""),
+        company_account_id: createdId,
+        account_name: createdName,
+      }));
+    }
+
+    setShowForm(true);
+    navigate(location.pathname, { replace: true, state: {} });
+  }, [location.pathname, location.state, navigate]);
 
   const fetchDropdowns = async () => {
     try {
@@ -888,54 +948,63 @@ Weight: ${row.weight}`;
                 </Field>
 
                 <Field label="Select Company">
-                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  <select name="company_id" value={formData.company_id} onChange={handleChange} style={inp}>
-                    <option value="">Select Company</option>
-                    {companies.map((c) => (
-                      <option key={getRecordId(c)} value={getRecordId(c)}>
-                        {c.name}
-                      </option>
-                    ))}
-                  </select>
-                  <button type="button" onClick={() => setShowCompanyModal(true)} style={{ ...btnStyle, background: "#0f766e", color: "#fff", whiteSpace: "nowrap" }}>
-                    + Create
-                  </button>
+                  <div>
+                    <input
+                      list="inward-company-names"
+                      value={formData.company_name || companies.find((c) => sameId(getRecordId(c), formData.company_id))?.name || ""}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        const match = companies.find((c) => sameText(c.name, value));
+                        setFormData((prev) => ({
+                          ...prev,
+                          company_id: match ? getRecordId(match) : "",
+                          company_account_id: match ? prev.company_account_id : "",
+                          company_name: value,
+                        }));
+                      }}
+                      onKeyDown={(e) => handleMasterInputKeyDown(e, "/companies", "company", e.currentTarget.value, "", companies, "name")}
+                      placeholder="Type company name (Alt+C to create, Alt+E to edit)"
+                      style={inp}
+                    />
+                    <datalist id="inward-company-names">
+                      {companies.map((c) => <option key={getRecordId(c)} value={c.name} />)}
+                    </datalist>
                   </div>
                 </Field>
 
                 <Field label="Select Account">
-                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  <select
-                    name="company_account_id"
-                    value={formData.company_account_id}
-                    onChange={handleChange}
-                    style={inp}
-                  >
-                    <option value="">Select Account</option>
-                    {companyAccounts
-                      .filter((acc) => {
-                        if (!formData.company_id) return true;
-                        return (
-                          sameId(getRecordId(acc.company_id), formData.company_id) ||
-                          sameText(acc.company_name, companies.find((c) => sameId(getRecordId(c), formData.company_id))?.name)
+                  <div>
+                    <input
+                      list="inward-account-names"
+                      value={formData.account_name || companyAccounts.find((acc) => sameId(getRecordId(acc), formData.company_account_id))?.account_name || ""}
+                      onChange={(e) => {
+                        const value = e.target.value;
+                        const company = companies.find((c) => sameId(getRecordId(c), formData.company_id));
+                        const match = companyAccounts.find((acc) =>
+                          sameText(acc.account_name, value) &&
+                          (!formData.company_id ||
+                            sameId(getRecordId(acc.company_id), formData.company_id) ||
+                            sameText(acc.company_name, company?.name))
                         );
-                      })
-                      .map((acc) => (
-                        <option key={getRecordId(acc)} value={getRecordId(acc)}>
-                          {acc.account_name}
-                        </option>
-                      ))}
-                  </select>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setAccountForm((prev) => ({ ...prev, company_id: formData.company_id || prev.company_id }));
-                      setShowAccountModal(true);
-                    }}
-                    style={{ ...btnStyle, background: "#16a34a", color: "#fff", whiteSpace: "nowrap" }}
-                  >
-                    + Create
-                  </button>
+                        setFormData((prev) => ({
+                          ...prev,
+                          company_account_id: match ? getRecordId(match) : "",
+                          account_name: value,
+                        }));
+                      }}
+                      onKeyDown={(e) => handleMasterInputKeyDown(e, "/company-accounts", "account", e.currentTarget.value, formData.company_id, companyAccounts, "account_name")}
+                      placeholder="Type account name (Alt+C to create, Alt+E to edit)"
+                      style={inp}
+                    />
+                    <datalist id="inward-account-names">
+                      {companyAccounts
+                        .filter((acc) => {
+                          if (!formData.company_id) return true;
+                          const company = companies.find((c) => sameId(getRecordId(c), formData.company_id));
+                          return sameId(getRecordId(acc.company_id), formData.company_id) || sameText(acc.company_name, company?.name);
+                        })
+                        .map((acc) => <option key={getRecordId(acc)} value={acc.account_name} />)}
+                    </datalist>
                   </div>
                 </Field>
 
