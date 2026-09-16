@@ -9,6 +9,7 @@ import {
 
 import { loadSession } from "./utils/auth";
 import SessionIdleGuard from "./components/SessionIdleGuard";
+import ProtectedRoute from "./components/ProtectedRoute";
 
 import LoginPage from "./pages/LoginPage";
 import { DashboardPageSafe } from "./pages/DashboardPage";
@@ -31,7 +32,6 @@ import SelfLoadingPage from "./pages/SelfLoadingPage";
 import LocalSalePage from "./pages/LocalSalePage";
 import ExpenseManagementPage from "./pages/ExpenseManagementPage";
 import DailyRejectionPage from "./pages/DailyRejectionPage";
-import ProtectedRoute from "./components/ProtectedRoute";
 
 function App() {
 
@@ -166,11 +166,19 @@ function App() {
         element={<LocalSalePage />}
       />
 
-
       <Route
         path="/daily-rejections"
         element={
-          <ProtectedRoute permission={["dailyRejection.view", "dailyRejection.create", "dailyRejection.assign"]}>
+          <ProtectedRoute permission={["dailyRejection.view", "dailyRejection.create", "dailyRejection.assign", "dailyRejection.start", "dailyRejection.complete", "dailyRejection.report"]}>
+            <DailyRejectionPage />
+          </ProtectedRoute>
+        }
+      />
+
+      <Route
+        path="/daily-rejection"
+        element={
+          <ProtectedRoute permission={["dailyRejection.view", "dailyRejection.create", "dailyRejection.assign", "dailyRejection.start", "dailyRejection.complete", "dailyRejection.report"]}>
             <DailyRejectionPage />
           </ProtectedRoute>
         }
