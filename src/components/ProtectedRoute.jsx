@@ -18,6 +18,7 @@ export default function ProtectedRoute({ children, permission }) {
     if (hasAnyPermission(user, ["expense.entry", "expense.view", "expense.create", "expense.edit", "expense.delete"])) return "/expenses";
     if (hasAnyPermission(user, ["inward.view", "inward.create", "inward.edit", "inward.delete"])) return "/inward";
     if (hasAnyPermission(user, ["outward.view", "outward.create", "outward.edit", "outward.delete"])) return "/outward";
+    if (hasAnyPermission(user, ["dailyRejection.view", "dailyRejection.create", "dailyRejection.assign"])) return "/daily-rejections";
     if (hasPermission(user, "report.inward")) return "/inward-report";
     return "/";
   };
