@@ -361,6 +361,7 @@ export const ROLE_PERMISSION_PRESETS = {
   ],
   viewer: [
     "dashboard.view",
+    "dailyRejection.view",
     "dropdown.view",
     "employees.view",
     "companies.view",
