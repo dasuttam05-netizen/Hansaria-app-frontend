@@ -70,7 +70,16 @@ export default function DailyRejectionPage() {
 
   const loadMasters = async () => {
     const response = await axios.get(`${API}/masters`);
-    setMasters(response.data || {});
+    const data = response?.data && typeof response.data === "object" ? response.data : {};
+    setMasters((prev) => ({
+      ...prev,
+      locations: Array.isArray(data.locations) ? data.locations : [],
+      warehouses: Array.isArray(data.warehouses) ? data.warehouses : [],
+      companies: Array.isArray(data.companies) ? data.companies : [],
+      accounts: Array.isArray(data.accounts) ? data.accounts : (Array.isArray(data.companyAccounts) ? data.companyAccounts : []),
+      products: Array.isArray(data.products) ? data.products : [],
+      employees: Array.isArray(data.employees) ? data.employees : (Array.isArray(data.staff) ? data.staff : []),
+    }));
   };
 
   const loadData = async () => {
