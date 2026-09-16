@@ -69,6 +69,7 @@ const PERMISSION_GROUPS = [
       { key: "cash_parties_report_access", label: "Parties Cash Book Report", permissions: ["cash.partiesBook.view"] },
       { key: "cash_employee_report_access", label: "Employee Cash Book Report", permissions: ["cash.employeeBook.view"] },
       { key: "transport_access", label: "Transport", permissions: ["transport.manage"] },
+      { key: "daily_rejection_access", label: "Daily Rejection", permissions: ["dailyRejection.view", "dailyRejection.create", "dailyRejection.assign", "dailyRejection.start", "dailyRejection.complete", "dailyRejection.report"] },
     ],
   },
   {
