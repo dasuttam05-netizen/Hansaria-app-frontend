@@ -107,35 +107,13 @@ export default function DashboardPage() {
   const API_BASE = "/api";
   const fetchData = async (currentUser, isActive) => {
     try {
-      const [payload, stockReportPayload, warehouseStockPayload, rentMonthEndPayload] = await Promise.all([
-        API.get(`${API_BASE}/dashboard`),
-        API.get(`${API_BASE}/reports/party-stock`),
-        API.get(`${API_BASE}/reports/warehouse-stock`),
-        API.get(`${API_BASE}/reports/warehouse-rent-month-end`, {
-          params: { month: new Date().toISOString().slice(0, 7) },
-        }),
-      ]);
+      const payload = await API.get(`${API_BASE}/dashboard`);
 
       if (!isActive()) {
         return;
       }
 
       const data = payload?.data || {};
-      const stockReport = stockReportPayload?.data || {};
-      const authoritativePartyStock = Array.isArray(stockReport.details)
-        ? stockReport.details
-        : [];
-      const authoritativeWarehouseStock = Array.isArray(warehouseStockPayload?.data)
-        ? warehouseStockPayload.data
-        : [];
-      const authoritativeRentSummary = Array.isArray(rentMonthEndPayload?.data?.summary)
-        ? rentMonthEndPayload.data.summary
-        : [];
-
-      const authoritativeTotalStock = authoritativePartyStock.reduce(
-        (sum, row) => sum + Number(row?.available_balance_qty ?? 0),
-        0
-      );
       const normalizedLocations = Array.isArray(data.locations) ? data.locations : [];
       const normalizedEmployees = Array.isArray(data.employees) ? data.employees : [];
       const normalizedCompanies = Array.isArray(data.companies) ? data.companies : [];
@@ -144,22 +122,14 @@ export default function DashboardPage() {
       const normalizedProducts = Array.isArray(data.products) ? data.products : [];
       const normalizedInwards = Array.isArray(data.inwards) ? data.inwards : [];
       const normalizedOutwards = Array.isArray(data.outwards) ? data.outwards : [];
-      const normalizedPartyStock = authoritativePartyStock.length
-        ? authoritativePartyStock
-        : (Array.isArray(data.partyStock) ? data.partyStock : []);
-      const normalizedWarehouseStock = authoritativeWarehouseStock.length
-        ? authoritativeWarehouseStock
-        : (Array.isArray(data.warehouseStock) ? data.warehouseStock : []);
-      // Dashboard Party Rent uses the same Warehouse Rent Month End report source.
-      // Do not duplicate/recalculate rent here.
-      const normalizedMonthEndRentSummary = authoritativeRentSummary.length
-        ? authoritativeRentSummary
-        : (Array.isArray(data.monthEndRentSummary) ? data.monthEndRentSummary : []);
-      const normalizedTotalStock = Number(
-        authoritativePartyStock.length
-          ? authoritativeTotalStock
-          : (data.totalStock ?? 0)
-      );
+      const normalizedPartyStock = Array.isArray(data.partyStock) ? data.partyStock : [];
+      const normalizedWarehouseStock = Array.isArray(data.warehouseStock) ? data.warehouseStock : [];
+      // Dashboard Party Rent must use the exact same rent calculation as the
+      // existing Warehouse Rent Ledger report. Do not duplicate/recalculate rent here.
+      const normalizedMonthEndRentSummary = Array.isArray(data.monthEndRentSummary)
+        ? data.monthEndRentSummary
+        : [];
+      const normalizedTotalStock = Number(data.totalStock ?? 0);
 
       setLocations(normalizedLocations);
       setEmployees(normalizedEmployees);
@@ -451,7 +421,7 @@ export default function DashboardPage() {
     },
     {
       title: "Entry",
-      permission: ["inward.view", "inward.create", "inward.edit", "inward.delete"],
+      permission: ["inward.view", "inward.create", "inward.edit", "inward.delete", "dailyRejection.view", "dailyRejection.create"],
       icon: <FaFileAlt />,
       submenu: [
         {
@@ -478,6 +448,11 @@ export default function DashboardPage() {
           label: "Outward Entry",
           permission: ["outward.view", "outward.create", "outward.edit", "outward.delete"],
           action: () => navigate("/outward"),
+        },
+        {
+          label: "Daily Rejection",
+          permission: ["dailyRejection.view", "dailyRejection.create", "dailyRejection.assign"],
+          action: () => navigate("/daily-rejections"),
         },
       ],
     },
