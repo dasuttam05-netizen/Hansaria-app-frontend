@@ -44,6 +44,7 @@ const FarmerManagementPage = lazy(() => import("./pages/FarmerManagementPage"));
 const WarehouseTradingPage = lazy(() => import("./pages/WarehouseTradingPage"));
 const ExpensesPendingPage = lazy(() => import("./pages/ExpensesPendingPage"));
 const CashActivityLogPage = lazy(() => import("./pages/CashActivityLogPage"));
+const DailyRejectionPage = lazy(() => import("./pages/DailyRejectionPage"));
 
 import ProtectedRoute from "./components/ProtectedRoute";
 import SessionIdleGuard from "./components/SessionIdleGuard";
@@ -220,6 +221,14 @@ function AppRoutes() {
           <InwardReportPage />
         </ProtectedRoute>
       ),
+    },
+    {
+      path: "/daily-rejections",
+      element: <DailyRejectionPage />,
+    },
+    {
+      path: "/daily-rejection",
+      element: <DailyRejectionPage />,
     },
     {
       path: "/outward",
