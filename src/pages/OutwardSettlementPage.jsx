@@ -33,6 +33,7 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
   const [loading, setLoading] = useState(true);
   const [meta, setMeta] = useState(null);
   const [isFreightAutoLocked, setIsFreightAutoLocked] = useState(false);
+  const [useTransportFreightAuto, setUseTransportFreightAuto] = useState(true);
   const [showLabourExpenseOption, setShowLabourExpenseOption] = useState(false);
   const [labourAutoEnabled, setLabourAutoEnabled] = useState(false);
   const [labourVoucherNos, setLabourVoucherNos] = useState([]);
@@ -250,8 +251,10 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
         : [];
       const labourExpenseTotal = approvedLabourEntries.reduce((sum, item) => sum + num(item.amount), 0);
       const biltiFreight = Number(res.data?.transport_bilti?.net_amount || 0);
-      const freightValue = biltiFreight > 0 ? biltiFreight : (s.freight ?? "");
-      setIsFreightAutoLocked(biltiFreight > 0);
+      const hasTransportFreight = biltiFreight > 0;
+      const autoTransportFreight = hasTransportFreight && (useTransportFreightAuto || s.freight === null || s.freight === undefined || s.freight === "");
+      const freightValue = autoTransportFreight ? biltiFreight : (s.freight ?? "");
+      setIsFreightAutoLocked(autoTransportFreight);
 
       const labourHasValue =
         s.outward_labour_charges !== null &&
@@ -1387,15 +1390,50 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
 
           <div>
             <label style={label}>Freight</label>
+            <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
+              <span style={{ fontSize: 12, color: PALETTE.muted, fontWeight: 700 }}>Auto from Transport Report</span>
+              <label style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 700 }}>
+                <input
+                  type="radio"
+                  name="transportFreightMode"
+                  checked={useTransportFreightAuto}
+                  onChange={async () => {
+                    setUseTransportFreightAuto(true);
+                    const biltiFreight = Number(meta?.transport_bilti?.net_amount || 0);
+                    if (biltiFreight > 0) {
+                      setFormData((prev) => ({ ...prev, freight: String(biltiFreight) }));
+                      setIsFreightAutoLocked(true);
+                    }
+                  }}
+                /> Yes
+              </label>
+              <label style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 700 }}>
+                <input
+                  type="radio"
+                  name="transportFreightMode"
+                  checked={!useTransportFreightAuto}
+                  onChange={() => {
+                    setUseTransportFreightAuto(false);
+                    setIsFreightAutoLocked(false);
+                  }}
+                /> No
+              </label>
+            </div>
             <input
               name="freight"
               type="number"
               value={formData.freight}
-              readOnly
-              style={{ ...input, background: "#f3f8ff", cursor: "not-allowed", color: PALETTE.muted }}
+              onChange={handleChange}
+              readOnly={useTransportFreightAuto}
+              style={{
+                ...input,
+                background: useTransportFreightAuto ? "#f3f8ff" : "#fff",
+                cursor: useTransportFreightAuto ? "not-allowed" : "text",
+                color: PALETTE.ink,
+              }}
             />
-            <div style={{ marginTop: 6, fontSize: 12, color: isFreightAutoLocked ? PALETTE.headerDark : PALETTE.muted, fontWeight: 600 }}>
-              {isFreightAutoLocked ? "Auto from transport payment (locked)" : "Auto field"}
+            <div style={{ marginTop: 6, fontSize: 12, color: useTransportFreightAuto ? PALETTE.headerDark : PALETTE.muted, fontWeight: 600 }}>
+              {useTransportFreightAuto ? "Automatic from Transport Report" : "Manual Freight"}
             </div>
           </div>
 
