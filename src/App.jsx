@@ -166,22 +166,15 @@ function App() {
         element={<LocalSalePage />}
       />
 
+
       <Route
         path="/daily-rejections"
-        element={
-          <ProtectedRoute permission={["dailyRejection.view", "dailyRejection.create", "dailyRejection.assign", "dailyRejection.start", "dailyRejection.complete", "dailyRejection.report"]}>
-            <DailyRejectionPage />
-          </ProtectedRoute>
-        }
+        element={<DailyRejectionPage />}
       />
 
       <Route
         path="/daily-rejection"
-        element={
-          <ProtectedRoute permission={["dailyRejection.view", "dailyRejection.create", "dailyRejection.assign", "dailyRejection.start", "dailyRejection.complete", "dailyRejection.report"]}>
-            <DailyRejectionPage />
-          </ProtectedRoute>
-        }
+        element={<DailyRejectionPage />}
       />
 
       <Route
