@@ -114,6 +114,40 @@ export default function DashboardPage() {
       }
 
       const data = payload?.data || {};
+
+      // Use the same live report endpoints as Stock Report and Warehouse Rent
+      // Month End Report so dashboard totals cannot diverge from the reports.
+      const currentMonth = new Date().toISOString().slice(0, 7);
+      const reportResults = await Promise.allSettled([
+        API.get(`${API_BASE}/reports/party-stock`),
+        API.get(`${API_BASE}/reports/warehouse-stock`),
+        API.get(`${API_BASE}/reports/total-stock`),
+        API.get(`${API_BASE}/reports/warehouse-rent-month-end`, {
+          params: { month: currentMonth },
+        }),
+      ]);
+
+      if (!isActive()) {
+        return;
+      }
+
+      const partyStockReport =
+        reportResults[0]?.status === "fulfilled"
+          ? reportResults[0].value?.data || {}
+          : {};
+      const warehouseStockReport =
+        reportResults[1]?.status === "fulfilled"
+          ? reportResults[1].value?.data || []
+          : [];
+      const totalStockReport =
+        reportResults[2]?.status === "fulfilled"
+          ? reportResults[2].value?.data || {}
+          : {};
+      const rentReport =
+        reportResults[3]?.status === "fulfilled"
+          ? reportResults[3].value?.data || {}
+          : {};
+
       const normalizedLocations = Array.isArray(data.locations) ? data.locations : [];
       const normalizedEmployees = Array.isArray(data.employees) ? data.employees : [];
       const normalizedCompanies = Array.isArray(data.companies) ? data.companies : [];
@@ -122,14 +156,25 @@ export default function DashboardPage() {
       const normalizedProducts = Array.isArray(data.products) ? data.products : [];
       const normalizedInwards = Array.isArray(data.inwards) ? data.inwards : [];
       const normalizedOutwards = Array.isArray(data.outwards) ? data.outwards : [];
-      const normalizedPartyStock = Array.isArray(data.partyStock) ? data.partyStock : [];
-      const normalizedWarehouseStock = Array.isArray(data.warehouseStock) ? data.warehouseStock : [];
-      // Dashboard Party Rent must use the exact same rent calculation as the
-      // existing Warehouse Rent Ledger report. Do not duplicate/recalculate rent here.
-      const normalizedMonthEndRentSummary = Array.isArray(data.monthEndRentSummary)
-        ? data.monthEndRentSummary
-        : [];
-      const normalizedTotalStock = Number(data.totalStock ?? 0);
+      const normalizedPartyStock = Array.isArray(partyStockReport.summary)
+        ? partyStockReport.summary
+        : Array.isArray(data.partyStock)
+          ? data.partyStock
+          : [];
+      const normalizedWarehouseStock = Array.isArray(warehouseStockReport)
+        ? warehouseStockReport
+        : Array.isArray(data.warehouseStock)
+          ? data.warehouseStock
+          : [];
+      // Dashboard rent must use the exact same month-end report calculation.
+      const normalizedMonthEndRentSummary = Array.isArray(rentReport.summary)
+        ? rentReport.summary
+        : Array.isArray(data.monthEndRentSummary)
+          ? data.monthEndRentSummary
+          : [];
+      const normalizedTotalStock = Number(
+        totalStockReport.total ?? data.totalStock ?? 0
+      );
 
       setLocations(normalizedLocations);
       setEmployees(normalizedEmployees);
