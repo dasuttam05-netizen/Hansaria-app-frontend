@@ -38,7 +38,8 @@ const dateLabel = (value) => {
 
 export default function DailyRejectionPage() {
   const navigate = useNavigate();
-  const { user } = loadSession();
+  const session = loadSession() || {};
+  const user = session?.user || null;
   const isManager = hasPermission(user, "dailyRejection.assign") || hasPermission(user, "dailyRejection.report") || String(user?.role || "").toLowerCase() === "admin";
   const canCreate = hasPermission(user, "dailyRejection.create");
   const canAssign = hasPermission(user, "dailyRejection.assign");
@@ -58,19 +59,36 @@ export default function DailyRejectionPage() {
   const [completionRemarks, setCompletionRemarks] = useState({});
   const [error, setError] = useState("");
 
+  const safeMasters = useMemo(() => ({
+    locations: Array.isArray(masters?.locations) ? masters.locations : [],
+    warehouses: Array.isArray(masters?.warehouses) ? masters.warehouses : [],
+    companies: Array.isArray(masters?.companies) ? masters.companies : [],
+    accounts: Array.isArray(masters?.accounts) ? masters.accounts : [],
+    products: Array.isArray(masters?.products) ? masters.products : [],
+    employees: Array.isArray(masters?.employees) ? masters.employees : [],
+  }), [masters]);
+
   const filteredAccounts = useMemo(
-    () => masters.accounts.filter((account) => !form.company_id || String(account.company_id || "") === String(form.company_id)),
-    [masters.accounts, form.company_id]
+    () => safeMasters.accounts.filter((account) => !form.company_id || String(account.company_id || account.companyId || "") === String(form.company_id)),
+    [safeMasters.accounts, form.company_id]
   );
 
   const selectedWarehouse = useMemo(
-    () => masters.warehouses.find((item) => idOf(item) === String(form.warehouse_id || "")),
-    [masters.warehouses, form.warehouse_id]
+    () => safeMasters.warehouses.find((item) => idOf(item) === String(form.warehouse_id || "")),
+    [safeMasters.warehouses, form.warehouse_id]
   );
 
   const loadMasters = async () => {
     const response = await axios.get(`${API}/masters`);
-    setMasters(response.data || {});
+    const payload = response?.data?.data || response?.data || {};
+    setMasters({
+      locations: Array.isArray(payload.locations) ? payload.locations : [],
+      warehouses: Array.isArray(payload.warehouses) ? payload.warehouses : [],
+      companies: Array.isArray(payload.companies) ? payload.companies : [],
+      accounts: Array.isArray(payload.accounts) ? payload.accounts : [],
+      products: Array.isArray(payload.products) ? payload.products : [],
+      employees: Array.isArray(payload.employees) ? payload.employees : [],
+    });
   };
 
   const loadData = async () => {
@@ -81,8 +99,17 @@ export default function DailyRejectionPage() {
         axios.get(API, { params: { status } }),
         axios.get(`${API}/summary`),
       ]);
-      setRows(Array.isArray(listResponse.data) ? listResponse.data : []);
-      setSummary(summaryResponse.data || {});
+      const listPayload = listResponse?.data?.data || listResponse?.data || [];
+      const summaryPayload = summaryResponse?.data?.data || summaryResponse?.data || {};
+      const normalizedRows = Array.isArray(listPayload)
+        ? listPayload
+        : Array.isArray(listPayload?.rows)
+          ? listPayload.rows
+          : Array.isArray(listPayload?.items)
+            ? listPayload.items
+            : [];
+      setRows(normalizedRows);
+      setSummary(summaryPayload && typeof summaryPayload === "object" ? summaryPayload : {});
     } catch (err) {
       setError(err?.response?.data?.error || err.message || "Failed to load Daily Rejection");
     } finally {
@@ -109,8 +136,8 @@ export default function DailyRejectionPage() {
   }, [user, isManager, form.location_id, form.employee_id]);
 
   useEffect(() => {
-    if (selectedWarehouse?.location_id && !form.location_id) {
-      setForm((prev) => ({ ...prev, location_id: String(selectedWarehouse.location_id) }));
+    if ((selectedWarehouse?.location_id || selectedWarehouse?.locationId) && !form.location_id) {
+      setForm((prev) => ({ ...prev, location_id: String(selectedWarehouse.location_id || selectedWarehouse.locationId) }));
     }
   }, [selectedWarehouse, form.location_id]);
 
@@ -192,6 +219,8 @@ export default function DailyRejectionPage() {
     return styles[value] || { background: "#f1f5f9", color: "#475569" };
   };
 
+  const canView = isManager || canCreate || canAssign || canStart || canComplete || hasPermission(user, "dailyRejection.view");
+
   return (
     <div style={pageStyle}>
       <div style={headerStyle}>
@@ -204,6 +233,10 @@ export default function DailyRejectionPage() {
         </div>
         <PageBackCloseActions navigate={navigate} size="compact" />
       </div>
+
+      {!canView && (
+        <div style={errorStyle}>You do not have permission to view Daily Rejection. Please ask Admin/HO/BM to enable Daily Rejection access for your employee.</div>
+      )}
 
       <div style={summaryGrid}>
         <SummaryCard label="Total" value={summary.total} />
@@ -237,12 +270,12 @@ export default function DailyRejectionPage() {
           <form onSubmit={submitEntry}>
             <div style={formGrid}>
               <Field label="Date"><input type="date" value={form.entry_date} onChange={(e) => updateForm("entry_date", e.target.value)} style={inputStyle} /></Field>
-              {isManager && <Field label="Employee"><select value={form.employee_id} onChange={(e) => updateForm("employee_id", e.target.value)} style={inputStyle}><option value="">Select Employee</option>{masters.employees.map((item) => <option key={idOf(item)} value={idOf(item)}>{item.name}{item.employee_id ? ` (${item.employee_id})` : ""}</option>)}</select></Field>}
-              <Field label="Location"><select value={form.location_id} onChange={(e) => updateForm("location_id", e.target.value)} style={inputStyle}><option value="">Select Location</option>{masters.locations.map((item) => <option key={idOf(item)} value={idOf(item)}>{item.name}</option>)}</select></Field>
-              <Field label="Warehouse"><select value={form.warehouse_id} onChange={(e) => { updateForm("warehouse_id", e.target.value); const w = masters.warehouses.find((x) => idOf(x) === e.target.value); if (w?.location_id) updateForm("location_id", String(w.location_id)); }} style={inputStyle}><option value="">Select Warehouse</option>{masters.warehouses.map((item) => <option key={idOf(item)} value={idOf(item)}>{item.name}</option>)}</select></Field>
-              <Field label="Company"><select value={form.company_id} onChange={(e) => { updateForm("company_id", e.target.value); updateForm("company_account_id", ""); }} style={inputStyle}><option value="">Select Company</option>{masters.companies.map((item) => <option key={idOf(item)} value={idOf(item)}>{item.name}</option>)}</select></Field>
+              {isManager && <Field label="Employee"><select value={form.employee_id} onChange={(e) => updateForm("employee_id", e.target.value)} style={inputStyle}><option value="">Select Employee</option>{safeMasters.employees.map((item) => <option key={idOf(item)} value={idOf(item)}>{item.name}{item.employee_id ? ` (${item.employee_id})` : ""}</option>)}</select></Field>}
+              <Field label="Location"><select value={form.location_id} onChange={(e) => updateForm("location_id", e.target.value)} style={inputStyle}><option value="">Select Location</option>{safeMasters.locations.map((item) => <option key={idOf(item)} value={idOf(item)}>{item.name}</option>)}</select></Field>
+              <Field label="Warehouse"><select value={form.warehouse_id} onChange={(e) => { updateForm("warehouse_id", e.target.value); const w = masters.warehouses.find((x) => idOf(x) === e.target.value); if (w?.location_id || w?.locationId) updateForm("location_id", String(w.location_id || w.locationId)); }} style={inputStyle}><option value="">Select Warehouse</option>{safeMasters.warehouses.map((item) => <option key={idOf(item)} value={idOf(item)}>{item.name}</option>)}</select></Field>
+              <Field label="Company"><select value={form.company_id} onChange={(e) => { updateForm("company_id", e.target.value); updateForm("company_account_id", ""); }} style={inputStyle}><option value="">Select Company</option>{safeMasters.companies.map((item) => <option key={idOf(item)} value={idOf(item)}>{item.name}</option>)}</select></Field>
               <Field label="Company Account"><select value={form.company_account_id} onChange={(e) => updateForm("company_account_id", e.target.value)} style={inputStyle}><option value="">Select Account</option>{filteredAccounts.map((item) => <option key={idOf(item)} value={idOf(item)}>{item.account_name}</option>)}</select></Field>
-              <Field label="Product"><select value={form.product_id} onChange={(e) => updateForm("product_id", e.target.value)} style={inputStyle}><option value="">Select Product</option>{masters.products.map((item) => <option key={idOf(item)} value={idOf(item)}>{item.name}</option>)}</select></Field>
+              <Field label="Product"><select value={form.product_id} onChange={(e) => updateForm("product_id", e.target.value)} style={inputStyle}><option value="">Select Product</option>{safeMasters.products.map((item) => <option key={idOf(item)} value={idOf(item)}>{item.name}</option>)}</select></Field>
               <Field label="Inward Voucher"><input value={form.inward_voucher} onChange={(e) => updateForm("inward_voucher", e.target.value)} placeholder="Optional" style={inputStyle} /></Field>
               <Field label="Outward Voucher"><input value={form.outward_voucher} onChange={(e) => updateForm("outward_voucher", e.target.value)} placeholder="Optional" style={inputStyle} /></Field>
               <Field label="Lorry No."><input value={form.lorry_no} onChange={(e) => updateForm("lorry_no", e.target.value)} placeholder="WB..." style={inputStyle} /></Field>
@@ -288,7 +321,7 @@ export default function DailyRejectionPage() {
                 <div style={assignBox}>
                   <select value={assignedEmployee[idOf(row)] || row.assigned_to || ""} onChange={(e) => setAssignedEmployee((prev) => ({ ...prev, [idOf(row)]: e.target.value }))} style={inputStyle}>
                     <option value="">Assign Employee</option>
-                    {masters.employees.map((item) => <option key={idOf(item)} value={idOf(item)}>{item.name}{item.employee_id ? ` (${item.employee_id})` : ""}</option>)}
+                    {safeMasters.employees.map((item) => <option key={idOf(item)} value={idOf(item)}>{item.name}{item.employee_id ? ` (${item.employee_id})` : ""}</option>)}
                   </select>
                   <button type="button" disabled={assigningId === idOf(row)} onClick={() => assignRow(idOf(row))} style={secondaryButton}>{assigningId === idOf(row) ? "Assigning..." : "Assign"}</button>
                 </div>
