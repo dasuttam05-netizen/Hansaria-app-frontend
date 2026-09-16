@@ -30,6 +30,7 @@ import PaltiLorryPage from "./pages/PaltiLorryPage";
 import SelfLoadingPage from "./pages/SelfLoadingPage";
 import LocalSalePage from "./pages/LocalSalePage";
 import ExpenseManagementPage from "./pages/ExpenseManagementPage";
+import DailyRejectionPage from "./pages/DailyRejectionPage";
 
 function App() {
 
@@ -162,6 +163,16 @@ function App() {
       <Route
         path="/local-sale"
         element={<LocalSalePage />}
+      />
+
+
+      <Route
+        path="/daily-rejections"
+        element={
+          <ProtectedRoute permission={["dailyRejection.view", "dailyRejection.create", "dailyRejection.assign"]}>
+            <DailyRejectionPage />
+          </ProtectedRoute>
+        }
       />
 
       <Route
