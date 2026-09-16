@@ -7,6 +7,8 @@ import PageBackCloseActions from "../components/PageBackCloseActions";
 
 const API = "/api/daily-rejections";
 const STATUSES = ["ALL", "PENDING", "ASSIGNED", "RUNNING", "COMPLETE"];
+const WORK_DESCRIPTIONS = ["PALTI", "WAREHOUSE UNLOAD", "LOCAL SALE", "PARTY ACCOUNT", "OTHERS"];
+const REASONS = ["HIGH FUNGUS", "HIGH MOISTURE", "DISCOLOUR", "DAMAGE", "LIVE INSECT", "WATER DAMAGE", "OTHERS"];
 
 const emptyForm = () => ({
   entry_date: new Date().toISOString().slice(0, 10),
@@ -20,9 +22,11 @@ const emptyForm = () => ({
   inward_id: "",
   outward_voucher: "",
   outward_id: "",
-  lorry_no: "",
+  consignee: "",
   original_qty: "",
+  actual_unloading_qty: "",
   rejection_qty: "",
+  action_type: "",
   reason: "",
   remarks: "",
 });
@@ -50,6 +54,7 @@ export default function DailyRejectionPage() {
   const [rows, setRows] = useState([]);
   const [summary, setSummary] = useState({ total: 0, pending: 0, assigned: 0, running: 0, complete: 0 });
   const [status, setStatus] = useState("ALL");
+  const [actionFilter, setActionFilter] = useState("ALL");
   const [loading, setLoading] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState(emptyForm());
@@ -123,7 +128,7 @@ export default function DailyRejectionPage() {
 
   useEffect(() => {
     loadData();
-  }, [status]);
+  }, [status, actionFilter]);
 
   useEffect(() => {
     if (!form.location_id && user?.location_id) {
@@ -151,12 +156,16 @@ export default function DailyRejectionPage() {
 
   const submitEntry = async (event) => {
     event.preventDefault();
-    if (!form.warehouse_id || !form.location_id || !form.product_id || Number(form.rejection_qty) <= 0) {
-      alert("Location, Warehouse, Product and Rejection Qty are required.");
+    const originalQty = Number(form.original_qty);
+    const actualUnloadingQty = Number(form.actual_unloading_qty);
+    const calculatedRejectionQty = Math.max(originalQty - actualUnloadingQty, 0);
+    const payload = { ...form, original_qty: originalQty, actual_unloading_qty: actualUnloadingQty, rejection_qty: calculatedRejectionQty };
+    if (!form.warehouse_id || !form.location_id || !form.product_id || !form.action_type || !form.reason || !Number.isFinite(originalQty) || !Number.isFinite(actualUnloadingQty) || actualUnloadingQty < 0 || calculatedRejectionQty <= 0) {
+      alert("Location, Warehouse, Product, Work Description, Reason, Original Qty and Actual Unloading Qty are required. Rejection Qty must be greater than 0.");
       return;
     }
     try {
-      await axios.post(API, form);
+      await axios.post(API, payload);
       alert("Daily Rejection saved as Pending.");
       resetForm();
       setShowForm(false);
@@ -253,7 +262,11 @@ export default function DailyRejectionPage() {
             </button>
           ))}
         </div>
-        <div style={{ display: "flex", gap: 8 }}>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+          <select value={actionFilter} onChange={(e) => setActionFilter(e.target.value)} style={{ ...inputStyle, width: "auto", minWidth: 180 }} aria-label="Filter by work description">
+            <option value="ALL">All Work</option>
+            {WORK_DESCRIPTIONS.map((item) => <option key={item} value={item}>{item}</option>)}
+          </select>
           {canCreate && (
             <button type="button" onClick={() => { resetForm(); setShowForm(true); }} style={primaryButton}>
               <FaPlus /> New Rejection
@@ -277,10 +290,12 @@ export default function DailyRejectionPage() {
               <Field label="Product"><select value={form.product_id} onChange={(e) => updateForm("product_id", e.target.value)} style={inputStyle}><option value="">Select Product</option>{safeMasters.products.map((item) => <option key={idOf(item)} value={idOf(item)}>{item.name}</option>)}</select></Field>
               <Field label="Inward Voucher"><input value={form.inward_voucher} onChange={(e) => updateForm("inward_voucher", e.target.value)} placeholder="Optional" style={inputStyle} /></Field>
               <Field label="Outward Voucher"><input value={form.outward_voucher} onChange={(e) => updateForm("outward_voucher", e.target.value)} placeholder="Optional" style={inputStyle} /></Field>
-              <Field label="Lorry No."><input value={form.lorry_no} onChange={(e) => updateForm("lorry_no", e.target.value)} placeholder="WB..." style={inputStyle} /></Field>
-              <Field label="Original Qty"><input type="number" step="0.01" value={form.original_qty} onChange={(e) => updateForm("original_qty", e.target.value)} style={inputStyle} /></Field>
-              <Field label="Rejection Qty *"><input type="number" step="0.01" min="0" value={form.rejection_qty} onChange={(e) => updateForm("rejection_qty", e.target.value)} style={inputStyle} /></Field>
-              <Field label="Reason"><input value={form.reason} onChange={(e) => updateForm("reason", e.target.value)} placeholder="Why rejected?" style={inputStyle} /></Field>
+              <Field label="Consignee"><input value={form.consignee} onChange={(e) => updateForm("consignee", e.target.value)} placeholder="Consignee name" style={inputStyle} /></Field>
+              <Field label="Work Description"><select value={form.action_type} onChange={(e) => updateForm("action_type", e.target.value)} style={inputStyle}><option value="">Select Work</option>{WORK_DESCRIPTIONS.map((item) => <option key={item} value={item}>{item}</option>)}</select></Field>
+              <Field label="Original Qty"><input type="number" step="0.01" min="0" value={form.original_qty} onChange={(e) => updateForm("original_qty", e.target.value)} style={inputStyle} /></Field>
+              <Field label="Actual Unloading Qty"><input type="number" step="0.01" min="0" value={form.actual_unloading_qty} onChange={(e) => updateForm("actual_unloading_qty", e.target.value)} style={inputStyle} /></Field>
+              <Field label="Rejection Qty"><input type="number" step="0.01" value={Math.max(Number(form.original_qty || 0) - Number(form.actual_unloading_qty || 0), 0).toFixed(2)} readOnly style={{ ...inputStyle, background: "#f8fafc", fontWeight: 800 }} /></Field>
+              <Field label="Reason"><select value={form.reason} onChange={(e) => updateForm("reason", e.target.value)} style={inputStyle}><option value="">Select Reason</option>{REASONS.map((item) => <option key={item} value={item}>{item}</option>)}</select></Field>
               <Field label="Remarks"><input value={form.remarks} onChange={(e) => updateForm("remarks", e.target.value)} placeholder="Optional" style={inputStyle} /></Field>
             </div>
             <div style={actionRow}><button type="submit" style={primaryButton}>Save Pending</button><button type="button" onClick={() => { resetForm(); setShowForm(false); }} style={secondaryButton}>Cancel</button></div>
@@ -309,10 +324,12 @@ export default function DailyRejectionPage() {
                 <Detail label="Company" value={row.company_name || "-"} />
                 <Detail label="Account" value={row.company_account_name || "-"} />
                 <Detail label="Product" value={row.product_name || "-"} />
-                <Detail label="Lorry" value={row.lorry_no || "-"} />
-                <Detail label="Reject Qty" value={money(row.rejection_qty)} />
+                <Detail label="Consignee" value={row.consignee || "-"} />
+                <Detail label="Original Qty" value={money(row.original_qty)} />
+                <Detail label="Actual Unloading Qty" value={money(row.actual_unloading_qty)} />
+                <Detail label="Rejection Qty" value={money(row.rejection_qty)} />
                 <Detail label="Reason" value={row.reason || "-"} />
-                <Detail label="Action" value={row.action_type || "-"} />
+                <Detail label="Work Description" value={row.action_type || "-"} />
                 <Detail label="Assigned To" value={row.assigned_to_name || "-"} />
               </div>
 
