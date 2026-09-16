@@ -31,6 +31,7 @@ import SelfLoadingPage from "./pages/SelfLoadingPage";
 import LocalSalePage from "./pages/LocalSalePage";
 import ExpenseManagementPage from "./pages/ExpenseManagementPage";
 import DailyRejectionPage from "./pages/DailyRejectionPage";
+import ProtectedRoute from "./components/ProtectedRoute";
 
 function App() {
 
