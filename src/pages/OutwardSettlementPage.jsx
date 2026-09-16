@@ -1439,70 +1439,70 @@ export default function OutwardSettlementPage({ outward, onSaved }) {
 
           <div>
             <label style={label}>Labour Charges</label>
+            {showLabourExpenseOption && (
+              <div style={{ display: "flex", gap: 8, alignItems: "center", marginBottom: 8 }}>
+                <span style={{ fontSize: 12, color: PALETTE.muted, fontWeight: 700 }}>Auto from Labour Expense</span>
+                <label style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 700 }}>
+                  <input
+                    type="radio"
+                    name="labourChargesMode"
+                    checked={labourAutoEnabled}
+                    onChange={() => {
+                      const entries = Array.isArray(meta?.labour_expense?.entries)
+                        ? meta.labour_expense.entries.filter((item) => num(item?.amount) > 0)
+                        : [];
+                      const total = entries.reduce((sum, item) => sum + num(item.amount), 0);
+                      setLabourAutoEnabled(true);
+                      setFormData((prev) => ({
+                        ...prev,
+                        outward_labour_charges: String(total || num(meta?.labour_expense?.amount)),
+                      }));
+                    }}
+                  /> Yes
+                </label>
+                <label style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 12, fontWeight: 700 }}>
+                  <input
+                    type="radio"
+                    name="labourChargesMode"
+                    checked={!labourAutoEnabled}
+                    onChange={() => setLabourAutoEnabled(false)}
+                  /> No
+                </label>
+              </div>
+            )}
             <input
               name="outward_labour_charges"
               type="number"
               value={formData.outward_labour_charges}
               onChange={handleChange}
-              readOnly={labourAutoEnabled}
+              readOnly={showLabourExpenseOption && labourAutoEnabled}
               style={{
                 ...input,
-                background: labourAutoEnabled ? "#f3f8ff" : "#fff",
-                cursor: labourAutoEnabled ? "not-allowed" : "text",
+                background: showLabourExpenseOption && labourAutoEnabled ? "#f3f8ff" : "#fff",
+                cursor: showLabourExpenseOption && labourAutoEnabled ? "not-allowed" : "text",
                 color: PALETTE.ink,
               }}
             />
             {showLabourExpenseOption && (
-              <div style={labourOptionStyle}>
-                <div style={{ marginBottom: 8, fontSize: 12, color: PALETTE.ink, fontWeight: 700 }}>
-                  Map labour charges from approved expense voucher?
-                </div>
-                <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setLabourAutoEnabled(true);
-                      setFormData((prev) => ({
-                        ...prev,
-                        outward_labour_charges: String(num(meta?.labour_expense?.amount)),
-                      }));
-                    }}
-                    style={{
-                      ...smallYesButtonStyle,
-                      background: labourAutoEnabled ? "#15803d" : "#10b981",
-                    }}
-                  >
-                    Yes
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setLabourAutoEnabled(false)}
-                    style={{
-                      ...smallNoButtonStyle,
-                      borderColor: labourAutoEnabled ? PALETTE.border : "#94a3b8",
-                      background: labourAutoEnabled ? "#ffffff" : "#f8fafc",
-                    }}
-                  >
-                    No
-                  </button>
-                </div>
-                <div style={{ marginTop: 8, fontSize: 12, color: PALETTE.muted }}>
-                  Auto amount: <strong>{num(meta?.labour_expense?.amount).toFixed(2)}</strong>
+              <div style={{ marginTop: 6, fontSize: 12, color: labourAutoEnabled ? PALETTE.headerDark : PALETTE.muted, fontWeight: 600 }}>
+                {labourAutoEnabled ? "Automatic from Labour Expense" : "Manual Labour Charges"}
+                <span style={{ marginLeft: 8 }}>
+                  Auto amount: <strong>{num(meta?.labour_expense?.entries?.reduce((sum, item) => sum + num(item?.amount), 0) || meta?.labour_expense?.amount).toFixed(2)}</strong>
                   {labourVoucherNos.length ? ` (voucher: ${labourVoucherNos.join(", ")})` : ""}
-                </div>
-                {labourExpenseEntries.length > 0 && (
-                  <div style={{ marginTop: 8, fontSize: 12, color: PALETTE.ink }}>
-                    Linked expense rows:
-                    <div style={{ marginTop: 4, display: "grid", gap: 4 }}>
-                      {labourExpenseEntries.map((entry) => (
-                        <div key={entry.id || entry.voucher_no} style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
-                          <span>{entry.voucher_no || `EXP-${entry.id}`}</span>
-                          <strong>{num(entry.amount).toFixed(2)}</strong>
-                        </div>
-                      ))}
+                </span>
+              </div>
+            )}
+            {showLabourExpenseOption && labourExpenseEntries.length > 0 && (
+              <div style={{ marginTop: 8, fontSize: 12, color: PALETTE.ink }}>
+                Linked expense rows:
+                <div style={{ marginTop: 4, display: "grid", gap: 4 }}>
+                  {labourExpenseEntries.map((entry) => (
+                    <div key={entry.id || entry.voucher_no} style={{ display: "flex", justifyContent: "space-between", gap: 10 }}>
+                      <span>{entry.voucher_no || `EXP-${entry.id}`}</span>
+                      <strong>{num(entry.amount).toFixed(2)}</strong>
                     </div>
-                  </div>
-                )}
+                  ))}
+                </div>
               </div>
             )}
           </div>
