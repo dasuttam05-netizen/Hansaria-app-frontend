@@ -141,6 +141,13 @@ function WarehouseSalePreviewModal({
   const saleRate = toNumber(salePreviewRow?.rate || previewSource?.rate);
   const saleAmount = toNumber(summary?.gross_amount ?? preview.grossAmount ?? saleQty * saleRate);
 
+  const saleFreightAutoAmount = toNumber(
+    salePreviewSummary?.transport_charge ??
+    salePreviewSummary?.summary?.transport_charge ??
+    salePreviewRow?.transport_charge ??
+    salePreviewRow?.freight ??
+    0
+  );
   const purchaseQty = purchaseLinks.reduce((sum, item) => sum + toNumber(item.quantity ?? item.weight), 0);
   const purchaseAmount = purchaseLinks.reduce((sum, item) => sum + toNumber(item.amount ?? (toNumber(item.quantity ?? item.weight) * toNumber(item.rate))), 0);
   const purchaseDeductionTotals = useMemo(() => {
@@ -166,15 +173,17 @@ function WarehouseSalePreviewModal({
       return acc;
     }, { claim: 0, labour: 0, freight: 0, cashDiscount: 0, tds: 0, other: 0, adjustment: 0, roundOff: 0, total: 0 });
   }, [purchaseLinks, toNumber]);
+  const freightAmountForPurchaseAuto = saleFreightAutoAmount > 0 ? saleFreightAutoAmount : purchaseDeductionTotals.freight;
   const purchaseDeductionAutoRows = useMemo(() => ({
     claim: purchaseDeductionTotals.claim,
     labour: purchaseDeductionTotals.labour,
-    freight: purchaseDeductionTotals.freight,
+    // Sale Freight automatically flows into Purchase Freight. Admin can still override it manually below.
+    freight: freightAmountForPurchaseAuto,
     cashDiscount: purchaseDeductionTotals.cashDiscount,
     tds: purchaseDeductionTotals.tds,
     other: purchaseDeductionTotals.other,
     adjustment: purchaseDeductionTotals.adjustment,
-  }), [purchaseDeductionTotals]);
+  }), [purchaseDeductionTotals, freightAmountForPurchaseAuto]);
 
   const purchaseDeductionFinal = {
     claim: purchaseManualMode.claim ? toNumber(purchaseManualValues.claim) : purchaseDeductionAutoRows.claim,
@@ -190,13 +199,7 @@ function WarehouseSalePreviewModal({
 
   const shortageAutoAmount = toNumber(salePreviewRow?.shortage_amount) || shortageQtyAuto * saleRate;
   const claimAutoAmount = toNumber(salePreviewRow?.claim_amount);
-  const freightAutoAmount = toNumber(
-    salePreviewSummary?.transport_charge ??
-    salePreviewSummary?.summary?.transport_charge ??
-    salePreviewRow?.transport_charge ??
-    salePreviewRow?.freight ??
-    0
-  );
+  const freightAutoAmount = saleFreightAutoAmount;
   const otherAutoAmount = toNumber(salePreviewRow?.other_deduction);
 
   const shortageAmount = manualMode.shortage ? toNumber(manualValues.shortage) : shortageAutoAmount;
@@ -337,20 +340,22 @@ function WarehouseSalePreviewModal({
           </div>
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 }}>
-          {[
-            { label: "Voucher No", value: preview.voucherNo },
-            { label: "Sale Type", value: preview.saleType },
-            { label: "Date", value: preview.date },
-            { label: "Location", value: preview.location },
-            { label: "Consignee", value: preview.consignee },
-            { label: "Buyer / Account", value: preview.account },
-          ].map((item) => (
-            <div key={item.label} style={{ border: "1px solid #d1d5db", borderRadius: 10, padding: 12, background: "#fff" }}>
-              <div style={{ fontSize: 11, textTransform: "uppercase", letterSpacing: 0.7, color: "#6b7280", marginBottom: 4 }}>{item.label}</div>
-              <div style={{ fontSize: 14, fontWeight: 800, color: "#111827" }}>{item.value || "-"}</div>
-            </div>
-          ))}
+        <div style={{ overflowX: "auto", paddingBottom: 2 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(6, minmax(145px, 1fr))", gap: 8, minWidth: 930 }}>
+            {[
+              { label: "Voucher No", value: preview.voucherNo, accent: "#0f766e", bg: "#ecfdf5" },
+              { label: "Sale Type", value: preview.saleType, accent: "#1d4ed8", bg: "#eff6ff" },
+              { label: "Date", value: preview.date, accent: "#7c3aed", bg: "#f5f3ff" },
+              { label: "Location", value: preview.location, accent: "#0369a1", bg: "#f0f9ff" },
+              { label: "Consignee", value: preview.consignee, accent: "#c2410c", bg: "#fff7ed" },
+              { label: "Buyer / Account", value: preview.account, accent: "#0f766e", bg: "#f0fdfa" },
+            ].map((item) => (
+              <div key={item.label} style={{ border: `1px solid ${item.accent}33`, borderTop: `3px solid ${item.accent}`, borderRadius: 10, padding: "9px 10px", background: item.bg, minWidth: 0, boxSizing: "border-box" }}>
+                <div style={{ fontSize: 10, textTransform: "uppercase", letterSpacing: 0.65, color: "#64748b", marginBottom: 3, fontWeight: 800 }}>{item.label}</div>
+                <div style={{ fontSize: 13, fontWeight: 900, color: "#111827", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={item.value || "-"}>{item.value || "-"}</div>
+              </div>
+            ))}
+          </div>
         </div>
 
         <div style={{ marginTop: 14, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
@@ -426,11 +431,10 @@ function WarehouseSalePreviewModal({
                   })}
                   <tr><td style={{ ...td, fontWeight: 800 }}>Total Deduction</td><td style={td}>{formatMoney(Object.values(purchaseDeductionAutoRows).reduce((sum, value) => sum + toNumber(value), 0))}</td><td style={td}>-</td><td style={{ ...td, fontWeight: 900 }}>{formatMoney(purchaseFinalDeductionTotal)}</td></tr>
                   <tr><td style={td}>Round Off</td><td style={td}>{formatMoney(purchaseDeductionTotals.roundOff)}</td><td style={td}>-</td><td style={{ ...td, fontWeight: 800 }}>{formatMoney(purchaseDeductionTotals.roundOff)}</td></tr>
-                  <tr><td style={{ ...td, fontWeight: 900 }}>Net Purchase After Deduction</td><td style={td}>-</td><td style={td}>-</td><td style={{ ...td, fontWeight: 900 }}>{formatMoney(purchaseNetAfterDeduction)}</td></tr>
                 </tbody>
               </table>
               <div style={{ marginTop: 8, fontSize: 11, color: isAdmin ? "#166534" : "#64748b" }}>
-                {isAdmin ? "Admin can switch a purchase deduction to Manual and enter a value." : "Automatic purchase deductions are shown. Manual deduction editing is available to Admin only."} Use F10 Purchase Tag to change the purchase allocation.
+                {isAdmin ? "Admin can switch a purchase deduction to Manual and enter a value." : "Automatic purchase deductions are shown. Manual deduction editing is available to Admin only."} Sale Freight automatically flows to Purchase Freight; Admin can override it manually. Use F10 Purchase Tag to change the purchase allocation.
               </div>
             </div>
           </div>
@@ -467,6 +471,25 @@ function WarehouseSalePreviewModal({
               </div>
             </div>
           </div>
+        </div>
+
+        <div style={{
+          marginTop: 12,
+          padding: "13px 16px",
+          borderRadius: 12,
+          background: "linear-gradient(135deg,#ecfdf5,#f0fdfa)",
+          border: "1px solid #99f6e4",
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          gap: 12,
+          flexWrap: "wrap",
+        }}>
+          <div>
+            <div style={{ fontSize: 11, fontWeight: 900, textTransform: "uppercase", letterSpacing: 0.7, color: "#0f766e" }}>Purchase Net After Deduction</div>
+            <div style={{ marginTop: 3, fontSize: 12, color: "#64748b" }}>Purchase amount after all final purchase deductions and round off.</div>
+          </div>
+          <div style={{ fontSize: 24, fontWeight: 950, color: "#115e59", whiteSpace: "nowrap" }}>{formatMoney(purchaseNetAfterDeduction)}</div>
         </div>
 
         <div style={{ marginTop: 14, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 }}>
