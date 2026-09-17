@@ -46,6 +46,37 @@ function statusStyle(status) {
   return styles[status] || { background: "#f1f5f9", color: "#475569", border: "1px solid #e2e8f0" };
 }
 
+
+function formatDate(value) {
+  if (!value) return "-";
+  const d = new Date(value);
+  return Number.isNaN(d.getTime()) ? "-" : d.toLocaleDateString("en-GB");
+}
+
+function Icon({ type, size = 18 }) {
+  const common = {
+    width: size,
+    height: size,
+    viewBox: "0 0 24 24",
+    fill: "none",
+    stroke: "currentColor",
+    strokeWidth: 2,
+    strokeLinecap: "round",
+    strokeLinejoin: "round",
+    "aria-hidden": true,
+  };
+  if (type === "edit") {
+    return <svg {...common}><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>;
+  }
+  if (type === "whatsapp") {
+    return <svg {...common}><path d="M20 11.5a8 8 0 0 1-11.8 7L4 20l1.5-4A8 8 0 1 1 20 11.5Z"/><path d="M9 8.8c.2-.4.5-.4.8-.4l.6 1.4c.1.2.1.4-.1.6l-.5.5c.6 1 1.4 1.8 2.4 2.3l.6-.6c.2-.2.3-.2.6-.1l1.4.6c.3.1.4.3.3.6-.3.9-.9 1.4-1.7 1.3-2.9-.3-5.8-3.2-6.2-6.1-.1-.8.3-1.4 1.8-1.5Z"/></svg>;
+  }
+  if (type === "pdf") {
+    return <svg {...common}><path d="M6 2h9l4 4v16H6Z"/><path d="M14 2v5h5"/><path d="M8 15h2.5a1.5 1.5 0 0 0 0-3H8v6"/><path d="M13 12h2a3 3 0 0 1 0 6h-2Z"/><path d="M19 12h-3v6"/></svg>;
+  }
+  return null;
+}
+
 export default function DailyRejectionPage() {
   const navigate = useNavigate();
   const session = loadSession() || {};
@@ -199,6 +230,167 @@ export default function DailyRejectionPage() {
     }
   };
 
+
+  const shareWhatsApp = (row) => {
+    let mobile = String(row?.consignee_mobile || row?.mobile || row?.phone || "").replace(/\D/g, "");
+    if (mobile.length === 10) mobile = `91${mobile}`;
+    const message = [
+      `Daily Rejection ${row?.rejection_no || ""}`.trim(),
+      `Date: ${formatDate(row?.entry_date)}`,
+      `Company: ${row?.company_name || "-"}`,
+      `Account: ${row?.company_account_name || "-"}`,
+      `Consignee: ${row?.consignee_name || row?.consignee || "-"}`,
+      `Product: ${row?.product_name || "-"}`,
+      `Original Qty: ${money(row?.original_qty)}`,
+      `Unloading Qty: ${money(row?.actual_unloading_qty)}`,
+      `Rejection Qty: ${money(row?.rejection_qty)}`,
+      `Reason: ${row?.reason || "-"}`,
+      `Work: ${row?.action_type || "-"}`,
+      `Assigned To: ${row?.assigned_to_name || "-"}`,
+      `Status: ${row?.status || "-"}`,
+    ].join("\\n");
+    const url = mobile
+      ? `https://wa.me/${mobile}?text=${encodeURIComponent(message)}`
+      : `https://wa.me/?text=${encodeURIComponent(message)}`;
+    window.open(url, "_blank", "noopener,noreferrer");
+  };
+
+  const openPdf = (row) => {
+    const popup = window.open("", "_blank", "width=900,height=700");
+    if (!popup) {
+      alert("Please allow pop-ups for the PDF preview.");
+      return;
+    }
+    const esc = (value) => String(value ?? "-")
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;")
+      .replace(/"/g, "&quot;")
+      .replace(/'/g, "&#039;");
+    const htmlDoc = `<!doctype html><html><head><meta charset="utf-8"><title>${esc(row?.rejection_no || "Daily Rejection")}</title>
+      <style>
+        body{font-family:Arial,sans-serif;padding:28px;color:#0f172a}h1{font-size:22px;margin:0 0 4px}
+        .meta{color:#64748b;margin-bottom:18px}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
+        .box{border:1px solid #dbe4ee;border-radius:10px;padding:10px}.l{font-size:10px;color:#64748b;font-weight:700;text-transform:uppercase}.v{font-size:14px;font-weight:700;margin-top:3px}
+        .qty{margin-top:16px;padding:12px;border-radius:10px;background:#f0fdfa;border:1px solid #99f6e4}
+        .foot{margin-top:22px;color:#64748b;font-size:11px}
+        @media print{body{padding:10px}}
+      </style></head><body>
+      <h1>Daily Rejection — ${esc(row?.rejection_no || "")}</h1>
+      <div class="meta">${esc(formatDate(row?.entry_date))}</div>
+      <div class="grid">
+        <div class="box"><div class="l">Company</div><div class="v">${esc(row?.company_name)}</div></div>
+        <div class="box"><div class="l">Account</div><div class="v">${esc(row?.company_account_name)}</div></div>
+        <div class="box"><div class="l">Consignee</div><div class="v">${esc(row?.consignee_name || row?.consignee)}</div></div>
+        <div class="box"><div class="l">Product</div><div class="v">${esc(row?.product_name)}</div></div>
+        <div class="box"><div class="l">Reason</div><div class="v">${esc(row?.reason)}</div></div>
+        <div class="box"><div class="l">Work</div><div class="v">${esc(row?.action_type)}</div></div>
+        <div class="box"><div class="l">Assigned To</div><div class="v">${esc(row?.assigned_to_name)}</div></div>
+        <div class="box"><div class="l">Status</div><div class="v">${esc(row?.status)}</div></div>
+        <div class="box"><div class="l">Employee</div><div class="v">${esc(row?.employee_name)}</div></div>
+      </div>
+      <div class="qty"><strong>Original Qty:</strong> ${esc(money(row?.original_qty))} &nbsp;&nbsp; <strong>Unloading Qty:</strong> ${esc(money(row?.actual_unloading_qty))} &nbsp;&nbsp; <strong>Rejection Qty:</strong> ${esc(money(row?.rejection_qty))}</div>
+      <div class="foot">Generated from Warehouse App Daily Rejection.</div>
+      <script>window.onload=function(){setTimeout(function(){window.print()},250)}</script>
+      </body></html>`;
+    popup.document.open();
+    popup.document.write(htmlDoc);
+    popup.document.close();
+  };
+
+  const renderActionIcons = (row) => {
+    const allowEdit = canEdit && row?.status !== "COMPLETE";
+    return (
+      <div style={styles.actionIcons}>
+        {allowEdit ? (
+          <button type="button" title="Edit" aria-label="Edit" onClick={() => editRow(row)} style={{ ...styles.iconButton, ...styles.iconEdit }}>
+            <Icon type="edit" />
+          </button>
+        ) : <span style={styles.iconSpacer} />}
+        <button type="button" title="WhatsApp" aria-label="WhatsApp" onClick={() => shareWhatsApp(row)} style={{ ...styles.iconButton, ...styles.iconWhatsapp }}>
+          <Icon type="whatsapp" />
+        </button>
+        <button type="button" title="PDF" aria-label="PDF" onClick={() => openPdf(row)} style={{ ...styles.iconButton, ...styles.iconPdf }}>
+          <Icon type="pdf" />
+        </button>
+      </div>
+    );
+  };
+
+  const assignedToMeRow = (row) => String(row?.assigned_to || "") === String(user?.id || "") || String(row?.assigned_to || "") === String(user?._id || "");
+
+  const renderTable = (tableRows, withWorkflow = true) => (
+    <div style={styles.tableOuter}>
+      <table style={styles.dataTable}>
+        <thead>
+          <tr>
+            {["Date","Rejection No","Company","Account","Consignee","Product","Original","Unloading","Reject","Reason","Work","Assigned To","Status","Action"].map((head) => (
+              <th key={head} style={styles.th}>{head}</th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {tableRows.length ? tableRows.map((row) => (
+            <React.Fragment key={idOf(row)}>
+              <tr>
+                <td style={styles.td}>{formatDate(row?.entry_date)}</td>
+                <td style={{ ...styles.td, fontWeight: 900 }}>{row?.rejection_no || idOf(row)}</td>
+                <td style={styles.td}>{row?.company_name || "-"}</td>
+                <td style={styles.td}>{row?.company_account_name || "-"}</td>
+                <td style={styles.td}>{row?.consignee_name || row?.consignee || "-"}</td>
+                <td style={styles.td}>{row?.product_name || "-"}</td>
+                <td style={styles.tdNum}>{money(row?.original_qty)}</td>
+                <td style={styles.tdNum}>{money(row?.actual_unloading_qty)}</td>
+                <td style={{ ...styles.tdNum, fontWeight: 900 }}>{money(row?.rejection_qty)}</td>
+                <td style={styles.td}>{row?.reason || "-"}</td>
+                <td style={styles.td}>{row?.action_type || "-"}</td>
+                <td style={styles.td}>{row?.assigned_to_name || "-"}</td>
+                <td style={styles.td}><span style={{ ...styles.statusChip, ...statusStyle(row?.status) }}>{row?.status || "PENDING"}</span></td>
+                <td style={{ ...styles.td, position: "sticky", right: 0, background: "#fff", zIndex: 2 }}>{renderActionIcons(row)}</td>
+              </tr>
+              {withWorkflow && canAssign && row?.status !== "COMPLETE" ? (
+                <tr>
+                  <td colSpan={14} style={styles.subRowCell}>
+                    <div style={styles.assignPanelCompact}>
+                      <div style={styles.assignHead}><span>ASSIGN WORK</span><small>Authorised users only</small></div>
+                      <div style={styles.assignGrid}>
+                        <select value={assignedAction[idOf(row)] || row.action_type || ""} onChange={(e) => setAssignedAction((prev) => ({ ...prev, [idOf(row)]: e.target.value }))} style={styles.input}>
+                          <option value="">Select Work Description</option>
+                          {WORK_DESCRIPTIONS.map((item) => <option key={item} value={item}>{item}</option>)}
+                        </select>
+                        <select value={assignedEmployee[idOf(row)] || row.assigned_to || ""} onChange={(e) => setAssignedEmployee((prev) => ({ ...prev, [idOf(row)]: e.target.value }))} style={styles.input}>
+                          <option value="">Select Staff</option>
+                          {masters.employees.map((item) => <option key={idOf(item)} value={idOf(item)}>{textOf(item)}</option>)}
+                        </select>
+                        <button type="button" disabled={busyId === idOf(row)} onClick={() => assignRow(idOf(row))} style={styles.assignButton}>
+                          {busyId === idOf(row) ? "Assigning..." : row.status === "RUNNING" ? "Reassign & Keep Running" : "Assign & Start Work"}
+                        </button>
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              ) : null}
+              {withWorkflow && assignedToMeRow(row) && row?.status === "RUNNING" ? (
+                <tr>
+                  <td colSpan={14} style={styles.subRowCell}>
+                    <div style={styles.workerPanelCompact}>
+                      <div><div style={styles.workerTitle}>YOUR ASSIGNED WORK</div><div style={styles.workerWork}>{row?.action_type || "Work assigned"} · {money(row?.rejection_qty)} Qty</div></div>
+                      <div style={styles.completeRow}>
+                        <input value={completionRemarks[idOf(row)] || ""} onChange={(e) => setCompletionRemarks((prev) => ({ ...prev, [idOf(row)]: e.target.value }))} placeholder="Completion remark (optional)" style={styles.input} />
+                        <button type="button" disabled={busyId === idOf(row)} onClick={() => completeRow(idOf(row), row?.rejection_qty)} style={styles.complete}>{busyId === idOf(row) ? "Completing..." : "✓ Complete Work"}</button>
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              ) : null}
+            </React.Fragment>
+          )) : <tr><td colSpan={14} style={styles.emptyCell}>No Daily Rejection records found.</td></tr>}
+        </tbody>
+      </table>
+    </div>
+  );
+
+
   const editRow = async (row) => {
     if (!canEdit) return;
     setEditId(row?.id || row?._id || "");
@@ -265,11 +457,7 @@ export default function DailyRejectionPage() {
             <Field label="To Date"><input type="date" value={reportTo} onChange={(e) => setReportTo(e.target.value)} style={styles.input} /></Field>
             <Field label="Work"><select value={actionFilter} onChange={(e) => setActionFilter(e.target.value)} style={styles.input}><option value="ALL">All Work</option>{WORK_DESCRIPTIONS.map((item) => <option key={item} value={item}>{item}</option>)}</select></Field>
           </div>
-          <div style={styles.reportMetaBar}>
-            <div style={styles.reportCount}>{reportRows.length ? `${reportRows.length} record${reportRows.length === 1 ? '' : 's'} found` : 'No report generated yet'}</div>
-            {reportRows.length ? <div style={styles.reportTotals}><span>Original <b>{money(reportRows.reduce((sum, row) => sum + (Number(row.original_qty) || 0), 0))}</b></span><span>Unloading <b>{money(reportRows.reduce((sum, row) => sum + (Number(row.actual_unloading_qty) || 0), 0))}</b></span><span>Reject <b>{money(reportRows.reduce((sum, row) => sum + (Number(row.rejection_qty) || 0), 0))}</b></span></div> : null}
-          </div>
-          <div style={styles.reportTableWrap}>{reportRows.length ? <div style={styles.tableScroller}><table style={styles.table}><thead><tr>{["Date","Rejection No","Company","Account","Consignee","Product","Original","Unloading","Reject","Reason","Work","Assigned To","Status"].map((h) => <th key={h} style={styles.th}>{h}</th>)}</tr></thead><tbody>{reportRows.map((row, rowIndex) => <tr key={idOf(row) || `${row.rejection_no || 'row'}-${rowIndex}`} style={rowIndex % 2 ? styles.rowAlt : undefined}>{[row.entry_date ? new Date(row.entry_date).toLocaleDateString('en-GB') : '-', row.rejection_no, row.company_name, row.company_account_name, row.consignee_name || row.consignee, row.product_name, money(row.original_qty), money(row.actual_unloading_qty), money(row.rejection_qty), row.reason, row.action_type, row.assigned_to_name, row.status].map((v,i)=><td key={i} style={styles.td}>{v || '-'}</td>)}</tr>)}</tbody><tfoot><tr>{["TOTAL","","","","","",money(reportRows.reduce((sum,row)=>sum+(Number(row.original_qty)||0),0)),money(reportRows.reduce((sum,row)=>sum+(Number(row.actual_unloading_qty)||0),0)),money(reportRows.reduce((sum,row)=>sum+(Number(row.rejection_qty)||0),0)),"","","",""].map((v,i)=><td key={i} style={styles.tdTotal}>{v}</td>)}</tr></tfoot></table></div> : <div style={styles.empty}>Select dates and click Generate Report.</div>}</div>
+          <div style={styles.reportTableWrap}>{reportRows.length ? renderTable(reportRows, false) : <div style={styles.empty}>Select dates and click Generate Report.</div>}</div>
         </div>
       ) : null}
 
@@ -306,50 +494,13 @@ export default function DailyRejectionPage() {
       {error ? <div style={styles.error}>{error}</div> : null}
 
       <div style={styles.list}>
-        {loading ? <div style={styles.empty}>Loading Daily Rejection...</div> : rows.length === 0 ? <div style={styles.empty}>No Daily Rejection records found.</div> : rows.map((row) => {
-          const rowId = idOf(row);
-          const assignedToMe = String(row.assigned_to || '') === String(user?.id || '') || String(row.assigned_to || '') === String(user?._id || '');
-          const badge = statusStyle(row.status);
-          return (
-            <div key={rowId} style={styles.card}>
-              <div style={styles.cardAccent} />
-              <div style={styles.cardTop}><div><div style={styles.rejNo}>{row.rejection_no || rowId}</div><div style={styles.meta}>{row.entry_date ? new Date(row.entry_date).toLocaleDateString('en-GB') : '-'} · {row.employee_name || '-'}</div></div><span style={{ ...styles.badge, ...badge }}>{row.status || 'PENDING'}</span></div>
-              <div style={styles.details}>
-                <Detail label="Location" value={row.location_name} /><Detail label="Company" value={row.company_name} /><Detail label="Account" value={row.company_account_name} /><Detail label="Consignee" value={row.consignee_name || row.consignee} /><Detail label="Product" value={row.product_name} /><Detail label="Original Qty" value={money(row.original_qty)} /><Detail label="Unloading Qty" value={money(row.actual_unloading_qty)} /><Detail label="Rejection Qty" value={money(row.rejection_qty)} /><Detail label="Reason" value={row.reason} /><Detail label="Work" value={row.action_type} /><Detail label="Assigned To" value={row.assigned_to_name} />
-              </div>
-
-              {canEdit && row.status !== 'COMPLETE' ? <div style={styles.editRow}><button type="button" onClick={() => editRow(row)} style={styles.editButton}>Edit Entry</button></div> : null}
-
-              {canAssign && row.status !== 'COMPLETE' ? (
-                <div style={styles.assignPanel}>
-                  <div style={styles.assignHead}><span>ASSIGN WORK</span><small>Authorised users only</small></div>
-                  <div style={styles.assignGrid}>
-                    <select value={assignedAction[rowId] || row.action_type || ''} onChange={(e) => setAssignedAction((prev) => ({ ...prev, [rowId]: e.target.value }))} style={styles.input}><option value="">Select Work Description</option>{WORK_DESCRIPTIONS.map((item) => <option key={item} value={item}>{item}</option>)}</select>
-                    <select value={assignedEmployee[rowId] || row.assigned_to || ''} onChange={(e) => setAssignedEmployee((prev) => ({ ...prev, [rowId]: e.target.value }))} style={styles.input}><option value="">Select Staff</option>{masters.employees.map((item) => <option key={idOf(item)} value={idOf(item)}>{textOf(item)}</option>)}</select>
-                    <button type="button" disabled={busyId === rowId} onClick={() => assignRow(rowId)} style={styles.assignButton}>{busyId === rowId ? 'Assigning...' : row.status === 'RUNNING' ? 'Reassign & Keep Running' : 'Assign & Start Work'}</button>
-                  </div>
-                </div>
-              ) : null}
-
-              {assignedToMe && row.status === 'RUNNING' ? (
-                <div style={styles.workerPanel}>
-                  <div><div style={styles.workerTitle}>Your Assigned Work</div><div style={styles.workerWork}>{row.action_type || 'Work assigned'} · {money(row.rejection_qty)} Qty</div></div>
-                  <div style={styles.completeRow}><input value={completionRemarks[rowId] || ''} onChange={(e) => setCompletionRemarks((prev) => ({ ...prev, [rowId]: e.target.value }))} placeholder="Completion remark (optional)" style={styles.input} /><button type="button" disabled={busyId === rowId} onClick={() => completeRow(rowId, row.rejection_qty)} style={styles.complete}>{busyId === rowId ? 'Completing...' : '✓ Complete Work'}</button></div>
-                </div>
-              ) : null}
-
-              {row.status === 'COMPLETE' ? <div style={styles.completedPanel}>✓ Work completed{row.completed_by_name ? ` by ${row.completed_by_name}` : ''}{row.completed_at ? ` · ${new Date(row.completed_at).toLocaleString('en-GB')}` : ''}</div> : null}
-            </div>
-          );
-        })}
+        {loading ? <div style={styles.empty}>Loading Daily Rejection...</div> : renderTable(rows)}
       </div>
     </div>
   );
 }
 
 function Field({ label, children }) { return <label style={styles.field}><span style={styles.label}>{label}</span>{children}</label>; }
-function Detail({ label, value }) { return <div style={styles.detail}><div style={styles.detailLabel}>{label}</div><div style={styles.detailValue}>{value == null || value === '' ? '-' : value}</div></div>; }
-
 const styles = {
   page: { minHeight: '100vh', background: 'linear-gradient(180deg,#f8fafc 0%,#eef6f5 100%)', padding: 14, fontFamily: 'Segoe UI,Arial,sans-serif', boxSizing: 'border-box' },
   hero: { background: 'linear-gradient(135deg,#0f766e,#155e75 72%,#164e63)', color: '#fff', borderRadius: 22, padding: 22, display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'center', flexWrap: 'wrap', boxShadow: '0 14px 34px rgba(15,118,110,.22)' },
@@ -361,25 +512,28 @@ const styles = {
   toolbar: { background: '#fff', border: '1px solid #dbe4ee', borderRadius: 16, padding: 11, display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', alignItems: 'center' }, tabs: { display: 'flex', gap: 7, flexWrap: 'wrap' }, toolbarRight: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' },
   tab: { border: '1px solid #cbd5e1', background: '#fff', color: '#334155', borderRadius: 999, padding: '8px 12px', fontWeight: 800, cursor: 'pointer' }, tabActive: { border: '1px solid #0f766e', background: '#0f766e', color: '#fff', borderRadius: 999, padding: '8px 12px', fontWeight: 800, cursor: 'pointer' }, compactSelect: { minHeight: 40, border: '1px solid #cbd5e1', borderRadius: 10, padding: '8px 10px', background: '#fff' },
   primary: { border: 0, background: '#0f766e', color: '#fff', borderRadius: 11, padding: '10px 15px', fontWeight: 900, cursor: 'pointer', boxShadow: '0 5px 12px rgba(15,118,110,.16)' }, secondary: { border: '1px solid #cbd5e1', background: '#fff', color: '#334155', borderRadius: 11, padding: '10px 14px', fontWeight: 900, cursor: 'pointer' },
-  reportPanel: { marginTop: 12, background: '#fff', border: '1px solid #dbe4ee', borderRadius: 20, padding: 15, boxShadow: '0 12px 30px rgba(15,23,42,.06)' },
-  reportHead: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, flexWrap: 'wrap', paddingBottom: 12, borderBottom: '1px solid #eef2f7' },
-  reportTitle: { fontSize: 22, fontWeight: 950, color: '#0f172a', marginTop: 3 },
-  reportFilters: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(180px,1fr))', gap: 11, marginTop: 13, padding: 12, background: '#f8fafc', borderRadius: 14, border: '1px solid #eef2f7' },
-  reportMetaBar: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10, flexWrap: 'wrap', marginTop: 12, padding: '10px 12px', background: 'linear-gradient(90deg,#f8fafc,#f0fdfa)', border: '1px solid #dbe4ee', borderRadius: 12 },
-  reportCount: { color: '#334155', fontSize: 12, fontWeight: 800 },
-  reportTotals: { display: 'flex', gap: 14, flexWrap: 'wrap', color: '#475569', fontSize: 12 },
-  reportTableWrap: { marginTop: 12, border: '1px solid #dbe4ee', borderRadius: 14, overflow: 'hidden', background: '#fff' },
-  tableScroller: { width: '100%', overflowX: 'auto', overflowY: 'auto', maxHeight: '62vh' },
-  table: { width: 'max-content', minWidth: '1500px', borderCollapse: 'separate', borderSpacing: 0, fontSize: 12, color: '#0f172a' },
-  th: { position: 'sticky', top: 0, zIndex: 2, background: '#0f766e', color: '#fff', padding: '11px 10px', textAlign: 'left', fontWeight: 900, whiteSpace: 'nowrap', borderBottom: '1px solid #0b5f59' },
-  td: { padding: '10px 10px', borderBottom: '1px solid #eef2f7', whiteSpace: 'nowrap', verticalAlign: 'top' },
-  tdTotal: { padding: '10px', background: '#ecfdf5', color: '#065f46', fontWeight: 950, borderTop: '2px solid #a7f3d0', whiteSpace: 'nowrap' },
-  rowAlt: { background: '#f8fafc' },
+  tableOuter: { width: '100%', overflowX: 'auto', background: '#fff', border: '1px solid #dbe4ee', borderRadius: 16, boxShadow: '0 10px 28px rgba(15,23,42,.05)' },
+  dataTable: { width: '100%', borderCollapse: 'separate', borderSpacing: 0, minWidth: 1500, fontSize: 12 },
+  th: { position: 'sticky', top: 0, zIndex: 3, background: '#0f766e', color: '#fff', padding: '11px 10px', textAlign: 'left', fontWeight: 900, whiteSpace: 'nowrap', borderRight: '1px solid rgba(255,255,255,.14)' },
+  td: { padding: '10px', color: '#0f172a', background: '#fff', whiteSpace: 'nowrap', borderTop: '1px solid #eef2f7', verticalAlign: 'middle' },
+  tdNum: { padding: '10px', color: '#0f172a', background: '#fff', whiteSpace: 'nowrap', borderTop: '1px solid #eef2f7', textAlign: 'right', fontVariantNumeric: 'tabular-nums', verticalAlign: 'middle' },
+  statusChip: { display: 'inline-flex', alignItems: 'center', borderRadius: 999, padding: '5px 8px', fontSize: 10, fontWeight: 900, whiteSpace: 'nowrap' },
+  emptyCell: { padding: 28, textAlign: 'center', color: '#64748b', background: '#fff' },
+  actionIcons: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, whiteSpace: 'nowrap' },
+  iconButton: { width: 32, height: 32, borderRadius: 9, border: '1px solid', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', background: '#fff' },
+  iconEdit: { color: '#2563eb', borderColor: '#bfdbfe', background: '#eff6ff' },
+  iconWhatsapp: { color: '#15803d', borderColor: '#bbf7d0', background: '#f0fdf4' },
+  iconPdf: { color: '#dc2626', borderColor: '#fecaca', background: '#fef2f2' },
+  iconSpacer: { width: 32, height: 32, display: 'inline-block' },
+  subRowCell: { padding: 0, background: '#fbfdff', borderTop: '1px dashed #dbe4ee' },
+  assignPanelCompact: { margin: 0, padding: '9px 10px', borderTop: '1px solid #bfdbfe', borderBottom: '1px solid #bfdbfe', background: 'linear-gradient(90deg,#eff6ff,#f8fbff)' },
+  workerPanelCompact: { margin: 0, padding: '9px 10px', borderTop: '1px solid #99f6e4', borderBottom: '1px solid #99f6e4', background: 'linear-gradient(90deg,#ecfeff,#f0fdfa)' },
   formCard: { background: '#fff', border: '1px solid #dbe4ee', borderRadius: 20, padding: 17, marginTop: 12, boxShadow: '0 12px 30px rgba(15,23,42,.07)' }, formHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, marginBottom: 8 }, formTitle: { margin: '2px 0 0', color: '#0f172a', fontSize: 23 }, close: { border: 0, background: '#f1f5f9', color: '#334155', width: 35, height: 35, borderRadius: 10, fontSize: 22, cursor: 'pointer' }, infoStrip: { background: '#f0fdfa', border: '1px solid #99f6e4', color: '#115e59', borderRadius: 11, padding: 10, fontSize: 12, marginBottom: 8 },
   section: { marginTop: 10, paddingTop: 12, borderTop: '1px solid #eef2f7' }, sectionTitle: { color: '#0f172a', fontSize: 15, fontWeight: 900, marginBottom: 10 }, grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(190px,1fr))', gap: 11 }, quantityGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(190px,1fr))', gap: 11 }, field: { display: 'grid', gap: 6 }, label: { fontSize: 12, color: '#475569', fontWeight: 800 }, input: { width: '100%', minHeight: 42, boxSizing: 'border-box', border: '1px solid #cbd5e1', borderRadius: 10, padding: '9px 10px', background: '#fff', color: '#0f172a' },
   rejectBox: { borderRadius: 13, padding: 13, background: 'linear-gradient(135deg,#ecfeff,#f0fdfa)', border: '1px solid #99f6e4', boxShadow: 'inset 0 1px 0 rgba(255,255,255,.7)' }, rejectLabel: { color: '#0f766e', fontSize: 11, fontWeight: 900, textTransform: 'uppercase' }, rejectValue: { fontSize: 28, fontWeight: 900, color: '#115e59', marginTop: 4 }, rejectHint: { color: '#5f6f7f', fontSize: 11, marginTop: 2 }, actionRow: { display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' },
   error: { marginTop: 12, padding: 12, background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca', borderRadius: 12, fontWeight: 700 }, list: { display: 'grid', gap: 12, marginTop: 12 }, empty: { background: '#fff', border: '1px dashed #cbd5e1', borderRadius: 16, padding: 30, textAlign: 'center', color: '#64748b' }, emptyLarge: { maxWidth: 560, margin: '12vh auto', background: '#fff', border: '1px solid #dbe4ee', borderRadius: 20, padding: 36, textAlign: 'center', boxShadow: '0 14px 40px rgba(15,23,42,.08)' }, emptyIcon: { width: 48, height: 48, margin: '0 auto 12px', borderRadius: '50%', background: '#fff7ed', color: '#c2410c', display: 'grid', placeItems: 'center', fontWeight: 900, fontSize: 24 }, emptyTitle: { margin: 0, color: '#0f172a' }, emptyText: { marginTop: 8, color: '#64748b' },
   card: { position: 'relative', overflow: 'hidden', background: '#fff', border: '1px solid #dbe4ee', borderRadius: 18, padding: 15, boxShadow: '0 8px 24px rgba(15,23,42,.05)' }, cardAccent: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, background: '#0f766e' }, cardTop: { display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }, rejNo: { fontWeight: 950, color: '#0f172a', fontSize: 18 }, meta: { color: '#64748b', fontSize: 12, marginTop: 3 }, badge: { borderRadius: 999, padding: '6px 10px', fontSize: 10, fontWeight: 950 }, details: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(145px,1fr))', gap: 8, marginTop: 12 }, detail: { background: '#f8fafc', borderRadius: 11, padding: 9, minWidth: 0 }, detailLabel: { color: '#64748b', fontSize: 10, fontWeight: 800, textTransform: 'uppercase' }, detailValue: { color: '#0f172a', fontWeight: 700, marginTop: 3, wordBreak: 'break-word' },
+  reportTableWrap: { marginTop: 12, overflowX: 'auto' },
   assignPanel: { marginTop: 13, border: '1px solid #bfdbfe', background: 'linear-gradient(135deg,#eff6ff,#f8fbff)', borderRadius: 14, padding: 12 }, assignHead: { display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center', marginBottom: 8, color: '#1e3a8a', fontSize: 11, fontWeight: 900 }, assignGrid: { display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr) auto', gap: 8 }, assignButton: { border: 0, background: '#1d4ed8', color: '#fff', borderRadius: 10, padding: '10px 13px', fontWeight: 900, cursor: 'pointer' },
   workerPanel: { marginTop: 13, border: '1px solid #99f6e4', background: 'linear-gradient(135deg,#ecfeff,#f0fdfa)', borderRadius: 14, padding: 12 }, workerTitle: { color: '#115e59', fontWeight: 950 }, workerWork: { color: '#475569', fontSize: 12, marginTop: 3 }, completeRow: { display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', gap: 8, marginTop: 10 }, complete: { border: 0, background: '#047857', color: '#fff', borderRadius: 10, padding: '10px 14px', fontWeight: 900, cursor: 'pointer' }, completedPanel: { marginTop: 12, padding: 10, borderRadius: 11, background: '#ecfdf5', border: '1px solid #a7f3d0', color: '#047857', fontWeight: 800 },
 };
