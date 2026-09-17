@@ -157,9 +157,9 @@ function WarehouseSalePreviewModal({
 
   const previewSource = salePreviewSummary?.sale || salePreviewRow;
   const preview = getSalePreviewDataForRow(previewSource);
-  const purchaseLinks = Array.isArray(salePreviewSummary?.purchase_links)
+  const hydratedPurchaseLinks = Array.isArray(salePreviewSummary?.purchase_links)
     ? salePreviewSummary.purchase_links
-    : preview.purchaseLinks;
+    : (Array.isArray(preview?.purchaseLinks) ? preview.purchaseLinks : []);
   const summary = salePreviewSummary?.summary || null;
 
   const saleQty = toNumber(salePreviewRow?.quantity || salePreviewRow?.dispatch_qty || salePreviewRow?.unloading_qty || 0);
@@ -177,10 +177,10 @@ function WarehouseSalePreviewModal({
         salePreviewRow?.freight ??
         0
       );
-  const purchaseQty = purchaseLinks.reduce((sum, item) => sum + toNumber(item.quantity ?? item.weight), 0);
-  const purchaseAmount = purchaseLinks.reduce((sum, item) => sum + toNumber(item.amount ?? (toNumber(item.quantity ?? item.weight) * toNumber(item.rate))), 0);
+  const purchaseQty = hydratedPurchaseLinks.reduce((sum, item) => sum + toNumber(item.quantity ?? item.weight), 0);
+  const purchaseAmount = hydratedPurchaseLinks.reduce((sum, item) => sum + toNumber(item.amount ?? (toNumber(item.quantity ?? item.weight) * toNumber(item.rate))), 0);
   const purchaseDeductionTotals = useMemo(() => {
-    return purchaseLinks.reduce((acc, item) => {
+    return hydratedPurchaseLinks.reduce((acc, item) => {
       const purchase = item?.purchase_details || item || {};
       acc.claim += toNumber(purchase.claim_amount ?? purchase.bags_claim);
       acc.labour += toNumber(purchase.labour);
@@ -201,7 +201,7 @@ function WarehouseSalePreviewModal({
       ));
       return acc;
     }, { claim: 0, labour: 0, freight: 0, cashDiscount: 0, tds: 0, other: 0, adjustment: 0, roundOff: 0, total: 0 });
-  }, [purchaseLinks, toNumber]);
+  }, [hydratedPurchaseLinks, toNumber]);
   const freightAmountForPurchaseAuto = saleFreightAutoAmount > 0 ? saleFreightAutoAmount : purchaseDeductionTotals.freight;
   const purchaseDeductionAutoRows = useMemo(() => ({
     claim: purchaseDeductionTotals.claim,
@@ -419,7 +419,7 @@ function WarehouseSalePreviewModal({
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
                 <thead><tr><th style={th}>Bill</th><th style={th}>Farmer</th><th style={th}>Qty</th><th style={th}>Rate</th><th style={th}>Amount</th><th style={th}>Source</th></tr></thead>
                 <tbody>
-                  {purchaseLinks.map((item, index) => {
+                  {hydratedPurchaseLinks.map((item, index) => {
                     const qty = toNumber(item.quantity ?? item.weight);
                     const rate = toNumber(item.rate);
                     const amount = toNumber(item.amount) || qty * rate;
@@ -427,7 +427,7 @@ function WarehouseSalePreviewModal({
                     const farmerName = item?.farmer_name || purchase?.farmer_name || purchase?.farmer || purchase?.party_name || purchase?.company_name || "-";
                     return <tr key={`${item.purchase_id || item._id || index}`}><td style={td}>{item.voucher_no || purchase.voucher_no || "-"}</td><td style={td}>{farmerName}</td><td style={td}>{formatDecimal4(qty)}</td><td style={td}>{formatMoney(rate)}</td><td style={td}>{formatMoney(amount)}</td><td style={td}>{item.source === "auto" ? "Auto" : "Manual"}</td></tr>;
                   })}
-                  {purchaseLinks.length === 0 && <tr><td style={{ ...td, textAlign: "center" }} colSpan={6}>No purchase bill tagged. Press F10 Purchase Tag.</td></tr>}
+                  {hydratedPurchaseLinks.length === 0 && <tr><td style={{ ...td, textAlign: "center" }} colSpan={6}>No purchase bill tagged. Press F10 Purchase Tag.</td></tr>}
                 </tbody>
               </table>
             </div>
