@@ -324,11 +324,19 @@ function WarehouseSalePreviewModal({
         salePreviewSummary?.warehouse_id ||
         salePreviewSummary?.summary?.warehouse_id ||
         "";
+      const consigneeId =
+        salePreviewRow?.consignee_id ||
+        salePreviewRow?.consignee?.id ||
+        salePreviewSummary?.sale?.consignee_id ||
+        salePreviewSummary?.consignee_id ||
+        salePreviewSummary?.summary?.consignee_id ||
+        "";
       const payload = {
         deduction_only: true,
         sale_type: saleType,
         warehouse_id: warehouseId,
         location_id: locationId,
+        consignee_id: consigneeId,
         unloading_date: salePreviewRow?.unloading_date || salePreviewRow?.date || "",
         unloading_qty: unloadingQty,
         shortage_quantity: currentShortageQty,
