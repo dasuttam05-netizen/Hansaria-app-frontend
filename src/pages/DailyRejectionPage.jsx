@@ -16,6 +16,7 @@ const makeEmptyForm = (user) => ({
   company_account_id: "",
   product_id: "",
   consignee_id: "",
+  lorry_no: "",
   original_qty: "",
   actual_unloading_qty: "",
   rejection_qty: "",
@@ -250,6 +251,7 @@ export default function DailyRejectionPage() {
   const buildShareText = (row) => [
     `Daily Rejection ${row?.rejection_no || ""}`.trim(),
     `Date: ${formatDate(row?.entry_date)}`,
+    `Lorry No: ${row?.lorry_no || "-"}`,
     `Company: ${row?.company_name || "-"}`,
     `Account: ${row?.company_account_name || "-"}`,
     `Consignee: ${row?.consignee_name || row?.consignee || "-"}`,
@@ -320,6 +322,7 @@ export default function DailyRejectionPage() {
       <h1>Daily Rejection — ${esc(row?.rejection_no || "")}</h1>
       <div class="meta">${esc(formatDate(row?.entry_date))}</div>
       <div class="grid">
+        <div class="box"><div class="l">Lorry No</div><div class="v">${esc(row?.lorry_no)}</div></div>
         <div class="box"><div class="l">Company</div><div class="v">${esc(row?.company_name)}</div></div>
         <div class="box"><div class="l">Account</div><div class="v">${esc(row?.company_account_name)}</div></div>
         <div class="box"><div class="l">Consignee</div><div class="v">${esc(row?.consignee_name || row?.consignee)}</div></div>
@@ -365,12 +368,86 @@ export default function DailyRejectionPage() {
 
   const assignedToMeRow = (row) => String(row?.assigned_to || "") === String(user?.id || "") || String(row?.assigned_to || "") === String(user?._id || "");
 
+  const renderMobileCards = (tableRows, withWorkflow = true) => (
+    <div className="dr-mobile-list">
+      {tableRows.length ? tableRows.map((row) => {
+        const rowId = idOf(row);
+        const assignedToMe = assignedToMeRow(row);
+        const isComplete = row?.status === "COMPLETE";
+        const actionValue = assignedAction[rowId] || row?.action_type || "";
+        const employeeValue = assignedEmployee[rowId] || row?.assigned_to || "";
+        const rowBusy = busyId === rowId;
+        return (
+          <div key={rowId} className="dr-mobile-card">
+            <div className="dr-mobile-card-head">
+              <div>
+                <div className="dr-mobile-rej">{row?.rejection_no || rowId}</div>
+                <div className="dr-mobile-date">{formatDate(row?.entry_date)}</div>
+              </div>
+              <span style={{ ...styles.statusChip, ...statusStyle(row?.status) }}>{row?.status || "PENDING"}</span>
+            </div>
+            <div className="dr-mobile-grid">
+              <div><span>Date</span><b>{formatDate(row?.entry_date)}</b></div>
+              <div><span>Rejection No</span><b>{row?.rejection_no || rowId}</b></div>
+              <div><span>Lorry No</span><b>{row?.lorry_no || "-"}</b></div>
+              <div><span>Company</span><b>{row?.company_name || "-"}</b></div>
+              <div><span>Account</span><b>{row?.company_account_name || "-"}</b></div>
+              <div><span>Consignee</span><b>{row?.consignee_name || row?.consignee || "-"}</b></div>
+              <div><span>Product</span><b>{row?.product_name || "-"}</b></div>
+              <div><span>Original</span><b>{money(row?.original_qty)}</b></div>
+              <div><span>Unloading</span><b>{money(row?.actual_unloading_qty)}</b></div>
+              <div><span>Reject</span><b>{money(row?.rejection_qty)}</b></div>
+              <div><span>Reason</span><b>{row?.reason || "-"}</b></div>
+              <div><span>Work</span><b>{row?.action_type || "-"}</b></div>
+              <div><span>Assigned To</span><b>{row?.assigned_to_name || "-"}</b></div>
+            </div>
+
+            {withWorkflow && canAssign && !isComplete ? (
+              <div className="dr-mobile-workflow">
+                <div className="dr-mobile-workflow-title">ASSIGN WORK</div>
+                <div className="dr-mobile-workflow-grid">
+                  <select value={actionValue} disabled={isComplete} onChange={(e) => setAssignedAction((prev) => ({ ...prev, [rowId]: e.target.value }))} style={styles.workflowSelect}>
+                    <option value="">Select Work</option>
+                    {WORK_DESCRIPTIONS.map((item) => <option key={item} value={item}>{item}</option>)}
+                  </select>
+                  <select value={employeeValue} disabled={isComplete} onChange={(e) => setAssignedEmployee((prev) => ({ ...prev, [rowId]: e.target.value }))} style={styles.workflowSelect}>
+                    <option value="">Select Staff</option>
+                    {masters.employees.map((item) => <option key={idOf(item)} value={idOf(item)}>{textOf(item)}</option>)}
+                  </select>
+                  <button type="button" disabled={rowBusy || isComplete || !actionValue || !employeeValue} onClick={() => assignRow(rowId)} style={{ ...styles.assignButtonInline, opacity: rowBusy || isComplete || !actionValue || !employeeValue ? 0.55 : 1 }}>
+                    {rowBusy ? "Assigning..." : row?.status === "RUNNING" ? "Reassign & Keep Running" : "Assign & Start Work"}
+                  </button>
+                </div>
+              </div>
+            ) : null}
+
+            {withWorkflow && assignedToMe && row?.status === "RUNNING" ? (
+              <div className="dr-mobile-worker">
+                <div className="dr-mobile-workflow-title">YOUR ASSIGNED WORK</div>
+                <div className="dr-mobile-worker-work">{row?.action_type || "Work assigned"} · {money(row?.rejection_qty)} Qty</div>
+                <div className="dr-mobile-complete">
+                  <input value={completionRemarks[rowId] || ""} onChange={(e) => setCompletionRemarks((prev) => ({ ...prev, [rowId]: e.target.value }))} placeholder="Completion note" style={styles.workflowInput} />
+                  <button type="button" disabled={rowBusy} onClick={() => completeRow(rowId, row?.rejection_qty)} style={styles.completeInline}>{rowBusy ? "Completing..." : "✓ Complete Work"}</button>
+                </div>
+              </div>
+            ) : null}
+
+            <div className="dr-mobile-actions">
+              {renderActionIcons(row)}
+            </div>
+          </div>
+        );
+      }) : <div style={styles.emptyCell}>No Daily Rejection records found.</div>}
+    </div>
+  );
+
   const renderTable = (tableRows, withWorkflow = true) => {
     const showManagerWorkflow = withWorkflow && canAssign;
-    const totalColumns = 14 + (showManagerWorkflow ? 3 : withWorkflow ? 1 : 0);
+    const totalColumns = 15 + (showManagerWorkflow ? 3 : withWorkflow ? 1 : 0);
     const headers = [
       "Date",
       "Rejection No",
+      "Lorry No",
       "Company",
       "Account",
       "Consignee",
@@ -387,122 +464,60 @@ export default function DailyRejectionPage() {
     ];
 
     return (
-      <div style={styles.tableOuter}>
-        <table style={{ ...styles.dataTable, minWidth: showManagerWorkflow ? 1950 : withWorkflow ? 1650 : 1500 }}>
-          <thead>
-            <tr>
-              {headers.map((head) => (
-                <th
-                  key={head}
-                  style={{
-                    ...styles.th,
-                    ...(head === "Action" ? styles.actionTh : {}),
-                    ...(head === "Assign Work" || head === "Select Staff" || head === "Work Action" ? styles.workflowTh : {}),
-                  }}
-                >
-                  {head}
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {tableRows.length ? tableRows.map((row) => {
-              const rowId = idOf(row);
-              const assignedToMe = assignedToMeRow(row);
-              const isComplete = row?.status === "COMPLETE";
-              const actionValue = assignedAction[rowId] || row?.action_type || "";
-              const employeeValue = assignedEmployee[rowId] || row?.assigned_to || "";
-              const rowBusy = busyId === rowId;
-
-              return (
-                <tr key={rowId}>
-                  <td style={styles.td}>{formatDate(row?.entry_date)}</td>
-                  <td style={{ ...styles.td, fontWeight: 900 }}>{row?.rejection_no || rowId}</td>
-                  <td style={styles.td}>{row?.company_name || "-"}</td>
-                  <td style={styles.td}>{row?.company_account_name || "-"}</td>
-                  <td style={styles.td}>{row?.consignee_name || row?.consignee || "-"}</td>
-                  <td style={styles.td}>{row?.product_name || "-"}</td>
-                  <td style={styles.tdNum}>{money(row?.original_qty)}</td>
-                  <td style={styles.tdNum}>{money(row?.actual_unloading_qty)}</td>
-                  <td style={{ ...styles.tdNum, fontWeight: 900 }}>{money(row?.rejection_qty)}</td>
-                  <td style={styles.td}>{row?.reason || "-"}</td>
-                  <td style={styles.td}>{row?.action_type || "-"}</td>
-                  <td style={styles.td}>{row?.assigned_to_name || "-"}</td>
-                  <td style={styles.td}>
-                    <span style={{ ...styles.statusChip, ...statusStyle(row?.status) }}>{row?.status || "PENDING"}</span>
-                  </td>
-
-                  {showManagerWorkflow ? (
-                    <>
-                      <td style={{ ...styles.td, ...styles.workflowTd }}>
-                        <select
-                          value={actionValue}
-                          disabled={isComplete}
-                          onChange={(e) => setAssignedAction((prev) => ({ ...prev, [rowId]: e.target.value }))}
-                          style={styles.workflowSelect}
-                        >
-                          <option value="">Select Work</option>
-                          {WORK_DESCRIPTIONS.map((item) => <option key={item} value={item}>{item}</option>)}
-                        </select>
-                      </td>
-                      <td style={{ ...styles.td, ...styles.workflowTd }}>
-                        <select
-                          value={employeeValue}
-                          disabled={isComplete}
-                          onChange={(e) => setAssignedEmployee((prev) => ({ ...prev, [rowId]: e.target.value }))}
-                          style={styles.workflowSelect}
-                        >
-                          <option value="">Select Staff</option>
-                          {masters.employees.map((item) => <option key={idOf(item)} value={idOf(item)}>{textOf(item)}</option>)}
-                        </select>
-                      </td>
-                      <td style={{ ...styles.td, ...styles.workflowTd }}>
-                        <button
-                          type="button"
-                          disabled={rowBusy || isComplete || !actionValue || !employeeValue}
-                          onClick={() => assignRow(rowId)}
-                          style={{ ...styles.assignButtonInline, opacity: rowBusy || isComplete || !actionValue || !employeeValue ? 0.55 : 1, cursor: rowBusy || isComplete || !actionValue || !employeeValue ? "not-allowed" : "pointer" }}
-                        >
-                          {rowBusy ? "Assigning..." : row?.status === "RUNNING" ? "Reassign & Keep Running" : "Assign & Start Work"}
-                        </button>
-                      </td>
-                    </>
-                  ) : withWorkflow ? (
-                    <td style={{ ...styles.td, ...styles.workflowTd }}>
-                      {assignedToMe && row?.status === "RUNNING" ? (
-                        <div style={styles.workerInline}>
-                          <input
-                            value={completionRemarks[rowId] || ""}
-                            onChange={(e) => setCompletionRemarks((prev) => ({ ...prev, [rowId]: e.target.value }))}
-                            placeholder="Completion note"
-                            style={styles.workflowInput}
-                          />
-                          <button
-                            type="button"
-                            disabled={rowBusy}
-                            onClick={() => completeRow(rowId, row?.rejection_qty)}
-                            style={styles.completeInline}
-                          >
-                            {rowBusy ? "Completing..." : "✓ Complete Work"}
-                          </button>
-                        </div>
-                      ) : (
-                        <span style={styles.mutedDash}>-</span>
-                      )}
-                    </td>
-                  ) : null}
-
-                  <td style={{ ...styles.td, ...styles.actionTd, position: "sticky", right: 0, background: "#fff", zIndex: 4 }}>
-                    {renderActionIcons(row)}
-                  </td>
+      <>
+        <div className="dr-desktop-table">
+          <div style={styles.tableOuter}>
+            <table style={{ ...styles.dataTable, minWidth: showManagerWorkflow ? 2050 : withWorkflow ? 1750 : 1600 }}>
+              <thead>
+                <tr>
+                  {headers.map((head) => (
+                    <th key={head} style={{ ...styles.th, ...(head === "Action" ? styles.actionTh : {}), ...(head === "Assign Work" || head === "Select Staff" || head === "Work Action" ? styles.workflowTh : {}) }}>{head}</th>
+                  ))}
                 </tr>
-              );
-            }) : (
-              <tr><td colSpan={totalColumns} style={styles.emptyCell}>No Daily Rejection records found.</td></tr>
-            )}
-          </tbody>
-        </table>
-      </div>
+              </thead>
+              <tbody>
+                {tableRows.length ? tableRows.map((row) => {
+                  const rowId = idOf(row);
+                  const assignedToMe = assignedToMeRow(row);
+                  const isComplete = row?.status === "COMPLETE";
+                  const actionValue = assignedAction[rowId] || row?.action_type || "";
+                  const employeeValue = assignedEmployee[rowId] || row?.assigned_to || "";
+                  const rowBusy = busyId === rowId;
+                  return (
+                    <tr key={rowId}>
+                      <td style={styles.td}>{formatDate(row?.entry_date)}</td>
+                      <td style={{ ...styles.td, fontWeight: 900 }}>{row?.rejection_no || rowId}</td>
+                      <td style={styles.td}>{row?.lorry_no || "-"}</td>
+                      <td style={styles.td}>{row?.company_name || "-"}</td>
+                      <td style={styles.td}>{row?.company_account_name || "-"}</td>
+                      <td style={styles.td}>{row?.consignee_name || row?.consignee || "-"}</td>
+                      <td style={styles.td}>{row?.product_name || "-"}</td>
+                      <td style={styles.tdNum}>{money(row?.original_qty)}</td>
+                      <td style={styles.tdNum}>{money(row?.actual_unloading_qty)}</td>
+                      <td style={{ ...styles.tdNum, fontWeight: 900 }}>{money(row?.rejection_qty)}</td>
+                      <td style={styles.td}>{row?.reason || "-"}</td>
+                      <td style={styles.td}>{row?.action_type || "-"}</td>
+                      <td style={styles.td}>{row?.assigned_to_name || "-"}</td>
+                      <td style={styles.td}><span style={{ ...styles.statusChip, ...statusStyle(row?.status) }}>{row?.status || "PENDING"}</span></td>
+                      {showManagerWorkflow ? (
+                        <>
+                          <td style={{ ...styles.td, ...styles.workflowTd }}><select value={actionValue} disabled={isComplete} onChange={(e) => setAssignedAction((prev) => ({ ...prev, [rowId]: e.target.value }))} style={styles.workflowSelect}><option value="">Select Work</option>{WORK_DESCRIPTIONS.map((item) => <option key={item} value={item}>{item}</option>)}</select></td>
+                          <td style={{ ...styles.td, ...styles.workflowTd }}><select value={employeeValue} disabled={isComplete} onChange={(e) => setAssignedEmployee((prev) => ({ ...prev, [rowId]: e.target.value }))} style={styles.workflowSelect}><option value="">Select Staff</option>{masters.employees.map((item) => <option key={idOf(item)} value={idOf(item)}>{textOf(item)}</option>)}</select></td>
+                          <td style={{ ...styles.td, ...styles.workflowTd }}><button type="button" disabled={rowBusy || isComplete || !actionValue || !employeeValue} onClick={() => assignRow(rowId)} style={{ ...styles.assignButtonInline, opacity: rowBusy || isComplete || !actionValue || !employeeValue ? 0.55 : 1 }}>{rowBusy ? "Assigning..." : row?.status === "RUNNING" ? "Reassign & Keep Running" : "Assign & Start Work"}</button></td>
+                        </>
+                      ) : withWorkflow ? (
+                        <td style={{ ...styles.td, ...styles.workflowTd }}>{assignedToMe && row?.status === "RUNNING" ? <div style={styles.workerInline}><input value={completionRemarks[rowId] || ""} onChange={(e) => setCompletionRemarks((prev) => ({ ...prev, [rowId]: e.target.value }))} placeholder="Completion note" style={styles.workflowInput} /><button type="button" disabled={rowBusy} onClick={() => completeRow(rowId, row?.rejection_qty)} style={styles.completeInline}>{rowBusy ? "Completing..." : "✓ Complete Work"}</button></div> : <span style={styles.mutedDash}>-</span>}</td>
+                      ) : null}
+                      <td style={{ ...styles.td, ...styles.actionTd, position: "sticky", right: 0, background: "#fff", zIndex: 4 }}>{renderActionIcons(row)}</td>
+                    </tr>
+                  );
+                }) : <tr><td colSpan={totalColumns} style={styles.emptyCell}>No Daily Rejection records found.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        </div>
+        {renderMobileCards(tableRows, withWorkflow)}
+      </>
     );
   };
 
@@ -518,6 +533,7 @@ export default function DailyRejectionPage() {
       company_account_id: String(row?.company_account_id || ""),
       product_id: String(row?.product_id || ""),
       consignee_id: String(row?.consignee_id || ""),
+      lorry_no: String(row?.lorry_no || ""),
       original_qty: row?.original_qty ?? "",
       actual_unloading_qty: row?.actual_unloading_qty ?? "",
       rejection_qty: row?.rejection_qty ?? "",
@@ -546,6 +562,28 @@ export default function DailyRejectionPage() {
   return (
     <>
       <style>{`
+
+        .dr-mobile-list { display:none; }
+        .dr-mobile-card { background:#fff; border:1px solid #dbe4ee; border-radius:16px; padding:12px; box-shadow:0 8px 24px rgba(15,23,42,.05); }
+        .dr-mobile-card-head { display:flex; justify-content:space-between; align-items:flex-start; gap:10px; padding-bottom:10px; border-bottom:1px solid #eef2f7; }
+        .dr-mobile-rej { font-weight:900; color:#0f172a; font-size:15px; }
+        .dr-mobile-date { color:#64748b; font-size:11px; margin-top:2px; }
+        .dr-mobile-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:7px; margin-top:10px; }
+        .dr-mobile-grid > div { background:#f8fafc; border:1px solid #eef2f7; border-radius:10px; padding:8px; min-width:0; }
+        .dr-mobile-grid span { display:block; color:#64748b; font-size:9px; font-weight:800; text-transform:uppercase; }
+        .dr-mobile-grid b { display:block; color:#0f172a; font-size:12px; margin-top:2px; word-break:break-word; }
+        .dr-mobile-workflow,.dr-mobile-worker { margin-top:10px; border-radius:12px; padding:10px; }
+        .dr-mobile-workflow { background:linear-gradient(135deg,#eff6ff,#f8fbff); border:1px solid #bfdbfe; }
+        .dr-mobile-worker { background:linear-gradient(135deg,#ecfeff,#f0fdfa); border:1px solid #99f6e4; }
+        .dr-mobile-workflow-title { color:#1e3a8a; font-size:10px; font-weight:900; letter-spacing:.3px; }
+        .dr-mobile-worker-work { color:#475569; font-size:11px; margin-top:3px; }
+        .dr-mobile-workflow-grid { display:grid; gap:7px; margin-top:8px; }
+        .dr-mobile-complete { display:grid; gap:7px; margin-top:8px; }
+        .dr-mobile-actions { display:flex; justify-content:flex-end; margin-top:10px; padding-top:9px; border-top:1px solid #eef2f7; }
+        @media (max-width: 720px) {
+          .dr-desktop-table { display:none; }
+          .dr-mobile-list { display:grid; gap:10px; }
+        }
         .daily-rejection-report-input {
           min-height: 38px !important;
           height: 38px;
@@ -602,6 +640,7 @@ export default function DailyRejectionPage() {
               <Field label="Company"><select value={form.company_id} onChange={(e) => { updateForm('company_id', e.target.value); updateForm('company_account_id', ''); }} style={styles.input}><option value="">Select Company</option>{masters.companies.map((item) => <option key={idOf(item)} value={idOf(item)}>{textOf(item)}</option>)}</select></Field>
               <Field label="Company Account"><select value={form.company_account_id} onChange={(e) => updateForm('company_account_id', e.target.value)} style={styles.input}><option value="">Select Account</option>{filteredAccounts.map((item) => <option key={idOf(item)} value={idOf(item)}>{item.account_name || item.name || '-'}</option>)}</select></Field>
               <Field label="Consignee"><select value={form.consignee_id} onChange={(e) => updateForm('consignee_id', e.target.value)} style={styles.input}><option value="">Select Consignee</option>{masters.consignees.map((item) => <option key={idOf(item)} value={idOf(item)}>{textOf(item)}</option>)}</select></Field>
+              <Field label="Lorry No."><input value={form.lorry_no} onChange={(e) => updateForm("lorry_no", e.target.value)} placeholder="Enter Lorry No." style={styles.input} /></Field>
               <Field label="Product"><select value={form.product_id} onChange={(e) => updateForm('product_id', e.target.value)} style={styles.input}><option value="">Select Product</option>{masters.products.map((item) => <option key={idOf(item)} value={idOf(item)}>{textOf(item)}</option>)}</select></Field>
             </div></div>
 
