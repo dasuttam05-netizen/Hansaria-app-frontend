@@ -110,6 +110,17 @@ export default function DailyRejectionPage() {
   const [reportFrom, setReportFrom] = useState("");
   const [reportTo, setReportTo] = useState("");
   const [reportRows, setReportRows] = useState([]);
+  const [toast, setToast] = useState(null);
+
+  const showToast = useCallback((message, type = "success") => {
+    setToast({ id: Date.now(), message, type });
+  }, []);
+
+  useEffect(() => {
+    if (!toast) return undefined;
+    const timer = window.setTimeout(() => setToast(null), 3200);
+    return () => window.clearTimeout(timer);
+  }, [toast]);
 
   const loadMasters = useCallback(async () => {
     try {
@@ -178,7 +189,7 @@ export default function DailyRejectionPage() {
   const submitEntry = async (event) => {
     event.preventDefault();
     if (!form.location_id || !form.product_id || !form.consignee_id || !form.reason || originalQty <= 0 || unloadingQty < 0 || unloadingQty > originalQty || rejectionQty <= 0) {
-      alert("Location, Product, Consignee, Reason, Original Qty and Actual Unloading Qty are required.");
+      showToast("Location, Product, Consignee, Reason, Original Qty and Actual Unloading Qty are required.", "error");
       return;
     }
     setSaving(true);
@@ -186,17 +197,17 @@ export default function DailyRejectionPage() {
       const payload = { ...form, original_qty: originalQty, actual_unloading_qty: unloadingQty, rejection_qty: rejectionQty };
       if (editId) {
         await axios.put(`${API}/${editId}`, payload);
-        alert("Daily Rejection updated successfully.");
+        showToast("Daily Rejection updated successfully.", "success");
       } else {
         await axios.post(API, payload);
-        alert("Daily Rejection saved as Pending.");
+        showToast("Daily Rejection saved as Pending.", "success");
       }
       resetForm();
       setShowForm(false);
       setEditId("");
       await loadData();
     } catch (err) {
-      alert(err?.response?.data?.error || err?.message || "Failed to save Daily Rejection");
+      showToast(err?.response?.data?.error || err?.message || "Failed to save Daily Rejection", "error");
     } finally {
       setSaving(false);
     }
@@ -206,15 +217,16 @@ export default function DailyRejectionPage() {
     const employeeId = assignedEmployee[rowId];
     const actionType = assignedAction[rowId];
     if (!employeeId || !actionType) {
-      alert("Select staff and Work Description first.");
+      showToast("Please select a staff member and Work Description first.", "warning");
       return;
     }
     setBusyId(rowId);
     try {
       await axios.patch(`${API}/${rowId}/assign`, { assigned_to: employeeId, action_type: actionType });
+      showToast("Work assigned successfully and moved to Running.", "success");
       await loadData();
     } catch (err) {
-      alert(err?.response?.data?.error || err?.message || "Failed to assign");
+      showToast(err?.response?.data?.error || err?.message || "Failed to assign the work.", "error");
     } finally {
       setBusyId("");
     }
@@ -225,9 +237,10 @@ export default function DailyRejectionPage() {
     try {
       await axios.post(`${API}/${rowId}/complete`, { completion_qty: qty, completion_remarks: completionRemarks[rowId] || "" });
       setCompletionRemarks((prev) => ({ ...prev, [rowId]: "" }));
+      showToast("Work completed successfully.", "success");
       await loadData();
     } catch (err) {
-      alert(err?.response?.data?.error || err?.message || "Failed to complete");
+      showToast(err?.response?.data?.error || err?.message || "Failed to complete the work.", "error");
     } finally {
       setBusyId("");
     }
@@ -266,9 +279,9 @@ export default function DailyRejectionPage() {
         document.execCommand("copy");
         area.remove();
       }
-      window.alert("Daily Rejection text copied. এখন যাকে চান paste করতে পারবেন।");
+      showToast("Daily Rejection text copied. You can now paste it wherever you want.", "success");
     } catch (err) {
-      window.alert("Copy করা যায়নি। আবার চেষ্টা করুন।");
+      showToast("Unable to copy the Daily Rejection text. Please try again.", "error");
     }
   };
 
@@ -280,12 +293,13 @@ export default function DailyRejectionPage() {
       ? `https://wa.me/${mobile}?text=${encodeURIComponent(message)}`
       : `https://wa.me/?text=${encodeURIComponent(message)}`;
     window.open(url, "_blank", "noopener,noreferrer");
+    showToast("WhatsApp share opened.", "success");
   };
 
   const openPdf = (row) => {
     const popup = window.open("", "_blank", "width=900,height=700");
     if (!popup) {
-      alert("Please allow pop-ups for the PDF preview.");
+      showToast("Please allow pop-ups to open the PDF preview.", "warning");
       return;
     }
     const esc = (value) => String(value ?? "-")
@@ -323,6 +337,7 @@ export default function DailyRejectionPage() {
     popup.document.open();
     popup.document.write(htmlDoc);
     popup.document.close();
+    showToast("PDF preview opened.", "success");
   };
 
   const renderActionIcons = (row) => {
@@ -536,6 +551,14 @@ export default function DailyRejectionPage() {
         </div>
       )}
 
+      {toast ? (
+        <div role="status" aria-live="polite" style={{ ...styles.toast, ...styles.toastKinds[toast.type || "success"] }}>
+          <span style={styles.toastDot} />
+          <div style={styles.toastMessage}>{toast.message}</div>
+          <button type="button" onClick={() => setToast(null)} style={styles.toastClose} aria-label="Close notification">×</button>
+        </div>
+      ) : null}
+
       {error ? <div style={styles.error}>{error}</div> : null}
 
       <div style={styles.list}>
@@ -617,6 +640,11 @@ const styles = {
     minWidth: 0,
   },
   reportTableWrap: { marginTop: 10, overflowX: 'auto', borderRadius: 12 },
+  toast: { position: 'fixed', top: 18, right: 18, zIndex: 99999, minWidth: 300, maxWidth: 'min(420px, calc(100vw - 36px))', display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', borderRadius: 12, border: '1px solid', boxShadow: '0 14px 35px rgba(15,23,42,.18)', backdropFilter: 'blur(8px)' },
+  toastKinds: { success: { background: '#ecfdf5', color: '#065f46', borderColor: '#a7f3d0' }, error: { background: '#fef2f2', color: '#991b1b', borderColor: '#fecaca' }, warning: { background: '#fffbeb', color: '#92400e', borderColor: '#fde68a' }, info: { background: '#eff6ff', color: '#1e40af', borderColor: '#bfdbfe' } },
+  toastDot: { width: 8, height: 8, borderRadius: 999, background: 'currentColor', flex: '0 0 auto' },
+  toastMessage: { fontSize: 13, fontWeight: 800, lineHeight: 1.35, flex: '1 1 auto' },
+  toastClose: { width: 24, height: 24, border: 0, background: 'transparent', color: 'inherit', fontSize: 18, lineHeight: 1, cursor: 'pointer', padding: 0, opacity: .8 },
   assignPanel: { marginTop: 13, border: '1px solid #bfdbfe', background: 'linear-gradient(135deg,#eff6ff,#f8fbff)', borderRadius: 14, padding: 12 }, assignHead: { display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center', marginBottom: 8, color: '#1e3a8a', fontSize: 11, fontWeight: 900 }, assignGrid: { display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr) auto', gap: 8 }, assignButton: { border: 0, background: '#1d4ed8', color: '#fff', borderRadius: 10, padding: '10px 13px', fontWeight: 900, cursor: 'pointer' },
   workerPanel: { marginTop: 13, border: '1px solid #99f6e4', background: 'linear-gradient(135deg,#ecfeff,#f0fdfa)', borderRadius: 14, padding: 12 }, workerTitle: { color: '#115e59', fontWeight: 950 }, workerWork: { color: '#475569', fontSize: 12, marginTop: 3 }, completeRow: { display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', gap: 8, marginTop: 10 }, complete: { border: 0, background: '#047857', color: '#fff', borderRadius: 10, padding: '10px 14px', fontWeight: 900, cursor: 'pointer' }, completedPanel: { marginTop: 12, padding: 10, borderRadius: 11, background: '#ecfdf5', border: '1px solid #a7f3d0', color: '#047857', fontWeight: 800 },
 };
