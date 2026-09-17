@@ -109,8 +109,6 @@ export default function DailyRejectionPage() {
   const [editId, setEditId] = useState("");
   const [reportFrom, setReportFrom] = useState("");
   const [reportTo, setReportTo] = useState("");
-  const [reportCompany, setReportCompany] = useState("ALL");
-  const [reportAccount, setReportAccount] = useState("ALL");
   const [reportRows, setReportRows] = useState([]);
   const [toast, setToast] = useState(null);
 
@@ -147,33 +145,15 @@ export default function DailyRejectionPage() {
     setLoading(true);
     setError("");
     try {
-      const actionParams = actionFilter !== "ALL" ? { action_type: actionFilter } : {};
-
-      let list = [];
-      if (status === "ALL") {
-        const statusCalls = ["PENDING", "ASSIGNED", "RUNNING", "COMPLETE"].map((statusValue) =>
-          axios.get(API, { params: { ...actionParams, status: statusValue } })
-        );
-        const responses = await Promise.all(statusCalls);
-        const merged = responses.flatMap((response) => {
-          const payload = response?.data?.data || response?.data || [];
-          return Array.isArray(payload) ? payload : (payload.rows || payload.items || []);
-        });
-        const seen = new Set();
-        list = merged.filter((row) => {
-          const key = idOf(row) || `${row?.rejection_no || ""}|${row?.entry_date || ""}|${row?.company_id || ""}`;
-          if (seen.has(key)) return false;
-          seen.add(key);
-          return true;
-        });
-      } else {
-        const listResponse = await axios.get(API, { params: { ...actionParams, status } });
-        const listPayload = listResponse?.data?.data || listResponse?.data || [];
-        list = Array.isArray(listPayload) ? listPayload : (listPayload.rows || listPayload.items || []);
-      }
-
-      const summaryResponse = await axios.get(`${API}/summary`);
+      const params = { status };
+      if (actionFilter !== "ALL") params.action_type = actionFilter;
+      const [listResponse, summaryResponse] = await Promise.all([
+        axios.get(API, { params }),
+        axios.get(`${API}/summary`),
+      ]);
+      const listPayload = listResponse?.data?.data || listResponse?.data || [];
       const summaryPayload = summaryResponse?.data?.data || summaryResponse?.data || {};
+      const list = Array.isArray(listPayload) ? listPayload : (listPayload.rows || listPayload.items || []);
       setRows(Array.isArray(list) ? list : []);
       setSummary(summaryPayload && typeof summaryPayload === "object" ? summaryPayload : {});
     } catch (err) {
@@ -385,76 +365,146 @@ export default function DailyRejectionPage() {
 
   const assignedToMeRow = (row) => String(row?.assigned_to || "") === String(user?.id || "") || String(row?.assigned_to || "") === String(user?._id || "");
 
-  const renderTable = (tableRows, withWorkflow = true) => (
-    <div className="daily-rejection-table-outer" style={styles.tableOuter}>
-      <table style={styles.dataTable}>
-        <thead>
-          <tr>
-            {["Date","Rejection No","Company","Account","Consignee","Product","Original","Unloading","Reject","Reason","Work","Assigned To","Status","Action"].map((head) => (
-              <th key={head} style={{ ...styles.th, ...(head === 'Action' ? styles.actionTh : {}) }}>{head}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {tableRows.length ? tableRows.map((row) => (
-            <React.Fragment key={idOf(row)}>
-              <tr>
-                <td style={styles.td}>{formatDate(row?.entry_date)}</td>
-                <td style={{ ...styles.td, fontWeight: 900 }}>{row?.rejection_no || idOf(row)}</td>
-                <td style={styles.td}>{row?.company_name || "-"}</td>
-                <td style={styles.td}>{row?.company_account_name || "-"}</td>
-                <td style={styles.td}>{row?.consignee_name || row?.consignee || "-"}</td>
-                <td style={styles.td}>{row?.product_name || "-"}</td>
-                <td style={styles.tdNum}>{money(row?.original_qty)}</td>
-                <td style={styles.tdNum}>{money(row?.actual_unloading_qty)}</td>
-                <td style={{ ...styles.tdNum, fontWeight: 900 }}>{money(row?.rejection_qty)}</td>
-                <td style={styles.td}>{row?.reason || "-"}</td>
-                <td style={styles.td}>{row?.action_type || "-"}</td>
-                <td style={styles.td}>{row?.assigned_to_name || "-"}</td>
-                <td style={styles.td}><span style={{ ...styles.statusChip, ...statusStyle(row?.status) }}>{row?.status || "PENDING"}</span></td>
-                <td style={{ ...styles.td, ...styles.actionTd, position: "sticky", right: 0, background: "#fff", zIndex: 2 }}>{renderActionIcons(row)}</td>
-              </tr>
-              {withWorkflow && canAssign && row?.status !== "COMPLETE" ? (
-                <tr>
-                  <td colSpan={14} style={styles.subRowCell}>
-                    <div style={styles.assignPanelCompact}>
-                      <div style={styles.assignHead}><span>ASSIGN WORK</span><small>Authorised users only</small></div>
-                      <div className="daily-rejection-assign-grid" style={styles.assignGrid}>
-                        <select value={assignedAction[idOf(row)] || row.action_type || ""} onChange={(e) => setAssignedAction((prev) => ({ ...prev, [idOf(row)]: e.target.value }))} style={styles.input}>
-                          <option value="">Select Work Description</option>
+  const renderTable = (tableRows, withWorkflow = true) => {
+    const showManagerWorkflow = withWorkflow && canAssign;
+    const totalColumns = 14 + (showManagerWorkflow ? 3 : withWorkflow ? 1 : 0);
+    const headers = [
+      "Date",
+      "Rejection No",
+      "Company",
+      "Account",
+      "Consignee",
+      "Product",
+      "Original",
+      "Unloading",
+      "Reject",
+      "Reason",
+      "Work",
+      "Assigned To",
+      "Status",
+      ...(showManagerWorkflow ? ["Assign Work", "Select Staff", "Work Action"] : withWorkflow ? ["Work Action"] : []),
+      "Action",
+    ];
+
+    return (
+      <div style={styles.tableOuter}>
+        <table style={{ ...styles.dataTable, minWidth: showManagerWorkflow ? 1950 : withWorkflow ? 1650 : 1500 }}>
+          <thead>
+            <tr>
+              {headers.map((head) => (
+                <th
+                  key={head}
+                  style={{
+                    ...styles.th,
+                    ...(head === "Action" ? styles.actionTh : {}),
+                    ...(head === "Assign Work" || head === "Select Staff" || head === "Work Action" ? styles.workflowTh : {}),
+                  }}
+                >
+                  {head}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {tableRows.length ? tableRows.map((row) => {
+              const rowId = idOf(row);
+              const assignedToMe = assignedToMeRow(row);
+              const isComplete = row?.status === "COMPLETE";
+              const actionValue = assignedAction[rowId] || row?.action_type || "";
+              const employeeValue = assignedEmployee[rowId] || row?.assigned_to || "";
+              const rowBusy = busyId === rowId;
+
+              return (
+                <tr key={rowId}>
+                  <td style={styles.td}>{formatDate(row?.entry_date)}</td>
+                  <td style={{ ...styles.td, fontWeight: 900 }}>{row?.rejection_no || rowId}</td>
+                  <td style={styles.td}>{row?.company_name || "-"}</td>
+                  <td style={styles.td}>{row?.company_account_name || "-"}</td>
+                  <td style={styles.td}>{row?.consignee_name || row?.consignee || "-"}</td>
+                  <td style={styles.td}>{row?.product_name || "-"}</td>
+                  <td style={styles.tdNum}>{money(row?.original_qty)}</td>
+                  <td style={styles.tdNum}>{money(row?.actual_unloading_qty)}</td>
+                  <td style={{ ...styles.tdNum, fontWeight: 900 }}>{money(row?.rejection_qty)}</td>
+                  <td style={styles.td}>{row?.reason || "-"}</td>
+                  <td style={styles.td}>{row?.action_type || "-"}</td>
+                  <td style={styles.td}>{row?.assigned_to_name || "-"}</td>
+                  <td style={styles.td}>
+                    <span style={{ ...styles.statusChip, ...statusStyle(row?.status) }}>{row?.status || "PENDING"}</span>
+                  </td>
+
+                  {showManagerWorkflow ? (
+                    <>
+                      <td style={{ ...styles.td, ...styles.workflowTd }}>
+                        <select
+                          value={actionValue}
+                          disabled={isComplete}
+                          onChange={(e) => setAssignedAction((prev) => ({ ...prev, [rowId]: e.target.value }))}
+                          style={styles.workflowSelect}
+                        >
+                          <option value="">Select Work</option>
                           {WORK_DESCRIPTIONS.map((item) => <option key={item} value={item}>{item}</option>)}
                         </select>
-                        <select value={assignedEmployee[idOf(row)] || row.assigned_to || ""} onChange={(e) => setAssignedEmployee((prev) => ({ ...prev, [idOf(row)]: e.target.value }))} style={styles.input}>
+                      </td>
+                      <td style={{ ...styles.td, ...styles.workflowTd }}>
+                        <select
+                          value={employeeValue}
+                          disabled={isComplete}
+                          onChange={(e) => setAssignedEmployee((prev) => ({ ...prev, [rowId]: e.target.value }))}
+                          style={styles.workflowSelect}
+                        >
                           <option value="">Select Staff</option>
                           {masters.employees.map((item) => <option key={idOf(item)} value={idOf(item)}>{textOf(item)}</option>)}
                         </select>
-                        <button type="button" disabled={busyId === idOf(row)} onClick={() => assignRow(idOf(row))} style={styles.assignButton}>
-                          {busyId === idOf(row) ? "Assigning..." : row.status === "RUNNING" ? "Reassign & Keep Running" : "Assign & Start Work"}
+                      </td>
+                      <td style={{ ...styles.td, ...styles.workflowTd }}>
+                        <button
+                          type="button"
+                          disabled={rowBusy || isComplete || !actionValue || !employeeValue}
+                          onClick={() => assignRow(rowId)}
+                          style={{ ...styles.assignButtonInline, opacity: rowBusy || isComplete || !actionValue || !employeeValue ? 0.55 : 1, cursor: rowBusy || isComplete || !actionValue || !employeeValue ? "not-allowed" : "pointer" }}
+                        >
+                          {rowBusy ? "Assigning..." : row?.status === "RUNNING" ? "Reassign & Keep Running" : "Assign & Start Work"}
                         </button>
-                      </div>
-                    </div>
+                      </td>
+                    </>
+                  ) : withWorkflow ? (
+                    <td style={{ ...styles.td, ...styles.workflowTd }}>
+                      {assignedToMe && row?.status === "RUNNING" ? (
+                        <div style={styles.workerInline}>
+                          <input
+                            value={completionRemarks[rowId] || ""}
+                            onChange={(e) => setCompletionRemarks((prev) => ({ ...prev, [rowId]: e.target.value }))}
+                            placeholder="Completion note"
+                            style={styles.workflowInput}
+                          />
+                          <button
+                            type="button"
+                            disabled={rowBusy}
+                            onClick={() => completeRow(rowId, row?.rejection_qty)}
+                            style={styles.completeInline}
+                          >
+                            {rowBusy ? "Completing..." : "✓ Complete Work"}
+                          </button>
+                        </div>
+                      ) : (
+                        <span style={styles.mutedDash}>-</span>
+                      )}
+                    </td>
+                  ) : null}
+
+                  <td style={{ ...styles.td, ...styles.actionTd, position: "sticky", right: 0, background: "#fff", zIndex: 4 }}>
+                    {renderActionIcons(row)}
                   </td>
                 </tr>
-              ) : null}
-              {withWorkflow && assignedToMeRow(row) && row?.status === "RUNNING" ? (
-                <tr>
-                  <td colSpan={14} style={styles.subRowCell}>
-                    <div style={styles.workerPanelCompact}>
-                      <div><div style={styles.workerTitle}>YOUR ASSIGNED WORK</div><div style={styles.workerWork}>{row?.action_type || "Work assigned"} · {money(row?.rejection_qty)} Qty</div></div>
-                      <div style={styles.completeRow}>
-                        <input value={completionRemarks[idOf(row)] || ""} onChange={(e) => setCompletionRemarks((prev) => ({ ...prev, [idOf(row)]: e.target.value }))} placeholder="Completion remark (optional)" style={styles.input} />
-                        <button type="button" disabled={busyId === idOf(row)} onClick={() => completeRow(idOf(row), row?.rejection_qty)} style={styles.complete}>{busyId === idOf(row) ? "Completing..." : "✓ Complete Work"}</button>
-                      </div>
-                    </div>
-                  </td>
-                </tr>
-              ) : null}
-            </React.Fragment>
-          )) : <tr><td colSpan={14} style={styles.emptyCell}>No Daily Rejection records found.</td></tr>}
-        </tbody>
-      </table>
-    </div>
-  );
+              );
+            }) : (
+              <tr><td colSpan={totalColumns} style={styles.emptyCell}>No Daily Rejection records found.</td></tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
 
 
   const editRow = async (row) => {
@@ -480,57 +530,9 @@ export default function DailyRejectionPage() {
   const submitReport = async () => {
     if (!canReport) return;
     try {
-      const params = {};
-      if (reportFrom) params.from = reportFrom;
-      if (reportTo) params.to = reportTo;
-      if (actionFilter !== "ALL") params.action_type = actionFilter;
-      if (reportCompany !== "ALL") params.company_id = reportCompany;
-      if (reportAccount !== "ALL") {
-        params.company_account_id = reportAccount;
-        params.account_id = reportAccount;
-      }
-
-      const response = await axios.get(`${API}/report`, { params });
+      const response = await axios.get(`${API}/report`, { params: { from: reportFrom, to: reportTo, action_type: actionFilter } });
       const payload = response?.data?.data || response?.data || {};
-      const sourceRows = Array.isArray(payload) ? payload : (payload.rows || payload.items || []);
-      const normalize = (value) => String(value ?? "").trim().toLowerCase();
-      const dateKey = (value) => {
-        if (!value) return "";
-        const raw = String(value);
-        if (/^\d{4}-\d{2}-\d{2}/.test(raw)) return raw.slice(0, 10);
-        const d = new Date(value);
-        if (Number.isNaN(d.getTime())) return "";
-        const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
-        return local.toISOString().slice(0, 10);
-      };
-      const selectedCompany = masters.companies.find((item) => idOf(item) === String(reportCompany));
-      const selectedCompanyName = normalize(selectedCompany?.name || selectedCompany?.company_name);
-      const selectedAccount = masters.accounts.find((item) => idOf(item) === String(reportAccount));
-      const selectedAccountName = normalize(selectedAccount?.account_name || selectedAccount?.name || selectedAccount?.company_account_name);
-
-      const filtered = sourceRows.filter((row) => {
-        const rowDate = dateKey(row?.entry_date);
-        if (reportFrom && rowDate && rowDate < reportFrom) return false;
-        if (reportTo && rowDate && rowDate > reportTo) return false;
-
-        if (actionFilter !== "ALL" && normalize(row?.action_type) !== normalize(actionFilter)) return false;
-
-        if (reportCompany !== "ALL") {
-          const rowCompanyId = row?.company_id ?? row?.company?._id ?? row?.company?.id;
-          const rowCompanyName = normalize(row?.company_name || row?.company?.name);
-          if (String(rowCompanyId || "") !== String(reportCompany) && (!selectedCompanyName || rowCompanyName !== selectedCompanyName)) return false;
-        }
-
-        if (reportAccount !== "ALL") {
-          const rowAccountId = row?.company_account_id ?? row?.account_id ?? row?.company_account?._id ?? row?.company_account?.id;
-          const rowAccountName = normalize(row?.company_account_name || row?.account_name || row?.company_account?.name);
-          if (String(rowAccountId || "") !== String(reportAccount) && (!selectedAccountName || rowAccountName !== selectedAccountName)) return false;
-        }
-        return true;
-      });
-
-      setReportRows(filtered);
-      showToast(`${filtered.length} report record${filtered.length === 1 ? "" : "s"} found.`, "success");
+      setReportRows(Array.isArray(payload) ? payload : (payload.rows || []));
     } catch (err) {
       setError(err?.response?.data?.error || err?.message || "Unable to load report");
       setReportRows([]);
@@ -538,7 +540,7 @@ export default function DailyRejectionPage() {
   };
 
   if (!canView) {
-    return <div className="daily-rejection-page" style={styles.page}><div style={styles.emptyLarge}><div style={styles.emptyIcon}>!</div><h2 style={styles.emptyTitle}>Daily Rejection Access Required</h2><div style={styles.emptyText}>Please ask an administrator to give you Daily Rejection access.</div></div></div>;
+    return <div style={styles.page}><div style={styles.emptyLarge}><div style={styles.emptyIcon}>!</div><h2 style={styles.emptyTitle}>Daily Rejection Access Required</h2><div style={styles.emptyText}>Please ask an administrator to give you Daily Rejection access.</div></div></div>;
   }
 
   return (
@@ -555,48 +557,23 @@ export default function DailyRejectionPage() {
         @media (max-width: 720px) {
           .daily-rejection-report-input { width: 100%; }
         }
-        .daily-rejection-assign-grid button { grid-column: 1 / -1; }
-        @media (max-width: 900px) {
-          .daily-rejection-assign-grid { grid-template-columns: 1fr 1fr !important; }
-          .daily-rejection-report-filters { grid-template-columns: repeat(2,minmax(140px,1fr)) !important; }
-        }
-        @media (max-width: 560px) {
-          .daily-rejection-assign-grid { grid-template-columns: 1fr !important; }
-          .daily-rejection-report-filters { grid-template-columns: 1fr !important; }
-        }
-        @media (max-width: 900px) {
-          .daily-rejection-page { padding: 8px !important; }
-          .daily-rejection-hero { padding: 14px !important; border-radius: 16px !important; }
-          .daily-rejection-title { font-size: 23px !important; }
-          .daily-rejection-toolbar { overflow-x: auto; flex-wrap: nowrap !important; }
-          .daily-rejection-toolbar .daily-rejection-tabs { flex-wrap: nowrap !important; overflow-x: auto; max-width: 100%; }
-          .daily-rejection-toolbar .daily-rejection-toolbar-right { flex-wrap: nowrap !important; }
-          .daily-rejection-summary { grid-template-columns: repeat(2,minmax(0,1fr)) !important; }
-          .daily-rejection-table-outer { max-width: 100%; overflow-x: auto !important; -webkit-overflow-scrolling: touch; }
-        }
-        @media (max-width: 560px) {
-          .daily-rejection-summary { grid-template-columns: 1fr 1fr !important; gap: 7px !important; }
-          .daily-rejection-toolbar { align-items: stretch !important; }
-          .daily-rejection-toolbar .daily-rejection-toolbar-right { min-width: max-content; }
-        }
       `}</style>
       <div style={styles.page}>
-      <div className="daily-rejection-hero" style={styles.hero}>
-        <div><div style={styles.kicker}>WAREHOUSE OPERATIONS</div><h1 className="daily-rejection-title" style={styles.title}>Daily Rejection</h1><div style={styles.subtitle}>Create rejection entries, assign work to staff, and close completed work from one smart workflow.</div></div>
+      <div style={styles.hero}>
+        <div><div style={styles.kicker}>WAREHOUSE OPERATIONS</div><h1 style={styles.title}>Daily Rejection</h1><div style={styles.subtitle}>Create rejection entries, assign work to staff, and close completed work from one smart workflow.</div></div>
         <button type="button" onClick={() => navigate(-1)} style={styles.back}>Back</button>
       </div>
 
-      <div className="daily-rejection-summary" style={styles.summaryGrid}>
+      <div style={styles.summaryGrid}>
         {[['Total', summary.total, 'neutral'], ['Pending', summary.pending, 'pending'], ['Running', summary.running, 'running'], ['Complete', summary.complete, 'complete']].map(([label, value, kind]) => (
           <div key={label} style={{ ...styles.metric, ...(styles.metricKinds[kind] || {}) }}><div style={styles.metricLabel}>{label}</div><div style={styles.metricValue}>{value ?? 0}</div></div>
         ))}
       </div>
 
-      <div className="daily-rejection-toolbar" style={styles.toolbar}>
-        <div className="daily-rejection-tabs" style={styles.tabs}>{STATUSES.filter((item) => item !== "REPORT" || canReport).map((item) => <button key={item} type="button" onClick={() => setStatus(item)} style={status === item ? styles.tabActive : styles.tab}>{item}</button>)}</div>
-        <div className="daily-rejection-toolbar-right" style={styles.toolbarRight}>
+      <div style={styles.toolbar}>
+        <div style={styles.tabs}>{STATUSES.filter((item) => item !== "REPORT" || canReport).map((item) => <button key={item} type="button" onClick={() => setStatus(item)} style={status === item ? styles.tabActive : styles.tab}>{item}</button>)}</div>
+        <div style={styles.toolbarRight}>
           <select value={actionFilter} onChange={(e) => setActionFilter(e.target.value)} style={styles.compactSelect}><option value="ALL">All Work</option>{WORK_DESCRIPTIONS.map((item) => <option key={item} value={item}>{item}</option>)}</select>
-          <select value={reportCompany} onChange={(e) => setReportCompany(e.target.value)} style={styles.compactSelect}><option value="ALL">All Companies</option>{masters.companies.map((item) => <option key={idOf(item)} value={idOf(item)}>{textOf(item)}</option>)}</select>
           {canCreate && <button type="button" onClick={() => { resetForm(); setShowForm(true); }} style={styles.primary}>+ New Rejection</button>}
           <button type="button" onClick={loadData} style={styles.secondary}>Refresh</button>
         </div>
@@ -605,11 +582,10 @@ export default function DailyRejectionPage() {
       {status === "REPORT" && canReport ? (
         <div style={styles.reportPanel}>
           <div style={styles.reportHead}><div><div style={styles.kicker}>REPORT</div><div style={styles.reportTitle}>Daily Rejection Date-wise Report</div></div><button type="button" onClick={submitReport} style={styles.primary}>Generate Report</button></div>
-          <div className="daily-rejection-report-filters" style={styles.reportFilters}>
+          <div style={styles.reportFilters}>
             <Field label="From Date"><input className="daily-rejection-report-input" type="date" value={reportFrom} onChange={(e) => setReportFrom(e.target.value)} style={styles.input} /></Field>
             <Field label="To Date"><input className="daily-rejection-report-input" type="date" value={reportTo} onChange={(e) => setReportTo(e.target.value)} style={styles.input} /></Field>
             <Field label="Work"><select className="daily-rejection-report-input" value={actionFilter} onChange={(e) => setActionFilter(e.target.value)} style={styles.input}><option value="ALL">All Work</option>{WORK_DESCRIPTIONS.map((item) => <option key={item} value={item}>{item}</option>)}</select></Field>
-            <Field label="Account"><select className="daily-rejection-report-input" value={reportAccount} onChange={(e) => setReportAccount(e.target.value)} style={styles.input}><option value="ALL">All Accounts</option>{masters.accounts.map((item) => <option key={idOf(item)} value={idOf(item)}>{item.account_name || item.name || item.company_account_name || "-"}</option>)}</select></Field>
           </div>
           <div style={styles.reportTableWrap}>{reportRows.length ? renderTable(reportRows, false) : <div style={styles.empty}>Select dates and click Generate Report.</div>}</div>
         </div>
@@ -675,13 +651,22 @@ const styles = {
   toolbar: { background: '#fff', border: '1px solid #dbe4ee', borderRadius: 16, padding: 11, display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', alignItems: 'center' }, tabs: { display: 'flex', gap: 7, flexWrap: 'wrap' }, toolbarRight: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' },
   tab: { border: '1px solid #cbd5e1', background: '#fff', color: '#334155', borderRadius: 999, padding: '8px 12px', fontWeight: 800, cursor: 'pointer' }, tabActive: { border: '1px solid #0f766e', background: '#0f766e', color: '#fff', borderRadius: 999, padding: '8px 12px', fontWeight: 800, cursor: 'pointer' }, compactSelect: { minHeight: 40, border: '1px solid #cbd5e1', borderRadius: 10, padding: '8px 10px', background: '#fff' },
   primary: { border: 0, background: '#0f766e', color: '#fff', borderRadius: 11, padding: '10px 15px', fontWeight: 900, cursor: 'pointer', boxShadow: '0 5px 12px rgba(15,118,110,.16)' }, secondary: { border: '1px solid #cbd5e1', background: '#fff', color: '#334155', borderRadius: 11, padding: '10px 14px', fontWeight: 900, cursor: 'pointer' },
-  tableOuter: { width: '100%', overflowX: 'auto', background: '#fff', border: '1px solid #dbe4ee', borderRadius: 16, boxShadow: '0 10px 28px rgba(15,23,42,.05)' },
-  dataTable: { width: '100%', borderCollapse: 'separate', borderSpacing: 0, minWidth: 1500, fontSize: 12 },
+  tableOuter: { width: '100%', overflowX: 'auto', overflowY: 'visible', WebkitOverflowScrolling: 'touch', background: '#fff', border: '1px solid #dbe4ee', borderRadius: 16, boxShadow: '0 10px 28px rgba(15,23,42,.05)' },
+  dataTable: { width: 'max-content', minWidth: 1500, borderCollapse: 'separate', borderSpacing: 0, fontSize: 12 },
   th: { position: 'sticky', top: 0, zIndex: 3, background: '#0f766e', color: '#fff', padding: '11px 10px', textAlign: 'left', fontWeight: 900, whiteSpace: 'nowrap', borderRight: '1px solid rgba(255,255,255,.14)' },
   td: { padding: '10px', color: '#0f172a', background: '#fff', whiteSpace: 'nowrap', borderTop: '1px solid #eef2f7', verticalAlign: 'middle' },
   tdNum: { padding: '10px', color: '#0f172a', background: '#fff', whiteSpace: 'nowrap', borderTop: '1px solid #eef2f7', textAlign: 'right', fontVariantNumeric: 'tabular-nums', verticalAlign: 'middle' },
   statusChip: { display: 'inline-flex', alignItems: 'center', borderRadius: 999, padding: '5px 8px', fontSize: 10, fontWeight: 900, whiteSpace: 'nowrap' },
   emptyCell: { padding: 28, textAlign: 'center', color: '#64748b', background: '#fff' },
+  workflowTh: { background: '#155e75', color: '#fff', minWidth: 170 },
+  workflowTd: { background: '#fbfdff', borderLeft: '1px solid #e2e8f0' },
+  workflowSelect: { minWidth: 165, height: 34, border: '1px solid #cbd5e1', borderRadius: 8, padding: '6px 8px', background: '#fff', color: '#0f172a', fontWeight: 700, whiteSpace: 'nowrap' },
+  workflowInput: { width: 155, height: 34, border: '1px solid #cbd5e1', borderRadius: 8, padding: '6px 8px', background: '#fff', color: '#0f172a', boxSizing: 'border-box' },
+  assignButtonInline: { border: 0, background: '#1d4ed8', color: '#fff', borderRadius: 8, padding: '8px 11px', fontWeight: 900, whiteSpace: 'nowrap' },
+  workerInline: { display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' },
+  completeInline: { border: 0, background: '#047857', color: '#fff', borderRadius: 8, padding: '8px 10px', fontWeight: 900, whiteSpace: 'nowrap', cursor: 'pointer' },
+  mutedDash: { color: '#94a3b8', fontWeight: 800 },
+  actionTd: { boxShadow: '-6px 0 10px rgba(15,23,42,.06)' },
   actionIcons: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, whiteSpace: 'nowrap' },
   iconButton: { width: 32, height: 32, borderRadius: 9, border: '1px solid', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', background: '#fff' },
   iconEdit: { color: '#2563eb', borderColor: '#bfdbfe', background: '#eff6ff' },
@@ -723,7 +708,7 @@ const styles = {
   },
   reportFilters: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(4,minmax(150px,1fr))',
+    gridTemplateColumns: 'repeat(3,minmax(160px,1fr))',
     gap: 9,
     padding: 10,
     background: '#f8fafc',
@@ -739,6 +724,6 @@ const styles = {
   toastDot: { width: 8, height: 8, borderRadius: 999, background: 'currentColor', flex: '0 0 auto' },
   toastMessage: { fontSize: 13, fontWeight: 800, lineHeight: 1.35, flex: '1 1 auto' },
   toastClose: { width: 24, height: 24, border: 0, background: 'transparent', color: 'inherit', fontSize: 18, lineHeight: 1, cursor: 'pointer', padding: 0, opacity: .8 },
-  assignPanel: { marginTop: 13, border: '1px solid #bfdbfe', background: 'linear-gradient(135deg,#eff6ff,#f8fbff)', borderRadius: 14, padding: 12 }, assignHead: { display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center', marginBottom: 8, color: '#1e3a8a', fontSize: 11, fontWeight: 900 }, assignGrid: { display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr)', gap: 8 }, assignButton: { border: 0, background: '#1d4ed8', color: '#fff', borderRadius: 10, padding: '10px 13px', fontWeight: 900, cursor: 'pointer' },
+  assignPanel: { marginTop: 13, border: '1px solid #bfdbfe', background: 'linear-gradient(135deg,#eff6ff,#f8fbff)', borderRadius: 14, padding: 12 }, assignHead: { display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center', marginBottom: 8, color: '#1e3a8a', fontSize: 11, fontWeight: 900 }, assignGrid: { display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr) auto', gap: 8 }, assignButton: { border: 0, background: '#1d4ed8', color: '#fff', borderRadius: 10, padding: '10px 13px', fontWeight: 900, cursor: 'pointer' },
   workerPanel: { marginTop: 13, border: '1px solid #99f6e4', background: 'linear-gradient(135deg,#ecfeff,#f0fdfa)', borderRadius: 14, padding: 12 }, workerTitle: { color: '#115e59', fontWeight: 950 }, workerWork: { color: '#475569', fontSize: 12, marginTop: 3 }, completeRow: { display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', gap: 8, marginTop: 10 }, complete: { border: 0, background: '#047857', color: '#fff', borderRadius: 10, padding: '10px 14px', fontWeight: 900, cursor: 'pointer' }, completedPanel: { marginTop: 12, padding: 10, borderRadius: 11, background: '#ecfdf5', border: '1px solid #a7f3d0', color: '#047857', fontWeight: 800 },
 };
