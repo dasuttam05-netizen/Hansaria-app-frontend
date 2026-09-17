@@ -109,6 +109,7 @@ export default function DailyRejectionPage() {
   const [editId, setEditId] = useState("");
   const [reportFrom, setReportFrom] = useState("");
   const [reportTo, setReportTo] = useState("");
+  const [reportCompany, setReportCompany] = useState("ALL");
   const [reportRows, setReportRows] = useState([]);
   const [toast, setToast] = useState(null);
 
@@ -145,15 +146,33 @@ export default function DailyRejectionPage() {
     setLoading(true);
     setError("");
     try {
-      const params = { status };
-      if (actionFilter !== "ALL") params.action_type = actionFilter;
-      const [listResponse, summaryResponse] = await Promise.all([
-        axios.get(API, { params }),
-        axios.get(`${API}/summary`),
-      ]);
-      const listPayload = listResponse?.data?.data || listResponse?.data || [];
+      const actionParams = actionFilter !== "ALL" ? { action_type: actionFilter } : {};
+
+      let list = [];
+      if (status === "ALL") {
+        const statusCalls = ["PENDING", "ASSIGNED", "RUNNING", "COMPLETE"].map((statusValue) =>
+          axios.get(API, { params: { ...actionParams, status: statusValue } })
+        );
+        const responses = await Promise.all(statusCalls);
+        const merged = responses.flatMap((response) => {
+          const payload = response?.data?.data || response?.data || [];
+          return Array.isArray(payload) ? payload : (payload.rows || payload.items || []);
+        });
+        const seen = new Set();
+        list = merged.filter((row) => {
+          const key = idOf(row) || `${row?.rejection_no || ""}|${row?.entry_date || ""}|${row?.company_id || ""}`;
+          if (seen.has(key)) return false;
+          seen.add(key);
+          return true;
+        });
+      } else {
+        const listResponse = await axios.get(API, { params: { ...actionParams, status } });
+        const listPayload = listResponse?.data?.data || listResponse?.data || [];
+        list = Array.isArray(listPayload) ? listPayload : (listPayload.rows || listPayload.items || []);
+      }
+
+      const summaryResponse = await axios.get(`${API}/summary`);
       const summaryPayload = summaryResponse?.data?.data || summaryResponse?.data || {};
-      const list = Array.isArray(listPayload) ? listPayload : (listPayload.rows || listPayload.items || []);
       setRows(Array.isArray(list) ? list : []);
       setSummary(summaryPayload && typeof summaryPayload === "object" ? summaryPayload : {});
     } catch (err) {
@@ -366,7 +385,7 @@ export default function DailyRejectionPage() {
   const assignedToMeRow = (row) => String(row?.assigned_to || "") === String(user?.id || "") || String(row?.assigned_to || "") === String(user?._id || "");
 
   const renderTable = (tableRows, withWorkflow = true) => (
-    <div style={styles.tableOuter}>
+    <div className="daily-rejection-table-outer" style={styles.tableOuter}>
       <table style={styles.dataTable}>
         <thead>
           <tr>
@@ -460,7 +479,10 @@ export default function DailyRejectionPage() {
   const submitReport = async () => {
     if (!canReport) return;
     try {
-      const response = await axios.get(`${API}/report`, { params: { from: reportFrom, to: reportTo, action_type: actionFilter } });
+      const params = { from: reportFrom, to: reportTo };
+      if (actionFilter !== "ALL") params.action_type = actionFilter;
+      if (reportCompany !== "ALL") params.company_id = reportCompany;
+      const response = await axios.get(`${API}/report`, { params });
       const payload = response?.data?.data || response?.data || {};
       setReportRows(Array.isArray(payload) ? payload : (payload.rows || []));
     } catch (err) {
@@ -470,7 +492,7 @@ export default function DailyRejectionPage() {
   };
 
   if (!canView) {
-    return <div style={styles.page}><div style={styles.emptyLarge}><div style={styles.emptyIcon}>!</div><h2 style={styles.emptyTitle}>Daily Rejection Access Required</h2><div style={styles.emptyText}>Please ask an administrator to give you Daily Rejection access.</div></div></div>;
+    return <div className="daily-rejection-page" style={styles.page}><div style={styles.emptyLarge}><div style={styles.emptyIcon}>!</div><h2 style={styles.emptyTitle}>Daily Rejection Access Required</h2><div style={styles.emptyText}>Please ask an administrator to give you Daily Rejection access.</div></div></div>;
   }
 
   return (
@@ -487,23 +509,41 @@ export default function DailyRejectionPage() {
         @media (max-width: 720px) {
           .daily-rejection-report-input { width: 100%; }
         }
+        @media (max-width: 900px) {
+          .daily-rejection-page { padding: 8px !important; }
+          .daily-rejection-hero { padding: 14px !important; border-radius: 16px !important; }
+          .daily-rejection-title { font-size: 23px !important; }
+          .daily-rejection-toolbar { overflow-x: auto; flex-wrap: nowrap !important; }
+          .daily-rejection-toolbar .daily-rejection-tabs { flex-wrap: nowrap !important; overflow-x: auto; max-width: 100%; }
+          .daily-rejection-toolbar .daily-rejection-toolbar-right { flex-wrap: nowrap !important; }
+          .daily-rejection-summary { grid-template-columns: repeat(2,minmax(0,1fr)) !important; }
+          .daily-rejection-report-filters { grid-template-columns: repeat(2,minmax(140px,1fr)) !important; }
+          .daily-rejection-table-outer { max-width: 100%; overflow-x: auto !important; -webkit-overflow-scrolling: touch; }
+        }
+        @media (max-width: 560px) {
+          .daily-rejection-summary { grid-template-columns: 1fr 1fr !important; gap: 7px !important; }
+          .daily-rejection-report-filters { grid-template-columns: 1fr !important; }
+          .daily-rejection-toolbar { align-items: stretch !important; }
+          .daily-rejection-toolbar .daily-rejection-toolbar-right { min-width: max-content; }
+        }
       `}</style>
       <div style={styles.page}>
-      <div style={styles.hero}>
-        <div><div style={styles.kicker}>WAREHOUSE OPERATIONS</div><h1 style={styles.title}>Daily Rejection</h1><div style={styles.subtitle}>Create rejection entries, assign work to staff, and close completed work from one smart workflow.</div></div>
+      <div className="daily-rejection-hero" style={styles.hero}>
+        <div><div style={styles.kicker}>WAREHOUSE OPERATIONS</div><h1 className="daily-rejection-title" style={styles.title}>Daily Rejection</h1><div style={styles.subtitle}>Create rejection entries, assign work to staff, and close completed work from one smart workflow.</div></div>
         <button type="button" onClick={() => navigate(-1)} style={styles.back}>Back</button>
       </div>
 
-      <div style={styles.summaryGrid}>
+      <div className="daily-rejection-summary" style={styles.summaryGrid}>
         {[['Total', summary.total, 'neutral'], ['Pending', summary.pending, 'pending'], ['Running', summary.running, 'running'], ['Complete', summary.complete, 'complete']].map(([label, value, kind]) => (
           <div key={label} style={{ ...styles.metric, ...(styles.metricKinds[kind] || {}) }}><div style={styles.metricLabel}>{label}</div><div style={styles.metricValue}>{value ?? 0}</div></div>
         ))}
       </div>
 
-      <div style={styles.toolbar}>
-        <div style={styles.tabs}>{STATUSES.filter((item) => item !== "REPORT" || canReport).map((item) => <button key={item} type="button" onClick={() => setStatus(item)} style={status === item ? styles.tabActive : styles.tab}>{item}</button>)}</div>
-        <div style={styles.toolbarRight}>
+      <div className="daily-rejection-toolbar" style={styles.toolbar}>
+        <div className="daily-rejection-tabs" style={styles.tabs}>{STATUSES.filter((item) => item !== "REPORT" || canReport).map((item) => <button key={item} type="button" onClick={() => setStatus(item)} style={status === item ? styles.tabActive : styles.tab}>{item}</button>)}</div>
+        <div className="daily-rejection-toolbar-right" style={styles.toolbarRight}>
           <select value={actionFilter} onChange={(e) => setActionFilter(e.target.value)} style={styles.compactSelect}><option value="ALL">All Work</option>{WORK_DESCRIPTIONS.map((item) => <option key={item} value={item}>{item}</option>)}</select>
+          <select value={reportCompany} onChange={(e) => setReportCompany(e.target.value)} style={styles.compactSelect}><option value="ALL">All Companies</option>{masters.companies.map((item) => <option key={idOf(item)} value={idOf(item)}>{textOf(item)}</option>)}</select>
           {canCreate && <button type="button" onClick={() => { resetForm(); setShowForm(true); }} style={styles.primary}>+ New Rejection</button>}
           <button type="button" onClick={loadData} style={styles.secondary}>Refresh</button>
         </div>
@@ -512,10 +552,11 @@ export default function DailyRejectionPage() {
       {status === "REPORT" && canReport ? (
         <div style={styles.reportPanel}>
           <div style={styles.reportHead}><div><div style={styles.kicker}>REPORT</div><div style={styles.reportTitle}>Daily Rejection Date-wise Report</div></div><button type="button" onClick={submitReport} style={styles.primary}>Generate Report</button></div>
-          <div style={styles.reportFilters}>
+          <div className="daily-rejection-report-filters" style={styles.reportFilters}>
             <Field label="From Date"><input className="daily-rejection-report-input" type="date" value={reportFrom} onChange={(e) => setReportFrom(e.target.value)} style={styles.input} /></Field>
             <Field label="To Date"><input className="daily-rejection-report-input" type="date" value={reportTo} onChange={(e) => setReportTo(e.target.value)} style={styles.input} /></Field>
             <Field label="Work"><select className="daily-rejection-report-input" value={actionFilter} onChange={(e) => setActionFilter(e.target.value)} style={styles.input}><option value="ALL">All Work</option>{WORK_DESCRIPTIONS.map((item) => <option key={item} value={item}>{item}</option>)}</select></Field>
+            <Field label="Company"><select className="daily-rejection-report-input" value={reportCompany} onChange={(e) => setReportCompany(e.target.value)} style={styles.input}><option value="ALL">All Companies</option>{masters.companies.map((item) => <option key={idOf(item)} value={idOf(item)}>{textOf(item)}</option>)}</select></Field>
           </div>
           <div style={styles.reportTableWrap}>{reportRows.length ? renderTable(reportRows, false) : <div style={styles.empty}>Select dates and click Generate Report.</div>}</div>
         </div>
