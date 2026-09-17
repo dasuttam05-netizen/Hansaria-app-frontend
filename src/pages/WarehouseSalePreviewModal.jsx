@@ -50,6 +50,24 @@ function WarehouseSalePreviewModal({
     adjustment: "",
     tds: "",
   });
+  const [purchaseManualMode, setPurchaseManualMode] = useState({
+    claim: false,
+    labour: false,
+    freight: false,
+    cashDiscount: false,
+    tds: false,
+    other: false,
+    adjustment: false,
+  });
+  const [purchaseManualValues, setPurchaseManualValues] = useState({
+    claim: "",
+    labour: "",
+    freight: "",
+    cashDiscount: "",
+    tds: "",
+    other: "",
+    adjustment: "",
+  });
 
   useEffect(() => {
     if (!salePreviewRow) return;
@@ -87,6 +105,24 @@ function WarehouseSalePreviewModal({
       cd: Boolean(prev.cd),
       adjustment: Boolean(prev.adjustment),
       tds: Boolean(prev.tds),
+    }));
+    setPurchaseManualValues({
+      claim: "0.00",
+      labour: "0.00",
+      freight: "0.00",
+      cashDiscount: "0.00",
+      tds: "0.00",
+      other: "0.00",
+      adjustment: "0.00",
+    });
+    setPurchaseManualMode((prev) => ({
+      claim: Boolean(prev.claim),
+      labour: Boolean(prev.labour),
+      freight: Boolean(prev.freight),
+      cashDiscount: Boolean(prev.cashDiscount),
+      tds: Boolean(prev.tds),
+      other: Boolean(prev.other),
+      adjustment: Boolean(prev.adjustment),
     }));
   }, [salePreviewRow, salePreviewSummary, saleTransportMode, toNumber]);
 
@@ -130,7 +166,27 @@ function WarehouseSalePreviewModal({
       return acc;
     }, { claim: 0, labour: 0, freight: 0, cashDiscount: 0, tds: 0, other: 0, adjustment: 0, roundOff: 0, total: 0 });
   }, [purchaseLinks, toNumber]);
-  const purchaseNetAfterDeduction = purchaseAmount - purchaseDeductionTotals.total + purchaseDeductionTotals.roundOff;
+  const purchaseDeductionAutoRows = useMemo(() => ({
+    claim: purchaseDeductionTotals.claim,
+    labour: purchaseDeductionTotals.labour,
+    freight: purchaseDeductionTotals.freight,
+    cashDiscount: purchaseDeductionTotals.cashDiscount,
+    tds: purchaseDeductionTotals.tds,
+    other: purchaseDeductionTotals.other,
+    adjustment: purchaseDeductionTotals.adjustment,
+  }), [purchaseDeductionTotals]);
+
+  const purchaseDeductionFinal = {
+    claim: purchaseManualMode.claim ? toNumber(purchaseManualValues.claim) : purchaseDeductionAutoRows.claim,
+    labour: purchaseManualMode.labour ? toNumber(purchaseManualValues.labour) : purchaseDeductionAutoRows.labour,
+    freight: purchaseManualMode.freight ? toNumber(purchaseManualValues.freight) : purchaseDeductionAutoRows.freight,
+    cashDiscount: purchaseManualMode.cashDiscount ? toNumber(purchaseManualValues.cashDiscount) : purchaseDeductionAutoRows.cashDiscount,
+    tds: purchaseManualMode.tds ? toNumber(purchaseManualValues.tds) : purchaseDeductionAutoRows.tds,
+    other: purchaseManualMode.other ? toNumber(purchaseManualValues.other) : purchaseDeductionAutoRows.other,
+    adjustment: purchaseManualMode.adjustment ? toNumber(purchaseManualValues.adjustment) : purchaseDeductionAutoRows.adjustment,
+  };
+  const purchaseFinalDeductionTotal = Object.values(purchaseDeductionFinal).reduce((sum, value) => sum + toNumber(value), 0);
+  const purchaseNetAfterDeduction = purchaseAmount - purchaseFinalDeductionTotal + purchaseDeductionTotals.roundOff;
 
   const shortageAutoAmount = toNumber(salePreviewRow?.shortage_amount) || shortageQtyAuto * saleRate;
   const claimAutoAmount = toNumber(salePreviewRow?.claim_amount);
@@ -157,7 +213,7 @@ function WarehouseSalePreviewModal({
 
   const totalDeduction = shortageAmount + claimAmount + freightAmount + otherAmount + cdAmount + adjustmentAmount + tdsAmount;
   const netSale = saleAmount - totalDeduction + roundOff;
-  const netPurchase = purchaseAmount;
+  const netPurchase = purchaseNetAfterDeduction;
   const profitLoss = netSale - netPurchase;
 
   const setModeValue = (key, checked) => {
@@ -176,6 +232,15 @@ function WarehouseSalePreviewModal({
     }
   };
 
+  const setPurchaseModeValue = (key, checked) => {
+    if (!isAdmin) return;
+    setPurchaseManualMode((prev) => ({ ...prev, [key]: checked }));
+    if (!checked) {
+      const autoValue = purchaseDeductionAutoRows[key] || 0;
+      setPurchaseManualValues((prev) => ({ ...prev, [key]: Number(autoValue).toFixed(2) }));
+    }
+  };
+
   const handleReset = () => {
     setManualMode({ shortage: false, claim: false, freight: false, other: false, cd: false, adjustment: false, tds: false });
     setManualValues({
@@ -186,6 +251,16 @@ function WarehouseSalePreviewModal({
       cd: cdAutoAmount.toFixed(2),
       adjustment: adjustmentAutoAmount.toFixed(2),
       tds: tdsAutoAmount.toFixed(2),
+    });
+    setPurchaseManualMode({ claim: false, labour: false, freight: false, cashDiscount: false, tds: false, other: false, adjustment: false });
+    setPurchaseManualValues({
+      claim: purchaseDeductionAutoRows.claim.toFixed(2),
+      labour: purchaseDeductionAutoRows.labour.toFixed(2),
+      freight: purchaseDeductionAutoRows.freight.toFixed(2),
+      cashDiscount: purchaseDeductionAutoRows.cashDiscount.toFixed(2),
+      tds: purchaseDeductionAutoRows.tds.toFixed(2),
+      other: purchaseDeductionAutoRows.other.toFixed(2),
+      adjustment: purchaseDeductionAutoRows.adjustment.toFixed(2),
     });
     setSaleTransportMode("auto");
     setSaleTransportManualAmount(freightAutoAmount.toFixed(2));
@@ -318,24 +393,44 @@ function WarehouseSalePreviewModal({
             <div style={{ padding: "10px 12px", background: "#f0fdfa", fontWeight: 800, color: "#115e59" }}>Purchase Deduction Details</div>
             <div style={{ padding: 12, overflowX: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                <thead><tr><th style={th}>Particular</th><th style={th}>Auto</th><th style={th}>Manual</th><th style={th}>Final</th></tr></thead>
                 <tbody>
                   {[
-                    ["Claim", purchaseDeductionTotals.claim],
-                    ["Labour", purchaseDeductionTotals.labour],
-                    ["Freight / Transport", purchaseDeductionTotals.freight],
-                    ["Cash Discount", purchaseDeductionTotals.cashDiscount],
-                    ["TDS", purchaseDeductionTotals.tds],
-                    ["Other Deduction", purchaseDeductionTotals.other],
-                    ["Adjustment", purchaseDeductionTotals.adjustment],
-                    ["Total Deduction", purchaseDeductionTotals.total],
-                    ["Round Off", purchaseDeductionTotals.roundOff],
-                    ["Net Purchase After Deduction", purchaseNetAfterDeduction],
-                  ].map(([label, value]) => (
-                    <tr key={label}><td style={td}>{label}</td><td style={{ ...td, textAlign: "right", fontWeight: label.includes("Net") || label === "Total Deduction" ? 900 : 700 }}>{formatMoney(value)}</td></tr>
-                  ))}
+                    ["claim", "Claim"],
+                    ["labour", "Labour"],
+                    ["freight", "Freight / Transport"],
+                    ["cashDiscount", "Cash Discount"],
+                    ["tds", "TDS"],
+                    ["other", "Other Deduction"],
+                    ["adjustment", "Adjustment"],
+                  ].map(([key, label]) => {
+                    const autoValue = purchaseDeductionAutoRows[key] || 0;
+                    const finalValue = purchaseDeductionFinal[key] || 0;
+                    return (
+                      <tr key={key}>
+                        <td style={td}>{label}</td>
+                        <td style={td}>{formatMoney(autoValue)}</td>
+                        <td style={td}>
+                          <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 150 }}>
+                            <label style={{ display: "inline-flex", alignItems: "center", gap: 5, color: purchaseManualMode[key] ? "#115e59" : "#475569", fontWeight: 800, fontSize: 11, whiteSpace: "nowrap" }}>
+                              <input type="checkbox" checked={Boolean(purchaseManualMode[key])} disabled={!isAdmin} onChange={(e) => setPurchaseModeValue(key, e.target.checked)} />
+                              Manual
+                            </label>
+                            <input type="number" step="0.01" value={purchaseManualValues[key]} disabled={!isAdmin || !purchaseManualMode[key]} onChange={(e) => setPurchaseManualValues((prev) => ({ ...prev, [key]: e.target.value }))} style={{ width: 105, padding: "7px 8px", border: "1px solid #cbd5e1", borderRadius: 7, background: purchaseManualMode[key] ? "#fff" : "#f8fafc" }} />
+                          </div>
+                        </td>
+                        <td style={{ ...td, fontWeight: 800 }}>{formatMoney(finalValue)}</td>
+                      </tr>
+                    );
+                  })}
+                  <tr><td style={{ ...td, fontWeight: 800 }}>Total Deduction</td><td style={td}>{formatMoney(Object.values(purchaseDeductionAutoRows).reduce((sum, value) => sum + toNumber(value), 0))}</td><td style={td}>-</td><td style={{ ...td, fontWeight: 900 }}>{formatMoney(purchaseFinalDeductionTotal)}</td></tr>
+                  <tr><td style={td}>Round Off</td><td style={td}>{formatMoney(purchaseDeductionTotals.roundOff)}</td><td style={td}>-</td><td style={{ ...td, fontWeight: 800 }}>{formatMoney(purchaseDeductionTotals.roundOff)}</td></tr>
+                  <tr><td style={{ ...td, fontWeight: 900 }}>Net Purchase After Deduction</td><td style={td}>-</td><td style={td}>-</td><td style={{ ...td, fontWeight: 900 }}>{formatMoney(purchaseNetAfterDeduction)}</td></tr>
                 </tbody>
               </table>
-              <div style={{ marginTop: 8, fontSize: 11, color: "#64748b" }}>Purchase deduction values are taken automatically from the linked purchase bills. Use F10 Purchase Tag to change the purchase allocation.</div>
+              <div style={{ marginTop: 8, fontSize: 11, color: isAdmin ? "#166534" : "#64748b" }}>
+                {isAdmin ? "Admin can switch a purchase deduction to Manual and enter a value." : "Automatic purchase deductions are shown. Manual deduction editing is available to Admin only."} Use F10 Purchase Tag to change the purchase allocation.
+              </div>
             </div>
           </div>
 
