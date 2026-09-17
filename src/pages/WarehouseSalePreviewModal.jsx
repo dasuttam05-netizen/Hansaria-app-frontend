@@ -358,14 +358,15 @@ function WarehouseSalePreviewModal({
             <div style={{ padding: "10px 12px", background: "#e8f6f3", fontWeight: 800, color: "#115e59" }}>Purchase Details</div>
             <div style={{ padding: 12, overflowX: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
-                <thead><tr><th style={th}>Bill</th><th style={th}>Consignee</th><th style={th}>Qty</th><th style={th}>Rate</th><th style={th}>Amount</th><th style={th}>Source</th></tr></thead>
+                <thead><tr><th style={th}>Bill</th><th style={th}>Farmer</th><th style={th}>Qty</th><th style={th}>Rate</th><th style={th}>Amount</th><th style={th}>Source</th></tr></thead>
                 <tbody>
                   {purchaseLinks.map((item, index) => {
                     const qty = toNumber(item.quantity ?? item.weight);
                     const rate = toNumber(item.rate);
                     const amount = toNumber(item.amount) || qty * rate;
                     const purchase = item?.purchase_details || item || {};
-                    return <tr key={`${item.purchase_id || item._id || index}`}><td style={td}>{item.voucher_no || purchase.voucher_no || "-"}</td><td style={td}>{item.consignee_name || purchase.consignee_name || purchase.consignee || preview.consignee || "-"}</td><td style={td}>{formatDecimal4(qty)}</td><td style={td}>{formatMoney(rate)}</td><td style={td}>{formatMoney(amount)}</td><td style={td}>{item.source === "auto" ? "Auto" : "Manual"}</td></tr>;
+                    const farmerName = item?.farmer_name || purchase?.farmer_name || purchase?.farmer || purchase?.party_name || purchase?.company_name || "-";
+                    return <tr key={`${item.purchase_id || item._id || index}`}><td style={td}>{item.voucher_no || purchase.voucher_no || "-"}</td><td style={td}>{farmerName}</td><td style={td}>{formatDecimal4(qty)}</td><td style={td}>{formatMoney(rate)}</td><td style={td}>{formatMoney(amount)}</td><td style={td}>{item.source === "auto" ? "Auto" : "Manual"}</td></tr>;
                   })}
                   {purchaseLinks.length === 0 && <tr><td style={{ ...td, textAlign: "center" }} colSpan={6}>No purchase bill tagged. Press F10 Purchase Tag.</td></tr>}
                 </tbody>
@@ -381,7 +382,7 @@ function WarehouseSalePreviewModal({
                   <tr><td style={td}>Sale Qty</td><td style={td}>{formatDecimal4(saleQty)}</td></tr>
                   <tr><td style={td}>Sale Rate</td><td style={td}>{formatMoney(saleRate)}</td></tr>
                   <tr><td style={td}>Sale Amount</td><td style={{ ...td, fontWeight: 900 }}>{formatMoney(saleAmount)}</td></tr>
-                  <tr><td style={td}>Consignee</td><td style={td}>{preview.consignee || "-"}</td></tr>
+                  <tr><td style={td}>Buyer</td><td style={td}>{preview.party || previewSource?.buyer_name || previewSource?.buyer || previewSource?.party_name || previewSource?.company_name || "-"}</td></tr>
                 </tbody>
               </table>
             </div>
