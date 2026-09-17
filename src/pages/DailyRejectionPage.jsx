@@ -74,6 +74,9 @@ function Icon({ type, size = 18 }) {
   if (type === "pdf") {
     return <svg {...common}><path d="M6 2h9l4 4v16H6Z"/><path d="M14 2v5h5"/><path d="M8 15h2.5a1.5 1.5 0 0 0 0-3H8v6"/><path d="M13 12h2a3 3 0 0 1 0 6h-2Z"/><path d="M19 12h-3v6"/></svg>;
   }
+  if (type === "copy") {
+    return <svg {...common}><rect x="8" y="8" width="11" height="12" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h3"/></svg>;
+  }
   return null;
 }
 
@@ -231,24 +234,48 @@ export default function DailyRejectionPage() {
   };
 
 
+  const buildShareText = (row) => [
+    `Daily Rejection ${row?.rejection_no || ""}`.trim(),
+    `Date: ${formatDate(row?.entry_date)}`,
+    `Company: ${row?.company_name || "-"}`,
+    `Account: ${row?.company_account_name || "-"}`,
+    `Consignee: ${row?.consignee_name || row?.consignee || "-"}`,
+    `Product: ${row?.product_name || "-"}`,
+    `Original Qty: ${money(row?.original_qty)}`,
+    `Unloading Qty: ${money(row?.actual_unloading_qty)}`,
+    `Rejection Qty: ${money(row?.rejection_qty)}`,
+    `Reason: ${row?.reason || "-"}`,
+    `Work: ${row?.action_type || "-"}`,
+    `Assigned To: ${row?.assigned_to_name || "-"}`,
+    `Status: ${row?.status || "-"}`,
+  ].join("\n");
+
+  const copyRowText = async (row) => {
+    const text = buildShareText(row);
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const area = document.createElement("textarea");
+        area.value = text;
+        area.style.position = "fixed";
+        area.style.left = "-9999px";
+        document.body.appendChild(area);
+        area.focus();
+        area.select();
+        document.execCommand("copy");
+        area.remove();
+      }
+      window.alert("Daily Rejection text copied. এখন যাকে চান paste করতে পারবেন।");
+    } catch (err) {
+      window.alert("Copy করা যায়নি। আবার চেষ্টা করুন।");
+    }
+  };
+
   const shareWhatsApp = (row) => {
     let mobile = String(row?.consignee_mobile || row?.mobile || row?.phone || "").replace(/\D/g, "");
     if (mobile.length === 10) mobile = `91${mobile}`;
-    const message = [
-      `Daily Rejection ${row?.rejection_no || ""}`.trim(),
-      `Date: ${formatDate(row?.entry_date)}`,
-      `Company: ${row?.company_name || "-"}`,
-      `Account: ${row?.company_account_name || "-"}`,
-      `Consignee: ${row?.consignee_name || row?.consignee || "-"}`,
-      `Product: ${row?.product_name || "-"}`,
-      `Original Qty: ${money(row?.original_qty)}`,
-      `Unloading Qty: ${money(row?.actual_unloading_qty)}`,
-      `Rejection Qty: ${money(row?.rejection_qty)}`,
-      `Reason: ${row?.reason || "-"}`,
-      `Work: ${row?.action_type || "-"}`,
-      `Assigned To: ${row?.assigned_to_name || "-"}`,
-      `Status: ${row?.status || "-"}`,
-    ].join("\\n");
+    const message = buildShareText(row);
     const url = mobile
       ? `https://wa.me/${mobile}?text=${encodeURIComponent(message)}`
       : `https://wa.me/?text=${encodeURIComponent(message)}`;
@@ -307,6 +334,9 @@ export default function DailyRejectionPage() {
             <Icon type="edit" />
           </button>
         ) : <span style={styles.iconSpacer} />}
+        <button type="button" title="Copy Text" aria-label="Copy Text" onClick={() => copyRowText(row)} style={{ ...styles.iconButton, ...styles.iconCopy }}>
+          <Icon type="copy" />
+        </button>
         <button type="button" title="WhatsApp" aria-label="WhatsApp" onClick={() => shareWhatsApp(row)} style={{ ...styles.iconButton, ...styles.iconWhatsapp }}>
           <Icon type="whatsapp" />
         </button>
@@ -537,6 +567,7 @@ const styles = {
   actionIcons: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, whiteSpace: 'nowrap' },
   iconButton: { width: 32, height: 32, borderRadius: 9, border: '1px solid', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', background: '#fff' },
   iconEdit: { color: '#2563eb', borderColor: '#bfdbfe', background: '#eff6ff' },
+  iconCopy: { color: '#7c3aed', borderColor: '#ddd6fe', background: '#f5f3ff' },
   iconWhatsapp: { color: '#15803d', borderColor: '#bbf7d0', background: '#f0fdf4' },
   iconPdf: { color: '#dc2626', borderColor: '#fecaca', background: '#fef2f2' },
   iconSpacer: { width: 32, height: 32, display: 'inline-block' },
