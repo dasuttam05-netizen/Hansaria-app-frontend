@@ -309,18 +309,18 @@ function WarehouseSalePreviewModal({
       const currentShortageQty = manualMode.shortage
         ? Math.min(Math.max(toNumber(manualValues.shortage) / Math.max(saleRate, 0.000001), 0), saleQty)
         : shortageQtyAuto;
-      const warehouseId =
-        salePreviewRow?.warehouse_id ||
-        salePreviewRow?.warehouseId ||
-        salePreviewSummary?.warehouse_id ||
-        salePreviewSummary?.warehouseId ||
-        salePreviewSummary?.sale?.warehouse_id ||
-        salePreviewSummary?.sale?.warehouseId ||
+      const saleType = salePreviewRow?.sale_type || salePreviewSummary?.sale?.sale_type || "direct";
+      const locationId =
+        salePreviewRow?.location_id ||
+        salePreviewRow?.location?.id ||
+        salePreviewSummary?.sale?.location_id ||
+        salePreviewSummary?.location_id ||
+        salePreviewSummary?.summary?.location_id ||
         "";
       const payload = {
         deduction_only: true,
-        warehouse_id: warehouseId,
-        sale_type: salePreviewRow?.sale_type || "direct",
+        sale_type: saleType,
+        location_id: locationId,
         unloading_date: salePreviewRow?.unloading_date || salePreviewRow?.date || "",
         unloading_qty: unloadingQty,
         shortage_quantity: currentShortageQty,
