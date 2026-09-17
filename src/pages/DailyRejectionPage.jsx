@@ -110,6 +110,7 @@ export default function DailyRejectionPage() {
   const [reportFrom, setReportFrom] = useState("");
   const [reportTo, setReportTo] = useState("");
   const [reportCompany, setReportCompany] = useState("ALL");
+  const [reportAccount, setReportAccount] = useState("ALL");
   const [reportRows, setReportRows] = useState([]);
   const [toast, setToast] = useState(null);
 
@@ -418,7 +419,7 @@ export default function DailyRejectionPage() {
                   <td colSpan={14} style={styles.subRowCell}>
                     <div style={styles.assignPanelCompact}>
                       <div style={styles.assignHead}><span>ASSIGN WORK</span><small>Authorised users only</small></div>
-                      <div style={styles.assignGrid}>
+                      <div className="daily-rejection-assign-grid" style={styles.assignGrid}>
                         <select value={assignedAction[idOf(row)] || row.action_type || ""} onChange={(e) => setAssignedAction((prev) => ({ ...prev, [idOf(row)]: e.target.value }))} style={styles.input}>
                           <option value="">Select Work Description</option>
                           {WORK_DESCRIPTIONS.map((item) => <option key={item} value={item}>{item}</option>)}
@@ -479,12 +480,57 @@ export default function DailyRejectionPage() {
   const submitReport = async () => {
     if (!canReport) return;
     try {
-      const params = { from: reportFrom, to: reportTo };
+      const params = {};
+      if (reportFrom) params.from = reportFrom;
+      if (reportTo) params.to = reportTo;
       if (actionFilter !== "ALL") params.action_type = actionFilter;
       if (reportCompany !== "ALL") params.company_id = reportCompany;
+      if (reportAccount !== "ALL") {
+        params.company_account_id = reportAccount;
+        params.account_id = reportAccount;
+      }
+
       const response = await axios.get(`${API}/report`, { params });
       const payload = response?.data?.data || response?.data || {};
-      setReportRows(Array.isArray(payload) ? payload : (payload.rows || []));
+      const sourceRows = Array.isArray(payload) ? payload : (payload.rows || payload.items || []);
+      const normalize = (value) => String(value ?? "").trim().toLowerCase();
+      const dateKey = (value) => {
+        if (!value) return "";
+        const raw = String(value);
+        if (/^\d{4}-\d{2}-\d{2}/.test(raw)) return raw.slice(0, 10);
+        const d = new Date(value);
+        if (Number.isNaN(d.getTime())) return "";
+        const local = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
+        return local.toISOString().slice(0, 10);
+      };
+      const selectedCompany = masters.companies.find((item) => idOf(item) === String(reportCompany));
+      const selectedCompanyName = normalize(selectedCompany?.name || selectedCompany?.company_name);
+      const selectedAccount = masters.accounts.find((item) => idOf(item) === String(reportAccount));
+      const selectedAccountName = normalize(selectedAccount?.account_name || selectedAccount?.name || selectedAccount?.company_account_name);
+
+      const filtered = sourceRows.filter((row) => {
+        const rowDate = dateKey(row?.entry_date);
+        if (reportFrom && rowDate && rowDate < reportFrom) return false;
+        if (reportTo && rowDate && rowDate > reportTo) return false;
+
+        if (actionFilter !== "ALL" && normalize(row?.action_type) !== normalize(actionFilter)) return false;
+
+        if (reportCompany !== "ALL") {
+          const rowCompanyId = row?.company_id ?? row?.company?._id ?? row?.company?.id;
+          const rowCompanyName = normalize(row?.company_name || row?.company?.name);
+          if (String(rowCompanyId || "") !== String(reportCompany) && (!selectedCompanyName || rowCompanyName !== selectedCompanyName)) return false;
+        }
+
+        if (reportAccount !== "ALL") {
+          const rowAccountId = row?.company_account_id ?? row?.account_id ?? row?.company_account?._id ?? row?.company_account?.id;
+          const rowAccountName = normalize(row?.company_account_name || row?.account_name || row?.company_account?.name);
+          if (String(rowAccountId || "") !== String(reportAccount) && (!selectedAccountName || rowAccountName !== selectedAccountName)) return false;
+        }
+        return true;
+      });
+
+      setReportRows(filtered);
+      showToast(`${filtered.length} report record${filtered.length === 1 ? "" : "s"} found.`, "success");
     } catch (err) {
       setError(err?.response?.data?.error || err?.message || "Unable to load report");
       setReportRows([]);
@@ -509,6 +555,15 @@ export default function DailyRejectionPage() {
         @media (max-width: 720px) {
           .daily-rejection-report-input { width: 100%; }
         }
+        .daily-rejection-assign-grid button { grid-column: 1 / -1; }
+        @media (max-width: 900px) {
+          .daily-rejection-assign-grid { grid-template-columns: 1fr 1fr !important; }
+          .daily-rejection-report-filters { grid-template-columns: repeat(2,minmax(140px,1fr)) !important; }
+        }
+        @media (max-width: 560px) {
+          .daily-rejection-assign-grid { grid-template-columns: 1fr !important; }
+          .daily-rejection-report-filters { grid-template-columns: 1fr !important; }
+        }
         @media (max-width: 900px) {
           .daily-rejection-page { padding: 8px !important; }
           .daily-rejection-hero { padding: 14px !important; border-radius: 16px !important; }
@@ -517,12 +572,10 @@ export default function DailyRejectionPage() {
           .daily-rejection-toolbar .daily-rejection-tabs { flex-wrap: nowrap !important; overflow-x: auto; max-width: 100%; }
           .daily-rejection-toolbar .daily-rejection-toolbar-right { flex-wrap: nowrap !important; }
           .daily-rejection-summary { grid-template-columns: repeat(2,minmax(0,1fr)) !important; }
-          .daily-rejection-report-filters { grid-template-columns: repeat(2,minmax(140px,1fr)) !important; }
           .daily-rejection-table-outer { max-width: 100%; overflow-x: auto !important; -webkit-overflow-scrolling: touch; }
         }
         @media (max-width: 560px) {
           .daily-rejection-summary { grid-template-columns: 1fr 1fr !important; gap: 7px !important; }
-          .daily-rejection-report-filters { grid-template-columns: 1fr !important; }
           .daily-rejection-toolbar { align-items: stretch !important; }
           .daily-rejection-toolbar .daily-rejection-toolbar-right { min-width: max-content; }
         }
@@ -556,7 +609,7 @@ export default function DailyRejectionPage() {
             <Field label="From Date"><input className="daily-rejection-report-input" type="date" value={reportFrom} onChange={(e) => setReportFrom(e.target.value)} style={styles.input} /></Field>
             <Field label="To Date"><input className="daily-rejection-report-input" type="date" value={reportTo} onChange={(e) => setReportTo(e.target.value)} style={styles.input} /></Field>
             <Field label="Work"><select className="daily-rejection-report-input" value={actionFilter} onChange={(e) => setActionFilter(e.target.value)} style={styles.input}><option value="ALL">All Work</option>{WORK_DESCRIPTIONS.map((item) => <option key={item} value={item}>{item}</option>)}</select></Field>
-            <Field label="Company"><select className="daily-rejection-report-input" value={reportCompany} onChange={(e) => setReportCompany(e.target.value)} style={styles.input}><option value="ALL">All Companies</option>{masters.companies.map((item) => <option key={idOf(item)} value={idOf(item)}>{textOf(item)}</option>)}</select></Field>
+            <Field label="Account"><select className="daily-rejection-report-input" value={reportAccount} onChange={(e) => setReportAccount(e.target.value)} style={styles.input}><option value="ALL">All Accounts</option>{masters.accounts.map((item) => <option key={idOf(item)} value={idOf(item)}>{item.account_name || item.name || item.company_account_name || "-"}</option>)}</select></Field>
           </div>
           <div style={styles.reportTableWrap}>{reportRows.length ? renderTable(reportRows, false) : <div style={styles.empty}>Select dates and click Generate Report.</div>}</div>
         </div>
@@ -670,7 +723,7 @@ const styles = {
   },
   reportFilters: {
     display: 'grid',
-    gridTemplateColumns: 'repeat(3,minmax(160px,1fr))',
+    gridTemplateColumns: 'repeat(4,minmax(150px,1fr))',
     gap: 9,
     padding: 10,
     background: '#f8fafc',
@@ -686,6 +739,6 @@ const styles = {
   toastDot: { width: 8, height: 8, borderRadius: 999, background: 'currentColor', flex: '0 0 auto' },
   toastMessage: { fontSize: 13, fontWeight: 800, lineHeight: 1.35, flex: '1 1 auto' },
   toastClose: { width: 24, height: 24, border: 0, background: 'transparent', color: 'inherit', fontSize: 18, lineHeight: 1, cursor: 'pointer', padding: 0, opacity: .8 },
-  assignPanel: { marginTop: 13, border: '1px solid #bfdbfe', background: 'linear-gradient(135deg,#eff6ff,#f8fbff)', borderRadius: 14, padding: 12 }, assignHead: { display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center', marginBottom: 8, color: '#1e3a8a', fontSize: 11, fontWeight: 900 }, assignGrid: { display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr) auto', gap: 8 }, assignButton: { border: 0, background: '#1d4ed8', color: '#fff', borderRadius: 10, padding: '10px 13px', fontWeight: 900, cursor: 'pointer' },
+  assignPanel: { marginTop: 13, border: '1px solid #bfdbfe', background: 'linear-gradient(135deg,#eff6ff,#f8fbff)', borderRadius: 14, padding: 12 }, assignHead: { display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center', marginBottom: 8, color: '#1e3a8a', fontSize: 11, fontWeight: 900 }, assignGrid: { display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr)', gap: 8 }, assignButton: { border: 0, background: '#1d4ed8', color: '#fff', borderRadius: 10, padding: '10px 13px', fontWeight: 900, cursor: 'pointer' },
   workerPanel: { marginTop: 13, border: '1px solid #99f6e4', background: 'linear-gradient(135deg,#ecfeff,#f0fdfa)', borderRadius: 14, padding: 12 }, workerTitle: { color: '#115e59', fontWeight: 950 }, workerWork: { color: '#475569', fontSize: 12, marginTop: 3 }, completeRow: { display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', gap: 8, marginTop: 10 }, complete: { border: 0, background: '#047857', color: '#fff', borderRadius: 10, padding: '10px 14px', fontWeight: 900, cursor: 'pointer' }, completedPanel: { marginTop: 12, padding: 10, borderRadius: 11, background: '#ecfdf5', border: '1px solid #a7f3d0', color: '#047857', fontWeight: 800 },
 };
