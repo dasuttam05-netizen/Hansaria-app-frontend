@@ -317,9 +317,17 @@ function WarehouseSalePreviewModal({
         salePreviewSummary?.location_id ||
         salePreviewSummary?.summary?.location_id ||
         "";
+      const warehouseId =
+        salePreviewRow?.warehouse_id ||
+        salePreviewRow?.warehouse?.id ||
+        salePreviewSummary?.sale?.warehouse_id ||
+        salePreviewSummary?.warehouse_id ||
+        salePreviewSummary?.summary?.warehouse_id ||
+        "";
       const payload = {
         deduction_only: true,
         sale_type: saleType,
+        warehouse_id: warehouseId,
         location_id: locationId,
         unloading_date: salePreviewRow?.unloading_date || salePreviewRow?.date || "",
         unloading_qty: unloadingQty,
