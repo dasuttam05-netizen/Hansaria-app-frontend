@@ -37,12 +37,18 @@ function WarehouseSalePreviewModal({
     claim: false,
     freight: false,
     other: false,
+    cd: false,
+    adjustment: false,
+    tds: false,
   });
   const [manualValues, setManualValues] = useState({
     shortage: "",
     claim: "",
     freight: "",
     other: "",
+    cd: "",
+    adjustment: "",
+    tds: "",
   });
 
   useEffect(() => {
@@ -61,17 +67,26 @@ function WarehouseSalePreviewModal({
       0
     );
     const otherAuto = toNumber(salePreviewRow?.other_deduction);
+    const cdAuto = toNumber(salePreviewRow?.cd_amount);
+    const adjustmentAuto = toNumber(salePreviewRow?.adjustment_amount);
+    const tdsAuto = toNumber(salePreviewRow?.tds_amount);
     setManualValues({
       shortage: shortageAuto.toFixed(2),
       claim: claimAuto.toFixed(2),
       freight: freightAuto.toFixed(2),
       other: otherAuto.toFixed(2),
+      cd: cdAuto.toFixed(2),
+      adjustment: adjustmentAuto.toFixed(2),
+      tds: tdsAuto.toFixed(2),
     });
     setManualMode((prev) => ({
       shortage: Boolean(prev.shortage),
       claim: Boolean(prev.claim),
       freight: saleTransportMode === "manual" || Boolean(prev.freight),
       other: Boolean(prev.other),
+      cd: Boolean(prev.cd),
+      adjustment: Boolean(prev.adjustment),
+      tds: Boolean(prev.tds),
     }));
   }, [salePreviewRow, salePreviewSummary, saleTransportMode, toNumber]);
 
@@ -132,9 +147,12 @@ function WarehouseSalePreviewModal({
   const claimAmount = manualMode.claim ? toNumber(manualValues.claim) : claimAutoAmount;
   const freightAmount = manualMode.freight ? toNumber(manualValues.freight) : freightAutoAmount;
   const otherAmount = manualMode.other ? toNumber(manualValues.other) : otherAutoAmount;
-  const cdAmount = toNumber(salePreviewRow?.cd_amount);
-  const adjustmentAmount = toNumber(salePreviewRow?.adjustment_amount);
-  const tdsAmount = toNumber(salePreviewRow?.tds_amount);
+  const cdAutoAmount = toNumber(salePreviewRow?.cd_amount);
+  const adjustmentAutoAmount = toNumber(salePreviewRow?.adjustment_amount);
+  const tdsAutoAmount = toNumber(salePreviewRow?.tds_amount);
+  const cdAmount = manualMode.cd ? toNumber(manualValues.cd) : cdAutoAmount;
+  const adjustmentAmount = manualMode.adjustment ? toNumber(manualValues.adjustment) : adjustmentAutoAmount;
+  const tdsAmount = manualMode.tds ? toNumber(manualValues.tds) : tdsAutoAmount;
   const roundOff = toNumber(salePreviewRow?.round_off);
 
   const totalDeduction = shortageAmount + claimAmount + freightAmount + otherAmount + cdAmount + adjustmentAmount + tdsAmount;
@@ -150,18 +168,24 @@ function WarehouseSalePreviewModal({
         claim: claimAutoAmount,
         freight: freightAutoAmount,
         other: otherAutoAmount,
+        cd: cdAutoAmount,
+        adjustment: adjustmentAutoAmount,
+        tds: tdsAutoAmount,
       }[key];
       setManualValues((prev) => ({ ...prev, [key]: Number(autoValue || 0).toFixed(2) }));
     }
   };
 
   const handleReset = () => {
-    setManualMode({ shortage: false, claim: false, freight: false, other: false });
+    setManualMode({ shortage: false, claim: false, freight: false, other: false, cd: false, adjustment: false, tds: false });
     setManualValues({
       shortage: shortageAutoAmount.toFixed(2),
       claim: claimAutoAmount.toFixed(2),
       freight: freightAutoAmount.toFixed(2),
       other: otherAutoAmount.toFixed(2),
+      cd: cdAutoAmount.toFixed(2),
+      adjustment: adjustmentAutoAmount.toFixed(2),
+      tds: tdsAutoAmount.toFixed(2),
     });
     setSaleTransportMode("auto");
     setSaleTransportManualAmount(freightAutoAmount.toFixed(2));
@@ -215,8 +239,11 @@ function WarehouseSalePreviewModal({
       { key: "claim", label: "Claim", auto: claimAutoAmount, value: claimAmount },
       { key: "freight", label: "Freight", auto: freightAutoAmount, value: freightAmount },
       { key: "other", label: "Others", auto: otherAutoAmount, value: otherAmount },
+      { key: "cd", label: "CD", auto: cdAutoAmount, value: cdAmount },
+      { key: "adjustment", label: "Adjustment", auto: adjustmentAutoAmount, value: adjustmentAmount },
+      { key: "tds", label: "TDS", auto: tdsAutoAmount, value: tdsAmount },
     ],
-    [formatDecimal4, shortageQtyAuto, shortageAutoAmount, claimAutoAmount, freightAutoAmount, otherAutoAmount, shortageAmount, claimAmount, freightAmount, otherAmount]
+    [formatDecimal4, shortageQtyAuto, shortageAutoAmount, claimAutoAmount, freightAutoAmount, otherAutoAmount, cdAutoAmount, adjustmentAutoAmount, tdsAutoAmount, shortageAmount, claimAmount, freightAmount, otherAmount, cdAmount, adjustmentAmount, tdsAmount]
   );
 
   return (
@@ -323,17 +350,18 @@ function WarehouseSalePreviewModal({
                       <td style={td}>{row.label}</td>
                       <td style={td}>{formatMoney(row.auto)}</td>
                       <td style={td}>
-                        <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-                          <input type="checkbox" checked={Boolean(manualMode[row.key])} disabled={!isAdmin} onChange={(e) => setModeValue(row.key, e.target.checked)} />
-                          <input type="number" step="0.01" value={manualValues[row.key]} disabled={!isAdmin || !manualMode[row.key]} onChange={(e) => setManualValues((prev) => ({ ...prev, [row.key]: e.target.value }))} style={{ width: 120, padding: "7px 8px", border: "1px solid #cbd5e1", borderRadius: 7 }} />
+                        <div style={{ display: "flex", alignItems: "center", gap: 8, minWidth: 150 }}>
+                          <label style={{ display: "inline-flex", alignItems: "center", gap: 5, color: manualMode[row.key] ? "#9a3412" : "#475569", fontWeight: 800, fontSize: 11, whiteSpace: "nowrap" }}>
+                            <input type="checkbox" checked={Boolean(manualMode[row.key])} disabled={!isAdmin} onChange={(e) => setModeValue(row.key, e.target.checked)} />
+                            Manual
+                          </label>
+                          <input type="number" step="0.01" value={manualValues[row.key]} disabled={!isAdmin || !manualMode[row.key]} onChange={(e) => setManualValues((prev) => ({ ...prev, [row.key]: e.target.value }))} style={{ width: 105, padding: "7px 8px", border: "1px solid #cbd5e1", borderRadius: 7, background: manualMode[row.key] ? "#fff" : "#f8fafc" }} />
                         </div>
                       </td>
                       <td style={{ ...td, fontWeight: 800 }}>{formatMoney(row.value)}</td>
                     </tr>
                   ))}
-                  {[['CD', cdAmount], ['Adjustment', adjustmentAmount], ['TDS', tdsAmount]].map(([label, value]) => (
-                    <tr key={label}><td style={td}>{label}</td><td style={td}>Auto</td><td style={td}>-</td><td style={{ ...td, fontWeight: 800 }}>{formatMoney(value)}</td></tr>
-                  ))}
+
                   <tr><td style={{ ...td, fontWeight: 800 }}>Total Deduction</td><td style={td}>-</td><td style={td}>-</td><td style={{ ...td, fontWeight: 900 }}>{formatMoney(totalDeduction)}</td></tr>
                   <tr><td style={td}>Round Off</td><td style={td}>-</td><td style={td}>-</td><td style={{ ...td, fontWeight: 800 }}>{formatMoney(roundOff)}</td></tr>
                 </tbody>
