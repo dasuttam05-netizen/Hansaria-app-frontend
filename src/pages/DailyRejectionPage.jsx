@@ -441,9 +441,10 @@ export default function DailyRejectionPage() {
     </div>
   );
 
-  const renderTable = (tableRows, withWorkflow = true) => {
+  const renderTable = (tableRows, withWorkflow = true, reportMode = false) => {
     const showManagerWorkflow = withWorkflow && canAssign;
-    const totalColumns = 15 + (showManagerWorkflow ? 3 : withWorkflow ? 1 : 0);
+    const showReportWorkflow = reportMode;
+    const totalColumns = 15 + (showManagerWorkflow || showReportWorkflow ? 3 : withWorkflow ? 1 : 0);
     const headers = [
       "Date",
       "Rejection No",
@@ -459,7 +460,7 @@ export default function DailyRejectionPage() {
       "Work",
       "Assigned To",
       "Status",
-      ...(showManagerWorkflow ? ["Assign Work", "Select Staff", "Work Action"] : withWorkflow ? ["Work Action"] : []),
+      ...(showManagerWorkflow || showReportWorkflow ? ["Assign Work", "Select Staff", "Work Action"] : withWorkflow ? ["Work Action"] : []),
       "Action",
     ];
 
@@ -467,7 +468,7 @@ export default function DailyRejectionPage() {
       <>
         <div className="dr-desktop-table">
           <div style={styles.tableOuter}>
-            <table style={{ ...styles.dataTable, minWidth: showManagerWorkflow ? 2050 : withWorkflow ? 1750 : 1600 }}>
+            <table style={{ ...styles.dataTable, minWidth: showManagerWorkflow ? 2350 : showReportWorkflow ? 2250 : withWorkflow ? 1850 : 1650 }}>
               <thead>
                 <tr>
                   {headers.map((head) => (
@@ -504,6 +505,12 @@ export default function DailyRejectionPage() {
                           <td style={{ ...styles.td, ...styles.workflowTd }}><select value={actionValue} disabled={isComplete} onChange={(e) => setAssignedAction((prev) => ({ ...prev, [rowId]: e.target.value }))} style={styles.workflowSelect}><option value="">Select Work</option>{WORK_DESCRIPTIONS.map((item) => <option key={item} value={item}>{item}</option>)}</select></td>
                           <td style={{ ...styles.td, ...styles.workflowTd }}><select value={employeeValue} disabled={isComplete} onChange={(e) => setAssignedEmployee((prev) => ({ ...prev, [rowId]: e.target.value }))} style={styles.workflowSelect}><option value="">Select Staff</option>{masters.employees.map((item) => <option key={idOf(item)} value={idOf(item)}>{textOf(item)}</option>)}</select></td>
                           <td style={{ ...styles.td, ...styles.workflowTd }}><button type="button" disabled={rowBusy || isComplete || !actionValue || !employeeValue} onClick={() => assignRow(rowId)} style={{ ...styles.assignButtonInline, opacity: rowBusy || isComplete || !actionValue || !employeeValue ? 0.55 : 1 }}>{rowBusy ? "Assigning..." : row?.status === "RUNNING" ? "Reassign & Keep Running" : "Assign & Start Work"}</button></td>
+                        </>
+                      ) : showReportWorkflow ? (
+                        <>
+                          <td style={{ ...styles.td, ...styles.workflowTd }}><span style={styles.reportWorkflowValue}>{row?.action_type || "-"}</span></td>
+                          <td style={{ ...styles.td, ...styles.workflowTd }}><span style={styles.reportWorkflowValue}>{row?.assigned_to_name || "-"}</span></td>
+                          <td style={{ ...styles.td, ...styles.workflowTd }}><span style={{ ...styles.reportWorkflowChip, ...statusStyle(row?.status) }}>{row?.status === "COMPLETE" ? "Completed" : row?.status === "RUNNING" ? "Running" : row?.status === "ASSIGNED" ? "Assigned" : "Pending"}</span></td>
                         </>
                       ) : withWorkflow ? (
                         <td style={{ ...styles.td, ...styles.workflowTd }}>{assignedToMe && row?.status === "RUNNING" ? <div style={styles.workerInline}><input value={completionRemarks[rowId] || ""} onChange={(e) => setCompletionRemarks((prev) => ({ ...prev, [rowId]: e.target.value }))} placeholder="Completion note" style={styles.workflowInput} /><button type="button" disabled={rowBusy} onClick={() => completeRow(rowId, row?.rejection_qty)} style={styles.completeInline}>{rowBusy ? "Completing..." : "✓ Complete Work"}</button></div> : <span style={styles.mutedDash}>-</span>}</td>
@@ -625,7 +632,7 @@ export default function DailyRejectionPage() {
             <Field label="To Date"><input className="daily-rejection-report-input" type="date" value={reportTo} onChange={(e) => setReportTo(e.target.value)} style={styles.input} /></Field>
             <Field label="Work"><select className="daily-rejection-report-input" value={actionFilter} onChange={(e) => setActionFilter(e.target.value)} style={styles.input}><option value="ALL">All Work</option>{WORK_DESCRIPTIONS.map((item) => <option key={item} value={item}>{item}</option>)}</select></Field>
           </div>
-          <div style={styles.reportTableWrap}>{reportRows.length ? renderTable(reportRows, false) : <div style={styles.empty}>Select dates and click Generate Report.</div>}</div>
+          <div style={styles.reportTableWrap}>{reportRows.length ? renderTable(reportRows, false, true) : <div style={styles.empty}>Select dates and click Generate Report.</div>}</div>
         </div>
       ) : null}
 
@@ -758,6 +765,8 @@ const styles = {
     minWidth: 0,
   },
   reportTableWrap: { marginTop: 10, overflowX: 'auto', borderRadius: 12 },
+  reportWorkflowValue: { display: 'inline-flex', alignItems: 'center', minHeight: 30, padding: '5px 8px', borderRadius: 8, background: '#f8fafc', border: '1px solid #e2e8f0', fontWeight: 800, color: '#0f172a', whiteSpace: 'nowrap' },
+  reportWorkflowChip: { display: 'inline-flex', alignItems: 'center', borderRadius: 999, padding: '5px 8px', fontSize: 10, fontWeight: 900, whiteSpace: 'nowrap', border: '1px solid transparent' },
   toast: { position: 'fixed', top: 18, right: 18, zIndex: 99999, minWidth: 300, maxWidth: 'min(420px, calc(100vw - 36px))', display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', borderRadius: 12, border: '1px solid', boxShadow: '0 14px 35px rgba(15,23,42,.18)', backdropFilter: 'blur(8px)' },
   toastKinds: { success: { background: '#ecfdf5', color: '#065f46', borderColor: '#a7f3d0' }, error: { background: '#fef2f2', color: '#991b1b', borderColor: '#fecaca' }, warning: { background: '#fffbeb', color: '#92400e', borderColor: '#fde68a' }, info: { background: '#eff6ff', color: '#1e40af', borderColor: '#bfdbfe' } },
   toastDot: { width: 8, height: 8, borderRadius: 999, background: 'currentColor', flex: '0 0 auto' },
