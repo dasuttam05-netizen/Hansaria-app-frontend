@@ -334,8 +334,9 @@ export default function DailyRejectionPage() {
             <Icon type="edit" />
           </button>
         ) : <span style={styles.iconSpacer} />}
-        <button type="button" title="Copy Text" aria-label="Copy Text" onClick={() => copyRowText(row)} style={{ ...styles.iconButton, ...styles.iconCopy }}>
-          <Icon type="copy" />
+        <button type="button" title="Copy Text" aria-label="Copy Text" onClick={() => copyRowText(row)} style={{ ...styles.iconButton, ...styles.copyButton }}>
+          <Icon type="copy" size={16} />
+          <span>Copy</span>
         </button>
         <button type="button" title="WhatsApp" aria-label="WhatsApp" onClick={() => shareWhatsApp(row)} style={{ ...styles.iconButton, ...styles.iconWhatsapp }}>
           <Icon type="whatsapp" />
@@ -355,7 +356,7 @@ export default function DailyRejectionPage() {
         <thead>
           <tr>
             {["Date","Rejection No","Company","Account","Consignee","Product","Original","Unloading","Reject","Reason","Work","Assigned To","Status","Action"].map((head) => (
-              <th key={head} style={styles.th}>{head}</th>
+              <th key={head} style={{ ...styles.th, ...(head === 'Action' ? styles.actionTh : {}) }}>{head}</th>
             ))}
           </tr>
         </thead>
@@ -376,7 +377,7 @@ export default function DailyRejectionPage() {
                 <td style={styles.td}>{row?.action_type || "-"}</td>
                 <td style={styles.td}>{row?.assigned_to_name || "-"}</td>
                 <td style={styles.td}><span style={{ ...styles.statusChip, ...statusStyle(row?.status) }}>{row?.status || "PENDING"}</span></td>
-                <td style={{ ...styles.td, position: "sticky", right: 0, background: "#fff", zIndex: 2 }}>{renderActionIcons(row)}</td>
+                <td style={{ ...styles.td, ...styles.actionTd, position: "sticky", right: 0, background: "#fff", zIndex: 2 }}>{renderActionIcons(row)}</td>
               </tr>
               {withWorkflow && canAssign && row?.status !== "COMPLETE" ? (
                 <tr>
@@ -568,6 +569,7 @@ const styles = {
   iconButton: { width: 32, height: 32, borderRadius: 9, border: '1px solid', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', background: '#fff' },
   iconEdit: { color: '#2563eb', borderColor: '#bfdbfe', background: '#eff6ff' },
   iconCopy: { color: '#7c3aed', borderColor: '#ddd6fe', background: '#f5f3ff' },
+  copyButton: { color: '#7c3aed', borderColor: '#ddd6fe', background: '#f5f3ff', minWidth: 66, padding: '7px 10px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5, fontWeight: 800 },
   iconWhatsapp: { color: '#15803d', borderColor: '#bbf7d0', background: '#f0fdf4' },
   iconPdf: { color: '#dc2626', borderColor: '#fecaca', background: '#fef2f2' },
   iconSpacer: { width: 32, height: 32, display: 'inline-block' },
