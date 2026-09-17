@@ -59,6 +59,7 @@ function WarehouseSalePreviewModal({
     other: false,
     adjustment: false,
   });
+  const [saleBiltiFreightAmount, setSaleBiltiFreightAmount] = useState(null);
   const [purchaseManualValues, setPurchaseManualValues] = useState({
     claim: "",
     labour: "",
@@ -68,6 +69,32 @@ function WarehouseSalePreviewModal({
     other: "",
     adjustment: "",
   });
+
+  useEffect(() => {
+    let cancelled = false;
+    const biltiId = salePreviewRow?.bilti_id || salePreviewRow?.transport_bilti_id;
+    if (!salePreviewRow || !biltiId || !axios?.get) {
+      setSaleBiltiFreightAmount(null);
+      return undefined;
+    }
+    const loadBiltiFreight = async () => {
+      try {
+        const response = await axios.get(`/api/transport-bilti/${biltiId}`);
+        const amount = toNumber(
+          response.data?.transport_charge ??
+          response.data?.net_amount ??
+          response.data?.payable_amount ??
+          response.data?.gross_freight ??
+          0
+        );
+        if (!cancelled) setSaleBiltiFreightAmount(amount);
+      } catch (err) {
+        if (!cancelled) setSaleBiltiFreightAmount(null);
+      }
+    };
+    loadBiltiFreight();
+    return () => { cancelled = true; };
+  }, [salePreviewRow?.bilti_id, salePreviewRow?.transport_bilti_id, axios, toNumber]);
 
   useEffect(() => {
     if (!salePreviewRow) return;
@@ -141,13 +168,15 @@ function WarehouseSalePreviewModal({
   const saleRate = toNumber(salePreviewRow?.rate || previewSource?.rate);
   const saleAmount = toNumber(summary?.gross_amount ?? preview.grossAmount ?? saleQty * saleRate);
 
-  const saleFreightAutoAmount = toNumber(
-    salePreviewSummary?.transport_charge ??
-    salePreviewSummary?.summary?.transport_charge ??
-    salePreviewRow?.transport_charge ??
-    salePreviewRow?.freight ??
-    0
-  );
+  const saleFreightAutoAmount = saleBiltiFreightAmount !== null
+    ? saleBiltiFreightAmount
+    : toNumber(
+        salePreviewSummary?.transport_charge ??
+        salePreviewSummary?.summary?.transport_charge ??
+        salePreviewRow?.transport_charge ??
+        salePreviewRow?.freight ??
+        0
+      );
   const purchaseQty = purchaseLinks.reduce((sum, item) => sum + toNumber(item.quantity ?? item.weight), 0);
   const purchaseAmount = purchaseLinks.reduce((sum, item) => sum + toNumber(item.amount ?? (toNumber(item.quantity ?? item.weight) * toNumber(item.rate))), 0);
   const purchaseDeductionTotals = useMemo(() => {
@@ -387,6 +416,8 @@ function WarehouseSalePreviewModal({
                   <tr><td style={td}>Sale Qty</td><td style={td}>{formatDecimal4(saleQty)}</td></tr>
                   <tr><td style={td}>Sale Rate</td><td style={td}>{formatMoney(saleRate)}</td></tr>
                   <tr><td style={td}>Sale Amount</td><td style={{ ...td, fontWeight: 900 }}>{formatMoney(saleAmount)}</td></tr>
+                  <tr><td style={td}>Freight (Transport Bilti)</td><td style={{ ...td, fontWeight: 800, color: "#9a3412" }}>{formatMoney(freightAmount)}</td></tr>
+                  <tr><td style={td}>Net Amount</td><td style={{ ...td, fontWeight: 900, color: "#0f766e" }}>{formatMoney(netSale)}</td></tr>
                   <tr><td style={td}>Buyer</td><td style={td}>{preview.party || previewSource?.buyer_name || previewSource?.buyer || previewSource?.party_name || previewSource?.company_name || "-"}</td></tr>
                 </tbody>
               </table>
