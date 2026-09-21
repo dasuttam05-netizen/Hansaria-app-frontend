@@ -106,13 +106,68 @@ export default function CompanyAccountsPage() {
     }));
   }, []);
 
+  const lookupAccount = useCallback(async (field, value) => {
+    const needle = String(value || "").trim();
+    if (!needle) return;
+
+    // First use already-loaded accounts for instant response.
+    const localMatch = findAccountByTaxOrPin(field, needle);
+    if (localMatch) {
+      if (field === "gst_no") {
+        // GST lookup: fill Account Name + PAN + Address.
+        setFormData((prev) => ({
+          ...prev,
+          account_name: localMatch.account_name || localMatch.accountName || prev.account_name || "",
+          pan_no: localMatch.pan_no || localMatch.panNo || prev.pan_no || "",
+          address: localMatch.address || prev.address || "",
+          company_id: localMatch.company_id ? String(localMatch.company_id) : prev.company_id,
+        }));
+      } else if (!String(formData.gst_no || "").trim()) {
+        // PIN lookup without GST: only fill Address.
+        setFormData((prev) => ({
+          ...prev,
+          address: localMatch.address || prev.address || "",
+        }));
+      }
+      return;
+    }
+
+    try {
+      const params = field === "gst_no" ? { gst_no: needle } : { pin_no: needle };
+      const res = await axios.get(`${API_URL}/lookup`, { params });
+      const account = res.data?.account || null;
+      if (!account) return;
+
+      if (field === "gst_no") {
+        setFormData((prev) => ({
+          ...prev,
+          account_name: account.account_name || prev.account_name || "",
+          pan_no: account.pan_no || prev.pan_no || "",
+          address: account.address || prev.address || "",
+          company_id: account.company_id ? String(account.company_id) : prev.company_id,
+        }));
+      } else if (!String(formData.gst_no || "").trim()) {
+        setFormData((prev) => ({
+          ...prev,
+          address: account.address || prev.address || "",
+        }));
+      }
+    } catch (err) {
+      console.error("Account lookup failed:", err);
+    }
+  }, [API_URL, findAccountByTaxOrPin, formData.gst_no]);
+
   const handleChange = (e) => {
     const { name, value } = e.target;
     setFormData((prev) => ({ ...prev, [name]: value }));
+  };
 
-    if (name === "gst_no" || name === "pin_no") {
-      const match = findAccountByTaxOrPin(name, value);
-      if (match) fillAccountFromMaster(match);
+  const handleLookupBlur = (e) => {
+    const { name, value } = e.target;
+    if (name === "gst_no") {
+      lookupAccount("gst_no", value);
+    } else if (name === "pin_no" && !String(formData.gst_no || "").trim()) {
+      lookupAccount("pin_no", value);
     }
   };
 
@@ -190,26 +245,19 @@ export default function CompanyAccountsPage() {
     }
   };
 
-  const downloadImportFormat = async () => {
-    try {
-      const res = await axios.get(`${API_URL}/import-template`, {
-        responseType: "blob",
-      });
-      const blob = new Blob([res.data], {
-        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-      });
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = "company_accounts_import_format.xlsx";
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
-    } catch (err) {
-      console.error(err);
-      alert(err?.response?.data?.error || "Failed to download Excel import format");
-    }
+  const downloadImportFormat = () => {
+    const header = "company_name,account_name,address,gst_no,pan_no,pin_no,mobile";
+    const sample = "ABC COMPANY,Main A/C,Head Office Address,22AAAAA0000A1Z5,ABCDE1234F,700001,9876543210";
+    const csv = `${header}\n${sample}\n`;
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "company_accounts_import_format.csv";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
   };
 
   const parseCsvLine = (line) => {
@@ -361,26 +409,22 @@ export default function CompanyAccountsPage() {
                   name="gst_no"
                   value={formData.gst_no}
                   onChange={handleChange}
+                  onBlur={handleLookupBlur}
                   placeholder="GST No"
                   style={inp}
                   maxLength={15}
                   autoComplete="off"
                 />
               </Field>
-              <Field label="GST No">
-                <input name="gst_no" value={formData.gst_no} onChange={handleChange} placeholder="GST No" style={inp} />
-              </Field>
               <Field label="PAN No">
                 <input name="pan_no" value={formData.pan_no} onChange={handleChange} placeholder="PAN No *" style={inp} />
-              </Field>
-              <Field label="PIN No">
-                <input name="pin_no" value={formData.pin_no} onChange={handleChange} placeholder="PIN No" style={inp} inputMode="numeric" />
               </Field>
               <Field label="PIN No">
                 <input
                   name="pin_no"
                   value={formData.pin_no}
                   onChange={handleChange}
+                  onBlur={handleLookupBlur}
                   placeholder="PIN No"
                   style={inp}
                   maxLength={6}
