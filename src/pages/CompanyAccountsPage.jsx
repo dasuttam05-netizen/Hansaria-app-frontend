@@ -190,19 +190,26 @@ export default function CompanyAccountsPage() {
     }
   };
 
-  const downloadImportFormat = () => {
-    const header = "company_name,account_name,address,gst_no,pan_no,pin_no,mobile";
-    const sample = "ABC COMPANY,Main A/C,Head Office Address,22AAAAA0000A1Z5,ABCDE1234F,700001,9876543210";
-    const csv = `${header}\n${sample}\n`;
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = window.URL.createObjectURL(blob);
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "company_accounts_import_format.csv";
-    document.body.appendChild(link);
-    link.click();
-    link.remove();
-    window.URL.revokeObjectURL(url);
+  const downloadImportFormat = async () => {
+    try {
+      const res = await axios.get(`${API_URL}/import-template`, {
+        responseType: "blob",
+      });
+      const blob = new Blob([res.data], {
+        type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = "company_accounts_import_format.xlsx";
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error(err);
+      alert(err?.response?.data?.error || "Failed to download Excel import format");
+    }
   };
 
   const parseCsvLine = (line) => {
@@ -360,8 +367,14 @@ export default function CompanyAccountsPage() {
                   autoComplete="off"
                 />
               </Field>
+              <Field label="GST No">
+                <input name="gst_no" value={formData.gst_no} onChange={handleChange} placeholder="GST No" style={inp} />
+              </Field>
               <Field label="PAN No">
                 <input name="pan_no" value={formData.pan_no} onChange={handleChange} placeholder="PAN No *" style={inp} />
+              </Field>
+              <Field label="PIN No">
+                <input name="pin_no" value={formData.pin_no} onChange={handleChange} placeholder="PIN No" style={inp} inputMode="numeric" />
               </Field>
               <Field label="PIN No">
                 <input
