@@ -1,620 +1,463 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useRef, useState, useEffect, useCallback } from "react";
 import axios from "axios";
-import { useNavigate } from "react-router-dom";
-import { hasPermission, loadSession } from "../utils/auth";
-
-const API = "/api/daily-rejections";
-const STATUSES = ["ALL", "PENDING", "RUNNING", "COMPLETE", "REPORT"];
-const WORK_DESCRIPTIONS = ["PALTI", "WAREHOUSE UNLOAD", "LOCAL SALE", "PARTY ACCOUNT", "OTHERS"];
-const REASONS = ["HIGH FUNGUS", "HIGH MOISTURE", "DISCOLOUR", "DAMAGE", "LIVE INSECT", "WATER DAMAGE", "OTHERS"];
-
-const makeEmptyForm = (user) => ({
-  entry_date: new Date().toISOString().slice(0, 10),
-  employee_id: user?.id ? String(user.id) : "",
-  location_id: user?.location_id ? String(user.location_id) : "",
+import { useLocation, useNavigate } from "react-router-dom";
+import { loadSession, hasPermission } from "../utils/auth";
+const emptyForm = () => ({
+  account_name: "",
+  address: "",
   company_id: "",
-  company_account_id: "",
-  product_id: "",
-  consignee_id: "",
-  original_qty: "",
-  actual_unloading_qty: "",
-  rejection_qty: "",
-  reason: "",
-  remarks: "",
+  pan_no: "",
+  mobile: "",
 });
 
-const idOf = (row) => String(row?.id ?? row?._id ?? row?.legacy_id ?? "");
-const textOf = (row) => String(row?.name ?? row?.title ?? row?.display_name ?? row?.party_name ?? row?.company_name ?? row?.consignee_name ?? "");
-const money = (value) => Number(value || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-
-function pickArray(payload, keys) {
-  if (Array.isArray(payload)) return payload;
-  for (const key of keys) {
-    if (Array.isArray(payload?.[key])) return payload[key];
-    if (Array.isArray(payload?.data?.[key])) return payload.data[key];
-  }
-  return [];
-}
-
-function statusStyle(status) {
-  const styles = {
-    PENDING: { background: "#fff7ed", color: "#c2410c", border: "1px solid #fed7aa" },
-    ASSIGNED: { background: "#eff6ff", color: "#1d4ed8", border: "1px solid #bfdbfe" },
-    RUNNING: { background: "#ecfeff", color: "#0f766e", border: "1px solid #99f6e4" },
-    COMPLETE: { background: "#ecfdf5", color: "#047857", border: "1px solid #a7f3d0" },
-  };
-  return styles[status] || { background: "#f1f5f9", color: "#475569", border: "1px solid #e2e8f0" };
-}
-
-
-function formatDate(value) {
-  if (!value) return "-";
-  const d = new Date(value);
-  return Number.isNaN(d.getTime()) ? "-" : d.toLocaleDateString("en-GB");
-}
-
-function Icon({ type, size = 18 }) {
-  const common = {
-    width: size,
-    height: size,
-    viewBox: "0 0 24 24",
-    fill: "none",
-    stroke: "currentColor",
-    strokeWidth: 2,
-    strokeLinecap: "round",
-    strokeLinejoin: "round",
-    "aria-hidden": true,
-  };
-  if (type === "edit") {
-    return <svg {...common}><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>;
-  }
-  if (type === "whatsapp") {
-    return <svg {...common}><path d="M20 11.5a8 8 0 0 1-11.8 7L4 20l1.5-4A8 8 0 1 1 20 11.5Z"/><path d="M9 8.8c.2-.4.5-.4.8-.4l.6 1.4c.1.2.1.4-.1.6l-.5.5c.6 1 1.4 1.8 2.4 2.3l.6-.6c.2-.2.3-.2.6-.1l1.4.6c.3.1.4.3.3.6-.3.9-.9 1.4-1.7 1.3-2.9-.3-5.8-3.2-6.2-6.1-.1-.8.3-1.4 1.8-1.5Z"/></svg>;
-  }
-  if (type === "pdf") {
-    return <svg {...common}><path d="M6 2h9l4 4v16H6Z"/><path d="M14 2v5h5"/><path d="M8 15h2.5a1.5 1.5 0 0 0 0-3H8v6"/><path d="M13 12h2a3 3 0 0 1 0 6h-2Z"/><path d="M19 12h-3v6"/></svg>;
-  }
-  if (type === "copy") {
-    return <svg {...common}><rect x="8" y="8" width="11" height="12" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h3"/></svg>;
-  }
-  return null;
-}
-
-export default function DailyRejectionPage() {
+export default function CompanyAccountsPage() {
+  const location = useLocation();
   const navigate = useNavigate();
-  const session = loadSession() || {};
-  const user = session.user || null;
+  const [accounts, setAccounts] = useState([]);
+  const [companies, setCompanies] = useState([]);
+  const [view, setView] = useState(() => (
+    location.state?.returnTo && location.state.returnField === "account" ? "form" : "list"
+  ));
+  const [formData, setFormData] = useState(() => ({
+    ...emptyForm(),
+    company_id: location.state?.companyId || "",
+    account_name: location.state?.draftName || "",
+  }));
+  const [editId, setEditId] = useState(null);
+  const submitLockRef = useRef(false);
+  const [importing, setImporting] = useState(false);
 
-  const canCreate = hasPermission(user, "dailyRejection.create");
-  const canAssign = hasPermission(user, "dailyRejection.assign") || String(user?.role || "").toLowerCase() === "admin";
-  const canView = hasPermission(user, "dailyRejection.view") || canCreate || canAssign || hasPermission(user, "dailyRejection.complete") || hasPermission(user, "dailyRejection.report") || String(user?.role || "").toLowerCase() === "admin";
-  const canComplete = hasPermission(user, "dailyRejection.complete") || canAssign;
-  const canEdit = hasPermission(user, "dailyRejection.edit") || String(user?.role || "").toLowerCase() === "admin";
-  const canReport = hasPermission(user, "dailyRejection.report") || String(user?.role || "").toLowerCase() === "admin";
+  const API_URL = "/api/company-accounts";
+  const { user } = loadSession();
+  const isAdmin = hasPermission(user, "all");
+  const canCreate = hasPermission(user, "companyAccounts.create");
+  const canEdit = hasPermission(user, "companyAccounts.edit");
+  const canDelete = hasPermission(user, "companyAccounts.delete");
+  const COMP_API = "/api/companies";
 
-  const [masters, setMasters] = useState({ locations: [], companies: [], accounts: [], products: [], employees: [], consignees: [] });
-  const [rows, setRows] = useState([]);
-  const [summary, setSummary] = useState({ total: 0, pending: 0, assigned: 0, running: 0, complete: 0 });
-  const [status, setStatus] = useState("ALL");
-  const [actionFilter, setActionFilter] = useState("ALL");
-  const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState(makeEmptyForm(user));
-  const [loading, setLoading] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState("");
-  const [assignedEmployee, setAssignedEmployee] = useState({});
-  const [assignedAction, setAssignedAction] = useState({});
-  const [busyId, setBusyId] = useState("");
-  const [completionRemarks, setCompletionRemarks] = useState({});
-  const [editId, setEditId] = useState("");
-  const [reportFrom, setReportFrom] = useState("");
-  const [reportTo, setReportTo] = useState("");
-  const [reportRows, setReportRows] = useState([]);
-
-  const loadMasters = useCallback(async () => {
+  const fetchAccounts = useCallback(async () => {
     try {
-      const response = await axios.get(`${API}/masters`);
-      const payload = response?.data?.data || response?.data || {};
-      setMasters({
-        locations: pickArray(payload, ["locations"]),
-        companies: pickArray(payload, ["companies"]),
-        accounts: pickArray(payload, ["accounts", "companyAccounts"]),
-        products: pickArray(payload, ["products"]),
-        employees: pickArray(payload, ["employees", "staff", "users"]),
-        consignees: pickArray(payload, ["consignees", "consigneeNames", "buyers"]),
-      });
+      const res = await axios.get(API_URL);
+      setAccounts(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
-      setError(err?.response?.data?.error || err?.message || "Unable to load Daily Rejection masters");
+      console.error(err);
+      alert("Failed to fetch accounts");
     }
   }, []);
 
-  const loadData = useCallback(async () => {
-    if (!canView) return;
-    if (status === "REPORT") return;
-    setLoading(true);
-    setError("");
+  const fetchCompanies = useCallback(async () => {
     try {
-      const params = { status };
-      if (actionFilter !== "ALL") params.action_type = actionFilter;
-      const [listResponse, summaryResponse] = await Promise.all([
-        axios.get(API, { params }),
-        axios.get(`${API}/summary`),
-      ]);
-      const listPayload = listResponse?.data?.data || listResponse?.data || [];
-      const summaryPayload = summaryResponse?.data?.data || summaryResponse?.data || {};
-      const list = Array.isArray(listPayload) ? listPayload : (listPayload.rows || listPayload.items || []);
-      setRows(Array.isArray(list) ? list : []);
-      setSummary(summaryPayload && typeof summaryPayload === "object" ? summaryPayload : {});
+      const res = await axios.get(COMP_API);
+      setCompanies(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
-      setError(err?.response?.data?.error || err?.message || "Unable to load Daily Rejection");
-      setRows([]);
-    } finally {
-      setLoading(false);
+      console.error(err);
+      alert("Failed to fetch companies");
     }
-  }, [status, actionFilter, canView]);
+  }, []);
 
-  useEffect(() => { loadMasters(); }, [loadMasters]);
-  useEffect(() => { loadData(); }, [loadData]);
+  useEffect(() => {
+    fetchAccounts();
+    fetchCompanies();
+  }, [fetchAccounts, fetchCompanies]);
 
-  const resetForm = () => setForm(makeEmptyForm(user));
-  const updateForm = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
+  useEffect(() => {
+    if (!location.state?.returnTo || location.state.returnField !== "account") return;
+    setFormData((prev) => ({
+      ...prev,
+      company_id: location.state.companyId || prev.company_id,
+      account_name: location.state.draftName || prev.account_name,
+    }));
+    setView("form");
+  }, [location.state]);
 
-  const filteredAccounts = useMemo(() => {
-    if (!form.company_id) return masters.accounts;
-    const selectedCompany = masters.companies.find((item) => idOf(item) === String(form.company_id));
-    const selectedName = String(selectedCompany?.name || selectedCompany?.company_name || "").trim().toLowerCase();
-    const matched = masters.accounts.filter((account) => {
-      const companyId = account?.company_id ?? account?.companyId ?? account?.company?.id ?? account?.company?._id;
-      const companyName = String(account?.company_name || account?.company?.name || "").trim().toLowerCase();
-      return String(companyId || "") === String(form.company_id) || (!!selectedName && companyName === selectedName);
-    });
-    return matched.length ? matched : masters.accounts;
-  }, [masters.accounts, masters.companies, form.company_id]);
+  useEffect(() => {
+    const requestedId = String(location.state?.editId || "");
+    if (!requestedId || !accounts.length) return;
+    const account = accounts.find((item) => String(item._id || item.id) === requestedId);
+    if (account) handleEdit(account);
+  }, [accounts, location.state]);
 
-  const originalQty = Number(form.original_qty) || 0;
-  const unloadingQty = Number(form.actual_unloading_qty) || 0;
-  const rejectionQty = Math.max(originalQty - unloadingQty, 0);
+  const handleChange = (e) => {
+    setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+  };
 
-  const submitEntry = async (event) => {
-    event.preventDefault();
-    if (!form.location_id || !form.product_id || !form.consignee_id || !form.reason || originalQty <= 0 || unloadingQty < 0 || unloadingQty > originalQty || rejectionQty <= 0) {
-      alert("Location, Product, Consignee, Reason, Original Qty and Actual Unloading Qty are required.");
+  const goList = () => {
+    setView("list");
+    setEditId(null);
+    setFormData(emptyForm());
+  };
+
+  const goAdd = () => {
+    setEditId(null);
+    setFormData(emptyForm());
+    setView("form");
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (submitLockRef.current) return;
+    if (!formData.account_name || !formData.company_id || !formData.pan_no || !formData.mobile) {
+      alert("Account Name, Company, PAN & Mobile are required");
       return;
     }
-    setSaving(true);
+
+    submitLockRef.current = true;
     try {
-      const payload = { ...form, original_qty: originalQty, actual_unloading_qty: unloadingQty, rejection_qty: rejectionQty };
+      let savedAccount = null;
       if (editId) {
-        await axios.put(`${API}/${editId}`, payload);
-        alert("Daily Rejection updated successfully.");
+        savedAccount = (await axios.put(`${API_URL}/${editId}`, formData))?.data || { ...formData, _id: editId };
+        alert("Account updated successfully");
       } else {
-        await axios.post(API, payload);
-        alert("Daily Rejection saved as Pending.");
+        savedAccount = (await axios.post(API_URL, formData))?.data || null;
+        alert("Account added successfully");
       }
-      resetForm();
-      setShowForm(false);
-      setEditId("");
-      await loadData();
+      if (location.state?.returnTo && location.state.returnField === "account" && savedAccount) {
+        navigate(location.state.returnTo, {
+          replace: true,
+          state: { masterCreated: savedAccount, returnField: "account", companyId: formData.company_id },
+        });
+        return;
+      }
+      goList();
+      fetchAccounts();
     } catch (err) {
-      alert(err?.response?.data?.error || err?.message || "Failed to save Daily Rejection");
+      console.error(err);
+      alert(err?.response?.data?.error || "Error saving account");
     } finally {
-      setSaving(false);
+      submitLockRef.current = false;
     }
   };
 
-  const assignRow = async (rowId) => {
-    const employeeId = assignedEmployee[rowId];
-    const actionType = assignedAction[rowId];
-    if (!employeeId || !actionType) {
-      alert("Select staff and Work Description first.");
-      return;
-    }
-    setBusyId(rowId);
+  const handleEdit = (acc) => {
+    setFormData({
+      account_name: acc.account_name || "",
+      address: acc.address || "",
+      company_id: acc.company_id ? String(acc.company_id) : "",
+      pan_no: acc.pan_no || "",
+      mobile: acc.mobile || "",
+    });
+    setEditId(acc._id || acc.id);
+    setView("form");
+  };
+
+  const handleDelete = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this account?")) return;
     try {
-      await axios.patch(`${API}/${rowId}/assign`, { assigned_to: employeeId, action_type: actionType });
-      await loadData();
+      await axios.delete(`${API_URL}/${id}`);
+      fetchAccounts();
     } catch (err) {
-      alert(err?.response?.data?.error || err?.message || "Failed to assign");
-    } finally {
-      setBusyId("");
+      console.error(err);
+      alert(err?.response?.data?.error || "Error deleting account");
     }
   };
 
-  const completeRow = async (rowId, qty) => {
-    setBusyId(rowId);
-    try {
-      await axios.post(`${API}/${rowId}/complete`, { completion_qty: qty, completion_remarks: completionRemarks[rowId] || "" });
-      setCompletionRemarks((prev) => ({ ...prev, [rowId]: "" }));
-      await loadData();
-    } catch (err) {
-      alert(err?.response?.data?.error || err?.message || "Failed to complete");
-    } finally {
-      setBusyId("");
-    }
+  const downloadImportFormat = () => {
+    const header = "company_name,account_name,address,pan_no,mobile";
+    const sample = "ABC COMPANY,Main A/C,Head Office Address,ABCDE1234F,9876543210";
+    const csv = `${header}\n${sample}\n`;
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+    const url = window.URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = "company_accounts_import_format.csv";
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    window.URL.revokeObjectURL(url);
   };
 
-
-  const buildShareText = (row) => [
-    `Daily Rejection ${row?.rejection_no || ""}`.trim(),
-    `Date: ${formatDate(row?.entry_date)}`,
-    `Company: ${row?.company_name || "-"}`,
-    `Account: ${row?.company_account_name || "-"}`,
-    `Consignee: ${row?.consignee_name || row?.consignee || "-"}`,
-    `Product: ${row?.product_name || "-"}`,
-    `Original Qty: ${money(row?.original_qty)}`,
-    `Unloading Qty: ${money(row?.actual_unloading_qty)}`,
-    `Rejection Qty: ${money(row?.rejection_qty)}`,
-    `Reason: ${row?.reason || "-"}`,
-    `Work: ${row?.action_type || "-"}`,
-    `Assigned To: ${row?.assigned_to_name || "-"}`,
-    `Status: ${row?.status || "-"}`,
-  ].join("\n");
-
-  const copyRowText = async (row) => {
-    const text = buildShareText(row);
-    try {
-      if (navigator?.clipboard?.writeText) {
-        await navigator.clipboard.writeText(text);
+  const parseCsvLine = (line) => {
+    const out = [];
+    let cur = "";
+    let inQuotes = false;
+    for (let i = 0; i < line.length; i += 1) {
+      const ch = line[i];
+      if (ch === "\"") {
+        if (inQuotes && line[i + 1] === "\"") {
+          cur += "\"";
+          i += 1;
+        } else {
+          inQuotes = !inQuotes;
+        }
+      } else if (ch === "," && !inQuotes) {
+        out.push(cur.trim());
+        cur = "";
       } else {
-        const area = document.createElement("textarea");
-        area.value = text;
-        area.style.position = "fixed";
-        area.style.left = "-9999px";
-        document.body.appendChild(area);
-        area.focus();
-        area.select();
-        document.execCommand("copy");
-        area.remove();
+        cur += ch;
       }
-      window.alert("Daily Rejection text copied. এখন যাকে চান paste করতে পারবেন।");
+    }
+    out.push(cur.trim());
+    return out;
+  };
+
+  const parseCsvText = (text) => {
+    const lines = String(text || "")
+      .split(/\r?\n/)
+      .map((line) => line.trim())
+      .filter(Boolean);
+    if (lines.length < 2) return [];
+
+    const headers = parseCsvLine(lines[0]).map((h) => h.toLowerCase());
+    return lines.slice(1).map((line) => {
+      const values = parseCsvLine(line);
+      const row = {};
+      headers.forEach((h, idx) => {
+        row[h] = values[idx] || "";
+      });
+      return {
+        company_name: row.company_name || "",
+        company_id: row.company_id || "",
+        account_name: row.account_name || "",
+        address: row.address || "",
+        pan_no: row.pan_no || "",
+        mobile: row.mobile || "",
+      };
+    });
+  };
+
+  const handleImportFile = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    try {
+      setImporting(true);
+      const fileName = String(file.name || "").toLowerCase();
+      let res;
+      if (fileName.endsWith(".xlsx")) {
+        const uploadForm = new FormData();
+        uploadForm.append("file", file);
+        res = await axios.post(`${API_URL}/import-xlsx`, uploadForm, {
+          headers: { "Content-Type": "multipart/form-data" },
+        });
+      } else {
+        const text = await file.text();
+        const rows = parseCsvText(text);
+        if (rows.length === 0) {
+          alert("No valid rows found. Please use the import format file.");
+          return;
+        }
+        res = await axios.post(`${API_URL}/import`, { rows });
+      }
+      const data = res.data || {};
+      alert(
+        `Import complete.\nTotal: ${data.total || 0}\nInserted: ${data.inserted || 0}\nSkipped: ${data.skipped || 0}`
+      );
+      fetchAccounts();
     } catch (err) {
-      window.alert("Copy করা যায়নি। আবার চেষ্টা করুন।");
+      console.error(err);
+      alert(err?.response?.data?.error || "Import failed");
+    } finally {
+      setImporting(false);
     }
   };
 
-  const shareWhatsApp = (row) => {
-    let mobile = String(row?.consignee_mobile || row?.mobile || row?.phone || "").replace(/\D/g, "");
-    if (mobile.length === 10) mobile = `91${mobile}`;
-    const message = buildShareText(row);
-    const url = mobile
-      ? `https://wa.me/${mobile}?text=${encodeURIComponent(message)}`
-      : `https://wa.me/?text=${encodeURIComponent(message)}`;
-    window.open(url, "_blank", "noopener,noreferrer");
+  const btnPrimary = {
+    background: "#2563eb",
+    color: "#fff",
+    border: "none",
+    padding: "10px 18px",
+    borderRadius: "8px",
+    cursor: "pointer",
+    fontWeight: 600,
+    fontSize: "14px",
   };
 
-  const openPdf = (row) => {
-    const popup = window.open("", "_blank", "width=900,height=700");
-    if (!popup) {
-      alert("Please allow pop-ups for the PDF preview.");
-      return;
-    }
-    const esc = (value) => String(value ?? "-")
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;")
-      .replace(/"/g, "&quot;")
-      .replace(/'/g, "&#039;");
-    const htmlDoc = `<!doctype html><html><head><meta charset="utf-8"><title>${esc(row?.rejection_no || "Daily Rejection")}</title>
-      <style>
-        body{font-family:Arial,sans-serif;padding:28px;color:#0f172a}h1{font-size:22px;margin:0 0 4px}
-        .meta{color:#64748b;margin-bottom:18px}.grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
-        .box{border:1px solid #dbe4ee;border-radius:10px;padding:10px}.l{font-size:10px;color:#64748b;font-weight:700;text-transform:uppercase}.v{font-size:14px;font-weight:700;margin-top:3px}
-        .qty{margin-top:16px;padding:12px;border-radius:10px;background:#f0fdfa;border:1px solid #99f6e4}
-        .foot{margin-top:22px;color:#64748b;font-size:11px}
-        @media print{body{padding:10px}}
-      </style></head><body>
-      <h1>Daily Rejection — ${esc(row?.rejection_no || "")}</h1>
-      <div class="meta">${esc(formatDate(row?.entry_date))}</div>
-      <div class="grid">
-        <div class="box"><div class="l">Company</div><div class="v">${esc(row?.company_name)}</div></div>
-        <div class="box"><div class="l">Account</div><div class="v">${esc(row?.company_account_name)}</div></div>
-        <div class="box"><div class="l">Consignee</div><div class="v">${esc(row?.consignee_name || row?.consignee)}</div></div>
-        <div class="box"><div class="l">Product</div><div class="v">${esc(row?.product_name)}</div></div>
-        <div class="box"><div class="l">Reason</div><div class="v">${esc(row?.reason)}</div></div>
-        <div class="box"><div class="l">Work</div><div class="v">${esc(row?.action_type)}</div></div>
-        <div class="box"><div class="l">Assigned To</div><div class="v">${esc(row?.assigned_to_name)}</div></div>
-        <div class="box"><div class="l">Status</div><div class="v">${esc(row?.status)}</div></div>
-        <div class="box"><div class="l">Employee</div><div class="v">${esc(row?.employee_name)}</div></div>
-      </div>
-      <div class="qty"><strong>Original Qty:</strong> ${esc(money(row?.original_qty))} &nbsp;&nbsp; <strong>Unloading Qty:</strong> ${esc(money(row?.actual_unloading_qty))} &nbsp;&nbsp; <strong>Rejection Qty:</strong> ${esc(money(row?.rejection_qty))}</div>
-      <div class="foot">Generated from Warehouse App Daily Rejection.</div>
-      <script>window.onload=function(){setTimeout(function(){window.print()},250)}</script>
-      </body></html>`;
-    popup.document.open();
-    popup.document.write(htmlDoc);
-    popup.document.close();
+  const card = {
+    background: "#fff",
+    border: "1px solid #e2e8f0",
+    borderRadius: "12px",
+    padding: "20px",
+    maxWidth: "1000px",
+    margin: "0 auto",
+    boxShadow: "0 4px 14px rgba(15,23,42,0.06)",
   };
 
-  const renderActionIcons = (row) => {
-    const allowEdit = canEdit && row?.status !== "COMPLETE";
+  if (view === "form") {
     return (
-      <div style={styles.actionIcons}>
-        {allowEdit ? (
-          <button type="button" title="Edit" aria-label="Edit" onClick={() => editRow(row)} style={{ ...styles.iconButton, ...styles.iconEdit }}>
-            <Icon type="edit" />
-          </button>
-        ) : <span style={styles.iconSpacer} />}
-        <button type="button" title="Copy Text" aria-label="Copy Text" onClick={() => copyRowText(row)} style={{ ...styles.iconButton, ...styles.iconCopy }}>
-          <Icon type="copy" />
-        </button>
-        <button type="button" title="WhatsApp" aria-label="WhatsApp" onClick={() => shareWhatsApp(row)} style={{ ...styles.iconButton, ...styles.iconWhatsapp }}>
-          <Icon type="whatsapp" />
-        </button>
-        <button type="button" title="PDF" aria-label="PDF" onClick={() => openPdf(row)} style={{ ...styles.iconButton, ...styles.iconPdf }}>
-          <Icon type="pdf" />
-        </button>
+      <div style={{ fontFamily: "Segoe UI, Arial, sans-serif", padding: "8px" }}>
+        <div style={card}>
+          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "12px", marginBottom: "20px" }}>
+            <h2 style={{ margin: 0, flex: 1, color: "#0f172a", fontSize: "18px" }}>
+              {editId ? "Edit Company Account" : "Add Company Account"}
+            </h2>
+            <button type="button" onClick={goList} style={btnPrimary}>
+              Back To Account List
+            </button>
+          </div>
+
+          <form onSubmit={handleSubmit}>
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+                gap: "16px",
+                alignItems: "start",
+              }}
+            >
+              <Field label="Account Name">
+                <input name="account_name" value={formData.account_name} onChange={handleChange} placeholder="Account Name *" style={inp} />
+              </Field>
+              <Field label="Company">
+                <select name="company_id" value={formData.company_id} onChange={handleChange} style={inp}>
+                  <option value="">Select Company *</option>
+                  {companies.map((c) => (
+                    <option key={c._id} value={c._id}>
+                      {c.name}
+                    </option>
+                  ))}
+                </select>
+              </Field>
+              <Field label="PAN No">
+                <input name="pan_no" value={formData.pan_no} onChange={handleChange} placeholder="PAN No *" style={inp} />
+              </Field>
+              <Field label="Mobile">
+                <input name="mobile" value={formData.mobile} onChange={handleChange} placeholder="Mobile No *" style={inp} />
+              </Field>
+              <Field label="Address">
+                <textarea
+                  name="address"
+                  value={formData.address}
+                  onChange={handleChange}
+                  placeholder="Address"
+                  rows={3}
+                  style={{ ...inp, resize: "vertical", minHeight: "72px" }}
+                />
+              </Field>
+            </div>
+
+            <div style={{ display: "flex", gap: "12px", marginTop: "22px", flexWrap: "wrap" }}>
+              <button type="submit" style={btnPrimary}>
+                Save
+              </button>
+              <button type="button" onClick={goList} style={btnPrimary}>
+                Back To Account List
+              </button>
+            </div>
+          </form>
+        </div>
       </div>
     );
-  };
-
-  const assignedToMeRow = (row) => String(row?.assigned_to || "") === String(user?.id || "") || String(row?.assigned_to || "") === String(user?._id || "");
-
-  const renderTable = (tableRows, withWorkflow = true) => (
-    <div style={styles.tableOuter}>
-      <table style={styles.dataTable}>
-        <thead>
-          <tr>
-            {["Date","Rejection No","Company","Account","Consignee","Product","Original","Unloading","Reject","Reason","Work","Assigned To","Status","Action"].map((head) => (
-              <th key={head} style={styles.th}>{head}</th>
-            ))}
-          </tr>
-        </thead>
-        <tbody>
-          {tableRows.length ? tableRows.map((row) => (
-            <React.Fragment key={idOf(row)}>
-              <tr>
-                <td style={styles.td}>{formatDate(row?.entry_date)}</td>
-                <td style={{ ...styles.td, fontWeight: 900 }}>{row?.rejection_no || idOf(row)}</td>
-                <td style={styles.td}>{row?.company_name || "-"}</td>
-                <td style={styles.td}>{row?.company_account_name || "-"}</td>
-                <td style={styles.td}>{row?.consignee_name || row?.consignee || "-"}</td>
-                <td style={styles.td}>{row?.product_name || "-"}</td>
-                <td style={styles.tdNum}>{money(row?.original_qty)}</td>
-                <td style={styles.tdNum}>{money(row?.actual_unloading_qty)}</td>
-                <td style={{ ...styles.tdNum, fontWeight: 900 }}>{money(row?.rejection_qty)}</td>
-                <td style={styles.td}>{row?.reason || "-"}</td>
-                <td style={styles.td}>{row?.action_type || "-"}</td>
-                <td style={styles.td}>{row?.assigned_to_name || "-"}</td>
-                <td style={styles.td}><span style={{ ...styles.statusChip, ...statusStyle(row?.status) }}>{row?.status || "PENDING"}</span></td>
-                <td style={{ ...styles.td, position: "sticky", right: 0, background: "#fff", zIndex: 2 }}>{renderActionIcons(row)}</td>
-              </tr>
-              {withWorkflow && canAssign && row?.status !== "COMPLETE" ? (
-                <tr>
-                  <td colSpan={14} style={styles.subRowCell}>
-                    <div style={styles.assignPanelCompact}>
-                      <div style={styles.assignHead}><span>ASSIGN WORK</span><small>Authorised users only</small></div>
-                      <div style={styles.assignGrid}>
-                        <select value={assignedAction[idOf(row)] || row.action_type || ""} onChange={(e) => setAssignedAction((prev) => ({ ...prev, [idOf(row)]: e.target.value }))} style={styles.input}>
-                          <option value="">Select Work Description</option>
-                          {WORK_DESCRIPTIONS.map((item) => <option key={item} value={item}>{item}</option>)}
-                        </select>
-                        <select value={assignedEmployee[idOf(row)] || row.assigned_to || ""} onChange={(e) => setAssignedEmployee((prev) => ({ ...prev, [idOf(row)]: e.target.value }))} style={styles.input}>
-                          <option value="">Select Staff</option>
-                          {masters.employees.map((item) => <option key={idOf(item)} value={idOf(item)}>{textOf(item)}</option>)}
-                        </select>
-                        <button type="button" disabled={busyId === idOf(row)} onClick={() => assignRow(idOf(row))} style={styles.assignButton}>
-                          {busyId === idOf(row) ? "Assigning..." : row.status === "RUNNING" ? "Reassign & Keep Running" : "Assign & Start Work"}
-                        </button>
-                      </div>
-                    </div>
-                  </td>
-                </tr>
-              ) : null}
-              {withWorkflow && assignedToMeRow(row) && row?.status === "RUNNING" ? (
-                <tr>
-                  <td colSpan={14} style={styles.subRowCell}>
-                    <div style={styles.workerPanelCompact}>
-                      <div><div style={styles.workerTitle}>YOUR ASSIGNED WORK</div><div style={styles.workerWork}>{row?.action_type || "Work assigned"} · {money(row?.rejection_qty)} Qty</div></div>
-                      <div style={styles.completeRow}>
-                        <input value={completionRemarks[idOf(row)] || ""} onChange={(e) => setCompletionRemarks((prev) => ({ ...prev, [idOf(row)]: e.target.value }))} placeholder="Completion remark (optional)" style={styles.input} />
-                        <button type="button" disabled={busyId === idOf(row)} onClick={() => completeRow(idOf(row), row?.rejection_qty)} style={styles.complete}>{busyId === idOf(row) ? "Completing..." : "✓ Complete Work"}</button>
-                      </div>
-                    </div>
-                  </td>
-                </tr>
-              ) : null}
-            </React.Fragment>
-          )) : <tr><td colSpan={14} style={styles.emptyCell}>No Daily Rejection records found.</td></tr>}
-        </tbody>
-      </table>
-    </div>
-  );
-
-
-  const editRow = async (row) => {
-    if (!canEdit) return;
-    setEditId(row?.id || row?._id || "");
-    setForm({
-      entry_date: row?.entry_date ? new Date(row.entry_date).toISOString().slice(0, 10) : new Date().toISOString().slice(0, 10),
-      employee_id: String(row?.employee_id || user?.id || ""),
-      location_id: String(row?.location_id || ""),
-      company_id: String(row?.company_id || ""),
-      company_account_id: String(row?.company_account_id || ""),
-      product_id: String(row?.product_id || ""),
-      consignee_id: String(row?.consignee_id || ""),
-      original_qty: row?.original_qty ?? "",
-      actual_unloading_qty: row?.actual_unloading_qty ?? "",
-      rejection_qty: row?.rejection_qty ?? "",
-      reason: row?.reason || "",
-      remarks: row?.remarks || "",
-    });
-    setShowForm(true);
-  };
-
-  const submitReport = async () => {
-    if (!canReport) return;
-    try {
-      const response = await axios.get(`${API}/report`, { params: { from: reportFrom, to: reportTo, action_type: actionFilter } });
-      const payload = response?.data?.data || response?.data || {};
-      setReportRows(Array.isArray(payload) ? payload : (payload.rows || []));
-    } catch (err) {
-      setError(err?.response?.data?.error || err?.message || "Unable to load report");
-      setReportRows([]);
-    }
-  };
-
-  if (!canView) {
-    return <div style={styles.page}><div style={styles.emptyLarge}><div style={styles.emptyIcon}>!</div><h2 style={styles.emptyTitle}>Daily Rejection Access Required</h2><div style={styles.emptyText}>Please ask an administrator to give you Daily Rejection access.</div></div></div>;
   }
 
   return (
-    <>
-      <style>{`
-        .daily-rejection-report-input {
-          min-height: 38px !important;
-          height: 38px;
-          padding: 7px 10px !important;
-          border-radius: 9px !important;
-          font-size: 13px;
-          background: #ffffff;
-        }
-        @media (max-width: 720px) {
-          .daily-rejection-report-input { width: 100%; }
-        }
-      `}</style>
-      <div style={styles.page}>
-      <div style={styles.hero}>
-        <div><div style={styles.kicker}>WAREHOUSE OPERATIONS</div><h1 style={styles.title}>Daily Rejection</h1><div style={styles.subtitle}>Create rejection entries, assign work to staff, and close completed work from one smart workflow.</div></div>
-        <button type="button" onClick={() => navigate(-1)} style={styles.back}>Back</button>
-      </div>
-
-      <div style={styles.summaryGrid}>
-        {[['Total', summary.total, 'neutral'], ['Pending', summary.pending, 'pending'], ['Running', summary.running, 'running'], ['Complete', summary.complete, 'complete']].map(([label, value, kind]) => (
-          <div key={label} style={{ ...styles.metric, ...(styles.metricKinds[kind] || {}) }}><div style={styles.metricLabel}>{label}</div><div style={styles.metricValue}>{value ?? 0}</div></div>
-        ))}
-      </div>
-
-      <div style={styles.toolbar}>
-        <div style={styles.tabs}>{STATUSES.filter((item) => item !== "REPORT" || canReport).map((item) => <button key={item} type="button" onClick={() => setStatus(item)} style={status === item ? styles.tabActive : styles.tab}>{item}</button>)}</div>
-        <div style={styles.toolbarRight}>
-          <select value={actionFilter} onChange={(e) => setActionFilter(e.target.value)} style={styles.compactSelect}><option value="ALL">All Work</option>{WORK_DESCRIPTIONS.map((item) => <option key={item} value={item}>{item}</option>)}</select>
-          {canCreate && <button type="button" onClick={() => { resetForm(); setShowForm(true); }} style={styles.primary}>+ New Rejection</button>}
-          <button type="button" onClick={loadData} style={styles.secondary}>Refresh</button>
+    <div style={{ fontFamily: "Segoe UI, Arial, sans-serif", padding: "8px" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px", flexWrap: "wrap", gap: "10px" }}>
+        <h2 style={{ margin: 0, fontSize: "18px", color: "#0f172a" }}>Company Account Management</h2>
+        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+          {isAdmin && (
+            <>
+              <button type="button" onClick={downloadImportFormat} style={{ ...btnPrimary, background: "#2563eb" }}>
+                Download Import Format
+              </button>
+              <label
+                style={{
+                  ...btnPrimary,
+                  background: importing ? "#94a3b8" : "#0f766e",
+                  cursor: importing ? "not-allowed" : "pointer",
+                }}
+              >
+                {importing ? "Importing..." : "Import CSV/XLSX"}
+                <input
+                  type="file"
+                  accept=".csv,.xlsx"
+                  onChange={handleImportFile}
+                  disabled={importing}
+                  style={{ display: "none" }}
+                />
+              </label>
+            </>
+          )}
+          {canCreate && (
+            <button type="button" onClick={goAdd} style={{ ...btnPrimary, background: "#0f766e" }}>
+              Add New Account
+            </button>
+          )}
         </div>
       </div>
 
-      {status === "REPORT" && canReport ? (
-        <div style={styles.reportPanel}>
-          <div style={styles.reportHead}><div><div style={styles.kicker}>REPORT</div><div style={styles.reportTitle}>Daily Rejection Date-wise Report</div></div><button type="button" onClick={submitReport} style={styles.primary}>Generate Report</button></div>
-          <div style={styles.reportFilters}>
-            <Field label="From Date"><input className="daily-rejection-report-input" type="date" value={reportFrom} onChange={(e) => setReportFrom(e.target.value)} style={styles.input} /></Field>
-            <Field label="To Date"><input className="daily-rejection-report-input" type="date" value={reportTo} onChange={(e) => setReportTo(e.target.value)} style={styles.input} /></Field>
-            <Field label="Work"><select className="daily-rejection-report-input" value={actionFilter} onChange={(e) => setActionFilter(e.target.value)} style={styles.input}><option value="ALL">All Work</option>{WORK_DESCRIPTIONS.map((item) => <option key={item} value={item}>{item}</option>)}</select></Field>
-          </div>
-          <div style={styles.reportTableWrap}>{reportRows.length ? renderTable(reportRows, false) : <div style={styles.empty}>Select dates and click Generate Report.</div>}</div>
-        </div>
-      ) : null}
-
-      {showForm && (
-        <div style={styles.formCard}>
-          <div style={styles.formHeader}><div><div style={styles.kicker}>NEW ENTRY</div><h2 style={styles.formTitle}>{editId ? "Edit Daily Rejection" : "Create Daily Rejection"}</h2></div><button type="button" onClick={() => setShowForm(false)} style={styles.close}>×</button></div>
-          <div style={styles.infoStrip}>Employee entry starts as <strong>PENDING</strong>. Work Description and Staff assignment are selected later by an authorised assigner.</div>
-          <form onSubmit={submitEntry}>
-            <div style={styles.section}><div style={styles.sectionTitle}>1 · Basic Details</div><div style={styles.grid}>
-              <Field label="Date"><input type="date" value={form.entry_date} onChange={(e) => updateForm('entry_date', e.target.value)} style={styles.input} /></Field>
-              <Field label="Location"><select value={form.location_id} onChange={(e) => updateForm('location_id', e.target.value)} style={styles.input}><option value="">Select Location</option>{masters.locations.map((item) => <option key={idOf(item)} value={idOf(item)}>{textOf(item)}</option>)}</select></Field>
-              <Field label="Company"><select value={form.company_id} onChange={(e) => { updateForm('company_id', e.target.value); updateForm('company_account_id', ''); }} style={styles.input}><option value="">Select Company</option>{masters.companies.map((item) => <option key={idOf(item)} value={idOf(item)}>{textOf(item)}</option>)}</select></Field>
-              <Field label="Company Account"><select value={form.company_account_id} onChange={(e) => updateForm('company_account_id', e.target.value)} style={styles.input}><option value="">Select Account</option>{filteredAccounts.map((item) => <option key={idOf(item)} value={idOf(item)}>{item.account_name || item.name || '-'}</option>)}</select></Field>
-              <Field label="Consignee"><select value={form.consignee_id} onChange={(e) => updateForm('consignee_id', e.target.value)} style={styles.input}><option value="">Select Consignee</option>{masters.consignees.map((item) => <option key={idOf(item)} value={idOf(item)}>{textOf(item)}</option>)}</select></Field>
-              <Field label="Product"><select value={form.product_id} onChange={(e) => updateForm('product_id', e.target.value)} style={styles.input}><option value="">Select Product</option>{masters.products.map((item) => <option key={idOf(item)} value={idOf(item)}>{textOf(item)}</option>)}</select></Field>
-            </div></div>
-
-            <div style={styles.section}><div style={styles.sectionTitle}>2 · Quantity Check</div><div style={styles.quantityGrid}>
-              <Field label="Original Qty"><input type="number" min="0" step="0.01" value={form.original_qty} onChange={(e) => updateForm('original_qty', e.target.value)} style={styles.input} /></Field>
-              <Field label="Actual Unloading Qty"><input type="number" min="0" step="0.01" value={form.actual_unloading_qty} onChange={(e) => updateForm('actual_unloading_qty', e.target.value)} style={styles.input} /></Field>
-              <div style={styles.rejectBox}><div style={styles.rejectLabel}>Automatic Rejection</div><div style={styles.rejectValue}>{money(rejectionQty)}</div><div style={styles.rejectHint}>Original Qty − Actual Unloading Qty</div></div>
-            </div></div>
-
-            <div style={styles.section}><div style={styles.sectionTitle}>3 · Rejection Reason</div><div style={styles.grid}>
-              <Field label="Reason"><select value={form.reason} onChange={(e) => updateForm('reason', e.target.value)} style={styles.input}><option value="">Select Reason</option>{REASONS.map((item) => <option key={item} value={item}>{item}</option>)}</select></Field>
-              <Field label="Remark"><input value={form.remarks} onChange={(e) => updateForm('remarks', e.target.value)} placeholder="Optional note" style={styles.input} /></Field>
-            </div></div>
-
-            <div style={styles.actionRow}><button type="submit" disabled={saving} style={styles.primary}>{saving ? 'Saving...' : editId ? 'Update Rejection' : 'Save Pending'}</button><button type="button" onClick={() => { setShowForm(false); setEditId(""); resetForm(); }} style={styles.secondary}>Cancel</button></div>
-          </form>
-        </div>
-      )}
-
-      {error ? <div style={styles.error}>{error}</div> : null}
-
-      <div style={styles.list}>
-        {loading ? <div style={styles.empty}>Loading Daily Rejection...</div> : renderTable(rows)}
+      <div style={{ overflowX: "auto", border: "1px solid #e2e8f0", borderRadius: "10px", background: "#fff" }}>
+        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
+          <thead>
+            <tr style={{ background: "#0f766e", color: "#fff" }}>
+              <th style={th}>ID</th>
+              <th style={th}>Account Name</th>
+              <th style={th}>Company</th>
+              <th style={th}>PAN</th>
+              <th style={th}>Mobile</th>
+              <th style={th}>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {accounts.map((acc, i) => (
+              <tr key={acc._id} style={{ background: i % 2 ? "#f8fafc" : "#fff" }}>
+                <td style={td}>{String(i + 1).padStart(2, "0")}</td>
+                <td style={td}>{acc.account_name || "-"}</td>
+                <td style={td}>{acc.company_name || "-"}</td>
+                <td style={td}>{acc.pan_no || "-"}</td>
+                <td style={td}>{acc.mobile || "-"}</td>
+                <td style={td}>
+                  {canEdit && (
+                    <button type="button" onClick={() => handleEdit(acc)} style={{ ...mini, background: "#2563eb" }}>
+                      Edit
+                    </button>
+                  )}
+                  {canDelete && (
+                    <button type="button" onClick={() => handleDelete(acc._id)} style={{ ...mini, background: "#dc2626" }}>
+                      Delete
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+            {accounts.length === 0 && (
+              <tr>
+                <td colSpan={6} style={{ ...td, textAlign: "center", padding: "20px" }}>
+                  No accounts found.
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
       </div>
     </div>
-    </>
   );
 }
 
-function Field({ label, children }) { return <label style={styles.field}><span style={styles.label}>{label}</span>{children}</label>; }
-const styles = {
-  page: { minHeight: '100vh', background: 'linear-gradient(180deg,#f8fafc 0%,#eef6f5 100%)', padding: 14, fontFamily: 'Segoe UI,Arial,sans-serif', boxSizing: 'border-box' },
-  hero: { background: 'linear-gradient(135deg,#0f766e,#155e75 72%,#164e63)', color: '#fff', borderRadius: 22, padding: 22, display: 'flex', justifyContent: 'space-between', gap: 16, alignItems: 'center', flexWrap: 'wrap', boxShadow: '0 14px 34px rgba(15,118,110,.22)' },
-  kicker: { fontSize: 11, fontWeight: 900, letterSpacing: 1.1, opacity: .82 }, title: { margin: '4px 0', fontSize: 30, lineHeight: 1.1 }, subtitle: { opacity: .88, fontSize: 13, maxWidth: 760 },
-  back: { border: '1px solid rgba(255,255,255,.35)', background: 'rgba(255,255,255,.12)', color: '#fff', borderRadius: 10, padding: '9px 14px', fontWeight: 800, cursor: 'pointer' },
-  summaryGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(150px,1fr))', gap: 10, margin: '12px 0' },
-  metric: { background: '#fff', border: '1px solid #dbe4ee', borderRadius: 16, padding: 14, boxShadow: '0 7px 20px rgba(15,23,42,.05)' }, metricKinds: { running: { borderColor: '#99f6e4' }, complete: { borderColor: '#a7f3d0' }, pending: { borderColor: '#fed7aa' }, neutral: {} },
-  metricLabel: { fontSize: 11, color: '#64748b', fontWeight: 800 }, metricValue: { fontSize: 25, color: '#0f172a', fontWeight: 900, marginTop: 3 },
-  toolbar: { background: '#fff', border: '1px solid #dbe4ee', borderRadius: 16, padding: 11, display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', alignItems: 'center' }, tabs: { display: 'flex', gap: 7, flexWrap: 'wrap' }, toolbarRight: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' },
-  tab: { border: '1px solid #cbd5e1', background: '#fff', color: '#334155', borderRadius: 999, padding: '8px 12px', fontWeight: 800, cursor: 'pointer' }, tabActive: { border: '1px solid #0f766e', background: '#0f766e', color: '#fff', borderRadius: 999, padding: '8px 12px', fontWeight: 800, cursor: 'pointer' }, compactSelect: { minHeight: 40, border: '1px solid #cbd5e1', borderRadius: 10, padding: '8px 10px', background: '#fff' },
-  primary: { border: 0, background: '#0f766e', color: '#fff', borderRadius: 11, padding: '10px 15px', fontWeight: 900, cursor: 'pointer', boxShadow: '0 5px 12px rgba(15,118,110,.16)' }, secondary: { border: '1px solid #cbd5e1', background: '#fff', color: '#334155', borderRadius: 11, padding: '10px 14px', fontWeight: 900, cursor: 'pointer' },
-  tableOuter: { width: '100%', overflowX: 'auto', background: '#fff', border: '1px solid #dbe4ee', borderRadius: 16, boxShadow: '0 10px 28px rgba(15,23,42,.05)' },
-  dataTable: { width: '100%', borderCollapse: 'separate', borderSpacing: 0, minWidth: 1500, fontSize: 12 },
-  th: { position: 'sticky', top: 0, zIndex: 3, background: '#0f766e', color: '#fff', padding: '11px 10px', textAlign: 'left', fontWeight: 900, whiteSpace: 'nowrap', borderRight: '1px solid rgba(255,255,255,.14)' },
-  td: { padding: '10px', color: '#0f172a', background: '#fff', whiteSpace: 'nowrap', borderTop: '1px solid #eef2f7', verticalAlign: 'middle' },
-  tdNum: { padding: '10px', color: '#0f172a', background: '#fff', whiteSpace: 'nowrap', borderTop: '1px solid #eef2f7', textAlign: 'right', fontVariantNumeric: 'tabular-nums', verticalAlign: 'middle' },
-  statusChip: { display: 'inline-flex', alignItems: 'center', borderRadius: 999, padding: '5px 8px', fontSize: 10, fontWeight: 900, whiteSpace: 'nowrap' },
-  emptyCell: { padding: 28, textAlign: 'center', color: '#64748b', background: '#fff' },
-  actionIcons: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, whiteSpace: 'nowrap' },
-  iconButton: { width: 32, height: 32, borderRadius: 9, border: '1px solid', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', background: '#fff' },
-  iconEdit: { color: '#2563eb', borderColor: '#bfdbfe', background: '#eff6ff' },
-  iconCopy: { color: '#7c3aed', borderColor: '#ddd6fe', background: '#f5f3ff' },
-  iconWhatsapp: { color: '#15803d', borderColor: '#bbf7d0', background: '#f0fdf4' },
-  iconPdf: { color: '#dc2626', borderColor: '#fecaca', background: '#fef2f2' },
-  iconSpacer: { width: 32, height: 32, display: 'inline-block' },
-  subRowCell: { padding: 0, background: '#fbfdff', borderTop: '1px dashed #dbe4ee' },
-  assignPanelCompact: { margin: 0, padding: '9px 10px', borderTop: '1px solid #bfdbfe', borderBottom: '1px solid #bfdbfe', background: 'linear-gradient(90deg,#eff6ff,#f8fbff)' },
-  workerPanelCompact: { margin: 0, padding: '9px 10px', borderTop: '1px solid #99f6e4', borderBottom: '1px solid #99f6e4', background: 'linear-gradient(90deg,#ecfeff,#f0fdfa)' },
-  formCard: { background: '#fff', border: '1px solid #dbe4ee', borderRadius: 20, padding: 17, marginTop: 12, boxShadow: '0 12px 30px rgba(15,23,42,.07)' }, formHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, marginBottom: 8 }, formTitle: { margin: '2px 0 0', color: '#0f172a', fontSize: 23 }, close: { border: 0, background: '#f1f5f9', color: '#334155', width: 35, height: 35, borderRadius: 10, fontSize: 22, cursor: 'pointer' }, infoStrip: { background: '#f0fdfa', border: '1px solid #99f6e4', color: '#115e59', borderRadius: 11, padding: 10, fontSize: 12, marginBottom: 8 },
-  section: { marginTop: 10, paddingTop: 12, borderTop: '1px solid #eef2f7' }, sectionTitle: { color: '#0f172a', fontSize: 15, fontWeight: 900, marginBottom: 10 }, grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(190px,1fr))', gap: 11 }, quantityGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(190px,1fr))', gap: 11 }, field: { display: 'grid', gap: 6 }, label: { fontSize: 12, color: '#475569', fontWeight: 800 }, input: { width: '100%', minHeight: 42, boxSizing: 'border-box', border: '1px solid #cbd5e1', borderRadius: 10, padding: '9px 10px', background: '#fff', color: '#0f172a' },
-  rejectBox: { borderRadius: 13, padding: 13, background: 'linear-gradient(135deg,#ecfeff,#f0fdfa)', border: '1px solid #99f6e4', boxShadow: 'inset 0 1px 0 rgba(255,255,255,.7)' }, rejectLabel: { color: '#0f766e', fontSize: 11, fontWeight: 900, textTransform: 'uppercase' }, rejectValue: { fontSize: 28, fontWeight: 900, color: '#115e59', marginTop: 4 }, rejectHint: { color: '#5f6f7f', fontSize: 11, marginTop: 2 }, actionRow: { display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' },
-  error: { marginTop: 12, padding: 12, background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca', borderRadius: 12, fontWeight: 700 }, list: { display: 'grid', gap: 12, marginTop: 12 }, empty: { background: '#fff', border: '1px dashed #cbd5e1', borderRadius: 16, padding: 30, textAlign: 'center', color: '#64748b' }, emptyLarge: { maxWidth: 560, margin: '12vh auto', background: '#fff', border: '1px solid #dbe4ee', borderRadius: 20, padding: 36, textAlign: 'center', boxShadow: '0 14px 40px rgba(15,23,42,.08)' }, emptyIcon: { width: 48, height: 48, margin: '0 auto 12px', borderRadius: '50%', background: '#fff7ed', color: '#c2410c', display: 'grid', placeItems: 'center', fontWeight: 900, fontSize: 24 }, emptyTitle: { margin: 0, color: '#0f172a' }, emptyText: { marginTop: 8, color: '#64748b' },
-  card: { position: 'relative', overflow: 'hidden', background: '#fff', border: '1px solid #dbe4ee', borderRadius: 18, padding: 15, boxShadow: '0 8px 24px rgba(15,23,42,.05)' }, cardAccent: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, background: '#0f766e' }, cardTop: { display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }, rejNo: { fontWeight: 950, color: '#0f172a', fontSize: 18 }, meta: { color: '#64748b', fontSize: 12, marginTop: 3 }, badge: { borderRadius: 999, padding: '6px 10px', fontSize: 10, fontWeight: 950 }, details: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(145px,1fr))', gap: 8, marginTop: 12 }, detail: { background: '#f8fafc', borderRadius: 11, padding: 9, minWidth: 0 }, detailLabel: { color: '#64748b', fontSize: 10, fontWeight: 800, textTransform: 'uppercase' }, detailValue: { color: '#0f172a', fontWeight: 700, marginTop: 3, wordBreak: 'break-word' },
-  reportPanel: {
-    marginTop: 12,
-    background: 'linear-gradient(180deg,#ffffff 0%,#f8fbfb 100%)',
-    border: '1px solid #d7e5e3',
-    borderRadius: 18,
-    padding: 12,
-    boxShadow: '0 10px 28px rgba(15,118,110,.07)',
-    overflow: 'hidden',
-  },
-  reportHead: {
-    display: 'flex',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: 10,
-    flexWrap: 'wrap',
-    padding: '2px 2px 10px',
-  },
-  reportTitle: {
-    fontSize: 17,
-    fontWeight: 900,
-    color: '#0f172a',
-    marginTop: 2,
-  },
-  reportFilters: {
-    display: 'grid',
-    gridTemplateColumns: 'repeat(3,minmax(160px,1fr))',
-    gap: 9,
-    padding: 10,
-    background: '#f8fafc',
-    border: '1px solid #e2e8f0',
-    borderRadius: 13,
-  },
-  reportFiltersCompactField: {
-    minWidth: 0,
-  },
-  reportTableWrap: { marginTop: 10, overflowX: 'auto', borderRadius: 12 },
-  assignPanel: { marginTop: 13, border: '1px solid #bfdbfe', background: 'linear-gradient(135deg,#eff6ff,#f8fbff)', borderRadius: 14, padding: 12 }, assignHead: { display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center', marginBottom: 8, color: '#1e3a8a', fontSize: 11, fontWeight: 900 }, assignGrid: { display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr) auto', gap: 8 }, assignButton: { border: 0, background: '#1d4ed8', color: '#fff', borderRadius: 10, padding: '10px 13px', fontWeight: 900, cursor: 'pointer' },
-  workerPanel: { marginTop: 13, border: '1px solid #99f6e4', background: 'linear-gradient(135deg,#ecfeff,#f0fdfa)', borderRadius: 14, padding: 12 }, workerTitle: { color: '#115e59', fontWeight: 950 }, workerWork: { color: '#475569', fontSize: 12, marginTop: 3 }, completeRow: { display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', gap: 8, marginTop: 10 }, complete: { border: 0, background: '#047857', color: '#fff', borderRadius: 10, padding: '10px 14px', fontWeight: 900, cursor: 'pointer' }, completedPanel: { marginTop: 12, padding: 10, borderRadius: 11, background: '#ecfdf5', border: '1px solid #a7f3d0', color: '#047857', fontWeight: 800 },
+function Field({ label, children }) {
+  return (
+    <div>
+      <label style={lbl}>{label}</label>
+      {children}
+    </div>
+  );
+}
+
+const inp = {
+  width: "100%",
+  padding: "10px 12px",
+  borderRadius: "8px",
+  border: "1px solid #cbd5e1",
+  fontSize: "14px",
+  boxSizing: "border-box",
+};
+
+const lbl = {
+  display: "block",
+  marginBottom: "6px",
+  fontWeight: 600,
+  fontSize: "13px",
+  color: "#334155",
+};
+
+const th = { padding: "10px 8px", textAlign: "left", borderBottom: "1px solid #0d5c56" };
+const td = { padding: "8px", borderBottom: "1px solid #e2e8f0" };
+const mini = {
+  border: "none",
+  color: "#fff",
+  padding: "5px 10px",
+  borderRadius: "6px",
+  cursor: "pointer",
+  fontSize: "12px",
+  fontWeight: 600,
 };
