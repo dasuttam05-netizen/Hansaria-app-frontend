@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useReducer, useRef, useState } from "react";
 import API from "./axiosInstance";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { FaFilePdf, FaWhatsapp } from "react-icons/fa";
+import { FaFilePdf, FaFileExcel, FaWhatsapp } from "react-icons/fa";
 import PageBackCloseActions from "../components/PageBackCloseActions";
 import WarehouseTradingHeader from "./WarehouseTradingHeader";
 import WarehouseVoucherPanel from "./WarehouseVoucherPanel";
@@ -234,6 +234,10 @@ const reportUiInitialState = {
     sale_journey_token: "",
     sale_lorry_no: "",
     sale_bill_no: "",
+    from_date: "",
+    to_date: "",
+    employee_id: "",
+    location_id: "",
     details_of_deduction: false,
   },
   saleFollowupFilter: "all",
@@ -301,7 +305,11 @@ export default function WarehouseTradingPage() {
   const [loading, setLoading] = useState(false);
   const [list, setList] = useState([]);
   const [reportData, setReportData] = useState([]);
-  const [reportFilterOptions, setReportFilterOptions] = useState({ account_ids: [], warehouse_ids: [], farmer_ids: [], buyer_ids: [] });
+  const [reportFilterOptions, setReportFilterOptions] = useState({
+    account_ids: [], warehouse_ids: [], farmer_ids: [], buyer_ids: [],
+    employee_ids: [], location_ids: [], accounts: [], warehouses: [], farmers: [], buyers: [],
+    employees: [], locations: [],
+  });
   const [warehouseStockReport, setWarehouseStockReport] = useState([]);
   const [reportPageInfo, setReportPageInfo] = useState({ page: 1, pageSize: PAGE_SIZE, hasMore: false });
   const [availableSaleStock, setAvailableSaleStock] = useState(null);
@@ -1081,7 +1089,7 @@ export default function WarehouseTradingPage() {
       loadReport();
     }, 120);
     return () => window.clearTimeout(timer);
-  }, [activeTab, activeReport, globalSearch, reportFilters.farmer_id, reportFilters.company_account_id, reportFilters.warehouse_id, reportFilters.sale_buyer_id, reportFilters.sale_company_account_id, reportFilters.sale_journey_token, reportFilters.sale_lorry_no, reportFilters.sale_bill_no, reportFilters.details_of_deduction]);
+  }, [activeTab, activeReport, reportPage, globalSearch, reportFilters.farmer_id, reportFilters.company_account_id, reportFilters.warehouse_id, reportFilters.sale_buyer_id, reportFilters.sale_company_account_id, reportFilters.sale_journey_token, reportFilters.sale_lorry_no, reportFilters.sale_bill_no, reportFilters.from_date, reportFilters.to_date, reportFilters.employee_id, reportFilters.location_id, reportFilters.details_of_deduction]);
 
   // Filter options are independent of pagination. Never reload them just
   // because the user moves from page 1 to page 2.
@@ -1091,7 +1099,7 @@ export default function WarehouseTradingPage() {
       loadReportFilterOptions();
     }, 40);
     return () => window.clearTimeout(timer);
-  }, [activeTab, activeReport, reportFilters.farmer_id, reportFilters.company_account_id, reportFilters.warehouse_id, reportFilters.sale_buyer_id]);
+  }, [activeTab, activeReport, reportFilters.farmer_id, reportFilters.company_account_id, reportFilters.warehouse_id, reportFilters.sale_buyer_id, reportFilters.employee_id, reportFilters.location_id]);
 
   useEffect(() => {
     // Keep bill-wise detail panels hidden by default. Press F5 to reveal and
@@ -1172,7 +1180,7 @@ export default function WarehouseTradingPage() {
     };
     window.addEventListener("keydown", handleLedgerRefresh);
     return () => window.removeEventListener("keydown", handleLedgerRefresh);
-  }, [activeTab, activeReport, reportFilters.farmer_id, reportFilters.warehouse_id, reportFilters.company_account_id, reportFilters.sale_buyer_id, reportFilters.sale_company_account_id, reportFilters.sale_journey_token, reportFilters.sale_lorry_no, reportFilters.sale_bill_no]);
+  }, [activeTab, activeReport, reportFilters.farmer_id, reportFilters.warehouse_id, reportFilters.company_account_id, reportFilters.sale_buyer_id, reportFilters.sale_company_account_id, reportFilters.sale_journey_token, reportFilters.sale_lorry_no, reportFilters.sale_bill_no, reportFilters.from_date, reportFilters.to_date, reportFilters.employee_id, reportFilters.location_id]);
 
   useEffect(() => {
     const handleF2Key = (event) => {
@@ -1634,6 +1642,12 @@ export default function WarehouseTradingPage() {
       const params = {};
       if (filters.company_account_id) params.company_account_id = filters.company_account_id;
       if (filters.warehouse_id) params.warehouse_id = filters.warehouse_id;
+      if (reportType === "profit-loss") {
+        if (filters.employee_id) params.employee_id = filters.employee_id;
+        if (filters.location_id) params.location_id = filters.location_id;
+        if (filters.from_date) params.from_date = filters.from_date;
+        if (filters.to_date) params.to_date = filters.to_date;
+      }
       const saleFilterReport = ["sale", "sale-party-ledger", "sale-followup", "sale-journey"].includes(reportType);
       if (!saleFilterReport && filters.farmer_id) params.farmer_id = filters.farmer_id;
       if (saleFilterReport && filters.sale_buyer_id) params.buyer_id = filters.sale_buyer_id;
@@ -1733,10 +1747,19 @@ export default function WarehouseTradingPage() {
         params.company_account_id = filters.sale_company_account_id;
       }
 
+      // Sale/Purchase/Warehouse/Profit-Loss reports are server-paged.
+      // Include page in the cache key; otherwise page 2 reuses page 1.
+      const serverPagedReport = ["sale", "purchase", "warehouse-stock", "profit-loss"].includes(reportType);
+      if (serverPagedReport) {
+        params.page = page;
+        params.page_size = PAGE_SIZE;
+      }
+
       const reportCacheKey = JSON.stringify({
         reportType,
         params,
         search: normalizedSearch,
+        page: serverPagedReport ? page : 1,
       });
       const cachedReport = reportDataCacheRef.current.get(reportCacheKey);
       if (cachedReport && Date.now() - cachedReport.time < 5 * 60 * 1000) {
@@ -1759,12 +1782,6 @@ export default function WarehouseTradingPage() {
         return;
       }
 
-      // Keep large reports server-paged so the first click only loads one page.
-      const serverPagedReport = ["sale", "purchase", "warehouse-stock"].includes(reportType);
-      if (serverPagedReport) {
-        params.page = page;
-        params.page_size = PAGE_SIZE;
-      }
       const reportRequest = API.get(`/api/wh-vouchers/report/${endpoint}`, { params });
       reportDataInFlightRef.current.set(reportCacheKey, reportRequest);
       const res = await reportRequest.finally(() => {
@@ -4122,11 +4139,15 @@ export default function WarehouseTradingPage() {
       ["amount", "FIFO Amount", (item) => formatMoney(item.amount || 0)],
     ],
     "profit-loss": [
-      ["warehouse", "Warehouse", (item) => item.warehouse_name || getWarehouseName(item)],
-      ["sale_amount", "Sale Amount", (item) => formatMoney(item.sale_amount || 0)],
-      ["purchase_amount", "Purchase Amount", (item) => formatMoney(item.purchase_amount || 0)],
-      ["profit_loss", "Profit/Loss", (item) => (
-        <span style={{ color: Number(item.profit_loss || 0) >= 0 ? "#16a34a" : "#dc2626" }}>
+      ["report_date", "Date", (item) => formatLedgerDate(item.report_date || item.date)],
+      ["sale_invoice_no", "Sale Inv No", (item) => item.sale_invoice_no || item.voucher_no || "-"],
+      ["farmer_name", "Farmer Name", (item) => item.farmer_name || "-"],
+      ["buyer_name", "Buyer Name", (item) => item.buyer_name || "-"],
+      ["consignee_name", "Consignee Name", (item) => item.consignee_name || "-"],
+      ["lorry_no", "Lorry No", (item) => item.lorry_no || "-"],
+      ["quantity", "Qnt", (item) => formatDecimal4(item.quantity || 0)],
+      ["profit_loss", "Profit / Loss", (item) => (
+        <span style={{ color: Number(item.profit_loss || 0) >= 0 ? "#16a34a" : "#dc2626", fontWeight: 800 }}>
           {formatMoney(item.profit_loss || 0)}
         </span>
       )],
@@ -4135,6 +4156,18 @@ export default function WarehouseTradingPage() {
 
   const activeReportColumns = reportColumns[activeReport] || (activeReport === "sale-journey" ? reportColumns["sale-party-ledger"] : reportColumns.sale);
   const currentReportRows = activeReport === "warehouse-stock" ? warehouseStockReport : reportData;
+  const profitLossSummary = useMemo(() => {
+    if (activeReport !== "profit-loss") return null;
+    const rows = Array.isArray(reportData) ? reportData : [];
+    return rows.reduce((acc, row) => {
+      const value = Number(row.profit_loss || 0);
+      acc.profitLoss += value;
+      if (value >= 0) acc.profit += value;
+      else acc.loss += Math.abs(value);
+      acc.qty += Number(row.quantity || 0);
+      return acc;
+    }, { profitLoss: 0, profit: 0, loss: 0, qty: 0 });
+  }, [activeReport, reportData]);
   const displayReportData = useMemo(() => {
     if (activeReport === "sale-followup") {
       const rows = Array.isArray(reportData) ? reportData : [];
@@ -4310,7 +4343,7 @@ export default function WarehouseTradingPage() {
   const filteredVoucherList = list;
 
   const filteredReportDataAll = useMemo(() => {
-    const serverPagedReport = ["sale", "purchase", "warehouse-stock"].includes(activeReport);
+    const serverPagedReport = ["sale", "purchase", "warehouse-stock", "profit-loss"].includes(activeReport);
     // Sale/Purchase search is already applied in MongoDB before pagination.
     if (serverPagedReport || !normalizedGlobalSearch) return displayReportData;
     return displayReportData.filter((item) =>
@@ -4343,7 +4376,7 @@ export default function WarehouseTradingPage() {
     );
   }, [displayReportData, normalizedGlobalSearch]);
   const filteredReportData = useMemo(() => {
-    const serverPagedReport = ["sale", "purchase", "warehouse-stock"].includes(activeReport);
+    const serverPagedReport = ["sale", "purchase", "warehouse-stock", "profit-loss"].includes(activeReport);
     if (serverPagedReport) return filteredReportDataAll;
     const start = (reportPage - 1) * PAGE_SIZE;
     return filteredReportDataAll.slice(start, start + PAGE_SIZE);
@@ -4358,7 +4391,7 @@ export default function WarehouseTradingPage() {
     setVoucherPage((current) => Math.min(current, Math.max(1, Number(voucherPageInfo.totalPages || 1))));
   }, [voucherPageInfo.totalPages]);
   useEffect(() => {
-    const serverPagedReport = ["sale", "purchase", "warehouse-stock"].includes(activeReport);
+    const serverPagedReport = ["sale", "purchase", "warehouse-stock", "profit-loss"].includes(activeReport);
     const totalPages = serverPagedReport
       ? Math.max(1, Math.ceil(Number(reportPageInfo.total || 0) / Number(reportPageInfo.pageSize || PAGE_SIZE)))
       : Math.max(1, Math.ceil(filteredReportDataAll.length / PAGE_SIZE));
@@ -4391,7 +4424,7 @@ export default function WarehouseTradingPage() {
     }
   };
   const totalVoucherPages = Math.max(1, Number(voucherPageInfo.totalPages || 1));
-  const totalReportPages = ["sale", "purchase", "warehouse-stock"].includes(activeReport)
+  const totalReportPages = ["sale", "purchase", "warehouse-stock", "profit-loss"].includes(activeReport)
     ? (reportPageInfo.hasMore ? reportPage + 1 : reportPage)
     : Math.max(1, Math.ceil(filteredReportDataAll.length / PAGE_SIZE));
   const renderPaginationBar = (page, totalPages, onPrev, onNext, totalItems, label = "rows") => {
@@ -4774,6 +4807,42 @@ export default function WarehouseTradingPage() {
 
   const downloadPurchaseLedgerPdf = () => downloadLedgerPdf("purchase-party-ledger");
   const downloadSaleLedgerPdf = () => downloadLedgerPdf("sale-party-ledger");
+  const buildProfitLossExportParams = () => {
+    const params = {};
+    if (reportFilters.from_date) params.from_date = reportFilters.from_date;
+    if (reportFilters.to_date) params.to_date = reportFilters.to_date;
+    if (reportFilters.warehouse_id) params.warehouse_id = reportFilters.warehouse_id;
+    if (reportFilters.farmer_id) params.farmer_id = reportFilters.farmer_id;
+    if (reportFilters.employee_id) params.employee_id = reportFilters.employee_id;
+    if (reportFilters.location_id) params.location_id = reportFilters.location_id;
+    if (reportFilters.sale_buyer_id) params.buyer_id = reportFilters.sale_buyer_id;
+    if (globalSearch.trim()) params.search = globalSearch.trim();
+    return params;
+  };
+
+  const downloadProfitLossExport = async (format = "pdf") => {
+    try {
+      const response = await API.get(`/api/wh-vouchers/report/profit-loss/export/${format}`, {
+        params: buildProfitLossExportParams(),
+        responseType: "blob",
+      });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `warehouse-profit-loss-${new Date().toISOString().slice(0, 10)}.${format === "xlsx" ? "xlsx" : "pdf"}`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => window.URL.revokeObjectURL(url), 1000);
+    } catch (err) {
+      console.error("Profit/Loss export failed:", err);
+      alert(err?.response?.data?.error || `Failed to export Profit/Loss ${format.toUpperCase()}`);
+    }
+  };
+
+  const downloadProfitLossPdf = () => downloadProfitLossExport("pdf");
+  const downloadProfitLossExcel = () => downloadProfitLossExport("xlsx");
+
 
   const shareLedgerWhatsapp = async (ledgerType = activeReport) => {
     if ((ledgerType !== "purchase-party-ledger" && ledgerType !== "sale-party-ledger") || !displayReportData.length) {
@@ -6552,6 +6621,86 @@ export default function WarehouseTradingPage() {
             onSharePurchaseLedgerWhatsapp={sharePurchaseLedgerWhatsapp}
             onShareSaleLedgerWhatsapp={shareSaleLedgerWhatsapp}
           >
+            {activeReport === "profit-loss" && (
+              <div style={{ display: "flex", gap: 10, alignItems: "end", flexWrap: "wrap", marginBottom: 14 }}>
+                <label style={{ display: "grid", gap: 6 }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: "#334155" }}>From Date</span>
+                  <input
+                    type="date"
+                    value={reportFilters.from_date}
+                    onChange={(e) => updateReportFilter("from_date", e.target.value)}
+                    style={{ ...inp, height: 42 }}
+                  />
+                </label>
+                <label style={{ display: "grid", gap: 6 }}>
+                  <span style={{ fontSize: 12, fontWeight: 700, color: "#334155" }}>To Date</span>
+                  <input
+                    type="date"
+                    value={reportFilters.to_date}
+                    onChange={(e) => updateReportFilter("to_date", e.target.value)}
+                    style={{ ...inp, height: 42 }}
+                  />
+                </label>
+                <SearchableSelect
+                  label="Location"
+                  value={reportFilters.location_id}
+                  options={(reportFilterOptions.locations?.length ? reportFilterOptions.locations : locations).map((item) => ({
+                    value: item.id || item._id,
+                    label: item.name,
+                  }))}
+                  onChange={(value) => updateReportFilter("location_id", value)}
+                  placeholder="All Locations"
+                />
+                <SearchableSelect
+                  label="Employee"
+                  value={reportFilters.employee_id}
+                  options={(reportFilterOptions.employees?.length ? reportFilterOptions.employees : employees).map((item) => ({
+                    value: item.id || item._id,
+                    label: item.name,
+                  }))}
+                  onChange={(value) => updateReportFilter("employee_id", value)}
+                  placeholder="All Employees"
+                />
+                <SearchableSelect
+                  label="Farmer"
+                  value={reportFilters.farmer_id}
+                  options={(reportFilterOptions.farmers?.length ? reportFilterOptions.farmers : farmers).map((item) => ({
+                    value: item.id || item._id,
+                    label: item.name,
+                  }))}
+                  onChange={(value) => updateReportFilter("farmer_id", value)}
+                  placeholder="All Farmers"
+                />
+                <SearchableSelect
+                  label="Warehouse"
+                  value={reportFilters.warehouse_id}
+                  options={(reportFilterOptions.warehouses?.length ? reportFilterOptions.warehouses : warehouses).map((item) => ({
+                    value: item.id || item._id,
+                    label: item.name,
+                  }))}
+                  onChange={(value) => updateReportFilter("warehouse_id", value)}
+                  placeholder="All Warehouses"
+                />
+                <div style={{ display: "flex", gap: 7, alignItems: "center", marginBottom: 1 }}>
+                  <button type="button" onClick={downloadProfitLossPdf} style={{ ...btnAction, background: "#b91c1c", display: "inline-flex", alignItems: "center", gap: 6 }}>
+                    <FaFilePdf /> PDF
+                  </button>
+                  <button type="button" onClick={downloadProfitLossExcel} style={{ ...btnAction, background: "#15803d", display: "inline-flex", alignItems: "center", gap: 6 }}>
+                    <FaFileExcel /> Excel
+                  </button>
+                </div>
+                {(reportFilters.from_date || reportFilters.to_date || reportFilters.location_id || reportFilters.employee_id || reportFilters.farmer_id || reportFilters.warehouse_id) && (
+                  <button
+                    type="button"
+                    onClick={() => setReportFilters({ ...reportFilters, from_date: "", to_date: "", location_id: "", employee_id: "", farmer_id: "", warehouse_id: "" })}
+                    style={{ ...btnAction, background: "#64748b", marginBottom: 1 }}
+                  >
+                    Clear Filters
+                  </button>
+                )}
+              </div>
+            )}
+
             {activeReport === "purchase" && (
               <div style={{ display: "flex", gap: 12, alignItems: "end", flexWrap: "wrap", marginBottom: 14 }}>
                 <SearchableSelect
@@ -6999,6 +7148,26 @@ export default function WarehouseTradingPage() {
               </div>
             ) : (
               <>
+                {activeReport === "profit-loss" && profitLossSummary && (
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10, marginBottom: 12 }}>
+                    <div style={{ padding: 12, border: "1px solid #bbf7d0", borderRadius: 8, background: "#f0fdf4" }}>
+                      <div style={{ fontSize: 11, color: "#166534", fontWeight: 700 }}>Current Page Profit</div>
+                      <div style={{ fontSize: 19, fontWeight: 900, color: "#15803d" }}>Rs. {formatMoney(profitLossSummary.profit)}</div>
+                    </div>
+                    <div style={{ padding: 12, border: "1px solid #fecaca", borderRadius: 8, background: "#fef2f2" }}>
+                      <div style={{ fontSize: 11, color: "#991b1b", fontWeight: 700 }}>Current Page Loss</div>
+                      <div style={{ fontSize: 19, fontWeight: 900, color: "#dc2626" }}>Rs. {formatMoney(profitLossSummary.loss)}</div>
+                    </div>
+                    <div style={{ padding: 12, border: "1px solid #cbd5e1", borderRadius: 8, background: "#f8fafc" }}>
+                      <div style={{ fontSize: 11, color: "#475569", fontWeight: 700 }}>Net Profit / Loss</div>
+                      <div style={{ fontSize: 19, fontWeight: 900, color: profitLossSummary.profitLoss >= 0 ? "#15803d" : "#dc2626" }}>Rs. {formatMoney(profitLossSummary.profitLoss)}</div>
+                    </div>
+                    <div style={{ padding: 12, border: "1px solid #dbe4ef", borderRadius: 8, background: "#fff" }}>
+                      <div style={{ fontSize: 11, color: "#475569", fontWeight: 700 }}>Quantity</div>
+                      <div style={{ fontSize: 19, fontWeight: 900, color: "#0f172a" }}>{formatDecimal4(profitLossSummary.qty)}</div>
+                    </div>
+                  </div>
+                )}
                 <WarehouseReportTable
                   activeReport={activeReport}
                   activeReportColumns={activeReportColumns}
@@ -7083,7 +7252,7 @@ export default function WarehouseTradingPage() {
               totalReportPages,
               () => setReportPage((prev) => Math.max(1, prev - 1)),
               () => setReportPage((prev) => Math.min(totalReportPages, prev + 1)),
-              (["sale", "purchase", "warehouse-stock"].includes(activeReport))
+              (["sale", "purchase", "warehouse-stock", "profit-loss"].includes(activeReport))
                 ? Number(reportPageInfo.total || 0)
                 : filteredReportDataAll.length,
               "rows"
