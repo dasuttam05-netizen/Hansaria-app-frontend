@@ -7,6 +7,8 @@ const emptyForm = () => ({
   address: "",
   company_id: "",
   pan_no: "",
+  gst_no: "",
+  pin_no: "",
   mobile: "",
 });
 
@@ -77,9 +79,44 @@ export default function CompanyAccountsPage() {
     if (account) handleEdit(account);
   }, [accounts, location.state]);
 
+  const normalizeValue = (value) => String(value || "").trim().toUpperCase();
+
+  const findAccountByTaxOrPin = useCallback((field, value) => {
+    const needle = normalizeValue(value);
+    if (!needle) return null;
+    return accounts.find((acc) => {
+      const accountValue = field === "gst_no"
+        ? (acc.gst_no || acc.gstNo || acc.gst || "")
+        : (acc.pin_no || acc.pinNo || acc.pin || acc.pincode || "");
+      return normalizeValue(accountValue) === needle;
+    }) || null;
+  }, [accounts]);
+
+  const fillAccountFromMaster = useCallback((account) => {
+    if (!account) return;
+    setFormData((prev) => ({
+      ...prev,
+      account_name: account.account_name || account.accountName || prev.account_name || "",
+      address: account.address || prev.address || "",
+      pan_no: account.pan_no || account.panNo || prev.pan_no || "",
+      pin_no: account.pin_no || account.pinNo || account.pin || account.pincode || prev.pin_no || "",
+      gst_no: account.gst_no || account.gstNo || account.gst || prev.gst_no || "",
+      mobile: account.mobile || prev.mobile || "",
+      company_id: account.company_id ? String(account.company_id) : prev.company_id,
+    }));
+  }, []);
+
   const handleChange = (e) => {
-    setFormData((prev) => ({ ...prev, [e.target.name]: e.target.value }));
+    const { name, value } = e.target;
+    setFormData((prev) => ({ ...prev, [name]: value }));
+
+    if (name === "gst_no" || name === "pin_no") {
+      const match = findAccountByTaxOrPin(name, value);
+      if (match) fillAccountFromMaster(match);
+    }
   };
+
+
 
   const goList = () => {
     setView("list");
@@ -134,6 +171,8 @@ export default function CompanyAccountsPage() {
       address: acc.address || "",
       company_id: acc.company_id ? String(acc.company_id) : "",
       pan_no: acc.pan_no || "",
+      gst_no: acc.gst_no || acc.gstNo || acc.gst || "",
+      pin_no: acc.pin_no || acc.pinNo || acc.pin || acc.pincode || "",
       mobile: acc.mobile || "",
     });
     setEditId(acc._id || acc.id);
@@ -152,8 +191,8 @@ export default function CompanyAccountsPage() {
   };
 
   const downloadImportFormat = () => {
-    const header = "company_name,account_name,address,pan_no,mobile";
-    const sample = "ABC COMPANY,Main A/C,Head Office Address,ABCDE1234F,9876543210";
+    const header = "company_name,account_name,address,gst_no,pan_no,pin_no,mobile";
+    const sample = "ABC COMPANY,Main A/C,Head Office Address,22AAAAA0000A1Z5,ABCDE1234F,700001,9876543210";
     const csv = `${header}\n${sample}\n`;
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = window.URL.createObjectURL(blob);
@@ -209,7 +248,9 @@ export default function CompanyAccountsPage() {
         company_id: row.company_id || "",
         account_name: row.account_name || "",
         address: row.address || "",
+        gst_no: row.gst_no || row.gst || "",
         pan_no: row.pan_no || "",
+        pin_no: row.pin_no || row.pin || row.pincode || "",
         mobile: row.mobile || "",
       };
     });
@@ -308,8 +349,31 @@ export default function CompanyAccountsPage() {
                   ))}
                 </select>
               </Field>
+              <Field label="GST No">
+                <input
+                  name="gst_no"
+                  value={formData.gst_no}
+                  onChange={handleChange}
+                  placeholder="GST No"
+                  style={inp}
+                  maxLength={15}
+                  autoComplete="off"
+                />
+              </Field>
               <Field label="PAN No">
                 <input name="pan_no" value={formData.pan_no} onChange={handleChange} placeholder="PAN No *" style={inp} />
+              </Field>
+              <Field label="PIN No">
+                <input
+                  name="pin_no"
+                  value={formData.pin_no}
+                  onChange={handleChange}
+                  placeholder="PIN No"
+                  style={inp}
+                  maxLength={6}
+                  inputMode="numeric"
+                  autoComplete="postal-code"
+                />
               </Field>
               <Field label="Mobile">
                 <input name="mobile" value={formData.mobile} onChange={handleChange} placeholder="Mobile No *" style={inp} />
@@ -383,7 +447,9 @@ export default function CompanyAccountsPage() {
               <th style={th}>ID</th>
               <th style={th}>Account Name</th>
               <th style={th}>Company</th>
+              <th style={th}>GST</th>
               <th style={th}>PAN</th>
+              <th style={th}>PIN</th>
               <th style={th}>Mobile</th>
               <th style={th}>Actions</th>
             </tr>
@@ -394,7 +460,9 @@ export default function CompanyAccountsPage() {
                 <td style={td}>{String(i + 1).padStart(2, "0")}</td>
                 <td style={td}>{acc.account_name || "-"}</td>
                 <td style={td}>{acc.company_name || "-"}</td>
+                <td style={td}>{acc.gst_no || acc.gstNo || acc.gst || "-"}</td>
                 <td style={td}>{acc.pan_no || "-"}</td>
+                <td style={td}>{acc.pin_no || acc.pinNo || acc.pin || acc.pincode || "-"}</td>
                 <td style={td}>{acc.mobile || "-"}</td>
                 <td style={td}>
                   {canEdit && (
@@ -412,7 +480,7 @@ export default function CompanyAccountsPage() {
             ))}
             {accounts.length === 0 && (
               <tr>
-                <td colSpan={6} style={{ ...td, textAlign: "center", padding: "20px" }}>
+                <td colSpan={9} style={{ ...td, textAlign: "center", padding: "20px" }}>
                   No accounts found.
                 </td>
               </tr>
