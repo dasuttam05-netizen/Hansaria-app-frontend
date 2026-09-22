@@ -225,7 +225,112 @@ export default function PartyStockReportPage() {
               params: journalParams,
               signal: controller.signal,
             });
-            if (!cancelled) setJournalRows(Array.isArray(journalRes.data?.rows) ? journalRes.data.rows : []);
+            if (!cancelled) {
+              const rows = Array.isArray(journalRes.data?.rows) ? journalRes.data.rows : [];
+              setJournalRows(rows);
+
+              // Journal Entry is an actual party-stock transfer.  Reflect the
+              // transfer back on the source Inward lot so Party Stock Report
+              // shows the Journal date as Outward Date and includes the
+              // journal quantity in Already Adjusted / Available Balance.
+              // We prefer the exact inward id; older report payloads may not
+              // expose it, so use the source voucher/lorry/date as safe fallbacks.
+              const journalBySource = new Map();
+              const addSourceMovement = (key, row) => {
+                if (!key) return;
+                const current = journalBySource.get(key) || { qty: 0, latestDate: "" };
+                current.qty += Number(row.qty || 0);
+                const d = row.date || "";
+                if (!current.latestDate || String(d) > String(current.latestDate)) current.latestDate = d;
+                journalBySource.set(key, current);
+              };
+
+              rows.forEach((row) => {
+                const inwardId = row.inward_id ?? row.inwardId ?? row.source_inward_id;
+                const inwardVoucher = row.inward_voucher_no || row.inward_no || "";
+                if (inwardId !== undefined && inwardId !== null && String(inwardId)) {
+                  addSourceMovement(`id:${String(inwardId)}`, row);
+                }
+                if (inwardVoucher) addSourceMovement(`voucher:${String(inwardVoucher)}`, row);
+                if (row.lorry_no) {
+                  addSourceMovement(
+                    `fallback:${String(row.lorry_no)}|${String(row.product_id || "")}|${String(row.from_party_id || "")}`,
+                    row
+                  );
+                }
+              });
+
+              const journalForDetail = (detail) => {
+                const candidates = [
+                  detail.inward_id,
+                  detail.inwardId,
+                  detail.source_inward_id,
+                  detail._id,
+                  detail.id,
+                ].filter((v) => v !== undefined && v !== null && String(v));
+                for (const id of candidates) {
+                  const hit = journalBySource.get(`id:${String(id)}`);
+                  if (hit) return hit;
+                }
+
+                const vouchers = [detail.voucher_no, detail.inward_voucher_no, detail.inward_no].filter(Boolean);
+                for (const voucher of vouchers) {
+                  const hit = journalBySource.get(`voucher:${String(voucher)}`);
+                  if (hit) return hit;
+                }
+
+                if (detail.lorry_no) {
+                  const hit = journalBySource.get(
+                    `fallback:${String(detail.lorry_no)}|${String(detail.product_id || "")}|${String(detail.company_account_id || detail.account_id || "")}`
+                  );
+                  if (hit) return hit;
+                }
+                return null;
+              };
+
+              const mergedDetails = normalizedDetails.map((detail) => {
+                const movement = journalForDetail(detail);
+                if (!movement) return detail;
+                const journalQty = Number(movement.qty || 0);
+                const adjusted = Number(detail.already_adjusted_qty || 0) + journalQty;
+                const balance = Math.max(0, Number(detail.net_opening_qty || 0) - adjusted);
+                return {
+                  ...detail,
+                  outward_date: movement.latestDate || detail.outward_date || "",
+                  already_adjusted_qty: adjusted,
+                  available_balance_qty: balance,
+                  journal_adjusted_qty: journalQty,
+                };
+              });
+
+              // Rebuild Summary by Party from the detail rows after applying
+              // Journal adjustments. This keeps Summary, Details and Journal
+              // movement totals consistent.
+              const grouped = new Map();
+              mergedDetails.forEach((row) => {
+                const key = `${String(row.company_id || row.company_name || row.party_name || "")}::${String(row.account_id || row.company_account_id || row.account_name || "")}`;
+                const existing = grouped.get(key);
+                if (existing) {
+                  existing.gross_qty += Number(row.gross_qty || 0);
+                  existing.shortage_qty += Number(row.shortage_qty || 0);
+                  existing.net_opening_qty += Number(row.net_opening_qty || 0);
+                  existing.already_adjusted_qty += Number(row.already_adjusted_qty || 0);
+                  existing.available_balance_qty += Number(row.available_balance_qty || 0);
+                } else {
+                  grouped.set(key, {
+                    ...row,
+                    gross_qty: Number(row.gross_qty || 0),
+                    shortage_qty: Number(row.shortage_qty || 0),
+                    net_opening_qty: Number(row.net_opening_qty || 0),
+                    already_adjusted_qty: Number(row.already_adjusted_qty || 0),
+                    available_balance_qty: Number(row.available_balance_qty || 0),
+                  });
+                }
+              });
+
+              setDetails(mergedDetails);
+              setSummary(Array.from(grouped.values()));
+            }
           } catch (journalErr) {
             if (journalErr?.code !== "ERR_CANCELED" && journalErr?.name !== "CanceledError") {
               console.error(journalErr);
@@ -292,8 +397,7 @@ export default function PartyStockReportPage() {
   const exportJournalCSV = () => {
     let csv = "Date,Journal No,Warehouse,Product,From Party,To Party,Qty,Cost Rate,Cost Amount,Sale Rate,Sale Amount,Profit/Loss,Lorry No,Employee\n";
     normalizedJournalRows.forEach((row) => {
-      csv += `${formatDisplayDate(row.date) || ""},${row.journal_no || ""},${row.warehouse_name || ""},${row.product_name || ""},${row.from_party_name || ""},${row.to_party_name || ""},${num(row.qty)},${num(row.cost_rate)},${num(row.cost_amount)},${num(row.sale_rate)},${num(row.sale_amount)},${num(row.profit_loss)},${row.lorry_no || ""},${row.employee_name || ""}
-`;
+      csv += `${formatDisplayDate(row.date) || ""},${row.journal_no || ""},${row.warehouse_name || ""},${row.product_name || ""},${row.from_party_name || ""},${row.to_party_name || ""},${num(row.qty)},${num(row.cost_rate)},${num(row.cost_amount)},${num(row.sale_rate)},${num(row.sale_amount)},${num(row.profit_loss)},${row.lorry_no || ""},${row.employee_name || ""}\n`;
     });
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
     const url = window.URL.createObjectURL(blob);
