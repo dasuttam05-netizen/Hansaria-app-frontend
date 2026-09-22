@@ -47,9 +47,11 @@ export default function WarehouseSaleDeductionModal({
 
   const manualTds = String(formData.tds_amount ?? "").trim() !== "";
   const displayedTds = manualTds ? toNumber(formData.tds_amount) : (tdsEligible ? autoTdsAmount : 0);
+  // Shortage and Claim remain separate. Shortage is calculated automatically;
+  // Claim is only the manually entered claim amount.
   const claimAmount = String(formData.claim_amount ?? "").trim() !== ""
     ? toNumber(formData.claim_amount)
-    : saleShortageAmount;
+    : 0;
   const otherDeduction = String(formData.other_deduction ?? "").trim() !== ""
     ? toNumber(formData.other_deduction)
     : saleQualityDeduction;
@@ -140,7 +142,8 @@ export default function WarehouseSaleDeductionModal({
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, minmax(160px, 1fr))", gap: 10, marginTop: 14 }}>
-          <div><label style={{ fontSize: 12, fontWeight: 700 }}>Claim Amount</label><input name="claim_amount" type="number" step="0.01" min="0" value={formData.claim_amount || ""} onChange={handleChange} placeholder={formatMoney(saleShortageAmount)} style={inp} /></div>
+          <div><label style={{ fontSize: 12, fontWeight: 700 }}>Shortage Amount</label><input value={formatMoney(saleShortageAmount)} readOnly style={readOnlyInp} /></div>
+          <div><label style={{ fontSize: 12, fontWeight: 700 }}>Claim Amount</label><input name="claim_amount" type="number" step="0.01" min="0" value={formData.claim_amount || ""} onChange={handleChange} placeholder="Enter claim separately" style={inp} /></div>
           <div><label style={{ fontSize: 12, fontWeight: 700 }}>Other Deduction</label><input name="other_deduction" type="number" step="0.01" min="0" value={formData.other_deduction || ""} onChange={handleChange} placeholder={formatMoney(saleQualityDeduction)} style={inp} /></div>
           <div><label style={{ fontSize: 12, fontWeight: 700 }}>CD %</label><input name="cd_percent" type="number" step="0.0001" min="0" value={formData.cd_percent || ""} onChange={handleChange} style={inp} /></div>
           <div><label style={{ fontSize: 12, fontWeight: 700 }}>CD Amount</label><input value={formatMoney(saleCashDiscountAmount)} readOnly style={readOnlyInp} /></div>
@@ -150,7 +153,8 @@ export default function WarehouseSaleDeductionModal({
           <div><label style={{ fontSize: 12, fontWeight: 700 }}>Round Off</label><input name="round_off" type="number" step="0.01" value={formData.round_off || ""} onChange={handleChange} style={inp} /></div>
         </div>
 
-        <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 10 }}>
+        <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 10 }}>
+          <div style={{ padding: 10, borderRadius: 8, background: "#f8fafc", border: "1px solid #e2e8f0" }}><small>Shortage</small><strong style={{ display: "block" }}>Rs.{formatMoney(saleShortageAmount)}</strong></div>
           <div style={{ padding: 10, borderRadius: 8, background: "#f8fafc", border: "1px solid #e2e8f0" }}><small>Claim</small><strong style={{ display: "block" }}>Rs.{formatMoney(claimAmount)}</strong></div>
           <div style={{ padding: 10, borderRadius: 8, background: "#f8fafc", border: "1px solid #e2e8f0" }}><small>TDS</small><strong style={{ display: "block" }}>Rs.{formatMoney(displayedTds)}</strong></div>
           <div style={{ padding: 10, borderRadius: 8, background: "#ecfdf5", border: "1px solid #a7f3d0" }}><small>Net Receivable</small><strong style={{ display: "block", fontSize: 18 }}>Rs.{formatMoney(saleNetReceivablePreview)}</strong></div>
