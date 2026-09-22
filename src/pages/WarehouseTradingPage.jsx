@@ -760,7 +760,9 @@ export default function WarehouseTradingPage() {
     return { item, claim, shortage, freight, others, labour, moisture, dunki, fungus, discolour, lessBags, cd, adjustment, tds, roundOff, total };
   });
   const purchaseTaggedDeductionTotal = purchaseTaggedDeductionDetails.reduce((sum, d) => sum + d.total, 0);
-  const netPurchaseSummaryValue = Math.max(againstPurchaseTotalAmount - purchaseTaggedDeductionTotal, 0);
+  const netPurchaseSummaryValue = formData.sale_type === "direct"
+    ? Math.max(toNumber(formData.direct_purchase_amount || againstPurchaseTotalAmount) - purchaseTaggedDeductionTotal, 0)
+    : Math.max(againstPurchaseTotalAmount - purchaseTaggedDeductionTotal, 0);
   // Shortage and Claim are now separate Sale deductions.
   // Shortage remains automatic from dispatch/unloading difference; Claim is independent/manual.
   const saleAutoClaimAmount = 0;
@@ -5439,8 +5441,8 @@ export default function WarehouseTradingPage() {
                       <div style={erpRow}>
                         <label style={erpLabel}>Sale Type</label>
                         <select name="sale_type" value={formData.sale_type || "direct"} onChange={handleChange} style={erpInput}>
-                          <option value="direct">Direct Farmer Loading Sale</option>
-                          <option value="warehouse">Warehouse Sale</option>
+                          <option value="direct">Direct Loading</option>
+                          <option value="warehouse">Warehouse Loading</option>
                         </select>
                       </div>
                       <div style={erpRow}>
@@ -5924,8 +5926,8 @@ export default function WarehouseTradingPage() {
                 {activeVoucherType === "sale" && (
                   <Field label="Sale Type">
                     <select name="sale_type" value={formData.sale_type || "direct"} onChange={handleChange} style={inp}>
-                      <option value="direct">Direct Farmer Loading Sale</option>
-                      <option value="warehouse">Warehouse Sale</option>
+                      <option value="direct">Direct Loading</option>
+                      <option value="warehouse">Warehouse Loading</option>
                     </select>
                   </Field>
                 )}
