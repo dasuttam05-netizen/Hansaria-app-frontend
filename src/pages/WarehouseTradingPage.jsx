@@ -239,8 +239,11 @@ const reportUiInitialState = {
     profit_from_date: "",
     profit_to_date: "",
     profit_location_id: "",
+    profit_warehouse_id: "",
     profit_employee_id: "",
     profit_farmer_id: "",
+    profit_buyer_id: "",
+    profit_consignee_id: "",
   },
   saleFollowupFilter: "all",
   selectedLedgerBillId: "",
@@ -1735,8 +1738,11 @@ export default function WarehouseTradingPage() {
         if (filters.profit_from_date) params.from_date = filters.profit_from_date;
         if (filters.profit_to_date) params.to_date = filters.profit_to_date;
         if (filters.profit_location_id) params.location_id = filters.profit_location_id;
+        if (filters.profit_warehouse_id) params.warehouse_id = filters.profit_warehouse_id;
         if (filters.profit_employee_id) params.employee_id = filters.profit_employee_id;
         if (filters.profit_farmer_id) params.farmer_id = filters.profit_farmer_id;
+        if (filters.profit_buyer_id) params.buyer_id = filters.profit_buyer_id;
+        if (filters.profit_consignee_id) params.consignee_id = filters.profit_consignee_id;
         if (normalizedSearch) params.search = normalizedSearch;
       }
       if (reportType === "sale-journey") {
@@ -6591,7 +6597,7 @@ export default function WarehouseTradingPage() {
                       onChange={(e) => {
                         const value = e.target.value === "warehouse" ? "warehouse" : "direct";
                         setProfitLossMode(value);
-                        setReportFilters((prev) => ({ ...prev, profit_loss_mode: value, profit_location_id: "", profit_employee_id: "", profit_farmer_id: "" }));
+                        setReportFilters((prev) => ({ ...prev, profit_loss_mode: value, profit_location_id: "", profit_warehouse_id: "", profit_employee_id: "", profit_farmer_id: "", profit_buyer_id: "", profit_consignee_id: "" }));
                         setReportPage(1);
                       }}
                       style={{ ...inp, minHeight: 40 }}
@@ -6607,9 +6613,12 @@ export default function WarehouseTradingPage() {
                       <SearchableSelect label="Location" value={reportFilters.profit_location_id} options={(locations || []).map((x) => ({ value: x.id || x._id, label: x.name }))} onChange={(v) => updateReportFilter("profit_location_id", v)} placeholder="All Locations" />
                       <SearchableSelect label="Employee" value={reportFilters.profit_employee_id} options={(employees || []).map((x) => ({ value: x.id || x._id, label: x.name }))} onChange={(v) => updateReportFilter("profit_employee_id", v)} placeholder="All Employees" />
                       <SearchableSelect label="Farmer" value={reportFilters.profit_farmer_id} options={(farmers || []).map((x) => ({ value: x.id || x._id, label: x.name }))} onChange={(v) => updateReportFilter("profit_farmer_id", v)} placeholder="All Farmers" />
+                      <SearchableSelect label="Warehouse" value={reportFilters.profit_warehouse_id} options={(warehouses || []).map((x) => ({ value: x.id || x._id, label: x.name }))} onChange={(v) => updateReportFilter("profit_warehouse_id", v)} placeholder="All Warehouses" />
+                      <SearchableSelect label="Buyer" value={reportFilters.profit_buyer_id} options={(buyerNames || []).map((x) => ({ value: x.id || x._id || x.legacy_id, label: x.name || x.buyer_name || x.company_name || x.party_name }))} onChange={(v) => updateReportFilter("profit_buyer_id", v)} placeholder="All Buyers" />
+                      <SearchableSelect label="Consignee" value={reportFilters.profit_consignee_id} options={(consignees || []).map((x) => ({ value: x.id || x._id || x.legacy_id, label: x.name || x.consignee_name }))} onChange={(v) => updateReportFilter("profit_consignee_id", v)} placeholder="All Consignees" />
                     </>
                   )}
-                  <button type="button" onClick={() => { setProfitLossMode("direct"); setReportFilters((prev) => ({ ...prev, profit_loss_mode: "direct", profit_from_date: "", profit_to_date: "", profit_location_id: "", profit_employee_id: "", profit_farmer_id: "" })); setReportPage(1); }} style={{ ...btnAction, background: "#64748b" }}>Clear Filters</button>
+                  <button type="button" onClick={() => { setProfitLossMode("direct"); setReportFilters((prev) => ({ ...prev, profit_loss_mode: "direct", profit_from_date: "", profit_to_date: "", profit_location_id: "", profit_warehouse_id: "", profit_employee_id: "", profit_farmer_id: "", profit_buyer_id: "", profit_consignee_id: "" })); setReportPage(1); }} style={{ ...btnAction, background: "#64748b" }}>Clear Filters</button>
                 </div>
               </div>
             )}
