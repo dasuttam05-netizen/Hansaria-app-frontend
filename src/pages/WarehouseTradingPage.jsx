@@ -235,12 +235,6 @@ const reportUiInitialState = {
     sale_lorry_no: "",
     sale_bill_no: "",
     details_of_deduction: false,
-    profit_loss_mode: "direct",
-    profit_from_date: "",
-    profit_to_date: "",
-    profit_location_id: "",
-    profit_employee_id: "",
-    profit_farmer_id: "",
   },
   saleFollowupFilter: "all",
   selectedLedgerBillId: "",
@@ -277,7 +271,6 @@ export default function WarehouseTradingPage() {
   const [activeTab, setActiveTab] = useState(null);
   const [activeVoucherType, setActiveVoucherType] = useState("purchase");
   const [activeReport, setActiveReport] = useState("sale");
-  const [profitLossMode, setProfitLossMode] = useState("direct");
 
   const [warehouses, setWarehouses] = useState([]);
   const [farmers, setFarmers] = useState([]);
@@ -768,12 +761,14 @@ export default function WarehouseTradingPage() {
   });
   const purchaseTaggedDeductionTotal = purchaseTaggedDeductionDetails.reduce((sum, d) => sum + d.total, 0);
   const netPurchaseSummaryValue = Math.max(againstPurchaseTotalAmount - purchaseTaggedDeductionTotal, 0);
-  const saleAutoClaimAmount = saleShortageAmount;
+  // Shortage and Claim are now separate Sale deductions.
+  // Shortage remains automatic from dispatch/unloading difference; Claim is independent/manual.
+  const saleAutoClaimAmount = 0;
   const saleAutoOtherDeduction = saleQualityDeduction;
-  const saleEffectiveClaimAmount = String(formData.claim_amount ?? "").trim() === "" ? saleAutoClaimAmount : toNumber(formData.claim_amount);
+  const saleEffectiveClaimAmount = String(formData.claim_amount ?? "").trim() === "" ? 0 : toNumber(formData.claim_amount);
   const saleEffectiveOtherDeduction = String(formData.other_deduction ?? "").trim() === "" ? saleAutoOtherDeduction : toNumber(formData.other_deduction);
   const saleEffectiveTdsAmount = String(formData.tds_amount ?? "").trim() === "" && tdsEligible ? autoTdsAmount : toNumber(formData.tds_amount);
-  const saleDeductionTotal = saleEffectiveClaimAmount + saleEffectiveOtherDeduction + saleTransportCharge + saleCashDiscountAmount + toNumber(formData.adjustment_amount) + saleEffectiveTdsAmount;
+  const saleDeductionTotal = saleShortageAmount + saleEffectiveClaimAmount + saleEffectiveOtherDeduction + saleTransportCharge + saleCashDiscountAmount + toNumber(formData.adjustment_amount) + saleEffectiveTdsAmount;
   const saleNetReceivablePreview =
     saleGrossAmountFromData(formData) -
     saleDeductionTotal +
@@ -783,7 +778,7 @@ export default function WarehouseTradingPage() {
   const resetSaleDeductionsToAuto = () => {
     setFormData((prev) => ({
       ...prev,
-      claim_amount: saleAutoClaimAmount ? saleAutoClaimAmount.toFixed(2) : "",
+      claim_amount: "",
       other_deduction: saleAutoOtherDeduction ? saleAutoOtherDeduction.toFixed(2) : "",
       tds_amount: tdsEligible && autoTdsAmount ? autoTdsAmount.toFixed(2) : "",
     }));
@@ -1078,16 +1073,17 @@ export default function WarehouseTradingPage() {
     editId,
   ]);
 
-  // Report rows: page/filter changes. Server-paged reports (including Sale,
-  // Purchase and Profit/Loss) reload the requested page; party ledgers remain
-  // client-paged for fast navigation.
+  // Report rows: page/filter changes only.
   useEffect(() => {
     if (activeTab !== "reports") return;
+    // Party ledgers are loaded once per filter/search change. Pagination is
+    // intentionally client-side so clicking Next/Prev never re-requests the
+    // expensive ledger endpoint. This keeps page changes effectively instant.
     const timer = window.setTimeout(() => {
       loadReport();
     }, 120);
     return () => window.clearTimeout(timer);
-  }, [activeTab, activeReport, reportPage, globalSearch, reportFilters.farmer_id, reportFilters.company_account_id, reportFilters.warehouse_id, reportFilters.sale_buyer_id, reportFilters.sale_company_account_id, reportFilters.sale_journey_token, reportFilters.sale_lorry_no, reportFilters.sale_bill_no, reportFilters.details_of_deduction, reportFilters.profit_loss_mode, reportFilters.profit_from_date, reportFilters.profit_to_date, reportFilters.profit_location_id, reportFilters.profit_employee_id, reportFilters.profit_farmer_id]);
+  }, [activeTab, activeReport, globalSearch, reportFilters.farmer_id, reportFilters.company_account_id, reportFilters.warehouse_id, reportFilters.sale_buyer_id, reportFilters.sale_company_account_id, reportFilters.sale_journey_token, reportFilters.sale_lorry_no, reportFilters.sale_bill_no, reportFilters.details_of_deduction]);
 
   // Filter options are independent of pagination. Never reload them just
   // because the user moves from page 1 to page 2.
@@ -1730,15 +1726,6 @@ export default function WarehouseTradingPage() {
       if (["sale", "purchase", "payment"].includes(reportType) && normalizedSearch) {
         params.search = normalizedSearch;
       }
-      if (reportType === "profit-loss") {
-        params.mode = filters.profit_loss_mode || profitLossMode || "direct";
-        if (filters.profit_from_date) params.from_date = filters.profit_from_date;
-        if (filters.profit_to_date) params.to_date = filters.profit_to_date;
-        if (filters.profit_location_id) params.location_id = filters.profit_location_id;
-        if (filters.profit_employee_id) params.employee_id = filters.profit_employee_id;
-        if (filters.profit_farmer_id) params.farmer_id = filters.profit_farmer_id;
-        if (normalizedSearch) params.search = normalizedSearch;
-      }
       if (reportType === "sale-journey") {
         if (filters.sale_journey_token) params.journey_token = filters.sale_journey_token;
         if (filters.sale_lorry_no) params.lorry_no = filters.sale_lorry_no;
@@ -1748,15 +1735,9 @@ export default function WarehouseTradingPage() {
         params.company_account_id = filters.sale_company_account_id;
       }
 
-      const serverPagedReport = ["sale", "purchase", "warehouse-stock", "profit-loss"].includes(reportType);
-      if (serverPagedReport) {
-        params.page = page;
-        params.page_size = PAGE_SIZE;
-      }
       const reportCacheKey = JSON.stringify({
         reportType,
         params,
-        page: serverPagedReport ? page : 1,
         search: normalizedSearch,
       });
       const cachedReport = reportDataCacheRef.current.get(reportCacheKey);
@@ -1781,6 +1762,11 @@ export default function WarehouseTradingPage() {
       }
 
       // Keep large reports server-paged so the first click only loads one page.
+      const serverPagedReport = ["sale", "purchase", "warehouse-stock"].includes(reportType);
+      if (serverPagedReport) {
+        params.page = page;
+        params.page_size = PAGE_SIZE;
+      }
       const reportRequest = API.get(`/api/wh-vouchers/report/${endpoint}`, { params });
       reportDataInFlightRef.current.set(reportCacheKey, reportRequest);
       const res = await reportRequest.finally(() => {
@@ -3430,9 +3416,7 @@ export default function WarehouseTradingPage() {
       others: voucher.others || "",
       claim_amount: voucher.claim_amount !== undefined && voucher.claim_amount !== null && String(voucher.claim_amount).trim() !== ""
         ? voucher.claim_amount
-        : voucher.shortage_amount !== undefined && voucher.shortage_amount !== null && String(voucher.shortage_amount).trim() !== ""
-          ? voucher.shortage_amount
-          : "",
+        : "",
       other_deduction: voucher.other_deduction !== undefined && voucher.other_deduction !== null && String(voucher.other_deduction).trim() !== ""
         ? voucher.other_deduction
         : voucher.adjustment_amount !== undefined && voucher.adjustment_amount !== null && String(voucher.adjustment_amount).trim() !== ""
@@ -3487,7 +3471,7 @@ export default function WarehouseTradingPage() {
     // Every deduction supports both modes: if the field is left blank, use the
     // calculated automatic value; if Admin enters a value (including 0), use
     // that manual value and persist it.
-    const finalClaimAmount = manualClaimEntered ? toNumber(formData.claim_amount) : saleShortageAmount;
+    const finalClaimAmount = manualClaimEntered ? toNumber(formData.claim_amount) : 0;
     const finalOtherDeduction = manualOtherDeductionEntered ? toNumber(formData.other_deduction) : saleQualityDeduction;
     const finalTdsAmount = manualTdsEntered ? toNumber(formData.tds_amount) : (tdsEligible ? autoTdsAmount : 0);
     const finalTransportCharge = manualTransportEntered ? toNumber(formData.transport_charge) : saleTransportCharge;
@@ -3520,7 +3504,7 @@ export default function WarehouseTradingPage() {
       other_deduction: finalOtherDeduction,
       transport_charge: finalTransportCharge,
       cd_amount: finalCdAmount,
-      total_deduction: finalClaimAmount + finalOtherDeduction + finalTransportCharge + finalCdAmount + finalAdjustmentAmount + finalTdsAmount,
+      total_deduction: saleShortageAmount + finalClaimAmount + finalOtherDeduction + finalTransportCharge + finalCdAmount + finalAdjustmentAmount + finalTdsAmount,
       adjustment_amount: finalAdjustmentAmount,
       tds_amount: finalTdsAmount,
       round_off: finalRoundOff,
@@ -3591,7 +3575,7 @@ export default function WarehouseTradingPage() {
     const manualClaimEntered = String(formData.claim_amount ?? "").trim() !== "";
     const manualOtherDeductionEntered = String(formData.other_deduction ?? "").trim() !== "";
     const manualTdsEntered = String(formData.tds_amount ?? "").trim() !== "";
-    const finalClaimAmount = manualClaimEntered ? toNumber(formData.claim_amount) : saleShortageAmount;
+    const finalClaimAmount = manualClaimEntered ? toNumber(formData.claim_amount) : 0;
     const finalOtherDeduction = manualOtherDeductionEntered ? toNumber(formData.other_deduction) : saleQualityDeduction;
     const finalTdsAmount = manualTdsEntered ? toNumber(formData.tds_amount) : (tdsEligible ? autoTdsAmount : 0);
     const finalCdAmount = Number((saleBillAmountFromData(formData) * toNumber(formData.cd_percent) / 100).toFixed(2));
@@ -3621,7 +3605,7 @@ export default function WarehouseTradingPage() {
       other_deduction: finalOtherDeduction,
       transport_charge: saleTransportCharge,
       cd_amount: finalCdAmount,
-      total_deduction: finalClaimAmount + finalOtherDeduction + saleTransportCharge + finalCdAmount + toNumber(formData.adjustment_amount) + finalTdsAmount,
+      total_deduction: saleShortageAmount + finalClaimAmount + finalOtherDeduction + saleTransportCharge + finalCdAmount + toNumber(formData.adjustment_amount) + finalTdsAmount,
       tds_amount: finalTdsAmount,
       reject_qty: toNumber(formData.reject_qty),
       amount: saleBillAmountFromData(formData),
@@ -4137,25 +4121,12 @@ export default function WarehouseTradingPage() {
       ["rate", "FIFO Rate", (item) => formatMoney(item.rate || 0)],
       ["amount", "FIFO Amount", (item) => formatMoney(item.amount || 0)],
     ],
-    "profit-loss": profitLossMode === "warehouse" ? [
+    "profit-loss": [
       ["warehouse", "Warehouse", (item) => item.warehouse_name || getWarehouseName(item)],
       ["sale_amount", "Sale Amount", (item) => formatMoney(item.sale_amount || 0)],
       ["purchase_amount", "Purchase Amount", (item) => formatMoney(item.purchase_amount || 0)],
       ["profit_loss", "Profit/Loss", (item) => (
-        <span style={{ color: Number(item.profit_loss || 0) >= 0 ? "#16a34a" : "#dc2626", fontWeight: 800 }}>
-          {formatMoney(item.profit_loss || 0)}
-        </span>
-      )],
-    ] : [
-      ["date", "Date", (item) => formatLedgerDate(item.date)],
-      ["voucher_no", "Sale Inv No", (item) => item.voucher_no || item.bill_no || "-"],
-      ["farmer_name", "Farmer Name", (item) => item.farmer_name || getFarmerName(item) || "-"],
-      ["buyer_name", "Buyer Name", (item) => item.buyer_name || getBuyerName(item) || "-"],
-      ["consignee_name", "Consignee Name", (item) => item.consignee_name || "-"],
-      ["lorry_no", "Lorry No", (item) => item.lorry_no || "-"],
-      ["quantity", "Qty", (item) => formatDecimal4(item.quantity || item.total_quantity || item.unloading_qty || 0)],
-      ["profit_loss", "Profit / Loss", (item) => (
-        <span style={{ color: Number(item.profit_loss || 0) >= 0 ? "#16a34a" : "#dc2626", fontWeight: 800 }}>
+        <span style={{ color: Number(item.profit_loss || 0) >= 0 ? "#16a34a" : "#dc2626" }}>
           {formatMoney(item.profit_loss || 0)}
         </span>
       )],
@@ -4339,7 +4310,7 @@ export default function WarehouseTradingPage() {
   const filteredVoucherList = list;
 
   const filteredReportDataAll = useMemo(() => {
-    const serverPagedReport = ["sale", "purchase", "warehouse-stock", "profit-loss"].includes(activeReport);
+    const serverPagedReport = ["sale", "purchase", "warehouse-stock"].includes(activeReport);
     // Sale/Purchase search is already applied in MongoDB before pagination.
     if (serverPagedReport || !normalizedGlobalSearch) return displayReportData;
     return displayReportData.filter((item) =>
@@ -4372,7 +4343,7 @@ export default function WarehouseTradingPage() {
     );
   }, [displayReportData, normalizedGlobalSearch]);
   const filteredReportData = useMemo(() => {
-    const serverPagedReport = ["sale", "purchase", "warehouse-stock", "profit-loss"].includes(activeReport);
+    const serverPagedReport = ["sale", "purchase", "warehouse-stock"].includes(activeReport);
     if (serverPagedReport) return filteredReportDataAll;
     const start = (reportPage - 1) * PAGE_SIZE;
     return filteredReportDataAll.slice(start, start + PAGE_SIZE);
@@ -4382,12 +4353,12 @@ export default function WarehouseTradingPage() {
   }, [activeVoucherType, normalizedGlobalSearch]);
   useEffect(() => {
     setReportPage(1);
-    }, [activeReport, normalizedGlobalSearch, saleFollowupFilter, reportFilters.farmer_id, reportFilters.warehouse_id, reportFilters.company_account_id, reportFilters.sale_buyer_id, reportFilters.sale_company_account_id, reportFilters.sale_journey_token, reportFilters.sale_lorry_no, reportFilters.sale_bill_no, reportFilters.profit_loss_mode, reportFilters.profit_from_date, reportFilters.profit_to_date, reportFilters.profit_location_id, reportFilters.profit_employee_id, reportFilters.profit_farmer_id]);
+    }, [activeReport, normalizedGlobalSearch, saleFollowupFilter, reportFilters.farmer_id, reportFilters.warehouse_id, reportFilters.company_account_id, reportFilters.sale_buyer_id, reportFilters.sale_company_account_id, reportFilters.sale_journey_token, reportFilters.sale_lorry_no, reportFilters.sale_bill_no]);
   useEffect(() => {
     setVoucherPage((current) => Math.min(current, Math.max(1, Number(voucherPageInfo.totalPages || 1))));
   }, [voucherPageInfo.totalPages]);
   useEffect(() => {
-    const serverPagedReport = ["sale", "purchase", "warehouse-stock", "profit-loss"].includes(activeReport);
+    const serverPagedReport = ["sale", "purchase", "warehouse-stock"].includes(activeReport);
     const totalPages = serverPagedReport
       ? Math.max(1, Math.ceil(Number(reportPageInfo.total || 0) / Number(reportPageInfo.pageSize || PAGE_SIZE)))
       : Math.max(1, Math.ceil(filteredReportDataAll.length / PAGE_SIZE));
@@ -4420,7 +4391,7 @@ export default function WarehouseTradingPage() {
     }
   };
   const totalVoucherPages = Math.max(1, Number(voucherPageInfo.totalPages || 1));
-  const totalReportPages = ["sale", "purchase", "warehouse-stock", "profit-loss"].includes(activeReport)
+  const totalReportPages = ["sale", "purchase", "warehouse-stock"].includes(activeReport)
     ? (reportPageInfo.hasMore ? reportPage + 1 : reportPage)
     : Math.max(1, Math.ceil(filteredReportDataAll.length / PAGE_SIZE));
   const renderPaginationBar = (page, totalPages, onPrev, onNext, totalItems, label = "rows") => {
@@ -5576,7 +5547,7 @@ export default function WarehouseTradingPage() {
                               </div>
                             </td>
                           </tr>
-                          <tr><td style={erpTd}>Claim</td><td style={erpTd}><input name="claim_amount" type="number" step="0.0001" value={String(formData.claim_amount ?? "").trim() === "" ? (saleAutoClaimAmount ? saleAutoClaimAmount.toFixed(2) : "0.00") : formData.claim_amount} onChange={handleChange} style={erpCellInput} /></td></tr>
+                          <tr><td style={erpTd}>Claim</td><td style={erpTd}><input name="claim_amount" type="number" step="0.0001" value={formData.claim_amount} onChange={handleChange} style={erpCellInput} placeholder="Enter claim separately" /></td></tr>
                           <tr><td style={{ ...erpTd, fontWeight: 700 }}>Total Deduction</td><td style={{ ...erpTd, fontWeight: 700 }}>{formatMoney(saleDeductionTotal)}</td></tr>
                           <tr><td style={erpTd}>Round Off</td><td style={erpTd}><input name="round_off" type="number" step="0.0001" value={formData.round_off} onChange={handleChange} style={erpCellInput} /></td></tr>
                           <tr><td style={erpTd}>Auto / Reset</td><td style={erpTd}><button type="button" onClick={resetSaleDeductionsToAuto} style={{ ...btnAction, background: "#64748b", width: "100%" }}>Auto Fill / Reset</button></td></tr>
@@ -6581,38 +6552,6 @@ export default function WarehouseTradingPage() {
             onSharePurchaseLedgerWhatsapp={sharePurchaseLedgerWhatsapp}
             onShareSaleLedgerWhatsapp={shareSaleLedgerWhatsapp}
           >
-            {activeReport === "profit-loss" && (
-              <div style={{ marginBottom: 14, padding: 14, border: "1px solid #dbe4ee", borderRadius: 12, background: "#f8fafc" }}>
-                <div style={{ display: "flex", gap: 10, alignItems: "end", flexWrap: "wrap" }}>
-                  <label style={{ display: "flex", flexDirection: "column", gap: 5, minWidth: 190, fontSize: 12, fontWeight: 800, color: "#334155" }}>
-                    Report Type
-                    <select
-                      value={profitLossMode}
-                      onChange={(e) => {
-                        const value = e.target.value === "warehouse" ? "warehouse" : "direct";
-                        setProfitLossMode(value);
-                        setReportFilters((prev) => ({ ...prev, profit_loss_mode: value, profit_location_id: "", profit_employee_id: "", profit_farmer_id: "" }));
-                        setReportPage(1);
-                      }}
-                      style={{ ...inp, minHeight: 40 }}
-                    >
-                      <option value="direct">Direct Loading</option>
-                      <option value="warehouse">Warehouse Wise</option>
-                    </select>
-                  </label>
-                  {profitLossMode === "direct" && (
-                    <>
-                      <label style={{ display: "flex", flexDirection: "column", gap: 5, minWidth: 145, fontSize: 12, fontWeight: 700, color: "#334155" }}>From Date<input type="date" value={reportFilters.profit_from_date} onChange={(e) => updateReportFilter("profit_from_date", e.target.value)} style={inp} /></label>
-                      <label style={{ display: "flex", flexDirection: "column", gap: 5, minWidth: 145, fontSize: 12, fontWeight: 700, color: "#334155" }}>To Date<input type="date" value={reportFilters.profit_to_date} onChange={(e) => updateReportFilter("profit_to_date", e.target.value)} style={inp} /></label>
-                      <SearchableSelect label="Location" value={reportFilters.profit_location_id} options={(locations || []).map((x) => ({ value: x.id || x._id, label: x.name }))} onChange={(v) => updateReportFilter("profit_location_id", v)} placeholder="All Locations" />
-                      <SearchableSelect label="Employee" value={reportFilters.profit_employee_id} options={(employees || []).map((x) => ({ value: x.id || x._id, label: x.name }))} onChange={(v) => updateReportFilter("profit_employee_id", v)} placeholder="All Employees" />
-                      <SearchableSelect label="Farmer" value={reportFilters.profit_farmer_id} options={(farmers || []).map((x) => ({ value: x.id || x._id, label: x.name }))} onChange={(v) => updateReportFilter("profit_farmer_id", v)} placeholder="All Farmers" />
-                    </>
-                  )}
-                  <button type="button" onClick={() => { setProfitLossMode("direct"); setReportFilters((prev) => ({ ...prev, profit_loss_mode: "direct", profit_from_date: "", profit_to_date: "", profit_location_id: "", profit_employee_id: "", profit_farmer_id: "" })); setReportPage(1); }} style={{ ...btnAction, background: "#64748b" }}>Clear Filters</button>
-                </div>
-              </div>
-            )}
             {activeReport === "purchase" && (
               <div style={{ display: "flex", gap: 12, alignItems: "end", flexWrap: "wrap", marginBottom: 14 }}>
                 <SearchableSelect
@@ -7144,7 +7083,7 @@ export default function WarehouseTradingPage() {
               totalReportPages,
               () => setReportPage((prev) => Math.max(1, prev - 1)),
               () => setReportPage((prev) => Math.min(totalReportPages, prev + 1)),
-              (["sale", "purchase", "warehouse-stock", "profit-loss"].includes(activeReport))
+              (["sale", "purchase", "warehouse-stock"].includes(activeReport))
                 ? Number(reportPageInfo.total || 0)
                 : filteredReportDataAll.length,
               "rows"
