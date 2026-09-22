@@ -175,6 +175,9 @@ export default function OutwardPage() {
   const [entryMode, setEntryMode] = useState("outward"); // outward | journal
   const [journalSourceAccounts, setJournalSourceAccounts] = useState([]);
   const [journalSourceLoading, setJournalSourceLoading] = useState(false);
+  const [journalHistory, setJournalHistory] = useState([]);
+  const [showJournalHistory, setShowJournalHistory] = useState(false);
+  const [journalHistoryLoading, setJournalHistoryLoading] = useState(false);
   const [editData, setEditData] = useState(null);
   const [selectedOutward, setSelectedOutward] = useState(null);
   const [selectedSettlementOutward, setSelectedSettlementOutward] = useState(null);
@@ -951,6 +954,51 @@ export default function OutwardPage() {
       self_loading: "No",
     });
 
+
+  const loadJournalHistory = async () => {
+    try {
+      setJournalHistoryLoading(true);
+      const res = await axios.get(`${API_BASE}/outward/journal-history`, { params: {} });
+      setJournalHistory(Array.isArray(res.data?.rows) ? res.data.rows : []);
+      setShowJournalHistory(true);
+    } catch (err) {
+      console.error(err);
+      toast.error(err?.response?.data?.error || "Journal history load failed", { theme: "colored" });
+    } finally {
+      setJournalHistoryLoading(false);
+    }
+  };
+
+  const openJournalEdit = (row) => {
+    const company = companies.find((c) => sameId(getRecordId(c), row.to_company_id));
+    const account = companyAccounts.find((a) => sameId(getRecordId(a), row.to_account_id));
+    setEditData({
+      journal_no: row.journal_no,
+      isJournalEdit: true,
+      employee_id: row.employee_id || "",
+    });
+    setEntryMode("journal");
+    setFormData((prev) => ({
+      ...prev,
+      date: row.date ? new Date(row.date).toISOString().slice(0, 10) : prev.date,
+      employee_id: row.employee_id || prev.employee_id,
+      warehouse_id: row.warehouse_id || "",
+      product_id: row.product_id || "",
+      journal_from_account_id: row.from_account_id || "",
+      journal_from_account_name: row.from_account_name || "",
+      company_id: row.to_company_id || "",
+      company_name: row.to_company_name || company?.name || "",
+      company_account_id: row.to_account_id || "",
+      account_name: row.to_account_name || account?.account_name || "",
+      weight: Number(row.qty || 0).toString(),
+      rate: "",
+      lorry_no: "",
+      inv_no: row.journal_no || "",
+    }));
+    setShowJournalHistory(false);
+    setShowForm(true);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
 
@@ -964,10 +1012,6 @@ export default function OutwardPage() {
     }
 
     if (entryMode === "journal") {
-      if (editData) {
-        toast.error("Journal Entry cannot be edited from Outward Edit", { theme: "colored" });
-        return;
-      }
       if (!formData.warehouse_id || !formData.product_id) {
         toast.error("Please select warehouse and product", { theme: "colored" });
         return;
@@ -987,7 +1031,7 @@ export default function OutwardPage() {
       try {
         submitLockRef.current = true;
         setIsSaving(true);
-        await axios.post(`${API_BASE}/outward/journal-entry`, {
+        const journalPayload = {
           date: formData.date,
           employee_id: formData.employee_id || null,
           location_id: formData.location_id || null,
@@ -999,8 +1043,14 @@ export default function OutwardPage() {
           rate: Number(formData.rate) || 0,
           lorry_no: String(formData.lorry_no || "").trim(),
           narration: String(formData.inv_no || "").trim(),
-        });
-        toast.success("Journal Entry saved: stock transferred FROM party TO party", { theme: "colored" });
+        };
+        if (editData?.isJournalEdit && editData?.journal_no) {
+          await axios.put(`${API_BASE}/outward/journal-entry/${encodeURIComponent(editData.journal_no)}`, journalPayload);
+          toast.success("Journal Entry updated and stock recalculated", { theme: "colored" });
+        } else {
+          await axios.post(`${API_BASE}/outward/journal-entry`, journalPayload);
+          toast.success("Journal Entry saved: stock transferred FROM party TO party", { theme: "colored" });
+        }
         setShowForm(false);
         setEntryMode("outward");
         setEditData(null);
@@ -1556,6 +1606,21 @@ Consignee: ${row.consignee_name}`;
               )}
             </div>
             <button
+              type="button"
+              onClick={loadJournalHistory}
+              style={{
+                ...btnStyle,
+                background: "#0f172a",
+                color: "#fff",
+                padding: "12px 16px",
+                borderRadius: "14px",
+                fontSize: "13px",
+                minWidth: "150px",
+              }}
+            >
+              Journal History
+            </button>
+            <button
               onClick={() => {
                 setEditData(null);
                 setEntryMode("journal");
@@ -1662,6 +1727,44 @@ Consignee: ${row.consignee_name}`;
         onChange={handleOutwardUpload}
       />
 
+
+      {showJournalHistory && (
+        <div style={{ position: "fixed", inset: 0, zIndex: 1100, background: "rgba(15,23,42,0.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 18 }}>
+          <div style={{ width: "min(1250px, 98vw)", maxHeight: "90vh", overflow: "auto", background: "#fff", borderRadius: 18, boxShadow: "0 30px 80px rgba(15,23,42,.25)", padding: 20 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 16 }}>
+              <div>
+                <h3 style={{ margin: 0, fontSize: 22, color: "#0f172a" }}>Journal Entry History</h3>
+                <div style={{ marginTop: 5, color: "#64748b", fontSize: 13 }}>Every manual party-stock transfer. Edit recalculates stock FROM the old transfer and applies the new transfer.</div>
+              </div>
+              <button type="button" onClick={() => setShowJournalHistory(false)} style={{ ...btnPrimary, background: "#ef4444" }}>Close</button>
+            </div>
+            {journalHistoryLoading ? <div style={{ padding: 30, textAlign: "center", color: "#64748b" }}>Loading history...</div> : (
+              <div style={{ overflowX: "auto" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                  <thead><tr>
+                    {['Date','Journal No','FROM Company','FROM Account','TO Company','TO Account','Qty','Action'].map((h) => <th key={h} style={{ ...thStyle, background: "#0f172a" }}>{h}</th>)}
+                  </tr></thead>
+                  <tbody>
+                    {journalHistory.length ? journalHistory.map((row) => (
+                      <tr key={row.journal_no}>
+                        <td style={tdStyle}>{row.date ? new Date(row.date).toLocaleDateString() : "-"}</td>
+                        <td style={tdStyle}>{row.journal_no}</td>
+                        <td style={tdStyle}>{row.from_company_name || "-"}</td>
+                        <td style={tdStyle}>{row.from_account_name || "-"}</td>
+                        <td style={tdStyle}>{row.to_company_name || "-"}</td>
+                        <td style={tdStyle}>{row.to_account_name || "-"}</td>
+                        <td style={{ ...tdStyle, textAlign: "right", fontWeight: 800 }}>{Number(row.qty || 0).toFixed(2)}</td>
+                        <td style={tdStyle}><button type="button" onClick={() => openJournalEdit(row)} disabled={!row.can_edit} style={{ ...btnStyle, background: "#2563eb", color: "#fff", padding: "7px 12px", borderRadius: 9 }}>Edit</button></td>
+                      </tr>
+                    )) : <tr><td colSpan="8" style={{ ...tdStyle, textAlign: "center", padding: 25 }}>No Journal Entry history found.</td></tr>}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
       {showForm && (
         <div
           style={{
@@ -1720,7 +1823,7 @@ Consignee: ${row.consignee_name}`;
                 }}
               >
                 <h2 style={{ margin: 0, flex: 1, color: "#0f172a", fontSize: "18px" }}>
-                  {entryMode === "journal" ? "New Journal Entry" : (editData ? "Edit Outward Entry" : "New Outward Entry")}
+                  {entryMode === "journal" ? (editData?.isJournalEdit ? `Edit Journal Entry ${editData.journal_no || ""}` : "New Journal Entry") : (editData ? "Edit Outward Entry" : "New Outward Entry")}
                 </h2>
                 {!editData && (
                   <select
