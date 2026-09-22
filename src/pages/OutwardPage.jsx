@@ -172,6 +172,9 @@ export default function OutwardPage() {
 
   const [outwards, setOutwards] = useState([]);
   const [showForm, setShowForm] = useState(false);
+  const [entryMode, setEntryMode] = useState("outward"); // outward | journal
+  const [journalSourceAccounts, setJournalSourceAccounts] = useState([]);
+  const [journalSourceLoading, setJournalSourceLoading] = useState(false);
   const [editData, setEditData] = useState(null);
   const [selectedOutward, setSelectedOutward] = useState(null);
   const [selectedSettlementOutward, setSelectedSettlementOutward] = useState(null);
@@ -208,6 +211,8 @@ export default function OutwardPage() {
     product_id: "",
     company_id: "",
     company_account_id: "",
+    journal_from_account_id: "",
+    journal_from_account_name: "",
     lorry_no: "",
     weight: "",
     rate: "",
@@ -253,6 +258,8 @@ export default function OutwardPage() {
   const isSelfLoading = String(formData.self_loading || "No").trim().toLowerCase() === "yes";
   const requestedQty = Number(formData.weight) || 0;
   const availableStock = Number(warehouseStock.availableStock) || 0;
+  const selectedJournalSource = journalSourceAccounts.find((row) => sameId(getRecordId(row), formData.journal_from_account_id));
+  const journalAvailableSourceStock = Number(selectedJournalSource?.available_qty || 0);
   const hasStockSelection = !isSelfLoading && Boolean(formData.warehouse_id && formData.product_id);
   const hasInsufficientStock =
     !isSelfLoading &&
@@ -639,6 +646,35 @@ export default function OutwardPage() {
   }, [selectedUnloadingOutward, selectedSettlementOutward, filteredOutwards, hoveredOutwardId, showForm, editData, selectedOutward]);
 
   useEffect(() => {
+    const loadJournalSourceAccounts = async () => {
+      if (entryMode !== "journal" || !formData.warehouse_id || !formData.product_id) {
+        setJournalSourceAccounts([]);
+        setJournalSourceLoading(false);
+        return;
+      }
+      try {
+        setJournalSourceLoading(true);
+        const res = await axios.get(`${API_BASE}/outward/journal-source-accounts`, {
+          params: { warehouse_id: formData.warehouse_id, product_id: formData.product_id },
+        });
+        const rows = Array.isArray(res.data?.rows) ? res.data.rows : [];
+        setJournalSourceAccounts(rows);
+        setFormData((prev) => {
+          if (!prev.journal_from_account_id) return prev;
+          const exists = rows.some((row) => sameId(getRecordId(row), prev.journal_from_account_id));
+          return exists ? prev : { ...prev, journal_from_account_id: "", journal_from_account_name: "" };
+        });
+      } catch (err) {
+        console.error("Failed to load journal source accounts:", err);
+        setJournalSourceAccounts([]);
+      } finally {
+        setJournalSourceLoading(false);
+      }
+    };
+    loadJournalSourceAccounts();
+  }, [entryMode, formData.warehouse_id, formData.product_id]);
+
+  useEffect(() => {
     const loadWarehouseStock = async () => {
       if (isSelfLoading || !formData.warehouse_id || !formData.product_id) {
         setWarehouseStock({ currentStock: 0, reservedStock: 0, availableStock: 0, adjustedQtyForCurrentOutward: 0, pendingAdjustmentQtyForCurrentOutward: 0, loading: false, error: "" });
@@ -758,6 +794,16 @@ export default function OutwardPage() {
 
   const handleChange = (e) => {
     const { name, value } = e.target;
+
+    if (name === "journal_from_account_id") {
+      const account = journalSourceAccounts.find((x) => sameId(getRecordId(x), value));
+      setFormData((prev) => ({
+        ...prev,
+        journal_from_account_id: value,
+        journal_from_account_name: account?.account_name || account?.name || "",
+      }));
+      return;
+    }
 
     if (name === "buyer_id") {
       const b = buyerNames.find((x) => sameId(getRecordId(x), value));
@@ -892,6 +938,8 @@ export default function OutwardPage() {
       product_id: "",
       company_id: "",
       company_account_id: "",
+      journal_from_account_id: "",
+      journal_from_account_name: "",
       lorry_no: "",
       weight: "",
       rate: "",
@@ -912,6 +960,59 @@ export default function OutwardPage() {
 
     if (!formData.date || !formData.employee_id) {
       toast.error("Please select date and employee", { theme: "colored" });
+      return;
+    }
+
+    if (entryMode === "journal") {
+      if (editData) {
+        toast.error("Journal Entry cannot be edited from Outward Edit", { theme: "colored" });
+        return;
+      }
+      if (!formData.warehouse_id || !formData.product_id) {
+        toast.error("Please select warehouse and product", { theme: "colored" });
+        return;
+      }
+      if (!formData.journal_from_account_id) {
+        toast.error("Please select FROM Party Account", { theme: "colored" });
+        return;
+      }
+      if (!formData.company_account_id) {
+        toast.error("Please select TO Party Account", { theme: "colored" });
+        return;
+      }
+      if ((Number(formData.weight) || 0) <= 0) {
+        toast.error("Please enter quantity/weight", { theme: "colored" });
+        return;
+      }
+      try {
+        submitLockRef.current = true;
+        setIsSaving(true);
+        await axios.post(`${API_BASE}/outward/journal-entry`, {
+          date: formData.date,
+          employee_id: formData.employee_id || null,
+          location_id: formData.location_id || null,
+          warehouse_id: formData.warehouse_id,
+          product_id: formData.product_id,
+          from_account_id: formData.journal_from_account_id,
+          to_account_id: formData.company_account_id,
+          quantity: Number(formData.weight) || 0,
+          rate: Number(formData.rate) || 0,
+          lorry_no: String(formData.lorry_no || "").trim(),
+          narration: String(formData.inv_no || "").trim(),
+        });
+        toast.success("Journal Entry saved: stock transferred FROM party TO party", { theme: "colored" });
+        setShowForm(false);
+        setEntryMode("outward");
+        setEditData(null);
+        resetForm();
+        fetchOutwards().catch(() => {});
+      } catch (err) {
+        console.error(err);
+        toast.error(err?.response?.data?.error || "Error saving journal entry", { theme: "colored" });
+      } finally {
+        submitLockRef.current = false;
+        setIsSaving(false);
+      }
       return;
     }
 
@@ -1364,6 +1465,8 @@ Consignee: ${row.consignee_name}`;
   const closeFormModal = () => {
     setShowForm(false);
     setEditData(null);
+    setEntryMode("outward");
+    resetForm();
   };
 
   return (
@@ -1454,6 +1557,29 @@ Consignee: ${row.consignee_name}`;
             <button
               onClick={() => {
                 setEditData(null);
+                setEntryMode("journal");
+                resetForm();
+                setShowForm(true);
+              }}
+              disabled={!canCreate}
+              style={{
+                ...btnStyle,
+                background: canCreate ? "#7c3aed" : "#94a3b8",
+                color: "#fff",
+                padding: "12px 16px",
+                borderRadius: "14px",
+                fontSize: "13px",
+                width: "auto",
+                minWidth: "160px",
+                boxShadow: canCreate ? "0 10px 20px rgba(124, 58, 237, 0.2)" : "none",
+              }}
+            >
+              Journal Entry
+            </button>
+            <button
+              onClick={() => {
+                setEditData(null);
+                setEntryMode("outward");
                 resetForm();
                 setShowForm(true);
               }}
@@ -1593,8 +1719,24 @@ Consignee: ${row.consignee_name}`;
                 }}
               >
                 <h2 style={{ margin: 0, flex: 1, color: "#0f172a", fontSize: "18px" }}>
-                  {editData ? "Edit Outward Entry" : "New Outward Entry"}
+                  {entryMode === "journal" ? "New Journal Entry" : (editData ? "Edit Outward Entry" : "New Outward Entry")}
                 </h2>
+                {!editData && (
+                  <select
+                    value={entryMode}
+                    onChange={(e) => {
+                      const mode = e.target.value;
+                      setEntryMode(mode);
+                      if (mode === "journal") {
+                        setFormData((prev) => ({ ...prev, buyer_id: "", buyer_name: "", consignee_id: "", consignee_name: "" }));
+                      }
+                    }}
+                    style={{ ...inp, width: "180px", minWidth: "180px", fontWeight: 700 }}
+                  >
+                    <option value="outward">Outward Entry</option>
+                    <option value="journal">Journal Entry</option>
+                  </select>
+                )}
                 <button type="button" onClick={closeFormModal} style={btnPrimary}>
                   Back To Outward List
                 </button>
@@ -1707,28 +1849,67 @@ Consignee: ${row.consignee_name}`;
                   </datalist>
                 </Field>
 
-                <Field label="Select Account">
-                  <div>
-                    <input
-                      list="outward-account-names"
-                      value={formData.account_name || selectedAccount?.account_name || ""}
-                      onChange={(e) => handleMasterInputChange("company_account_id", "account_name", companyAccounts.filter((item) => accountBelongsToCompany(item, formData.company_id, companyLookup.get(String(formData.company_id)))), "account_name", e.target.value)}
-                      onKeyDown={(e) => handleMasterInputKeyDown(e, "/company-accounts", "account", e.currentTarget.value, formData.company_id, companyAccounts, "account_name")}
-                      placeholder="Type account name (Alt+C to create, Alt+E to edit)"
+                {entryMode === "journal" && (
+                  <Field label="FROM Party Account">
+                    <select
+                      name="journal_from_account_id"
+                      value={formData.journal_from_account_id}
+                      onChange={handleChange}
                       style={inp}
-                    />
-                  </div>
-                  <datalist id="outward-account-names">
-                    {formData.company_id && companyAccounts
-                      .filter((acc) => accountBelongsToCompany(
-                        acc,
-                        formData.company_id,
-                        companyLookup.get(String(formData.company_id))
-                      ))
-                      .map((acc) => (
-                        <option key={getRecordId(acc)} value={acc.account_name} />
+                      disabled={!formData.warehouse_id || !formData.product_id || journalSourceLoading}
+                    >
+                      <option value="">{journalSourceLoading ? "Loading inward parties..." : "Select FROM Party"}</option>
+                      {journalSourceAccounts.map((account) => (
+                        <option key={getRecordId(account)} value={getRecordId(account)}>
+                          {account.account_name} — Stock: {Number(account.available_qty || 0).toFixed(2)}
+                        </option>
                       ))}
-                  </datalist>
+                    </select>
+                  </Field>
+                )}
+
+                <Field label={entryMode === "journal" ? "TO Party Account" : "Select Account"}>
+                  {entryMode === "journal" ? (
+                    <select
+                      name="company_account_id"
+                      value={formData.company_account_id}
+                      onChange={handleChange}
+                      style={inp}
+                    >
+                      <option value="">Select TO Party Account</option>
+                      {companyAccounts
+                        .filter((acc) => !formData.company_id || accountBelongsToCompany(acc, formData.company_id, companyLookup.get(String(formData.company_id))))
+                        .map((acc) => (
+                          <option key={getRecordId(acc)} value={getRecordId(acc)}>
+                            {acc.account_name}
+                          </option>
+                        ))}
+                    </select>
+                  ) : (
+                    <>
+                      <div>
+                        <input
+                          list="outward-account-names"
+                          value={formData.account_name || selectedAccount?.account_name || ""}
+                          onChange={(e) => handleMasterInputChange("company_account_id", "account_name", companyAccounts.filter((item) => accountBelongsToCompany(item, formData.company_id, companyLookup.get(String(formData.company_id)))), "account_name", e.target.value)}
+                          onKeyDown={(e) => handleMasterInputKeyDown(e, "/company-accounts", "account", e.currentTarget.value, formData.company_id, companyAccounts, "account_name")}
+                          placeholder="Type account name (Alt+C to create, Alt+E to edit)"
+                          style={inp}
+                        />
+                      </div>
+                      <datalist id="outward-account-names">
+                        {formData.company_id && companyAccounts
+                          .filter((acc) => accountBelongsToCompany(
+                            acc,
+                            formData.company_id,
+                            companyLookup.get(String(formData.company_id))
+                          ))
+                          .map((acc) => (
+                            <option key={getRecordId(acc)} value={acc.account_name} />
+                          ))}
+                      </datalist>
+                    </>
+                  )}
                 </Field>
 
                 <Field label="Lorry No">
@@ -1757,7 +1938,11 @@ Consignee: ${row.consignee_name}`;
                   <div>
                     <input
                       readOnly
-                      value={isSelfLoading ? "N/A for Self Loading" : hasStockSelection ? (warehouseStock.loading ? "Loading..." : availableStock.toFixed(2)) : "Select warehouse and product"}
+                      value={entryMode === "journal"
+                        ? (!formData.warehouse_id || !formData.product_id
+                          ? "Select warehouse and product"
+                          : (journalSourceLoading ? "Loading inward parties..." : (formData.journal_from_account_id ? journalAvailableSourceStock.toFixed(2) : "Select FROM party")))
+                        : (isSelfLoading ? "N/A for Self Loading" : hasStockSelection ? (warehouseStock.loading ? "Loading..." : availableStock.toFixed(2)) : "Select warehouse and product")}
                       style={{ ...inp, background: "#f8fafc", color: hasInsufficientStock ? "#dc2626" : "#0f172a", fontWeight: 700 }}
                     />
                     {!isSelfLoading && hasStockSelection ? (
@@ -1766,6 +1951,11 @@ Consignee: ${row.consignee_name}`;
                         {!warehouseStock.error ? (
                           <div style={{ marginTop: "3px", color: "#475569", fontWeight: 600 }}>
                             Pending Adjustment: {(editData ? warehouseStock.pendingAdjustmentQtyForCurrentOutward : requestedQty).toFixed(2)}
+                          </div>
+                        ) : null}
+                        {entryMode === "journal" && formData.journal_from_account_id ? (
+                          <div style={{ marginTop: "3px", color: "#7c3aed", fontWeight: 700 }}>
+                            FROM Party Stock: {journalAvailableSourceStock.toFixed(2)}
                           </div>
                         ) : null}
                       </div>
@@ -1791,7 +1981,7 @@ Consignee: ${row.consignee_name}`;
                   />
                 </Field>
 
-                <Field label="Select buyer name">
+                {entryMode !== "journal" && <Field label="Select buyer name">
                   <div>
                     <input
                       list="outward-buyer-names"
@@ -1805,9 +1995,9 @@ Consignee: ${row.consignee_name}`;
                   <datalist id="outward-buyer-names">
                     {buyerNames.map((b) => <option key={getRecordId(b)} value={b.name} />)}
                   </datalist>
-                </Field>
+                </Field>}
 
-                <Field label="Select consignee">
+                {entryMode !== "journal" && <Field label="Select consignee">
                   <div>
                     <input
                       list="outward-consignee-names"
@@ -1824,7 +2014,7 @@ Consignee: ${row.consignee_name}`;
                         <option key={getRecordId(c)} value={c.name} />
                       ))}
                   </datalist>
-                </Field>
+                </Field>}
 
                 <div style={{ gridColumn: "1 / -1", display: "flex", flexDirection: "column", gap: "8px", marginTop: "6px" }}>
                   <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
