@@ -1432,6 +1432,7 @@ Consignee: ${row.consignee_name}`;
       ...prev,
       [field]: match ? getRecordId(match) : "",
       [nameField]: typedName,
+      ...(field === "company_id" ? { company_account_id: "", account_name: "" } : {}),
       ...(field === "buyer_id" ? { consignee_id: "", consignee_name: "" } : {}),
     }));
   };
@@ -1831,7 +1832,7 @@ Consignee: ${row.consignee_name}`;
                   </select>
                 </Field>
 
-                <Field label="Select Company">
+                <Field label={entryMode === "journal" ? "TO Company Name" : "Select Company"}>
                   <div>
                     <input
                       list="outward-company-names"
@@ -1868,7 +1869,7 @@ Consignee: ${row.consignee_name}`;
                   </Field>
                 )}
 
-                <Field label={entryMode === "journal" ? "TO Party Account" : "Select Account"}>
+                <Field label={entryMode === "journal" ? "TO Company Account" : "Select Account"}>
                   {entryMode === "journal" ? (
                     <select
                       name="company_account_id"
@@ -1876,7 +1877,7 @@ Consignee: ${row.consignee_name}`;
                       onChange={handleChange}
                       style={inp}
                     >
-                      <option value="">Select TO Party Account</option>
+                      <option value="">{formData.company_id ? "Select TO Company Account" : "Select TO Company Name first"}</option>
                       {companyAccounts
                         .filter((acc) => !formData.company_id || accountBelongsToCompany(acc, formData.company_id, companyLookup.get(String(formData.company_id))))
                         .map((acc) => (
