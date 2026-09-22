@@ -11,12 +11,13 @@ export default function PartyStockReportPage() {
   const navigate = useNavigate();
   const [summary, setSummary] = useState([]);
   const [details, setDetails] = useState([]);
+  const [journalRows, setJournalRows] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [companies, setCompanies] = useState([]);
   const [locations, setLocations] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
   const [products, setProducts] = useState([]);
-  const [visibleSections, setVisibleSections] = useState(["totals", "summary", "details"]);
+  const [visibleSections, setVisibleSections] = useState(["totals", "summary", "details", "journal"]);
   const [filtersReady, setFiltersReady] = useState(false);
 
   const [filters, setFilters] = useState({
@@ -210,6 +211,27 @@ export default function PartyStockReportPage() {
           const normalizedDetails = (res.data.details || []).map(normalizePartyStockRow);
           setSummary(normalizedSummary);
           setDetails(normalizedDetails);
+
+          try {
+            const journalParams = {
+              from_date: filters.from_date,
+              to_date: filters.to_date,
+              employee_id: filters.employee_id,
+              product_id: filters.product_id,
+              location_id: locList.length === 1 ? locList[0] : "",
+              warehouse_id: whList.length === 1 ? whList[0] : "",
+            };
+            const journalRes = await axios.get(`${API_BASE}/outward/stock-journal`, {
+              params: journalParams,
+              signal: controller.signal,
+            });
+            if (!cancelled) setJournalRows(Array.isArray(journalRes.data?.rows) ? journalRes.data.rows : []);
+          } catch (journalErr) {
+            if (journalErr?.code !== "ERR_CANCELED" && journalErr?.name !== "CanceledError") {
+              console.error(journalErr);
+              if (!cancelled) setJournalRows([]);
+            }
+          }
         }
       } catch (err) {
         if (err?.code === "ERR_CANCELED" || err?.name === "CanceledError") return;
@@ -236,6 +258,51 @@ export default function PartyStockReportPage() {
       return;
     }
     setFilters((prev) => ({ ...prev, [name]: String(value || "") }));
+  };
+
+  const normalizedJournalRows = useMemo(
+    () =>
+      (journalRows || []).map((row) => ({
+        ...row,
+        qty: Number(row.qty || 0),
+        cost_rate: Number(row.cost_rate || 0),
+        cost_amount: Number(row.cost_amount || 0),
+        sale_rate: Number(row.sale_rate || 0),
+        sale_amount: Number(row.sale_amount || 0),
+        profit_loss: Number(row.profit_loss || 0),
+      })),
+    [journalRows]
+  );
+
+  const journalTotals = useMemo(
+    () =>
+      normalizedJournalRows.reduce(
+        (acc, row) => {
+          acc.qty += row.qty;
+          acc.cost += row.cost_amount;
+          acc.sale += row.sale_amount;
+          acc.profit += row.profit_loss;
+          return acc;
+        },
+        { qty: 0, cost: 0, sale: 0, profit: 0 }
+      ),
+    [normalizedJournalRows]
+  );
+
+  const exportJournalCSV = () => {
+    let csv = "Date,Journal No,Warehouse,Product,From Party,To Party,Qty,Cost Rate,Cost Amount,Sale Rate,Sale Amount,Profit/Loss,Lorry No,Employee
+";
+    normalizedJournalRows.forEach((row) => {
+      csv += `${formatDisplayDate(row.date) || ""},${row.journal_no || ""},${row.warehouse_name || ""},${row.product_name || ""},${row.from_party_name || ""},${row.to_party_name || ""},${num(row.qty)},${num(row.cost_rate)},${num(row.cost_amount)},${num(row.sale_rate)},${num(row.sale_amount)},${num(row.profit_loss)},${row.lorry_no || ""},${row.employee_name || ""}
+`;
+    });
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "Party_Stock_Journal_Report.csv";
+    a.click();
+    window.URL.revokeObjectURL(url);
   };
 
   const exportCSV = () => {
@@ -362,6 +429,9 @@ export default function PartyStockReportPage() {
           <button onClick={exportCSV} style={{ ...button, background: "#2563eb" }}>
             Export CSV
           </button>
+          <button onClick={exportJournalCSV} style={{ ...button, background: "#7c3aed" }}>
+            Journal CSV
+          </button>
         </div>
         <div style={{ marginTop: 14 }}>
           <ReportSectionToggles
@@ -372,6 +442,7 @@ export default function PartyStockReportPage() {
               { key: "totals", label: "Totals" },
               { key: "summary", label: "Summary" },
               { key: "details", label: "Details" },
+              { key: "journal", label: "Stock Journal" },
             ]}
           />
         </div>
@@ -505,6 +576,78 @@ export default function PartyStockReportPage() {
           </table>
         </div>
       </div>
+      ) : null}
+
+      {visibleSections.includes("journal") ? (
+        <div style={{ ...card, marginTop: 16, overflow: "hidden" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 12 }}>
+            <div>
+              <h3 style={{ margin: 0, color: "#0f172a" }}>Stock Journal / Party Stock Movement</h3>
+              <div style={{ marginTop: 4, color: "#64748b", fontSize: 12 }}>
+                Existing Inward/Outward logic remains unchanged. This journal records the actual FIFO stock movement.
+              </div>
+            </div>
+            <button onClick={exportJournalCSV} style={{ ...button, background: "#7c3aed" }}>Export Journal CSV</button>
+          </div>
+          <div style={{ overflowX: "auto", maxHeight: "72vh" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+              <thead>
+                <tr>
+                  <th style={th}>Date</th>
+                  <th style={th}>Journal No</th>
+                  <th style={th}>Warehouse</th>
+                  <th style={th}>Product</th>
+                  <th style={th}>From Party</th>
+                  <th style={th}>To Party</th>
+                  <th style={th}>Qty</th>
+                  <th style={th}>Cost Rate</th>
+                  <th style={th}>Cost Amount</th>
+                  <th style={th}>Sale Rate</th>
+                  <th style={th}>Sale Amount</th>
+                  <th style={th}>Profit / Loss</th>
+                  <th style={th}>Lorry No</th>
+                  <th style={th}>Employee</th>
+                </tr>
+              </thead>
+              <tbody>
+                {normalizedJournalRows.length > 0 ? normalizedJournalRows.map((row, index) => (
+                  <tr key={`${row.journal_no || row.outward_id}-${row.inward_id}-${index}`}>
+                    <td style={td}>{formatDisplayDate(row.date)}</td>
+                    <td style={td}>{row.journal_no || "-"}</td>
+                    <td style={td}>{row.warehouse_name || "-"}</td>
+                    <td style={td}>{row.product_name || "-"}</td>
+                    <td style={td}>{row.from_party_name || "-"}</td>
+                    <td style={td}>{row.to_party_name || "-"}</td>
+                    <td style={td}>{num(row.qty)}</td>
+                    <td style={td}>{num(row.cost_rate)}</td>
+                    <td style={td}>{num(row.cost_amount)}</td>
+                    <td style={td}>{num(row.sale_rate)}</td>
+                    <td style={td}>{num(row.sale_amount)}</td>
+                    <td style={{ ...td, fontWeight: 700 }}>{num(row.profit_loss)}</td>
+                    <td style={td}>{row.lorry_no || "-"}</td>
+                    <td style={td}>{row.employee_name || "-"}</td>
+                  </tr>
+                )) : (
+                  <tr><td style={td} colSpan="14">No stock journal records found. Journal is created when an Outward is completed through the existing FIFO adjustment.</td></tr>
+                )}
+              </tbody>
+              {normalizedJournalRows.length > 0 && (
+                <tfoot>
+                  <tr style={{ background: "#f3e8ff", fontWeight: 700 }}>
+                    <td style={td} colSpan="6">Journal Totals</td>
+                    <td style={td}>{num(journalTotals.qty)}</td>
+                    <td style={td}>-</td>
+                    <td style={td}>{num(journalTotals.cost)}</td>
+                    <td style={td}>-</td>
+                    <td style={td}>{num(journalTotals.sale)}</td>
+                    <td style={td}>{num(journalTotals.profit)}</td>
+                    <td style={td} colSpan="2">-</td>
+                  </tr>
+                </tfoot>
+              )}
+            </table>
+          </div>
+        </div>
       ) : null}
     </div>
   );
