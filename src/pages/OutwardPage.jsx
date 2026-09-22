@@ -1832,40 +1832,69 @@ Consignee: ${row.consignee_name}`;
                   </select>
                 </Field>
 
-                <Field label={entryMode === "journal" ? "TO Company Name" : "Select Company"}>
-                  <div>
-                    <input
-                      list="outward-company-names"
-                      value={formData.company_name || selectedCompany?.name || ""}
-                      onChange={(e) => handleMasterInputChange("company_id", "company_name", companies, "name", e.target.value)}
-                      onKeyDown={(e) => handleMasterInputKeyDown(e, "/companies", "company", e.currentTarget.value, "", companies)}
-                      placeholder="Type company name (Alt+C to create, Alt+E to edit)"
-                      style={inp}
-                    />
-                  </div>
-                  <datalist id="outward-company-names">
-                    {companies.map((c) => (
-                      <option key={getRecordId(c)} value={c.name} />
-                    ))}
-                  </datalist>
-                </Field>
+                {entryMode === "journal" ? (
+                  <>
+                    <Field label="FROM Company Name">
+                      <input
+                        value={selectedJournalSource?.company_name || ""}
+                        readOnly
+                        placeholder={journalSourceLoading ? "Loading inward company..." : "Select FROM Party Account first"}
+                        style={{ ...inp, background: "#f8fafc" }}
+                      />
+                    </Field>
 
-                {entryMode === "journal" && (
-                  <Field label="FROM Party Account">
-                    <select
-                      name="journal_from_account_id"
-                      value={formData.journal_from_account_id}
-                      onChange={handleChange}
-                      style={inp}
-                      disabled={!formData.warehouse_id || !formData.product_id || journalSourceLoading}
-                    >
-                      <option value="">{journalSourceLoading ? "Loading inward parties..." : "Select FROM Party"}</option>
-                      {journalSourceAccounts.map((account) => (
-                        <option key={getRecordId(account)} value={getRecordId(account)}>
-                          {account.account_name} — Stock: {Number(account.available_qty || 0).toFixed(2)}
-                        </option>
+                    <Field label="FROM Party Account">
+                      <select
+                        name="journal_from_account_id"
+                        value={formData.journal_from_account_id}
+                        onChange={handleChange}
+                        style={inp}
+                        disabled={!formData.warehouse_id || !formData.product_id || journalSourceLoading}
+                      >
+                        <option value="">{journalSourceLoading ? "Loading inward parties..." : "Select FROM Party Account"}</option>
+                        {journalSourceAccounts.map((account) => (
+                          <option key={getRecordId(account)} value={getRecordId(account)}>
+                            {account.account_name} — Stock: {Number(account.available_qty || 0).toFixed(2)}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+
+                    <Field label="TO Company Name">
+                      <div>
+                        <input
+                          list="outward-company-names"
+                          value={formData.company_name || selectedCompany?.name || ""}
+                          onChange={(e) => handleMasterInputChange("company_id", "company_name", companies, "name", e.target.value)}
+                          onKeyDown={(e) => handleMasterInputKeyDown(e, "/companies", "company", e.currentTarget.value, "", companies)}
+                          placeholder="Type TO company name (Alt+C to create, Alt+E to edit)"
+                          style={inp}
+                        />
+                      </div>
+                      <datalist id="outward-company-names">
+                        {companies.map((c) => (
+                          <option key={getRecordId(c)} value={c.name} />
+                        ))}
+                      </datalist>
+                    </Field>
+                  </>
+                ) : (
+                  <Field label="Select Company">
+                    <div>
+                      <input
+                        list="outward-company-names"
+                        value={formData.company_name || selectedCompany?.name || ""}
+                        onChange={(e) => handleMasterInputChange("company_id", "company_name", companies, "name", e.target.value)}
+                        onKeyDown={(e) => handleMasterInputKeyDown(e, "/companies", "company", e.currentTarget.value, "", companies)}
+                        placeholder="Type company name (Alt+C to create, Alt+E to edit)"
+                        style={inp}
+                      />
+                    </div>
+                    <datalist id="outward-company-names">
+                      {companies.map((c) => (
+                        <option key={getRecordId(c)} value={c.name} />
                       ))}
-                    </select>
+                    </datalist>
                   </Field>
                 )}
 
