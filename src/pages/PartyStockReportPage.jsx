@@ -290,8 +290,7 @@ export default function PartyStockReportPage() {
   );
 
   const exportJournalCSV = () => {
-    let csv = "Date,Journal No,Warehouse,Product,From Party,To Party,Qty,Cost Rate,Cost Amount,Sale Rate,Sale Amount,Profit/Loss,Lorry No,Employee
-";
+    let csv = "Date,Journal No,Warehouse,Product,From Party,To Party,Qty,Cost Rate,Cost Amount,Sale Rate,Sale Amount,Profit/Loss,Lorry No,Employee\n";
     normalizedJournalRows.forEach((row) => {
       csv += `${formatDisplayDate(row.date) || ""},${row.journal_no || ""},${row.warehouse_name || ""},${row.product_name || ""},${row.from_party_name || ""},${row.to_party_name || ""},${num(row.qty)},${num(row.cost_rate)},${num(row.cost_amount)},${num(row.sale_rate)},${num(row.sale_amount)},${num(row.profit_loss)},${row.lorry_no || ""},${row.employee_name || ""}
 `;
