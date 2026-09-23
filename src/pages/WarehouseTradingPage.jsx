@@ -4191,7 +4191,8 @@ export default function WarehouseTradingPage() {
     const ledgerEntries = activeReport === "sale-party-ledger" && !reportFilters.details_of_deduction
       ? (() => {
           const saleRows = entries.filter((row) => String(row.voucher_type || "") === "Sale");
-          const deductionRows = entries.filter((row) => String(row.voucher_type || "").startsWith("Sale - ") && row.ledger_component);
+          const deductionRows = entries.filter((row) => String(row.voucher_type || "").startsWith("Sale - ") && row.ledger_component && row.ledger_component !== "additional_amount");
+          const additionalRows = entries.filter((row) => String(row.voucher_type || "") === "Sale - Add Amount" && row.ledger_component === "additional_amount");
           const receiptRows = entries.filter((row) => String(row.voucher_type || "") === "Receipt");
           const deductionsBySale = new Map();
           deductionRows.forEach((row) => {
@@ -4225,7 +4226,7 @@ export default function WarehouseTradingPage() {
               ledger_view: "normal",
             };
           });
-          return [...normalSales, ...receiptRows];
+          return [...normalSales, ...additionalRows, ...receiptRows];
         })()
       : entries;
 
