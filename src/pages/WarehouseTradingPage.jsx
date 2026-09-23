@@ -53,6 +53,7 @@ const defaultForm = () => ({
   rate: "",
   amount: "",
   claim_amount: "",
+  additional_amount: "",
   other_deduction: "",
   cd_percent: "",
   cd_amount: "",
@@ -771,12 +772,14 @@ export default function WarehouseTradingPage() {
   const saleAutoClaimAmount = saleShortageAmount;
   const saleAutoOtherDeduction = saleQualityDeduction;
   const saleEffectiveClaimAmount = String(formData.claim_amount ?? "").trim() === "" ? 0 : toNumber(formData.claim_amount);
+  const saleAdditionalAmount = toNumber(formData.additional_amount);
   const saleEffectiveOtherDeduction = String(formData.other_deduction ?? "").trim() === "" ? saleAutoOtherDeduction : toNumber(formData.other_deduction);
   const saleEffectiveTdsAmount = toNumber(formData.tds_amount);
   const saleDeductionTotal = saleShortageAmount + saleEffectiveClaimAmount + saleEffectiveOtherDeduction + saleTransportCharge + saleCashDiscountAmount + toNumber(formData.adjustment_amount) + saleEffectiveTdsAmount;
   const saleNetReceivablePreview =
     saleGrossAmountFromData(formData) -
     saleDeductionTotal +
+    saleAdditionalAmount +
     toNumber(formData.round_off);
   const saleProfitLossPreview = saleNetReceivablePreview - netPurchaseSummaryValue;
 
@@ -3433,6 +3436,7 @@ export default function WarehouseTradingPage() {
         : voucher.shortage_amount !== undefined && voucher.shortage_amount !== null && String(voucher.shortage_amount).trim() !== ""
           ? voucher.shortage_amount
           : "",
+      additional_amount: voucher.additional_amount !== undefined && voucher.additional_amount !== null ? voucher.additional_amount : "",
       other_deduction: voucher.other_deduction !== undefined && voucher.other_deduction !== null && String(voucher.other_deduction).trim() !== ""
         ? voucher.other_deduction
         : voucher.adjustment_amount !== undefined && voucher.adjustment_amount !== null && String(voucher.adjustment_amount).trim() !== ""
@@ -3488,6 +3492,7 @@ export default function WarehouseTradingPage() {
     // calculated automatic value; if Admin enters a value (including 0), use
     // that manual value and persist it.
     const finalClaimAmount = manualClaimEntered ? toNumber(formData.claim_amount) : 0;
+    const finalAdditionalAmount = toNumber(formData.additional_amount);
     const finalOtherDeduction = manualOtherDeductionEntered ? toNumber(formData.other_deduction) : saleQualityDeduction;
     const finalTdsAmount = manualTdsEntered ? toNumber(formData.tds_amount) : 0;
     const finalTransportCharge = manualTransportEntered ? toNumber(formData.transport_charge) : saleTransportCharge;
@@ -3517,6 +3522,7 @@ export default function WarehouseTradingPage() {
       shortage_quantity: saleShortageQty,
       shortage_amount: saleShortageAmount,
       claim_amount: finalClaimAmount,
+      additional_amount: finalAdditionalAmount,
       other_deduction: finalOtherDeduction,
       transport_charge: finalTransportCharge,
       cd_amount: finalCdAmount,
@@ -3592,6 +3598,7 @@ export default function WarehouseTradingPage() {
     const manualOtherDeductionEntered = String(formData.other_deduction ?? "").trim() !== "";
     const manualTdsEntered = String(formData.tds_amount ?? "").trim() !== "";
     const finalClaimAmount = manualClaimEntered ? toNumber(formData.claim_amount) : 0;
+    const finalAdditionalAmount = toNumber(formData.additional_amount);
     const finalOtherDeduction = manualOtherDeductionEntered ? toNumber(formData.other_deduction) : saleQualityDeduction;
     const finalTdsAmount = manualTdsEntered ? toNumber(formData.tds_amount) : 0;
     const finalCdAmount = Number((saleBillAmountFromData(formData) * toNumber(formData.cd_percent) / 100).toFixed(2));
@@ -3618,6 +3625,7 @@ export default function WarehouseTradingPage() {
       shortage_quantity: saleShortageQty,
       shortage_amount: saleShortageAmount,
       claim_amount: finalClaimAmount,
+      additional_amount: finalAdditionalAmount,
       other_deduction: finalOtherDeduction,
       transport_charge: saleTransportCharge,
       cd_amount: finalCdAmount,
@@ -7394,6 +7402,7 @@ export default function WarehouseTradingPage() {
           saveSaleVoucherPass={saveSaleVoucherPass}
           saleQualityDeduction={saleQualityDeduction}
           saleTransportCharge={saleTransportCharge}
+          saleAdditionalAmount={saleAdditionalAmount}
           saleCashDiscountAmount={saleCashDiscountAmount}
           saleBillAmountFromData={saleBillAmountFromData}
           tdsEligible={false}
