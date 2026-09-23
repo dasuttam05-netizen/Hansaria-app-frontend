@@ -772,7 +772,7 @@ export default function WarehouseTradingPage() {
   const saleAutoOtherDeduction = saleQualityDeduction;
   const saleEffectiveClaimAmount = String(formData.claim_amount ?? "").trim() === "" ? 0 : toNumber(formData.claim_amount);
   const saleEffectiveOtherDeduction = String(formData.other_deduction ?? "").trim() === "" ? saleAutoOtherDeduction : toNumber(formData.other_deduction);
-  const saleEffectiveTdsAmount = String(formData.tds_amount ?? "").trim() === "" && tdsEligible ? autoTdsAmount : toNumber(formData.tds_amount);
+  const saleEffectiveTdsAmount = toNumber(formData.tds_amount);
   const saleDeductionTotal = saleShortageAmount + saleEffectiveClaimAmount + saleEffectiveOtherDeduction + saleTransportCharge + saleCashDiscountAmount + toNumber(formData.adjustment_amount) + saleEffectiveTdsAmount;
   const saleNetReceivablePreview =
     saleGrossAmountFromData(formData) -
@@ -785,7 +785,7 @@ export default function WarehouseTradingPage() {
       ...prev,
       claim_amount: "",
       other_deduction: saleAutoOtherDeduction ? saleAutoOtherDeduction.toFixed(2) : "",
-      tds_amount: tdsEligible && autoTdsAmount ? autoTdsAmount.toFixed(2) : "",
+      tds_amount: "",
     }));
   };
 
@@ -3489,7 +3489,7 @@ export default function WarehouseTradingPage() {
     // that manual value and persist it.
     const finalClaimAmount = manualClaimEntered ? toNumber(formData.claim_amount) : 0;
     const finalOtherDeduction = manualOtherDeductionEntered ? toNumber(formData.other_deduction) : saleQualityDeduction;
-    const finalTdsAmount = manualTdsEntered ? toNumber(formData.tds_amount) : (tdsEligible ? autoTdsAmount : 0);
+    const finalTdsAmount = manualTdsEntered ? toNumber(formData.tds_amount) : 0;
     const finalTransportCharge = manualTransportEntered ? toNumber(formData.transport_charge) : saleTransportCharge;
     const finalAdjustmentAmount = manualAdjustmentEntered ? toNumber(formData.adjustment_amount) : 0;
     const finalRoundOff = manualRoundOffEntered ? toNumber(formData.round_off) : 0;
@@ -3593,7 +3593,7 @@ export default function WarehouseTradingPage() {
     const manualTdsEntered = String(formData.tds_amount ?? "").trim() !== "";
     const finalClaimAmount = manualClaimEntered ? toNumber(formData.claim_amount) : 0;
     const finalOtherDeduction = manualOtherDeductionEntered ? toNumber(formData.other_deduction) : saleQualityDeduction;
-    const finalTdsAmount = manualTdsEntered ? toNumber(formData.tds_amount) : (tdsEligible ? autoTdsAmount : 0);
+    const finalTdsAmount = manualTdsEntered ? toNumber(formData.tds_amount) : 0;
     const finalCdAmount = Number((saleBillAmountFromData(formData) * toNumber(formData.cd_percent) / 100).toFixed(2));
     const unloadingDate = formData.unloading_date || "";
     const dueDays = formData.due_days !== undefined && formData.due_days !== null && String(formData.due_days).trim() !== "" ? toNumber(formData.due_days) : "";
@@ -7396,8 +7396,8 @@ export default function WarehouseTradingPage() {
           saleTransportCharge={saleTransportCharge}
           saleCashDiscountAmount={saleCashDiscountAmount}
           saleBillAmountFromData={saleBillAmountFromData}
-          tdsEligible={tdsEligible}
-          autoTdsAmount={autoTdsAmount}
+          tdsEligible={false}
+          autoTdsAmount={0}
           saleRemainingQty={saleRemainingQty}
           saleShortageQty={saleShortageQty}
           saleShortageAmount={saleShortageAmount}
