@@ -3107,11 +3107,8 @@ export default function WarehouseTradingPage() {
     const adjustmentAmount = toNumber(row?.adjustment_amount || 0);
     const tdsAmount = toNumber(row?.tds_amount || 0);
     const roundOff = toNumber(row?.round_off || 0);
-    const additionalAmount = toNumber(row?.additional_amount || row?.add_amount || row?.sale_additional_amount || 0);
     const totalDeduction = toNumber(row?.total_deduction || (claimAmount + otherDeduction + cdAmount + adjustmentAmount + tdsAmount - roundOff));
-    const storedNetPayable = toNumber(row?.net_amount_payable || row?.net_receivable_amount || row?.outstanding);
-    const baseNetPayable = storedNetPayable || (grossAmount - totalDeduction + roundOff);
-    const netPayable = baseNetPayable + additionalAmount;
+    const netPayable = toNumber(row?.net_amount_payable || row?.net_receivable_amount || row?.outstanding || grossAmount - totalDeduction + roundOff);
     const purchaseLinks = Array.isArray(row?.against_purchase_links) ? row.against_purchase_links : [];
     const directPurchaseAmount = toNumber(row?.direct_purchase_amount || purchaseLinks.reduce((sum, item) => sum + toNumber(item.amount || 0), 0));
     const directPurchaseRate = toNumber(row?.direct_purchase_rate || purchaseLinks[0]?.rate || 0);
@@ -3141,10 +3138,9 @@ export default function WarehouseTradingPage() {
       adjustmentAmount: formatMoney(adjustmentAmount),
       tdsAmount: formatMoney(tdsAmount),
       roundOff: formatMoney(roundOff),
-      additionalAmount: formatMoney(additionalAmount),
       totalDeduction: formatMoney(totalDeduction),
       netPayable: formatMoney(netPayable),
-      netReceivable: formatMoney(netPayable),
+      netReceivable: formatMoney(row?.net_receivable_amount || netPayable),
       directPurchaseQty: formatDecimal4(directPurchaseQty),
       directPurchaseRate: formatMoney(directPurchaseRate),
       directPurchaseAmount: formatMoney(directPurchaseAmount),
@@ -3908,7 +3904,7 @@ export default function WarehouseTradingPage() {
       ["product", "Product", (item) => getProductName(item)],
       ["against_purchase", "Against Purchase", (item) => item.against_purchase_enabled ? `${item.against_purchase_links?.length || 0} bill` : "-"],
       ["total_quantity", "Total Quantity", (item) => formatDecimal4(item.total_quantity || 0)],
-      ["total_amount", "Total Amount", (item) => formatMoney(toNumber(item.total_amount || item.amount || 0) + toNumber(item.additional_amount || item.add_amount || item.sale_additional_amount || 0))],
+      ["total_amount", "Total Amount", (item) => formatMoney(item.total_amount || 0)],
     ],
     payment: [
       ["date", "Date", (item) => formatLedgerDate(item.date)],
@@ -5675,6 +5671,7 @@ export default function WarehouseTradingPage() {
                               <tr><td style={erpTd}>Others</td><td style={erpTd}>{formatMoney(saleEffectiveOtherDeduction)}</td></tr>
                               <tr><td style={erpTd}>CD / Adjustment / TDS</td><td style={erpTd}>{formatMoney(saleCashDiscountAmount + toNumber(formData.adjustment_amount) + saleEffectiveTdsAmount)}</td></tr>
                               <tr><td style={{ ...erpTd, fontWeight: 800 }}>Total Sale Deduction</td><td style={{ ...erpTd, fontWeight: 800 }}>{formatMoney(saleDeductionTotal)}</td></tr>
+                              <tr><td style={{ ...erpTd, fontWeight: 800 }}>Add Amount</td><td style={{ ...erpTd, fontWeight: 800, color: "#166534" }}>+ {formatMoney(saleAdditionalAmount)}</td></tr>
                               <tr><td style={erpTd}>Round Off</td><td style={erpTd}>{formatMoney(toNumber(formData.round_off))}</td></tr>
                               <tr><td style={{ ...erpTd, fontWeight: 800, background: "#f5f8ff" }}>Net Sale Value</td><td style={{ ...erpTd, fontWeight: 800, background: "#f5f8ff" }}>{formatMoney(saleNetReceivablePreview)}</td></tr>
                             </tbody>
@@ -7137,7 +7134,7 @@ export default function WarehouseTradingPage() {
                           <div><span>Warehouse</span><strong>{getWarehouseName(item)}</strong></div>
                           <div><span>Product</span><strong>{getProductName(item)}</strong></div>
                           <div><span>Total Qty</span><strong>{formatDecimal4(item.total_quantity || item.quantity || 0)}</strong></div>
-                          <div className="wide"><span>Total Amount</span><strong>Rs.{formatMoney(toNumber(item.total_amount || item.amount || 0) + toNumber(item.additional_amount || item.add_amount || item.sale_additional_amount || 0))}</strong></div>
+                          <div className="wide"><span>Total Amount</span><strong>Rs.{formatMoney(item.total_amount || item.amount || 0)}</strong></div>
                         </div>
                         <div className="purchase-mobile-entry-actions">
                           <button type="button" onClick={() => showSaleReportPreview(item)}>View</button>
