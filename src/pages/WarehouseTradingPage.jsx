@@ -5671,6 +5671,7 @@ export default function WarehouseTradingPage() {
                               <tr><td style={erpTd}>Others</td><td style={erpTd}>{formatMoney(saleEffectiveOtherDeduction)}</td></tr>
                               <tr><td style={erpTd}>CD / Adjustment / TDS</td><td style={erpTd}>{formatMoney(saleCashDiscountAmount + toNumber(formData.adjustment_amount) + saleEffectiveTdsAmount)}</td></tr>
                               <tr><td style={{ ...erpTd, fontWeight: 800 }}>Total Sale Deduction</td><td style={{ ...erpTd, fontWeight: 800 }}>{formatMoney(saleDeductionTotal)}</td></tr>
+                              <tr><td style={{ ...erpTd, fontWeight: 800 }}>Add Amount</td><td style={{ ...erpTd, fontWeight: 800, color: "#166534" }}>+ {formatMoney(saleAdditionalAmount)}</td></tr>
                               <tr><td style={erpTd}>Round Off</td><td style={erpTd}>{formatMoney(toNumber(formData.round_off))}</td></tr>
                               <tr><td style={{ ...erpTd, fontWeight: 800, background: "#f5f8ff" }}>Net Sale Value</td><td style={{ ...erpTd, fontWeight: 800, background: "#f5f8ff" }}>{formatMoney(saleNetReceivablePreview)}</td></tr>
                             </tbody>
