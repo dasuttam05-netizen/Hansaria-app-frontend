@@ -31,6 +31,7 @@ export default function WarehouseSaleDeductionModal({
   saleNetReceivablePreview,
   saleQualityDeduction,
   saleTransportCharge = 0,
+  saleAdditionalAmount = 0,
   tdsEligible,
   autoTdsAmount,
   getBuyerName,
@@ -150,6 +151,7 @@ export default function WarehouseSaleDeductionModal({
           <div><label style={{ fontSize: 12, fontWeight: 700 }}>TDS Amount</label><input name="tds_amount" type="number" step="0.01" min="0" value={formData.tds_amount || ""} onChange={handleChange} placeholder={tdsEligible ? formatMoney(autoTdsAmount) : "0.00"} style={inp} /></div>
           <div><label style={{ fontSize: 12, fontWeight: 700 }}>Adjustment</label><input name="adjustment_amount" type="number" step="0.01" min="0" value={formData.adjustment_amount || ""} onChange={handleChange} style={inp} /></div>
           <div><label style={{ fontSize: 12, fontWeight: 700 }}>Transport Charge</label><input name="transport_charge" type="number" step="0.01" min="0" value={formData.transport_charge || ""} onChange={handleChange} style={inp} /></div>
+          <div><label style={{ fontSize: 12, fontWeight: 700 }}>Add Amount</label><input name="additional_amount" type="number" step="0.01" min="0" value={formData.additional_amount || ""} onChange={handleChange} placeholder="Amount to add" style={inp} /></div>
           <div><label style={{ fontSize: 12, fontWeight: 700 }}>Round Off</label><input name="round_off" type="number" step="0.01" value={formData.round_off || ""} onChange={handleChange} style={inp} /></div>
         </div>
 
@@ -157,6 +159,7 @@ export default function WarehouseSaleDeductionModal({
           <div style={{ padding: 10, borderRadius: 8, background: "#f8fafc", border: "1px solid #e2e8f0" }}><small>Shortage</small><strong style={{ display: "block" }}>Rs.{formatMoney(saleShortageAmount)}</strong></div>
           <div style={{ padding: 10, borderRadius: 8, background: "#f8fafc", border: "1px solid #e2e8f0" }}><small>Claim</small><strong style={{ display: "block" }}>Rs.{formatMoney(claimAmount)}</strong></div>
           <div style={{ padding: 10, borderRadius: 8, background: "#f8fafc", border: "1px solid #e2e8f0" }}><small>TDS</small><strong style={{ display: "block" }}>Rs.{formatMoney(displayedTds)}</strong></div>
+          <div style={{ padding: 10, borderRadius: 8, background: "#f0fdf4", border: "1px solid #bbf7d0" }}><small>Add Amount</small><strong style={{ display: "block" }}>Rs.{formatMoney(saleAdditionalAmount)}</strong></div>
           <div style={{ padding: 10, borderRadius: 8, background: "#ecfdf5", border: "1px solid #a7f3d0" }}><small>Net Receivable</small><strong style={{ display: "block", fontSize: 18 }}>Rs.{formatMoney(saleNetReceivablePreview)}</strong></div>
         </div>
 
