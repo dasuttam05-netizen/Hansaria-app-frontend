@@ -124,7 +124,10 @@ function WarehouseSalePreviewModal({
       adjustment: adjustmentAuto.toFixed(2),
       tds: tdsAuto.toFixed(2),
     });
-    const savedSaleManualModes = salePreviewRow?.sale_deduction_manual_modes || salePreviewSummary?.sale?.sale_deduction_manual_modes || {};
+    const savedSaleManualModes =
+      salePreviewRow?.sale_deduction_manual_modes ||
+      salePreviewSummary?.sale?.sale_deduction_manual_modes ||
+      {};
     setManualMode({
       shortage: Boolean(savedSaleManualModes.shortage),
       claim: Boolean(savedSaleManualModes.claim),
@@ -187,6 +190,14 @@ function WarehouseSalePreviewModal({
   const saleRate = toNumber(salePreviewRow?.rate || previewSource?.rate);
   const saleAmount = toNumber(summary?.gross_amount ?? preview.grossAmount ?? saleQty * saleRate);
 
+  const saleAdditionalAmount = toNumber(
+    summary?.additional_amount ??
+    salePreviewSummary?.additional_amount ??
+    salePreviewRow?.additional_amount ??
+    previewSource?.additional_amount ??
+    0
+  );
+
   const saleFreightAutoAmount = saleBiltiFreightAmount !== null
     ? saleBiltiFreightAmount
     : toNumber(
@@ -196,13 +207,6 @@ function WarehouseSalePreviewModal({
         salePreviewRow?.freight ??
         0
       );
-  const saleAdditionalAmount = toNumber(
-    salePreviewSummary?.summary?.additional_amount ??
-    salePreviewSummary?.additional_amount ??
-    salePreviewRow?.additional_amount ??
-    previewSource?.additional_amount ??
-    0
-  );
   const purchaseQty = hydratedPurchaseLinks.reduce((sum, item) => sum + toNumber(item.quantity ?? item.weight), 0);
   const purchaseAmount = hydratedPurchaseLinks.reduce((sum, item) => sum + toNumber(item.amount ?? (toNumber(item.quantity ?? item.weight) * toNumber(item.rate))), 0);
   const purchaseDeductionTotals = useMemo(() => {
@@ -357,6 +361,7 @@ function WarehouseSalePreviewModal({
         salePreviewSummary?.consignee_id ||
         salePreviewSummary?.summary?.consignee_id ||
         "";
+
       const purchaseGrossTotal = hydratedPurchaseLinks.reduce((sum, item) => {
         const purchase = item?.purchase_details || item || {};
         const qty = toNumber(item?.quantity ?? item?.weight ?? purchase.quantity);
@@ -380,7 +385,6 @@ function WarehouseSalePreviewModal({
             tds: toNumber(purchase.tds_amount),
             other: toNumber(purchase.other_deduction),
             adjustment: toNumber(purchase.adjustment_amount),
-            roundOff: toNumber(purchase.round_off),
           };
           const final = {
             claim: purchaseManualMode.claim ? purchaseDeductionFinal.claim * ratio : auto.claim,
@@ -390,13 +394,14 @@ function WarehouseSalePreviewModal({
             tds: purchaseManualMode.tds ? purchaseDeductionFinal.tds * ratio : auto.tds,
             other: purchaseManualMode.other ? purchaseDeductionFinal.other * ratio : auto.other,
             adjustment: purchaseManualMode.adjustment ? purchaseDeductionFinal.adjustment * ratio : auto.adjustment,
-            roundOff: auto.roundOff,
+            roundOff: toNumber(purchase.round_off),
           };
           final.totalDeduction = Number((
-            final.claim + final.labour + final.freight + final.cashDiscount + final.tds + final.other + final.adjustment
+            final.claim + final.labour + final.freight + final.cashDiscount +
+            final.tds + final.other + final.adjustment
           ).toFixed(2));
           return {
-            purchase_id: String(item?.purchase_id || item?.id || item?._id || ""),
+            purchase_id: String(item?.purchase_id || item?.id || item?._id || "").trim(),
             final,
             manual_modes: { ...purchaseManualMode },
           };
@@ -602,13 +607,6 @@ function WarehouseSalePreviewModal({
                 {isAdmin ? "Admin can switch a deduction to Manual and enter a value." : "Automatic deductions are shown. Manual deduction editing is available to Admin only."}
               </div>
             </div>
-          </div>
-        </div>
-
-        <div style={{ marginTop: 12, display: "flex", justifyContent: "flex-end" }}>
-          <div style={{ padding: "10px 14px", borderRadius: 10, background: "#f0fdf4", border: "1px solid #bbf7d0", minWidth: 180 }}>
-            <div style={{ color: "#166534", fontSize: 11, fontWeight: 900, textTransform: "uppercase" }}>Add Amount</div>
-            <div style={{ marginTop: 3, fontSize: 21, fontWeight: 950, color: "#166534" }}>+ {formatMoney(saleAdditionalAmount)}</div>
           </div>
         </div>
 
