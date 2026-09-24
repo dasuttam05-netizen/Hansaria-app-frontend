@@ -763,7 +763,15 @@ export default function OutwardPage() {
   const fetchOutwards = async () => {
     try {
       const res = await axios.get(`${API_BASE}/outward`);
-      setOutwards(Array.isArray(res.data) ? res.data : []);
+      const outwardRows = Array.isArray(res.data)
+        ? res.data.map((row) => ({
+            ...row,
+            // Party Stock Report uses company_name as party_name.
+            // Keep dashboard Outward Entries aligned to the same Party value.
+            party_name: row.company_name || row.party_name || row.company_account_name || row.account_name || "",
+          }))
+        : [];
+      setOutwards(outwardRows);
       // refresh settlement summary as well
       try {
         const sres = await axios.get(`${API_BASE}/outward-settlement/report/list`);
@@ -2238,6 +2246,7 @@ Consignee: ${row.consignee_name}`;
                 <th style={thStyle}>Warehouse</th>
                 <th style={thStyle}>Product</th>
                 <th style={thStyle}>Company</th>
+                <th style={thStyle}>Party</th>
                 <th style={thStyle}>Account</th>
                 <th style={thStyle}>Lorry</th>
                 <th style={thStyle}>Weight</th>
@@ -2286,6 +2295,7 @@ Consignee: ${row.consignee_name}`;
                         <td style={cellBase}>{displayName(row, row.warehouse_id, warehouseLookup, ["name", "warehouse_name"], "Warehouse")}</td>
                         <td style={cellBase}>{displayName(row, row.product_id, productLookup, ["name", "product_name"], "Product")}</td>
                         <td style={cellBase}>{displayName(row, row.company_id, companyLookup, ["name", "company_name"], "Company")}</td>
+                        <td style={cellBase}>{row.party_name || row.company_name || "-"}</td>
                         <td style={cellBase}>{displayName(row, row.company_account_id, accountLookup, ["account_name", "name", "party_name"], "Account")}</td>
                         <td style={cellBase}>{row.lorry_no}</td>
                         <td style={cellRight}>{formatWeight(row.weight)}</td>
