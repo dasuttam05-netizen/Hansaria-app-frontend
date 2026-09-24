@@ -161,6 +161,40 @@ export default function DashboardPage() {
         : Array.isArray(data.partyStock)
           ? data.partyStock
           : [];
+      const partyStockDetails = Array.isArray(partyStockReport.details)
+        ? partyStockReport.details
+        : [];
+
+      // Dashboard Outward Party must use the same party basis as Party Stock Report.
+      // Prefer the Party Stock detail's resolved company_name for the same company;
+      // keep the existing dashboard value as fallback when no matching stock row exists.
+      const partyNameByCompany = new Map();
+      partyStockDetails.forEach((row) => {
+        const companyId = String(row?.company_id ?? '').trim();
+        const partyName = String(row?.company_name ?? row?.party_name ?? '').trim();
+        if (companyId && partyName) partyNameByCompany.set(companyId, partyName);
+      });
+      const partyNameByAccountWarehouse = new Map();
+      partyStockDetails.forEach((row) => {
+        const accountId = String(row?.company_account_id ?? '').trim();
+        const warehouseId = String(row?.warehouse_id ?? '').trim();
+        const partyName = String(row?.company_name ?? row?.party_name ?? '').trim();
+        if (partyName && (accountId || warehouseId)) {
+          partyNameByAccountWarehouse.set(`${accountId}|${warehouseId}`, partyName);
+        }
+      });
+      const dashboardOutwardRows = normalizedOutwards.map((item) => {
+        const companyId = String(item?.company_id ?? '').trim();
+        const accountId = String(item?.company_account_id ?? '').trim();
+        const warehouseId = String(item?.warehouse_id ?? '').trim();
+        const reportParty =
+          (companyId && partyNameByCompany.get(companyId)) ||
+          partyNameByAccountWarehouse.get(`${accountId}|${warehouseId}`) ||
+          '';
+        return reportParty
+          ? { ...item, party_name: reportParty }
+          : item;
+      });
       const normalizedWarehouseStock = Array.isArray(warehouseStockReport)
         ? warehouseStockReport
         : Array.isArray(data.warehouseStock)
@@ -183,7 +217,7 @@ export default function DashboardPage() {
       setWarehouses(normalizedWarehouses);
       setProducts(normalizedProducts);
       setInwards(normalizedInwards);
-      setOutwards(normalizedOutwards);
+      setOutwards(dashboardOutwardRows);
       setPartyStock(normalizedPartyStock);
       setWarehouseStock(normalizedWarehouseStock);
       setTotalStock(normalizedTotalStock);
