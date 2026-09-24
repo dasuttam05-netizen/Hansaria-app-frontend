@@ -151,7 +151,8 @@ export default function PartyStockReportPage() {
 
   const normalizePartyStockRow = (row) => ({
     ...row,
-    company_name: row.company_name || row.party_name || row.company_name || row.account_name || "",
+    company_name: row.company_name || row.party_name || row.account_name || "",
+    party_name: row.party_name || row.company_name || row.account_name || "",
     account_name: row.account_name || "",
     company_address: row.company_address || row.address || "",
     lorry_no: row.lorry_no || "",
