@@ -125,6 +125,7 @@ export default function DashboardPage() {
         API.get(`${API_BASE}/reports/warehouse-rent-month-end`, {
           params: { month: currentMonth },
         }),
+        API.get(`${API_BASE}/outward/stock-journal`),
       ]);
 
       if (!isActive()) {
@@ -156,14 +157,117 @@ export default function DashboardPage() {
       const normalizedProducts = Array.isArray(data.products) ? data.products : [];
       const normalizedInwards = Array.isArray(data.inwards) ? data.inwards : [];
       const normalizedOutwards = Array.isArray(data.outwards) ? data.outwards : [];
-      const normalizedPartyStock = Array.isArray(partyStockReport.summary)
+      let normalizedPartyStock = Array.isArray(partyStockReport.summary)
         ? partyStockReport.summary
         : Array.isArray(data.partyStock)
           ? data.partyStock
           : [];
-      const partyStockDetails = Array.isArray(partyStockReport.details)
+      let partyStockDetails = Array.isArray(partyStockReport.details)
         ? partyStockReport.details
         : [];
+
+      // Keep Dashboard Stock Report exactly aligned with Party Stock Report.
+      // Party Stock Report applies Journal Entry stock movements after the
+      // /reports/party-stock response, so apply the same movements here.
+      const partyStockJournalRows =
+        reportResults[4]?.status === "fulfilled" &&
+        Array.isArray(reportResults[4].value?.data?.rows)
+          ? reportResults[4].value.data.rows
+          : [];
+      if (reportResults[4]?.status === "fulfilled" && partyStockDetails.length > 0) {
+        const journalBySource = new Map();
+        const addSourceMovement = (key, row) => {
+          if (!key) return;
+          const current = journalBySource.get(key) || { qty: 0, latestDate: "" };
+          current.qty += Number(row?.qty || 0);
+          const d = row?.date || "";
+          if (!current.latestDate || String(d) > String(current.latestDate)) current.latestDate = d;
+          journalBySource.set(key, current);
+        };
+
+        partyStockJournalRows.forEach((row) => {
+          const inwardId = row?.inward_id ?? row?.inwardId ?? row?.source_inward_id;
+          const inwardVoucher = row?.inward_voucher_no || row?.inward_no || "";
+          if (inwardId !== undefined && inwardId !== null && String(inwardId)) {
+            addSourceMovement(`id:${String(inwardId)}`, row);
+          }
+          if (inwardVoucher) addSourceMovement(`voucher:${String(inwardVoucher)}`, row);
+          if (row?.lorry_no) {
+            addSourceMovement(
+              `fallback:${String(row.lorry_no)}|${String(row.product_id || "")}|${String(row.from_party_id || "")}`,
+              row
+            );
+          }
+        });
+
+        const journalForDetail = (detail) => {
+          const candidates = [
+            detail?.inward_id,
+            detail?.inwardId,
+            detail?.source_inward_id,
+            detail?._id,
+            detail?.id,
+          ].filter((value) => value !== undefined && value !== null && String(value));
+          for (const id of candidates) {
+            const hit = journalBySource.get(`id:${String(id)}`);
+            if (hit) return hit;
+          }
+
+          const vouchers = [detail?.voucher_no, detail?.inward_voucher_no, detail?.inward_no].filter(Boolean);
+          for (const voucher of vouchers) {
+            const hit = journalBySource.get(`voucher:${String(voucher)}`);
+            if (hit) return hit;
+          }
+
+          if (detail?.lorry_no) {
+            const hit = journalBySource.get(
+              `fallback:${String(detail.lorry_no)}|${String(detail.product_id || "")}|${String(detail.company_account_id || detail.account_id || "")}`
+            );
+            if (hit) return hit;
+          }
+          return null;
+        };
+
+        const mergedPartyStockDetails = partyStockDetails.map((detail) => {
+          const movement = journalForDetail(detail);
+          if (!movement) return detail;
+          const journalQty = Number(movement.qty || 0);
+          const adjusted = Number(detail.already_adjusted_qty || 0) + journalQty;
+          const balance = Math.max(0, Number(detail.net_opening_qty || 0) - adjusted);
+          return {
+            ...detail,
+            outward_date: movement.latestDate || detail.outward_date || "",
+            already_adjusted_qty: adjusted,
+            available_balance_qty: balance,
+            journal_adjusted_qty: journalQty,
+          };
+        });
+
+        const grouped = new Map();
+        mergedPartyStockDetails.forEach((row) => {
+          const key = `${String(row?.company_id || row?.company_name || row?.party_name || "")}::${String(row?.account_id || row?.company_account_id || row?.account_name || "")}`;
+          const existing = grouped.get(key);
+          if (existing) {
+            existing.gross_qty += Number(row?.gross_qty || 0);
+            existing.shortage_qty += Number(row?.shortage_qty || 0);
+            existing.net_opening_qty += Number(row?.net_opening_qty || 0);
+            existing.already_adjusted_qty += Number(row?.already_adjusted_qty || 0);
+            existing.available_balance_qty += Number(row?.available_balance_qty || 0);
+          } else {
+            grouped.set(key, {
+              ...row,
+              gross_qty: Number(row?.gross_qty || 0),
+              shortage_qty: Number(row?.shortage_qty || 0),
+              net_opening_qty: Number(row?.net_opening_qty || 0),
+              already_adjusted_qty: Number(row?.already_adjusted_qty || 0),
+              available_balance_qty: Number(row?.available_balance_qty || 0),
+            });
+          }
+        });
+
+        partyStockDetails = mergedPartyStockDetails;
+        normalizedPartyStock = Array.from(grouped.values());
+      }
 
       // Dashboard Outward Party must use the same party basis as Party Stock Report.
       // Prefer the Party Stock detail's resolved company_name for the same company;
@@ -195,11 +299,22 @@ export default function DashboardPage() {
           ? { ...item, party_name: reportParty }
           : item;
       });
-      const normalizedWarehouseStock = Array.isArray(warehouseStockReport)
-        ? warehouseStockReport
-        : Array.isArray(data.warehouseStock)
-          ? data.warehouseStock
-          : [];
+
+      const dashboardWarehouseStockMap = new Map();
+      partyStockDetails.forEach((row) => {
+        const warehouseName = String(row?.warehouse_name || row?.warehouse || "Unknown").trim() || "Unknown";
+        const existing = dashboardWarehouseStockMap.get(warehouseName) || { warehouse: warehouseName, stock: 0 };
+        existing.stock += Number(row?.available_balance_qty || 0);
+        dashboardWarehouseStockMap.set(warehouseName, existing);
+      });
+      const reportWarehouseStockFromPartyStock = Array.from(dashboardWarehouseStockMap.values());
+      const normalizedWarehouseStock = reportWarehouseStockFromPartyStock.length > 0
+        ? reportWarehouseStockFromPartyStock
+        : Array.isArray(warehouseStockReport)
+          ? warehouseStockReport
+          : Array.isArray(data.warehouseStock)
+            ? data.warehouseStock
+            : [];
       // Dashboard rent must use the exact same month-end report calculation.
       const normalizedMonthEndRentSummary = Array.isArray(rentReport.summary)
         ? rentReport.summary
