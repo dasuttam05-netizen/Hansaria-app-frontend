@@ -1,3119 +1,3808 @@
-import React, { useState, useEffect, useMemo, useRef } from "react";
-import axios from "axios";
-import { useLocation, useNavigate } from "react-router-dom";
-import { ToastContainer, toast, Slide } from "react-toastify";
-import "react-toastify/dist/ReactToastify.css";
-import AdjustmentPage from "./AdjustmentPage";
-import OutwardSettlementPage from "./OutwardSettlementPage";
-import BuyerAdjustmentListModal from "./BuyerAdjustmentListModal";
-import BuyerAdjustmentSavedListModal from "./BuyerAdjustmentSavedListModal";
-import BuyerAdjustmentForm from "./BuyerAdjustmentForm";
-import { hasAnyPermission, hasPermission, loadSession } from "../utils/auth";
-import { consigneeHasBuyer } from "../utils/consigneeBuyers";
-import MultiSelectDropdown from "../components/MultiSelectDropdown";
+const express = require("express");
+const mongoose = require("mongoose");
+const multer = require("multer");
+const XLSX = require("xlsx");
 
-const lbl = {
-  display: "block",
-  marginBottom: "6px",
-  fontWeight: 600,
-  fontSize: "12px",
-  color: "#334155",
-};
+const router = express.Router();
 
-const inp = {
-  width: "100%",
-  padding: "10px 12px",
-  borderRadius: "8px",
-  border: "1px solid #cbd5e1",
-  fontSize: "13px",
-  boxSizing: "border-box",
-  background: "#fff",
-};
+const {
+  userHasPermission,
+} = require("../middleware/auth");
 
-function Field({ label, children }) {
+const {
+  canAccessWarehouse,
+} = require("../helpers/access");
+
+const {
+  Location: MongoLocation,
+  Employee: MongoEmployee,
+  Warehouse: MongoWarehouse,
+  Product: MongoProduct,
+  Company: MongoCompany,
+  CompanyAccount: MongoCompanyAccount,
+  Inward: MongoInward,
+  Outward: MongoOutward,
+  StockJournal: MongoStockJournal,
+  MirrorRow,
+  isMongoMirrorReady,
+} = require("../db-mongodb");
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+});
+
+/*
+====================================================
+GENERAL HELPERS
+====================================================
+*/
+
+function mongoReady() {
+  return isMongoMirrorReady();
+}
+
+function ensureMongo(res) {
+  if (!mongoReady()) {
+    res.status(503).json({
+      error: "MongoDB is not connected",
+    });
+    return false;
+  }
+
+  return true;
+}
+
+function safeNumber(value) {
+  if (
+    value === undefined ||
+    value === null ||
+    value === ""
+  ) {
+    return 0;
+  }
+
+  const numberValue = Number(value);
+
+  return Number.isFinite(numberValue)
+    ? numberValue
+    : 0;
+}
+
+function safeText(value) {
+  if (
+    value === undefined ||
+    value === null ||
+    value === ""
+  ) {
+    return null;
+  }
+
+  return String(value).trim() || null;
+}
+
+function normalizeId(value) {
+  if (
+    value === undefined ||
+    value === null ||
+    value === ""
+  ) {
+    return null;
+  }
+
+  if (
+    typeof value === "object" &&
+    value !== null
+  ) {
+    if (
+      value._id !== undefined &&
+      value._id !== null
+    ) {
+      return String(value._id);
+    }
+
+    if (
+      value.id !== undefined &&
+      value.id !== null
+    ) {
+      return String(value.id);
+    }
+  }
+
+  return String(value);
+}
+
+/*
+ * Mongo schemas in this project use Mixed IDs in several places, so the
+ * same logical ID can exist as an ObjectId, string, or legacy numeric value.
+ * Build all safe representations for stock queries.
+ */
+function mixedIdCandidates(value) {
+  const normalized = normalizeId(value);
+
+  if (!normalized) {
+    return [];
+  }
+
+  const candidates = [normalized];
+
+  if (isValidObjectId(normalized)) {
+    candidates.push(
+      new mongoose.Types.ObjectId(normalized)
+    );
+  }
+
+  const numeric = Number(normalized);
+
+  if (Number.isFinite(numeric)) {
+    candidates.push(numeric);
+  }
+
+  const unique = [];
+  const seen = new Set();
+
+  for (const candidate of candidates) {
+    const key =
+      candidate instanceof mongoose.Types.ObjectId
+        ? `objectId:${candidate.toHexString()}`
+        : `${typeof candidate}:${String(candidate)}`;
+
+    if (!seen.has(key)) {
+      seen.add(key);
+      unique.push(candidate);
+    }
+  }
+
+  return unique;
+}
+
+function isValidObjectId(value) {
+  try {
+    return mongoose.Types.ObjectId.isValid(
+      String(value ?? "")
+    );
+  } catch {
+    return false;
+  }
+}
+
+function formatOutwardVoucher(slNo) {
+  return `OUT-${String(slNo).padStart(4, "0")}`;
+}
+
+function normalizeDate(value) {
+  if (
+    value === undefined ||
+    value === null ||
+    String(value).trim() === ""
+  ) {
+    return null;
+  }
+
+  if (
+    value instanceof Date &&
+    !Number.isNaN(value.getTime())
+  ) {
+    return value;
+  }
+
+  const text = String(value).trim();
+
+  const yyyyMmDd = text.match(
+    /^(\d{4})-(\d{2})-(\d{2})$/
+  );
+
+  if (yyyyMmDd) {
+    const parsed = new Date(
+      `${yyyyMmDd[1]}-${yyyyMmDd[2]}-${yyyyMmDd[3]}T00:00:00.000Z`
+    );
+
+    if (!Number.isNaN(parsed.getTime())) {
+      return parsed;
+    }
+  }
+
+  const parsed = new Date(text);
+
+  return Number.isNaN(parsed.getTime())
+    ? null
+    : parsed;
+}
+
+function normalizeSelfLoading(value) {
   return (
-    <div>
-      <span style={lbl}>{label}</span>
-      {children}
-    </div>
+    String(value || "No")
+      .trim()
+      .toLowerCase() === "yes"
+      ? "Yes"
+      : "No"
   );
 }
 
-const getRecordId = (record) => {
-  if (!record) return "";
-  if (typeof record === "string" || typeof record === "number") return String(record);
-  return String(record.id || record._id || "");
-};
-
-const sameId = (left, right) =>
-  String(left || "") !== "" && String(left || "") === String(right || "");
-
-const sameText = (left, right) =>
-  String(left || "").trim().toLowerCase() !== "" &&
-  String(left || "").trim().toLowerCase() === String(right || "").trim().toLowerCase();
-
-const firstNonEmpty = (...values) => values.find((value) => String(value || "").trim() !== "") || "";
-
-const buildLookupMap = (items) => {
-  const map = new Map();
-  (Array.isArray(items) ? items : []).forEach((item) => {
-    [item?.id, item?._id, item?.legacy_id]
-      .filter((value) => value !== undefined && value !== null && String(value).trim())
-      .forEach((value) => map.set(String(value).trim(), item));
-  });
-  return map;
-};
-
-const displayName = (row, id, lookup, fields, fallbackPrefix) => {
-  const key = getRecordId(id);
-  const source = key ? lookup.get(key) : null;
-  return firstNonEmpty(
-    ...fields.map((field) => source?.[field]),
-    ...fields.map((field) => row?.[field]),
-    key ? `${fallbackPrefix} ${key}` : ""
+function isSelfLoadingOutward(row) {
+  return (
+    normalizeSelfLoading(
+      row?.self_loading
+    ) === "Yes"
   );
-};
+}
 
-const accountBelongsToCompany = (account, companyId, company) => {
-  if (!companyId) return false;
-  const selectedId = String(companyId);
-  const accountCompanyId = getRecordId(account?.company_id);
-  if (accountCompanyId === selectedId) return true;
-  if (String(account?.company_legacy_id || account?.company_id_legacy || "") === selectedId) return true;
-  return sameText(account?.company_name, company?.name);
-};
+function canAccessOutwardRow(user, row) {
+  if (!row) {
+    return false;
+  }
 
-const mobileCard = {
-  border: "1px solid #bbf7d0",
-  borderRadius: 14,
-  background: "#ecfdf5",
-  padding: 12,
-  boxShadow: "0 8px 18px rgba(34, 197, 94, 0.08)",
-};
-
-const mobileCardTitle = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "flex-start",
-  gap: 12,
-  marginBottom: 10,
-};
-
-const mobileCardBadge = {
-  display: "inline-flex",
-  alignItems: "center",
-  borderRadius: 999,
-  padding: "4px 10px",
-  fontSize: 12,
-  fontWeight: 700,
-  color: "#1f3d05",
-  background: "#d9f99d",
-  whiteSpace: "nowrap",
-};
-
-const mobileRow = {
-  display: "flex",
-  justifyContent: "space-between",
-  gap: 12,
-  padding: "6px 0",
-  borderTop: "1px solid #d9f99d",
-};
-
-const mobileLabel = {
-  color: "#1f3d05",
-  fontSize: 13,
-  fontWeight: 800,
-  flex: "0 0 42%",
-};
-
-const mobileValue = {
-  color: "#14532d",
-  fontSize: 14,
-  fontWeight: 600,
-  textAlign: "right",
-  wordBreak: "break-word",
-  flex: "1 1 auto",
-};
-
-const normalizeIdList = (input) => {
-  if (!Array.isArray(input)) return [];
-  return input.map((item) => getRecordId(item)).filter(Boolean);
-};
-
-const warehouseHasEmployee = (warehouse, employeeId, employees = []) => {
-  const selectedEmployeeId = String(employeeId || "");
-  if (!selectedEmployeeId) return true;
-
-  const directEmployeeId = getRecordId(warehouse?.employee_id);
-  const warehouseEmployeeIds = normalizeIdList(warehouse?.employee_ids);
-  if (sameId(directEmployeeId, selectedEmployeeId) || warehouseEmployeeIds.some((id) => sameId(id, selectedEmployeeId))) {
+  if (isSelfLoadingOutward(row)) {
     return true;
   }
 
-  const warehouseId = getRecordId(warehouse);
-  const employee = employees.find((item) => sameId(getRecordId(item), selectedEmployeeId));
-  const assignedWarehouseIds = normalizeIdList(employee?.assigned_warehouse_ids);
-  return assignedWarehouseIds.some((id) => sameId(id, warehouseId));
-};
-
-export default function OutwardPage() {
-
-  const fetchAvailableWarehouseStock = async (warehouseId, productId) => {
-    if (!warehouseId || !productId) return 0;
-    const res = await axios.get(`${API_BASE}/outward/available-stock`, {
-      params: { warehouse_id: warehouseId, product_id: productId },
-    });
-    return Number(res.data?.availableStock ?? 0);
-  };
-  const API_BASE = "/api";
-  const navigate = useNavigate();
-  const location = useLocation();
-  const { user } = loadSession();
-
-  const [outwards, setOutwards] = useState([]);
-  const [showForm, setShowForm] = useState(false);
-  const [entryMode, setEntryMode] = useState("outward"); // outward | journal
-  const [journalEditData, setJournalEditData] = useState(null);
-  const [showJournalHistory, setShowJournalHistory] = useState(false);
-  const [journalHistoryRows, setJournalHistoryRows] = useState([]);
-  const [journalHistoryLoading, setJournalHistoryLoading] = useState(false);
-  const [journalSourceAccounts, setJournalSourceAccounts] = useState([]);
-  const [journalSourceLoading, setJournalSourceLoading] = useState(false);
-  const [editData, setEditData] = useState(null);
-  const [selectedOutward, setSelectedOutward] = useState(null);
-  const [selectedSettlementOutward, setSelectedSettlementOutward] = useState(null);
-  const [hoveredOutwardId, setHoveredOutwardId] = useState(null);
-  const [settlementRows, setSettlementRows] = useState([]);
-  const [summaryLoading, setSummaryLoading] = useState(false);
-  const [filterView, setFilterView] = useState("all"); // all | pending | adjusted | settled
-  const [showBuyerAdjustmentList, setShowBuyerAdjustmentList] = useState(false);
-  const [showBuyerAdjustmentSavedList, setShowBuyerAdjustmentSavedList] = useState(false);
-  const [selectedUnloadingOutward, setSelectedUnloadingOutward] = useState(null);
-  const [selectedUnloadingDetails, setSelectedUnloadingDetails] = useState([]);
-  const [selectedUnloadingLoading, setSelectedUnloadingLoading] = useState(false);
-  const [selectedUnloadingError, setSelectedUnloadingError] = useState("");
-  const [showBuyerAdjustmentForm, setShowBuyerAdjustmentForm] = useState(false);
-  const [selectedUnloadingDetail, setSelectedUnloadingDetail] = useState(null);
-  const [isSaving, setIsSaving] = useState(false);
-  const [showCompanyModal, setShowCompanyModal] = useState(false);
-  const [showAccountModal, setShowAccountModal] = useState(false);
-  const [showBuyerModal, setShowBuyerModal] = useState(false);
-  const [showConsigneeModal, setShowConsigneeModal] = useState(false);
-  const [companyForm, setCompanyForm] = useState({ name: "", mobile: "", address: "" });
-  const [accountForm, setAccountForm] = useState({ company_id: "", account_name: "", pan_no: "", mobile: "", address: "" });
-  const [buyerForm, setBuyerForm] = useState({ name: "", mobile: "", email: "", address: "", gst_no: "", pan_no: "", state: "", location: "" });
-  const [consigneeForm, setConsigneeForm] = useState({ buyer_ids: [], name: "", mobile: "", email: "", address: "", gst_no: "", pan_no: "", state: "", location: "" });
-  const selectedRowDetailRef = useRef(null);
-  const rowRefs = useRef({});
-  const submitLockRef = useRef(false);
-
-  const [formData, setFormData] = useState({
-    date: "",
-    employee_id: "",
-    location_id: "",
-    warehouse_id: "",
-    product_id: "",
-    company_id: "",
-    company_account_id: "",
-    journal_from_account_id: "",
-    journal_from_account_name: "",
-    lorry_no: "",
-    weight: "",
-    rate: "",
-    inv_no: "",
-    buyer_id: "",
-    buyer_name: "",
-    consignee_id: "",
-    consignee_name: "",
-    self_loading: "No",
-  });
-
-  const [employees, setEmployees] = useState([]);
-  const [locations, setLocations] = useState([]);
-  const [warehouses, setWarehouses] = useState([]);
-  const [products, setProducts] = useState([]);
-  const [companies, setCompanies] = useState([]);
-  const [companyAccounts, setCompanyAccounts] = useState([]);
-  const [consigneeNames, setConsigneeNames] = useState([]);
-  const [buyerNames, setBuyerNames] = useState([]);
-  const outwardFileRef = useRef(null);
-
-  const employeeLookup = useMemo(() => buildLookupMap(employees), [employees]);
-  const locationLookup = useMemo(() => buildLookupMap(locations), [locations]);
-  const warehouseLookup = useMemo(() => buildLookupMap(warehouses), [warehouses]);
-  const productLookup = useMemo(() => buildLookupMap(products), [products]);
-  const companyLookup = useMemo(() => buildLookupMap(companies), [companies]);
-  const accountLookup = useMemo(() => buildLookupMap(companyAccounts), [companyAccounts]);
-  const [warehouseStock, setWarehouseStock] = useState({ currentStock: 0, reservedStock: 0, availableStock: 0, adjustedQtyForCurrentOutward: 0, pendingAdjustmentQtyForCurrentOutward: 0, loading: false, error: "" });
-
-  const consigneesForBuyer = useMemo(() => {
-    if (!formData.buyer_id) return [];
-    return consigneeNames.filter((c) => consigneeHasBuyer(c, formData.buyer_id));
-  }, [formData.buyer_id, consigneeNames]);
-  const canCreate = hasPermission(user, "outward.create");
-  const canEdit = hasPermission(user, "outward.edit");
-  const canDelete = hasPermission(user, "outward.delete");
-  const canImport = hasPermission(user, "outward.import");
-  const canExport = hasPermission(user, "outward.export");
-  const canAdjust = hasPermission(user, "adjustment.manage");
-  const canViewEmployees = hasPermission(user, "employees.view");
-  const canAccessPage =
-    canCreate || canEdit || canDelete || canAdjust || hasPermission(user, "outward.view");
-  const isSelfLoading = String(formData.self_loading || "No").trim().toLowerCase() === "yes";
-  const requestedQty = Number(formData.weight) || 0;
-  const availableStock = Number(warehouseStock.availableStock) || 0;
-  const selectedJournalSource = journalSourceAccounts.find((row) => sameId(getRecordId(row), formData.journal_from_account_id));
-  const journalAvailableSourceStock = Number(selectedJournalSource?.available_qty || 0);
-  const hasStockSelection = !isSelfLoading && Boolean(formData.warehouse_id && formData.product_id);
-  const hasInsufficientStock =
-    !isSelfLoading &&
-    !warehouseStock.loading &&
-    hasStockSelection &&
-    requestedQty > 0 &&
-    requestedQty > availableStock;
-
-  const downloadOutwardTemplate = async () => {
-    try {
-      const res = await axios.get(`${API_BASE}/outward/template-xlsx`, { responseType: "blob" });
-      const url = window.URL.createObjectURL(new Blob([res.data]));
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = "outward-template.xlsx";
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
-      toast.success("Outward template downloaded", { theme: "colored" });
-    } catch (err) {
-      console.error(err);
-      toast.error(err?.response?.data?.error || "Template download failed", { theme: "colored" });
-    }
-  };
-
-  const handleOutwardUpload = async (e) => {
-    const file = e.target.files?.[0];
-    e.target.value = "";
-    if (!file) return;
-
-    const formData = new FormData();
-    formData.append("file", file);
-
-    try {
-      const res = await axios.post(`${API_BASE}/outward/import-xlsx`, formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
-      const data = res.data || {};
-      const errors = Array.isArray(data.errors) ? data.errors : [];
-      toast.success(`Imported ${data.inserted || 0} outward rows`, { theme: "colored" });
-      if (errors.length > 0) {
-        const preview = errors
-          .slice(0, 3)
-          .map((err) => {
-            const sample = err.sample_row
-              ? ` | Sample: ${Object.entries(err.sample_row)
-                  .filter(([, value]) => String(value || "").trim() !== "")
-                  .map(([key, value]) => `${key}=${value}`)
-                  .join(", ")}`
-              : "";
-            return `Row ${err.row}: ${err.error}${sample}`;
-          })
-          .join("\n");
-        toast.info(
-          `${data.skipped || 0} rows skipped${preview ? `\n${preview}` : ""}`,
-          { theme: "colored", autoClose: 6000 }
-        );
-        if (data.inserted === 0) {
-          alert(`No outward rows were imported.\n\n${preview || "Please check the XLSX columns and values."}`);
-        }
-      }
-      fetchOutwards();
-    } catch (err) {
-      console.error(err);
-      toast.error(err?.response?.data?.error || "Outward import failed", { theme: "colored" });
-    }
-  };
-
-  const openAdjustmentModal = (row) => {
-    setSelectedSettlementOutward(null);
-    setShowForm(false);
-    setSelectedOutward(row || null);
-  };
-
-  const openSettlementModal = (row) => {
-    setSelectedOutward(null);
-    setShowForm(false);
-    if (!row) {
-      setSelectedSettlementOutward(null);
-      return;
-    }
-
-    const accountName = displayName(
-      row,
-      row.company_account_id,
-      accountLookup,
-      ["account_name", "name", "party_name"],
-      "Account"
-    );
-
-    setSelectedSettlementOutward({
-      ...row,
-      account_name: row.account_name || accountName,
-      company_account_name: row.company_account_name || accountName,
-      accountName: row.accountName || accountName,
-      location_name: displayName(row, row.location_id, locationLookup, ["name", "location_name"], "Location"),
-      warehouse_name: displayName(row, row.warehouse_id, warehouseLookup, ["name", "warehouse_name"], "Warehouse"),
-      product_name: displayName(row, row.product_id, productLookup, ["name", "product_name"], "Product"),
-    });
-  };
-
-  const closeAdjustmentModal = () => {
-    setSelectedOutward(null);
-  };
-  const closeSettlementModal = () => setSelectedSettlementOutward(null);
-
-  const fetchUnloadingDetails = async (outward) => {
-    if (!outward || !outward.id) {
-      setSelectedUnloadingDetails([]);
-      setSelectedUnloadingError("");
-      return;
-    }
-
-    setSelectedUnloadingLoading(true);
-    setSelectedUnloadingError("");
-
-    try {
-      const res = await axios.get(`${API_BASE}/buyer-adjustment/${outward.id}`);
-      setSelectedUnloadingDetails(Array.isArray(res.data) ? res.data : []);
-    } catch (err) {
-      console.error("Error fetching unloading details:", err);
-      setSelectedUnloadingDetails([]);
-      setSelectedUnloadingError(err?.response?.data?.error || "Failed to fetch unloading details");
-    } finally {
-      setSelectedUnloadingLoading(false);
-    }
-  };
-
-  const openUnloadingDetails = (row) => {
-    setSelectedUnloadingOutward(row);
-    fetchUnloadingDetails(row);
-  };
-
-  useEffect(() => {
-    if (!selectedUnloadingOutward) return;
-
-    const detailEl = selectedRowDetailRef.current;
-    if (detailEl && typeof detailEl.scrollIntoView === "function") {
-      detailEl.scrollIntoView({ block: "nearest", behavior: "smooth" });
-      return;
-    }
-
-    const rowEl = rowRefs.current[String(selectedUnloadingOutward.id)];
-    if (rowEl && typeof rowEl.scrollIntoView === "function") {
-      rowEl.scrollIntoView({ block: "nearest", behavior: "smooth" });
-    }
-  }, [selectedUnloadingOutward]);
-
-  const openBuyerAdjustmentList = () => {
-    setShowForm(false);
-    setSelectedOutward(null);
-    setSelectedSettlementOutward(null);
-    setShowBuyerAdjustmentList(true);
-  };
-  const closeBuyerAdjustmentList = () => setShowBuyerAdjustmentList(false);
-
-  const openBuyerAdjustmentSavedList = () => {
-    setShowForm(false);
-    setSelectedOutward(null);
-    setSelectedSettlementOutward(null);
-    setShowBuyerAdjustmentSavedList(true);
-  };
-  const closeBuyerAdjustmentSavedList = () => setShowBuyerAdjustmentSavedList(false);
-
-  const selectedUnloadingTotals = useMemo(() => {
-    const rows = Array.isArray(selectedUnloadingDetails) ? selectedUnloadingDetails : [];
-    const totalQty = rows.reduce((sum, detail) => sum + Number(detail.qty || detail.weight || 0), 0);
-    const totalClaim = rows.reduce((sum, detail) => sum + Number(detail.claim || 0), 0);
-    const totalOtherDeduction = rows.reduce((sum, detail) => sum + Number(detail.other_deduction || 0), 0);
-    const totalShortage = rows.reduce((sum, detail) => sum + Number(detail.shortage || 0), 0);
-    const totalShortageAmount = rows.reduce((sum, detail) => sum + Number(detail.shortage_amount || 0), 0);
-    const consigneeRateRows = rows.filter((detail) => Number(detail.rate || 0) > 0);
-    const consigneeWeight = consigneeRateRows.reduce((sum, detail) => sum + Number(detail.qty || detail.weight || 0), 0);
-    const weightedRateSum = consigneeRateRows.reduce((sum, detail) => sum + Number(detail.rate || 0) * Number(detail.qty || detail.weight || 0), 0);
-    const avgRate = consigneeWeight > 0 ? weightedRateSum / consigneeWeight : 0;
-    const totalGodawanPaltiWeight = Number(selectedUnloadingOutward?.weight || selectedUnloadingOutward?.qty || selectedUnloadingOutward?.unloading_qty || 0);
-    return {
-      totalQty,
-      consigneeWeight,
-      avgRate,
-      totalClaim,
-      totalOtherDeduction,
-      totalShortage,
-      totalShortageAmount,
-      totalGodawanPaltiWeight,
-    };
-  }, [selectedUnloadingDetails, selectedUnloadingOutward]);
-
-  const handleSelectOutwardForBuyerAdjustment = (outward) => {
-    setShowBuyerAdjustmentList(false);
-    setShowBuyerAdjustmentSavedList(false);
-    openUnloadingDetails(outward);
-  };
-
-  const handleEditUnloadingDetail = (detail) => {
-    setSelectedUnloadingDetail(detail);
-    setShowBuyerAdjustmentForm(true);
-  };
-
-  const closeBuyerAdjustmentForm = () => {
-    setShowBuyerAdjustmentForm(false);
-    setSelectedUnloadingDetail(null);
-    fetchUnloadingDetails(selectedUnloadingOutward);
-  };
-
-  useEffect(() => {
-    fetchDropdowns();
-    fetchOutwards();
-  }, []);
-
-  useEffect(() => {
-    if (formData.employee_id) {
-      const employeeId = String(formData.employee_id);
-      const emp = employees.find((e) => sameId(getRecordId(e), employeeId));
-      const assignedWarehouses = warehouses.filter(
-        (w) => warehouseHasEmployee(w, employeeId, employees)
-      );
-      const currentWarehouseIsValid = assignedWarehouses.some(
-        (w) => sameId(getRecordId(w), formData.warehouse_id)
-      );
-      const selectedWarehouse = currentWarehouseIsValid
-        ? assignedWarehouses.find((w) => sameId(getRecordId(w), formData.warehouse_id))
-        : assignedWarehouses[0];
-      const warehouseLocationId = getRecordId(selectedWarehouse?.location_id);
-      const isMissingEmployeeData = !emp && assignedWarehouses.length === 0;
-
-      setFormData((prev) => ({
-        ...prev,
-        location_id:
-          isMissingEmployeeData && prev.location_id
-            ? prev.location_id
-            : warehouseLocationId || getRecordId(emp?.location_id) || prev.location_id,
-        warehouse_id:
-          currentWarehouseIsValid
-            ? prev.warehouse_id
-            : assignedWarehouses.length > 0
-            ? getRecordId(assignedWarehouses[0])
-            : prev.warehouse_id,
-      }));
-    }
-  }, [formData.employee_id, employees, warehouses, editData]);
-
-  // Filter warehouses by selected location
-  const warehousesForLocation = formData.location_id
-    ? warehouses.filter((w) => sameId(getRecordId(w.location_id), formData.location_id))
-    : warehouses;
-
-  const noWarehousesAvailable = formData.location_id && warehousesForLocation.length === 0;
-
-  useEffect(() => {
-    const createdRecord = location.state?.masterCreated;
-    const returnField = location.state?.returnField;
-    if (!createdRecord || !returnField) return;
-
-    const createdId = getRecordId(createdRecord);
-    const createdName = String(
-      createdRecord.name || createdRecord.account_name || createdRecord.company_name || ""
-    ).trim();
-    if (!createdId || !createdName) return;
-
-    if (returnField === "company") {
-      setCompanies((prev) => [createdRecord, ...prev.filter((item) => !sameId(getRecordId(item), createdId))]);
-      setFormData((prev) => ({ ...prev, company_id: createdId, company_name: createdName }));
-    } else if (returnField === "account") {
-      setCompanyAccounts((prev) => [createdRecord, ...prev.filter((item) => !sameId(getRecordId(item), createdId))]);
-      setFormData((prev) => ({
-        ...prev,
-        company_id: String(createdRecord.company_id || location.state?.companyId || prev.company_id || ""),
-        company_account_id: createdId,
-        account_name: createdName,
-      }));
-    } else if (returnField === "buyer") {
-      setBuyerNames((prev) => [createdRecord, ...prev.filter((item) => !sameId(getRecordId(item), createdId))]);
-      setFormData((prev) => ({ ...prev, buyer_id: createdId, buyer_name: createdName, consignee_id: "", consignee_name: "" }));
-    } else if (returnField === "consignee") {
-      setConsigneeNames((prev) => [createdRecord, ...prev.filter((item) => !sameId(getRecordId(item), createdId))]);
-      setFormData((prev) => ({ ...prev, consignee_id: createdId, consignee_name: createdName }));
-    }
-
-    setShowForm(true);
-    navigate(location.pathname, { replace: true, state: {} });
-  }, [location.pathname, location.state, navigate]);
-
-  const totalSettlementsCount = useMemo(() => {
-    // count unique outward_ids in settlement rows
-    try {
-      const ids = new Set((settlementRows || []).map((s) => String(s.outward_id)));
-      return ids.size;
-    } catch (e) {
-      return (settlementRows || []).length;
-    }
-  }, [settlementRows]);
-
-  const totalSettlementWeight = useMemo(() => {
-    return (settlementRows || []).reduce((sum, r) => sum + (Number(r.settlement_weight || r.unloading_qty || 0) || 0), 0);
-  }, [settlementRows]);
-
-  const settledIds = useMemo(() => {
-    try {
-      return new Set((settlementRows || []).map((s) => String(s.outward_id)));
-    } catch (e) {
-      return new Set();
-    }
-  }, [settlementRows]);
-
-  const adjustedCount = useMemo(() => {
-    return outwards.filter((r) => {
-      if (settledIds.has(String(r.id))) return false;
-      const status = String(r.status || "").toLowerCase();
-      return status === "partial" || status === "completed";
-    }).length;
-  }, [outwards, settledIds]);
-
-  const pendingCount = useMemo(() => {
-    return outwards.filter(
-      (r) => !settledIds.has(String(r.id)) && (!r.status || String(r.status || "").toLowerCase() === "pending")
-    ).length;
-  }, [outwards, settledIds]);
-
-  const filteredOutwards = useMemo(() => {
-    if (filterView === "all") return outwards;
-    if (filterView === "pending") return outwards.filter(
-      (r) => !settledIds.has(String(r.id)) && (!r.status || String(r.status || "").toLowerCase() === "pending")
-    );
-    if (filterView === "adjusted") return outwards.filter((r) => {
-      if (settledIds.has(String(r.id))) return false;
-      const status = String(r.status || "").toLowerCase();
-      return status === "partial" || status === "completed";
-    });
-    if (filterView === "settled") {
-      return outwards.filter((r) => settledIds.has(String(r.id)));
-    }
-    return outwards;
-  }, [outwards, filterView, settledIds]);
-
-  useEffect(() => {
-    const handleKeyDown = (event) => {
-      if (event.key !== "F2" && event.key !== "F5" && event.key !== "F6") return;
-      event.preventDefault();
-      event.stopPropagation();
-
-      const targetRow =
-        selectedUnloadingOutward ||
-        (hoveredOutwardId ? filteredOutwards.find((row) => String(row.id) === String(hoveredOutwardId)) : null) ||
-        (filteredOutwards && filteredOutwards.length > 0 ? filteredOutwards[0] : null);
-
-      if (event.key === "F2") {
-        if (targetRow) {
-          closeSettlementModal();
-          closeFormModal();
-          setSelectedUnloadingOutward(targetRow);
-          setShowBuyerAdjustmentForm(true);
-        } else {
-          console.warn("F2: No outward row found to open buyer adjustment form");
-        }
-        return;
-      }
-
-      if (event.key === "F6") {
-        closeSettlementModal();
-        closeFormModal();
-        openBuyerAdjustmentSavedList();
-        return;
-      }
-
-      if (event.key === "F5") {
-        if (targetRow) {
-          closeAdjustmentModal();
-          closeFormModal();
-          openSettlementModal(targetRow);
-          return;
-        }
-
-        if (showForm && editData) {
-          closeAdjustmentModal();
-          openSettlementModal(editData);
-        }
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown, true);
-    return () => window.removeEventListener("keydown", handleKeyDown, true);
-  }, [selectedUnloadingOutward, selectedSettlementOutward, filteredOutwards, hoveredOutwardId, showForm, editData, selectedOutward]);
-
-  useEffect(() => {
-    const loadJournalSourceAccounts = async () => {
-      if (entryMode !== "journal" || !formData.warehouse_id || !formData.product_id) {
-        setJournalSourceAccounts([]);
-        setJournalSourceLoading(false);
-        return;
-      }
-      try {
-        setJournalSourceLoading(true);
-        const res = await axios.get(`${API_BASE}/outward/journal-source-accounts`, {
-          params: { warehouse_id: formData.warehouse_id, product_id: formData.product_id },
-        });
-        const rows = Array.isArray(res.data?.rows) ? res.data.rows : [];
-        setJournalSourceAccounts(rows);
-        setFormData((prev) => {
-          if (!prev.journal_from_account_id) return prev;
-          const exists = rows.some((row) => sameId(getRecordId(row), prev.journal_from_account_id));
-          return exists ? prev : { ...prev, journal_from_account_id: "", journal_from_account_name: "" };
-        });
-      } catch (err) {
-        console.error("Failed to load journal source accounts:", err);
-        setJournalSourceAccounts([]);
-      } finally {
-        setJournalSourceLoading(false);
-      }
-    };
-    loadJournalSourceAccounts();
-  }, [entryMode, formData.warehouse_id, formData.product_id]);
-
-  useEffect(() => {
-    const loadWarehouseStock = async () => {
-      if (isSelfLoading || !formData.warehouse_id || !formData.product_id) {
-        setWarehouseStock({ currentStock: 0, reservedStock: 0, availableStock: 0, adjustedQtyForCurrentOutward: 0, pendingAdjustmentQtyForCurrentOutward: 0, loading: false, error: "" });
-        return;
-      }
-
-      try {
-        setWarehouseStock((prev) => ({ ...prev, loading: true, error: "" }));
-        const res = await axios.get(`${API_BASE}/outward/available-stock`, {
-          params: {
-            warehouse_id: formData.warehouse_id,
-            product_id: formData.product_id,
-            outward_id: editData?.id || "",
-          },
-        });
-        const data = res.data || {};
-        setWarehouseStock({
-          currentStock: Number(data.currentStock) || 0,
-          reservedStock: Number(data.reservedStock) || 0,
-          availableStock: Number(data.availableStock) || 0,
-          adjustedQtyForCurrentOutward: Number(data.adjustedQtyForCurrentOutward) || 0,
-          pendingAdjustmentQtyForCurrentOutward: Number(data.pendingAdjustmentQtyForCurrentOutward) || 0,
-          loading: false,
-          error: "",
-        });
-      } catch (err) {
-        console.error(err);
-        setWarehouseStock({
-          currentStock: 0,
-          reservedStock: 0,
-          availableStock: 0,
-          adjustedQtyForCurrentOutward: 0,
-          pendingAdjustmentQtyForCurrentOutward: 0,
-          loading: false,
-          error: err?.response?.data?.error || "Failed to load stock",
-        });
-      }
-    };
-
-    loadWarehouseStock();
-  }, [API_BASE, formData.warehouse_id, formData.product_id, editData?.id, isSelfLoading]);
-
-  const fetchDropdowns = async () => {
-    try {
-      const canReadEmployees = hasAnyPermission(user, ["employees.view", "inward.view", "outward.view", "expense.entry", "report.erp"]);
-      const canReadLocations = hasAnyPermission(user, ["locations.manage", "expense.entry", "expense.view", "expense.create", "expense.edit", "inward.view", "inward.create", "outward.view", "outward.create", "employees.view", "report.partyStock", "report.warehouseRentLedger", "report.warehouseRentMonthEnd"]);
-      const canReadWarehouses = hasAnyPermission(user, ["warehouses.manage", "outward.view", "outward.create", "inward.view", "inward.create", "warehouse.trading.view"]);
-      const canReadProducts = hasAnyPermission(user, ["products.manage", "inward.view", "inward.create", "outward.view", "outward.create", "adjustment.manage", "expense.entry", "expense.view", "expense.create", "transport.manage", "report.inward", "report.erp", "report.partyLedger", "report.partyStock"]);
-      const canReadCompanies = hasAnyPermission(user, ["companies.manage", "inward.view", "inward.create", "outward.view", "outward.create", "adjustment.manage", "expense.entry", "expense.view", "expense.create", "cash.view", "settlement.view", "report.inward", "report.erp", "report.partyLedger", "report.partyStock", "report.warehouseRentLedger", "report.warehouseRentMonthEnd", "report.outwardSettlement", "report.expense"]);
-      const canReadCompanyAccounts = hasAnyPermission(user, ["companyAccounts.manage", "inward.view", "inward.create", "outward.view", "outward.create", "adjustment.manage", "expense.entry", "expense.view", "expense.create", "cash.view", "settlement.view", "report.inward", "report.erp", "report.partyLedger", "report.partyStock", "report.warehouseRentLedger", "report.warehouseRentMonthEnd", "report.outwardSettlement", "report.expense"]);
-      const [empRes, locRes, whRes, prodRes, compRes, accRes, consigneeRes, buyerRes] = await Promise.all([
-        canReadEmployees
-          ? axios.get(`${API_BASE}/employees`)
-          : Promise.resolve({
-              data: user
-                ? [{ id: getRecordId(user), name: user.name || user.username || "Current User", location_id: user.location_id }]
-                : [],
-            }),
-        canReadLocations ? axios.get(`${API_BASE}/locations`) : Promise.resolve({ data: [] }),
-        canReadWarehouses ? axios.get(`${API_BASE}/warehouses`) : Promise.resolve({ data: [] }),
-        canReadProducts ? axios.get(`${API_BASE}/products`) : Promise.resolve({ data: [] }),
-        canReadCompanies ? axios.get(`${API_BASE}/companies`) : Promise.resolve({ data: [] }),
-        canReadCompanyAccounts ? axios.get(`${API_BASE}/company-accounts`) : Promise.resolve({ data: [] }),
-        axios.get(`${API_BASE}/consignee-names`).catch(() => ({ data: [] })),
-        axios.get(`${API_BASE}/buyer-names`).catch(() => ({ data: [] })),
-      ]);
-
-      setEmployees(empRes.data || []);
-      setLocations(locRes.data || []);
-      setWarehouses(whRes.data || []);
-      setProducts(prodRes.data || []);
-      setCompanies(compRes.data || []);
-      setCompanyAccounts(accRes.data || []);
-      setConsigneeNames(Array.isArray(consigneeRes.data) ? consigneeRes.data : []);
-      setBuyerNames(Array.isArray(buyerRes.data) ? buyerRes.data : []);
-    } catch (err) {
-      console.error(err);
-      toast.error("Error fetching dropdowns", { theme: "colored" });
-    }
-  };
-
-  const fetchOutwards = async () => {
-    try {
-      const res = await axios.get(`${API_BASE}/outward`);
-      const outwardRows = Array.isArray(res.data)
-        ? res.data.map((row) => ({
-            ...row,
-            // Party Stock Report uses company_name as party_name.
-            // Keep dashboard Outward Entries aligned to the same Party value.
-            party_name: row.company_name || row.party_name || row.company_account_name || row.account_name || "",
-          }))
-        : [];
-      setOutwards(outwardRows);
-      // refresh settlement summary as well
-      try {
-        const sres = await axios.get(`${API_BASE}/outward-settlement/report/list`);
-        setSettlementRows(Array.isArray(sres.data) ? sres.data : []);
-      } catch (e) {
-        setSettlementRows([]);
-      }
-    } catch (err) {
-      console.error(err);
-      toast.error("Error fetching outwards", { theme: "colored" });
-    }
-  };
-
-  const refreshMasters = async () => {
-    try {
-      const canReadCompanies = hasAnyPermission(user, ["companies.manage", "inward.view", "inward.create", "outward.view", "outward.create", "adjustment.manage", "expense.entry", "expense.view", "expense.create", "cash.view", "settlement.view", "report.inward", "report.erp", "report.partyLedger", "report.partyStock", "report.warehouseRentLedger", "report.warehouseRentMonthEnd", "report.outwardSettlement", "report.expense"]);
-      const canReadCompanyAccounts = hasAnyPermission(user, ["companyAccounts.manage", "inward.view", "inward.create", "outward.view", "outward.create", "adjustment.manage", "expense.entry", "expense.view", "expense.create", "cash.view", "settlement.view", "report.inward", "report.erp", "report.partyLedger", "report.partyStock", "report.warehouseRentLedger", "report.warehouseRentMonthEnd", "report.outwardSettlement", "report.expense"]);
-      const [compRes, accRes, buyerRes, consigneeRes] = await Promise.all([
-        canReadCompanies ? axios.get(`${API_BASE}/companies`) : Promise.resolve({ data: [] }),
-        canReadCompanyAccounts ? axios.get(`${API_BASE}/company-accounts`) : Promise.resolve({ data: [] }),
-        axios.get(`${API_BASE}/buyer-names`).catch(() => ({ data: [] })),
-        axios.get(`${API_BASE}/consignee-names`).catch(() => ({ data: [] })),
-      ]);
-      setCompanies(Array.isArray(compRes.data) ? compRes.data : []);
-      setCompanyAccounts(Array.isArray(accRes.data) ? accRes.data : []);
-      setBuyerNames(Array.isArray(buyerRes.data) ? buyerRes.data : []);
-      setConsigneeNames(Array.isArray(consigneeRes.data) ? consigneeRes.data : []);
-    } catch (err) {
-      console.error(err);
-    }
-  };
-
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-
-    if (name === "journal_from_account_id") {
-      const account = journalSourceAccounts.find((x) => sameId(getRecordId(x), value));
-      setFormData((prev) => ({
-        ...prev,
-        journal_from_account_id: value,
-        journal_from_account_name: account?.account_name || account?.name || "",
-      }));
-      return;
-    }
-
-    if (name === "buyer_id") {
-      const b = buyerNames.find((x) => sameId(getRecordId(x), value));
-      setFormData((prev) => ({
-        ...prev,
-        buyer_id: value,
-        buyer_name: b ? b.name : "",
-        consignee_id: "",
-        consignee_name: "",
-      }));
-      return;
-    }
-
-    if (name === "consignee_id") {
-      const c = consigneeNames.find((x) => sameId(getRecordId(x), value));
-      setFormData((prev) => ({
-        ...prev,
-        consignee_id: value,
-        consignee_name: c ? c.name : "",
-      }));
-      return;
-    }
-
-    if (name === "self_loading") {
-      setFormData((prev) => ({
-        ...prev,
-        self_loading: value,
-        warehouse_id: value === "Yes" ? "" : prev.warehouse_id,
-      }));
-      return;
-    }
-
-    if (name === "warehouse_id") {
-      const selectedWarehouse = warehouses.find((item) => sameId(getRecordId(item), value));
-      setFormData((prev) => ({
-        ...prev,
-        warehouse_id: value,
-        location_id: getRecordId(selectedWarehouse?.location_id) || prev.location_id,
-      }));
-      return;
-    }
-
-    setFormData((prev) => ({ ...prev, [name]: value }));
-  };
-
-  const handleCompanyQuickCreate = async (e) => {
-    e.preventDefault();
-    if (!String(companyForm.name || "").trim()) return toast.error("Company name is required", { theme: "colored" });
-    if (!String(companyForm.mobile || "").trim()) return toast.error("Mobile is required", { theme: "colored" });
-    try {
-      const res = await axios.post(`${API_BASE}/companies`, companyForm);
-      const createdId = String(res.data?.id || res.data?._id || "");
-      setCompanyForm({ name: "", mobile: "", address: "" });
-      setShowCompanyModal(false);
-      await refreshMasters();
-      if (createdId) setFormData((prev) => ({ ...prev, company_id: createdId }));
-      toast.success("Company created", { theme: "colored" });
-    } catch (err) {
-      toast.error(err?.response?.data?.error || "Failed to create company", { theme: "colored" });
-    }
-  };
-
-  const handleAccountQuickCreate = async (e) => {
-    e.preventDefault();
-    if (!String(accountForm.company_id || "").trim()) return toast.error("Select company", { theme: "colored" });
-    if (!String(accountForm.account_name || "").trim()) return toast.error("Account name is required", { theme: "colored" });
-    if (!String(accountForm.pan_no || "").trim()) return toast.error("PAN is required", { theme: "colored" });
-    if (!String(accountForm.mobile || "").trim()) return toast.error("Mobile is required", { theme: "colored" });
-    try {
-      const selectedCompanyId = String(accountForm.company_id || "");
-      const res = await axios.post(`${API_BASE}/company-accounts`, accountForm);
-      const createdId = String(res.data?.id || res.data?._id || "");
-      setAccountForm({ company_id: "", account_name: "", pan_no: "", mobile: "", address: "" });
-      setShowAccountModal(false);
-      await refreshMasters();
-      if (selectedCompanyId) {
-        setFormData((prev) => ({ ...prev, company_id: selectedCompanyId, company_account_id: createdId || prev.company_account_id }));
-      }
-      toast.success("Account created", { theme: "colored" });
-    } catch (err) {
-      toast.error(err?.response?.data?.error || "Failed to create account", { theme: "colored" });
-    }
-  };
-
-  const handleBuyerQuickCreate = async (e) => {
-    e.preventDefault();
-    if (!String(buyerForm.name || "").trim()) return toast.error("Buyer name is required", { theme: "colored" });
-    try {
-      const res = await axios.post(`${API_BASE}/buyer-names`, buyerForm);
-      const createdId = String(res.data?.id || res.data?._id || "");
-      setBuyerForm({ name: "", mobile: "", email: "", address: "", gst_no: "", pan_no: "", state: "", location: "" });
-      setShowBuyerModal(false);
-      await refreshMasters();
-      if (createdId) setFormData((prev) => ({ ...prev, buyer_id: createdId }));
-      toast.success("Buyer created", { theme: "colored" });
-    } catch (err) {
-      toast.error(err?.response?.data?.error || "Failed to create buyer", { theme: "colored" });
-    }
-  };
-
-  const handleConsigneeQuickCreate = async (e) => {
-    e.preventDefault();
-    const buyer_ids = (consigneeForm.buyer_ids || [])
-      .map((id) => Number(id))
-      .filter((n) => Number.isFinite(n) && n > 0);
-    if (!buyer_ids.length) return toast.error("Select at least one buyer", { theme: "colored" });
-    if (!String(consigneeForm.name || "").trim()) return toast.error("Consignee name is required", { theme: "colored" });
-    try {
-      const payload = { ...consigneeForm, buyer_ids, buyer_id: buyer_ids[0] };
-      const res = await axios.post(`${API_BASE}/consignee-names`, payload);
-      const createdId = String(res.data?.id || res.data?._id || "");
-      const selectedBuyerId = String(formData.buyer_id || buyer_ids[0] || "");
-      setConsigneeForm({ buyer_ids: [], name: "", mobile: "", email: "", address: "", gst_no: "", pan_no: "", state: "", location: "" });
-      setShowConsigneeModal(false);
-      await refreshMasters();
-      if (createdId) setFormData((prev) => ({ ...prev, buyer_id: selectedBuyerId, consignee_id: createdId }));
-      toast.success("Consignee created", { theme: "colored" });
-    } catch (err) {
-      toast.error(err?.response?.data?.error || "Failed to create consignee", { theme: "colored" });
-    }
-  };
-
-  const resetForm = () =>
-    setFormData({
-      date: "",
-      employee_id: "",
-      location_id: "",
-      warehouse_id:
-        (user?.assigned_warehouse_ids || []).length === 1
-          ? getRecordId(user.assigned_warehouse_ids[0])
-          : "",
-      product_id: "",
-      company_id: "",
-      company_account_id: "",
-      journal_from_account_id: "",
-      journal_from_account_name: "",
-      lorry_no: "",
-      weight: "",
-      rate: "",
-      inv_no: "",
-      buyer_id: "",
-      buyer_name: "",
-      consignee_id: "",
-      consignee_name: "",
-      self_loading: "No",
-    });
-
-  const formatDateInput = (value) => {
-    if (!value) return "";
-    const d = new Date(value);
-    if (Number.isNaN(d.getTime())) return "";
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
-  };
-
-  const loadJournalHistory = async () => {
-    try {
-      setJournalHistoryLoading(true);
-      const res = await axios.get(`${API_BASE}/outward/journal-history`);
-      setJournalHistoryRows(Array.isArray(res.data?.rows) ? res.data.rows : []);
-      setShowJournalHistory(true);
-    } catch (err) {
-      console.error("Failed to load journal history:", err);
-      toast.error(err?.response?.data?.error || "Failed to load Journal History", { theme: "colored" });
-    } finally {
-      setJournalHistoryLoading(false);
-    }
-  };
-
-  const openJournalEdit = (row) => {
-    setJournalEditData(row);
-    setEditData(null);
-    setEntryMode("journal");
-    setFormData((prev) => ({
-      ...prev,
-      date: formatDateInput(row.date),
-      employee_id: row.employee_id ? String(row.employee_id) : "",
-      location_id: row.location_id ? String(row.location_id) : "",
-      warehouse_id: row.warehouse_id ? String(row.warehouse_id) : "",
-      product_id: row.product_id ? String(row.product_id) : "",
-      company_id: row.to_company_id ? String(row.to_company_id) : "",
-      company_account_id: row.to_account_id ? String(row.to_account_id) : "",
-      company_name: row.to_company_name || "",
-      account_name: row.to_account_name || "",
-      journal_from_account_id: row.from_account_id ? String(row.from_account_id) : "",
-      journal_from_account_name: row.from_account_name || "",
-      lorry_no: row.lorry_no || "",
-      weight: Number(row.qty || 0),
-      rate: Number(row.rate || 0),
-      inv_no: row.journal_no || "",
-      buyer_id: "",
-      buyer_name: "",
-      consignee_id: "",
-      consignee_name: "",
-    }));
-    setShowJournalHistory(false);
-    setShowForm(true);
-  };
-
-  const deleteJournalEntry = async (row) => {
-    if (!window.confirm(`Delete Journal Entry ${row.journal_no}? Stock will be restored.`)) return;
-    try {
-      await axios.delete(`${API_BASE}/outward/journal-entry/${encodeURIComponent(row.journal_no)}`);
-      toast.success("Journal Entry deleted and stock restored", { theme: "colored" });
-      await loadJournalHistory();
-      fetchOutwards().catch(() => {});
-    } catch (err) {
-      toast.error(err?.response?.data?.error || "Failed to delete Journal Entry", { theme: "colored" });
-    }
-  };
-
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-
-    if (submitLockRef.current || isSaving) {
-      return;
-    }
-
-    if (!formData.date || !formData.employee_id) {
-      toast.error("Please select date and employee", { theme: "colored" });
-      return;
-    }
-
-    if (entryMode === "journal") {
-      if (!formData.warehouse_id || !formData.product_id) {
-        toast.error("Please select warehouse and product", { theme: "colored" });
-        return;
-      }
-      if (!formData.journal_from_account_id) {
-        toast.error("Please select FROM Party Account", { theme: "colored" });
-        return;
-      }
-      if (!formData.company_account_id) {
-        toast.error("Please select TO Party Account", { theme: "colored" });
-        return;
-      }
-      if ((Number(formData.weight) || 0) <= 0) {
-        toast.error("Please enter quantity/weight", { theme: "colored" });
-        return;
-      }
-      try {
-        submitLockRef.current = true;
-        setIsSaving(true);
-        const journalPayload = {
-          date: formData.date,
-          employee_id: formData.employee_id || null,
-          location_id: formData.location_id || null,
-          warehouse_id: formData.warehouse_id,
-          product_id: formData.product_id,
-          from_account_id: formData.journal_from_account_id,
-          to_account_id: formData.company_account_id,
-          quantity: Number(formData.weight) || 0,
-          rate: Number(formData.rate) || 0,
-          lorry_no: String(formData.lorry_no || "").trim(),
-          narration: String(formData.inv_no || "").trim(),
-        };
-        if (journalEditData?.journal_no) {
-          await axios.put(`${API_BASE}/outward/journal-entry/${encodeURIComponent(journalEditData.journal_no)}`, journalPayload);
-          toast.success("Journal Entry updated and stock recalculated", { theme: "colored" });
-        } else {
-          await axios.post(`${API_BASE}/outward/journal-entry`, journalPayload);
-          toast.success("Journal Entry saved: stock transferred FROM party TO party", { theme: "colored" });
-        }
-        setShowForm(false);
-        setEntryMode("outward");
-        setEditData(null);
-        setJournalEditData(null);
-        resetForm();
-        fetchOutwards().catch(() => {});
-      } catch (err) {
-        console.error(err);
-        toast.error(err?.response?.data?.error || "Error saving journal entry", { theme: "colored" });
-      } finally {
-        submitLockRef.current = false;
-        setIsSaving(false);
-      }
-      return;
-    }
-
-    const payload = (() => {
-      const selectedBuyer = buyerNames.find((item) => sameId(getRecordId(item), formData.buyer_id));
-      const selectedConsignee = consigneeNames.find((item) => sameId(getRecordId(item), formData.consignee_id));
-
-      return {
-        ...formData,
-        employee_id: formData.employee_id || null,
-        location_id: formData.location_id || null,
-        warehouse_id: String(formData.self_loading || "No").trim().toLowerCase() === "yes" ? null : formData.warehouse_id || null,
-        product_id: formData.product_id || null,
-        company_id: formData.company_id || null,
-        company_account_id: formData.company_account_id || null,
-        lorry_no: String(formData.lorry_no || "").trim(),
-        weight: Number(formData.weight) || 0,
-        quantity: Number(formData.weight) || 0,
-        rate: Number(formData.rate) || 0,
-        buyer_name: String(formData.buyer_name || selectedBuyer?.name || "").trim(),
-        consignee_name: String(formData.consignee_name || selectedConsignee?.name || "").trim(),
-        inv_no: String(formData.inv_no || "").trim(),
-        self_loading: String(formData.self_loading || "No").trim() || "No",
-      };
-    })();
-
-    if (!payload.self_loading || String(payload.self_loading).trim().toLowerCase() !== "yes") {
-      if (!payload.warehouse_id) {
-        toast.error("Please select warehouse", { theme: "colored" });
-        return;
-      }
-    }
-
-    if (!payload.product_id) {
-      toast.error("Please select product", { theme: "colored" });
-      return;
-    }
-
-    if (hasInsufficientStock) {
-      toast.error(`Selected warehouse stock not available. Available stock is ${availableStock.toFixed(2)}.`, { theme: "colored" });
-      return;
-    }
-
-    try {
-      submitLockRef.current = true;
-      setIsSaving(true);
-
-      if (editData) {
-        const outwardId = getRecordId(editData);
-        if (!outwardId) {
-          throw new Error("Outward record ID is missing");
-        }
-        await axios.put(`${API_BASE}/outward/${outwardId}`, payload);
-        toast.info("Outward updated successfully", { theme: "colored" });
-      } else {
-        await axios.post(`${API_BASE}/outward`, payload);
-        toast.success("Outward saved successfully", { theme: "colored" });
-      }
-
-      setShowForm(false);
-      setEditData(null);
-      resetForm();
-      fetchOutwards().catch((fetchErr) => {
-        console.error("Failed to refresh outward list after save:", fetchErr);
-      });
-    } catch (err) {
-      console.error(err);
-      toast.error(err?.response?.data?.error || "Error saving outward", { theme: "colored" });
-    } finally {
-      submitLockRef.current = false;
-      setIsSaving(false);
-    }
-  };
-
-  const handleEdit = (row) => {
-    if (!canEdit) {
-      toast.error("You only have create access. Edit is not allowed.", { theme: "colored" });
-      return;
-    }
-    setEditData(row);
-    const bName = (row.buyer_name || "").trim();
-    const cName = (row.consignee_name || "").trim();
-      const consigneeRow = consigneeNames.find((c) => (c.name || "").trim() === cName);
-    let buyer_id = "";
-    let consignee_id = "";
-    if (consigneeRow) {
-      const ids = Array.isArray(consigneeRow.buyer_ids) && consigneeRow.buyer_ids.length
-        ? consigneeRow.buyer_ids
-        : consigneeRow.buyer_id
-          ? [consigneeRow.buyer_id]
-          : [];
-      const matchFromName = buyerNames.find((b) => (b.name || "").trim() === bName);
-      if (matchFromName && ids.some((id) => sameId(getRecordId(id), getRecordId(matchFromName)))) {
-        buyer_id = getRecordId(matchFromName);
-      } else if (ids.length) {
-        buyer_id = getRecordId(ids[0]);
-      }
-      consignee_id = getRecordId(consigneeRow);
-    } else {
-      const buyerRow = buyerNames.find((b) => (b.name || "").trim() === bName);
-      if (buyerRow) {
-        buyer_id = getRecordId(buyerRow);
-        const cg = consigneeNames.find(
-          (c) => (c.name || "").trim() === cName && consigneeHasBuyer(c, buyer_id)
-        );
-        if (cg) consignee_id = getRecordId(cg);
-      }
-    }
-    // Ensure dropdown lists include the referenced items from this row
-    const empId = getRecordId(row.employee_id);
-    if (empId && !employees.some((e) => sameId(getRecordId(e), empId))) {
-      setEmployees((prev) => [
-        ...(Array.isArray(prev) ? prev : []),
-        { id: empId, name: row.employee_name || `Employee ${empId}` },
-      ]);
-    }
-
-    const locId = getRecordId(row.location_id);
-    if (locId && !locations.some((l) => sameId(getRecordId(l), locId))) {
-      setLocations((prev) => [
-        ...(Array.isArray(prev) ? prev : []),
-        { id: locId, name: row.location_name || `Location ${locId}` },
-      ]);
-    }
-
-    const whId = getRecordId(row.warehouse_id);
-    if (whId && !warehouses.some((w) => sameId(getRecordId(w), whId))) {
-      setWarehouses((prev) => [
-        ...(Array.isArray(prev) ? prev : []),
-        { id: whId, name: row.warehouse_name || `Warehouse ${whId}`, location_id: locId || null },
-      ]);
-    }
-
-    const prodId = getRecordId(row.product_id);
-    if (prodId && !products.some((p) => sameId(getRecordId(p), prodId))) {
-      setProducts((prev) => [
-        ...(Array.isArray(prev) ? prev : []),
-        { id: prodId, name: row.product_name || `Product ${prodId}` },
-      ]);
-    }
-
-    const compId = getRecordId(row.company_id);
-    if (compId && !companies.some((c) => sameId(getRecordId(c), compId))) {
-      setCompanies((prev) => [
-        ...(Array.isArray(prev) ? prev : []),
-        { id: compId, name: row.company_name || `Company ${compId}` },
-      ]);
-    }
-
-    const accId = getRecordId(row.company_account_id);
-    if (accId && !companyAccounts.some((a) => sameId(getRecordId(a), accId))) {
-      setCompanyAccounts((prev) => [
-        ...(Array.isArray(prev) ? prev : []),
-        { id: accId, account_name: row.party_name || row.account_name || `Account ${accId}`, company_id: compId || null },
-      ]);
-    }
-
-    const bId = getRecordId(buyer_id);
-    if (bId && !buyerNames.some((b) => sameId(getRecordId(b), bId))) {
-      setBuyerNames((prev) => [
-        ...(Array.isArray(prev) ? prev : []),
-        { id: bId, name: row.buyer_name || `Buyer ${bId}` },
-      ]);
-    }
-
-    const cId = getRecordId(consignee_id);
-    if (cId && !consigneeNames.some((c) => sameId(getRecordId(c), cId))) {
-      setConsigneeNames((prev) => [
-        ...(Array.isArray(prev) ? prev : []),
-        { id: cId, name: row.consignee_name || `Consignee ${cId}`, buyer_id: bId || null },
-      ]);
-    }
-    setFormData({
-      date: row.date ? new Date(row.date).toISOString().slice(0, 10) : "",
-      employee_id: getRecordId(row.employee_id) || "",
-      location_id: getRecordId(row.location_id) || "",
-      warehouse_id: getRecordId(row.warehouse_id) || "",
-      product_id: getRecordId(row.product_id) || "",
-      company_id: getRecordId(row.company_id) || "",
-      company_account_id: getRecordId(row.company_account_id) || "",
-      lorry_no: row.lorry_no || "",
-      weight: row.weight || "",
-      rate: row.rate || "",
-      inv_no: row.inv_no || "",
-      buyer_id: getRecordId(buyer_id) || "",
-      buyer_name: row.buyer_name || "",
-      consignee_id: getRecordId(consignee_id) || "",
-      consignee_name: row.consignee_name || "",
-      self_loading: row.self_loading || "No",
-    });
-    setShowForm(true);
-  };
-
-  useEffect(() => {
-    const handleOutwardEditShortcut = (event) => {
-      if (!event.altKey || event.key.toLowerCase() !== "e") return;
-      if (event.target instanceof HTMLElement && event.target.closest("input, textarea, select")) return;
-      event.preventDefault();
-      if (selectedUnloadingOutward) {
-        handleEdit(selectedUnloadingOutward);
-      } else {
-        toast.info("Select an outward entry first, then press Alt+E.", { theme: "colored" });
-      }
-    };
-
-    window.addEventListener("keydown", handleOutwardEditShortcut);
-    return () => window.removeEventListener("keydown", handleOutwardEditShortcut);
-  }, [selectedUnloadingOutward, canEdit]);
-
-  const handleDelete = async (id) => {
-    if (!canDelete) {
-      toast.error("Delete is not allowed for this user.", { theme: "colored" });
-      return;
-    }
-    if (!window.confirm("Are you sure you want to delete this outward?")) return;
-
-    try {
-      await axios.delete(`${API_BASE}/outward/${id}`);
-      toast.warn("Outward deleted successfully", { theme: "colored" });
-      fetchOutwards();
-    } catch (err) {
-      console.error(err);
-      toast.error(err?.response?.data?.error || "Delete error", { theme: "colored" });
-    }
-  };
-
-  const handleCopy = (row) => {
-    const text = `
-Date: ${formatDate(row.date)}
-Employee: ${row.employee_name}
-Location: ${row.location_name}
-Warehouse: ${row.warehouse_name}
-Product: ${row.product_name}
-Company: ${row.company_name}
-Account: ${row.party_name || row.account_name}
-Lorry: ${row.lorry_no}
-Weight: ${row.weight}
-Rate: ${row.rate}
-Inv No: ${row.inv_no || "�"}
-Self Loading: ${row.self_loading || "No"}
-Buyer: ${row.buyer_name}
-Consignee: ${row.consignee_name}`;
-    navigator.clipboard
-      .writeText(text)
-      .then(() => toast.info("Copied to clipboard", { theme: "colored" }));
-  };
-
-  const formatDate = (dateStr) => {
-    if (!dateStr) return "";
-    const d = new Date(dateStr);
-    return `${String(d.getDate()).padStart(2, "0")}-${String(
-      d.getMonth() + 1
-    ).padStart(2, "0")}-${d.getFullYear()}`;
-  };
-
-  const formatWeight = (value) => {
-    const num = Number(value);
-    return Number.isFinite(num) ? num.toFixed(3) : "0.000";
-  };
-
-  const formatRate = (value) => {
-    const num = Number(value);
-    return Number.isFinite(num) ? num.toFixed(2) : "0.00";
-  };
-
-  const pageStyle = {
-    fontFamily: "Segoe UI, Arial, sans-serif",
-    padding: "20px",
-    background: "#f8fafc",
-    minHeight: "100vh",
-  };
-
-  const cardStyle = {
-    background: "#fff",
-    border: "1px solid #e2e8f0",
-    borderRadius: "16px",
-    boxShadow: "0 10px 30px rgba(15, 23, 42, 0.08)",
-  };
-
-  const btnStyle = {
-    padding: "8px 12px",
-    fontSize: "12px",
-    borderRadius: "999px",
-    border: "none",
-    cursor: "pointer",
-    fontWeight: 600,
-  };
-
-  const tableFontSize = "13px";
-  const rowHoverBg = "#e0f4ff";
-
-  const thStyle = {
-    padding: "7px 8px",
-    border: "1px solid #dbe7f1",
-    background: "#0f766e",
-    color: "#fff",
-    position: "sticky",
-    top: 0,
-    zIndex: 3,
-    textAlign: "center",
-    whiteSpace: "nowrap",
-    fontSize: "13px",
-    fontWeight: 700,
-    lineHeight: 1,
-  };
-
-  const thActionsStyle = {
-    ...thStyle,
-    right: 0,
-    zIndex: 4,
-    minWidth: "210px",
-    boxShadow: "-10px 0 18px rgba(15, 23, 42, 0.08)",
-  };
-
-  const tdStyle = {
-    padding: "3px 6px",
-    border: "1px solid #edf2f7",
-    verticalAlign: "middle",
-    background: "#fff",
-    whiteSpace: "nowrap",
-    fontSize: "12px",
-    lineHeight: 1.05,
-    fontWeight: 500,
-    color: "#0f172a",
-  };
-
-  const tdStyleRight = {
-    ...tdStyle,
-    textAlign: "right",
-  };
-
-  const actionIconStyle = {
-    fontSize: "13px",
-    lineHeight: 1,
-  };
-
-  const actionBtnStyle = {
-    width: "32px",
-    height: "32px",
-    padding: 0,
-    fontSize: "13px",
-    borderRadius: "8px",
-    border: "none",
-    cursor: "pointer",
-    fontWeight: 600,
-    flexShrink: 0,
-    display: "inline-flex",
-    alignItems: "center",
-    justifyContent: "center",
-  };
-
-  const btnPrimary = {
-    background: "#2563eb",
-    color: "#fff",
-    border: "none",
-    padding: "10px 18px",
-    borderRadius: "8px",
-    cursor: "pointer",
-    fontWeight: 600,
-    fontSize: "14px",
-  };
-
-  const modalOverlay = {
-    position: "fixed",
-    inset: 0,
-    background: "rgba(15,23,42,0.45)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
-    zIndex: 2000,
-    padding: 12,
-  };
-
-  const modalCard = {
-    background: "#fff",
-    borderRadius: 12,
-    padding: 20,
-    width: "100%",
-    maxWidth: 520,
-    boxShadow: "0 20px 40px rgba(0,0,0,0.2)",
-  };
-
-  const formCard = {
-    background: "#fff",
-    border: "1px solid #e2e8f0",
-    borderRadius: "10px",
-    padding: "20px",
-    boxShadow: "0 4px 14px rgba(15, 23, 42, 0.06)",
-    width: "100%",
-  };
-
-  const quickLinkButton = {
-    ...btnStyle,
-    background: "#e2e8f0",
-    color: "#0f172a",
-    border: "1px solid #cbd5e1",
-    whiteSpace: "nowrap",
-  };
-
-  const openMasterPage = (path, returnField, draftName, companyId = "", editId = "") => {
-    setShowForm(false);
-    navigate(path, {
-      state: {
-        returnTo: "/outward",
-        returnField,
-        draftName: String(draftName || "").trim(),
-        companyId: String(companyId || ""),
-        editId: String(editId || ""),
-      },
-    });
-  };
-
-  const handleMasterInputChange = (field, nameField, items, nameKey, value) => {
-    const typedName = String(value || "");
-    const match = items.find((item) => sameText(item?.[nameKey], typedName));
-    setFormData((prev) => ({
-      ...prev,
-      [field]: match ? getRecordId(match) : "",
-      [nameField]: typedName,
-      ...(field === "company_id" ? { company_account_id: "", account_name: "" } : {}),
-      ...(field === "buyer_id" ? { consignee_id: "", consignee_name: "" } : {}),
-    }));
-  };
-
-  const handleMasterInputKeyDown = (event, path, returnField, value, companyId = "", items = [], nameKey = "name") => {
-    if (event.altKey && event.key.toLowerCase() === "c") {
-      event.preventDefault();
-      const selectedItem = (items || []).find((item) => sameText(item?.[nameKey], value));
-      openMasterPage(path, returnField, value, companyId, selectedItem ? getRecordId(selectedItem) : "");
-      return;
-    }
-    if (event.altKey && event.key.toLowerCase() === "e") {
-      const selectedItem = (items || []).find((item) => sameText(item?.[nameKey], value));
-      if (selectedItem) {
-        event.preventDefault();
-        openSelectedMasterForEdit(path, returnField, selectedItem, companyId, nameKey);
-      }
-    }
-  };
-
-  const openSelectedMasterForEdit = (path, returnField, item, companyId = "", nameKey = "name") => {
-    if (!item) return;
-    openMasterPage(path, returnField, item?.[nameKey], companyId, getRecordId(item));
-  };
-
-  const selectedCompany = companies.find((item) => sameId(getRecordId(item), formData.company_id));
-  const selectedAccount = companyAccounts.find((item) => sameId(getRecordId(item), formData.company_account_id));
-  const selectedBuyer = buyerNames.find((item) => sameId(getRecordId(item), formData.buyer_id));
-  const selectedConsignee = consigneeNames.find((item) => sameId(getRecordId(item), formData.consignee_id));
-
-  const closeFormModal = () => {
-    setShowForm(false);
-    setEditData(null);
-    setEntryMode("outward");
-    resetForm();
-  };
-
-  return (
-    <div style={pageStyle}>
-      {!canAccessPage ? (
-        <div style={{ ...cardStyle, padding: "24px", textAlign: "center", color: "#64748b" }}>
-          You do not have access to this page.
-        </div>
-      ) : (
-        <>
-      <div
-        style={{
-          ...cardStyle,
-          padding: "18px",
-          marginBottom: "16px",
-          background: "linear-gradient(90deg, #d8f1fb 0%, #eef6fb 50%, #fdfefe 100%)",
-          border: "1px solid #9dd8fb",
-          borderRadius: "20px",
-          boxShadow: "0 16px 40px rgba(14, 165, 233, 0.12)",
-        }}
-      >
-        <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", gap: "16px", alignItems: "flex-start" }}>
-          <div style={{ minWidth: 0, flex: "1 1 260px" }}>
-            <div
-              style={{
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-                width: "96px",
-                height: "32px",
-                borderRadius: "999px",
-                border: "1px solid rgba(14, 165, 233, 0.25)",
-                background: "#ffffff",
-                color: "#0f172a",
-                fontSize: "12px",
-                fontWeight: 700,
-                letterSpacing: "0.04em",
-                marginBottom: "10px",
-              }}
-            >
-              OUTWARD
-            </div>
-            <h2 style={{ margin: 0, color: "#0f172a", fontSize: "28px", fontWeight: 800, lineHeight: 1.05 }}>
-              Outward Management
-            </h2>
-            <p style={{ margin: "12px 0 0", color: "#475569", fontSize: "14px", maxWidth: "620px" }}>
-              Manage outward records with quick summaries, adjustment actions, and settlement status in one clean dashboard.
-            </p>
-          </div>
-
-          <div style={{ minWidth: "220px", flex: "1 1 220px", display: "flex", alignItems: "center", justifyContent: "flex-end" }}>
-            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", justifyContent: "flex-end", marginRight: "12px" }}>
-              {canExport && (
-                <button
-                  type="button"
-                  onClick={downloadOutwardTemplate}
-                  style={{
-                    ...btnStyle,
-                    background: "#0f766e",
-                    color: "#fff",
-                    padding: "12px 16px",
-                    borderRadius: "14px",
-                    fontSize: "13px",
-                    boxShadow: "0 10px 20px rgba(15, 118, 110, 0.18)",
-                  }}
-                >
-                  Download Excel
-                </button>
-              )}
-              {canImport && (
-                <button
-                  type="button"
-                  onClick={() => outwardFileRef.current?.click()}
-                  style={{
-                    ...btnStyle,
-                    background: "#16a34a",
-                    color: "#fff",
-                    padding: "12px 16px",
-                    borderRadius: "14px",
-                    fontSize: "13px",
-                    boxShadow: "0 10px 20px rgba(22, 163, 74, 0.18)",
-                  }}
-                >
-                  Upload Excel
-                </button>
-              )}
-            </div>
-            <button
-              type="button"
-              onClick={loadJournalHistory}
-              disabled={journalHistoryLoading}
-              style={{
-                ...btnStyle,
-                background: "#475569",
-                color: "#fff",
-                padding: "12px 16px",
-                borderRadius: "14px",
-                fontSize: "13px",
-                width: "auto",
-                minWidth: "150px",
-              }}
-            >
-              {journalHistoryLoading ? "Loading..." : "Journal History"}
-            </button>
-            <button
-              onClick={() => {
-                setEditData(null);
-                setJournalEditData(null);
-                setEntryMode("journal");
-                resetForm();
-                setShowForm(true);
-              }}
-              disabled={!canCreate}
-              style={{
-                ...btnStyle,
-                background: canCreate ? "#7c3aed" : "#94a3b8",
-                color: "#fff",
-                padding: "12px 16px",
-                borderRadius: "14px",
-                fontSize: "13px",
-                width: "auto",
-                minWidth: "160px",
-                boxShadow: canCreate ? "0 10px 20px rgba(124, 58, 237, 0.2)" : "none",
-              }}
-            >
-              Journal Entry
-            </button>
-            <button
-              onClick={() => {
-                setEditData(null);
-                setEntryMode("outward");
-                resetForm();
-                setShowForm(true);
-              }}
-              disabled={!canCreate}
-              style={{
-                ...btnStyle,
-                background: canCreate ? "#0f766e" : "#94a3b8",
-                color: "#fff",
-                padding: "12px 16px",
-                borderRadius: "14px",
-                fontSize: "13px",
-                width: "auto",
-                minWidth: "160px",
-                boxShadow: canCreate ? "0 10px 20px rgba(16, 185, 129, 0.2)" : "none",
-              }}
-            >
-              Add Outward
-            </button>
-          </div>
-        </div>
-
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: "12px", marginTop: "18px" }}>
-          {[
-            { title: "Total Entries", key: "all", value: outwards.length, note: "Loaded outward records" },
-            { title: "All", key: "all", value: outwards.length, note: "Show all entries" },
-            { title: "Pending", key: "pending", value: pendingCount, note: "Not adjusted" },
-            { title: "Adjusted", key: "adjusted", value: adjustedCount, note: "Partial/completed" },
-            { title: "Settled", key: "settled", value: totalSettlementsCount, note: `Settlement details • ${totalSettlementWeight.toFixed(2)} wt` },
-          ].map((item) => {
-            const isActive = filterView === item.key;
-            return (
-              <div
-                key={item.title}
-                onClick={() => setFilterView(item.key)}
-                style={{
-                  borderRadius: "18px",
-                  border: isActive ? "1px solid #0ea5a4" : "1px solid rgba(15, 23, 42, 0.08)",
-                  background: isActive ? "rgba(14, 165, 164, 0.08)" : "#fff",
-                  padding: "18px 16px",
-                  display: "flex",
-                  flexDirection: "column",
-                  justifyContent: "space-between",
-                  minHeight: "120px",
-                  boxShadow: "0 10px 20px rgba(15, 23, 42, 0.04)",
-                  cursor: "pointer",
-                }}
-              >
-                <div>
-                  <div style={{ fontSize: "11px", color: "#64748b", fontWeight: 700, marginBottom: "6px", textTransform: "uppercase", letterSpacing: "0.08em" }}>
-                    {item.title}
-                  </div>
-                  <div style={{ fontSize: "30px", fontWeight: 800, color: "#0f172a", lineHeight: 1 }}>{item.value}</div>
-                </div>
-                <div style={{ fontSize: "12px", color: "#475569" }}>{item.note}</div>
-              </div>
-            );
-          })}
-        </div>
-        <div style={{ marginTop: "12px", color: "#475569", fontSize: "13px" }}>
-          Click any summary box above to show the matching outward details below.
-        </div>
-      </div>
-
-      <ToastContainer
-        position="top-right"
-        autoClose={2500}
-        hideProgressBar
-        newestOnTop
-        closeOnClick
-        transition={Slide}
-        style={{ zIndex: 99999 }}
-      />
-
-      <input
-        ref={outwardFileRef}
-        type="file"
-        accept=".xlsx,.xls"
-        style={{ display: "none" }}
-        onChange={handleOutwardUpload}
-      />
-
-      {showJournalHistory && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.5)", zIndex: 1300, padding: "24px 12px", overflowY: "auto" }}>
-          <div style={{ width: "100%", maxWidth: "1500px", margin: "0 auto", background: "#fff", borderRadius: "18px", padding: "20px", boxShadow: "0 24px 60px rgba(15,23,42,0.28)" }}>
-            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, marginBottom: 16 }}>
-              <h2 style={{ margin: 0, fontSize: "20px" }}>Journal Entry History</h2>
-              <button type="button" onClick={() => setShowJournalHistory(false)} style={{ ...btnPrimary, background: "#ef4444" }}>Close</button>
-            </div>
-            <div style={{ overflowX: "auto", border: "1px solid #e2e8f0", borderRadius: "12px" }}>
-              <table style={{ width: "100%", minWidth: "1150px", borderCollapse: "collapse" }}>
-                <thead>
-                  <tr>
-                    {['Date','Journal No','FROM Company','FROM Account','TO Company','TO Account','Qty','Edit','Delete'].map((h) => (
-                      <th key={h} style={{ ...thStyle, whiteSpace: "nowrap" }}>{h}</th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody>
-                  {journalHistoryRows.length ? journalHistoryRows.map((row) => (
-                    <tr key={row.journal_no}>
-                      <td style={tdStyle}>{formatDate(row.date)}</td>
-                      <td style={tdStyle}>{row.journal_no}</td>
-                      <td style={tdStyle}>{row.from_company_name || "-"}</td>
-                      <td style={tdStyle}>{row.from_account_name || "-"}</td>
-                      <td style={tdStyle}>{row.to_company_name || "-"}</td>
-                      <td style={tdStyle}>{row.to_account_name || "-"}</td>
-                      <td style={{ ...tdStyleRight, fontWeight: 700 }}>{Number(row.qty || 0).toFixed(2)}</td>
-                      <td style={tdStyle}>
-                        <button type="button" onClick={() => openJournalEdit(row)} style={{ ...actionBtnStyle, background: "#3b82f6", color: "#fff" }} title="Edit Journal">✎ Edit</button>
-                      </td>
-                      <td style={tdStyle}>
-                        <button type="button" onClick={() => deleteJournalEntry(row)} style={{ ...actionBtnStyle, background: "#ef4444", color: "#fff" }} title="Delete Journal">🗑 Delete</button>
-                      </td>
-                    </tr>
-                  )) : (
-                    <tr><td colSpan={9} style={{ ...tdStyle, textAlign: "center", padding: "24px" }}>No Journal Entry found.</td></tr>
-                  )}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {showForm && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(15, 23, 42, 0.45)",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "flex-start",
-            padding: "20px 12px",
-            zIndex: 1000,
-            overflowY: "auto",
-          }}
-        >
-          <div
-            style={{
-              width: "100%",
-              maxWidth: "1000px",
-              maxHeight: "92vh",
-              overflowY: "auto",
-              position: "relative",
-              marginTop: "4px",
-            }}
-          >
-            <button
-              type="button"
-              onClick={closeFormModal}
-              aria-label="Close"
-              style={{
-                position: "absolute",
-                top: "8px",
-                right: "8px",
-                zIndex: 2,
-                background: "#ef4444",
-                color: "#fff",
-                border: "none",
-                width: "34px",
-                height: "34px",
-                borderRadius: "50%",
-                cursor: "pointer",
-                fontWeight: "bold",
-              }}
-            >
-              X
-            </button>
-
-            <div style={formCard}>
-              <div
-                style={{
-                  display: "flex",
-                  flexWrap: "wrap",
-                  alignItems: "center",
-                  gap: "12px",
-                  marginBottom: "20px",
-                  paddingRight: "40px",
-                }}
-              >
-                <h2 style={{ margin: 0, flex: 1, color: "#0f172a", fontSize: "18px" }}>
-                  {entryMode === "journal" ? (journalEditData ? "Edit Journal Entry" : "New Journal Entry") : (editData ? "Edit Outward Entry" : "New Outward Entry")}
-                </h2>
-                {!editData && !journalEditData && (
-                  <select
-                    value={entryMode}
-                    onChange={(e) => {
-                      const mode = e.target.value;
-                      setEntryMode(mode);
-                      if (mode === "journal") {
-                        setFormData((prev) => ({ ...prev, buyer_id: "", buyer_name: "", consignee_id: "", consignee_name: "" }));
-                      }
-                    }}
-                    style={{ ...inp, width: "180px", minWidth: "180px", fontWeight: 700 }}
-                  >
-                    <option value="outward">Outward Entry</option>
-                    <option value="journal">Journal Entry</option>
-                  </select>
-                )}
-                <button type="button" onClick={closeFormModal} style={btnPrimary}>
-                  Back To Outward List
-                </button>
-              </div>
-
-              <form
-                onSubmit={handleSubmit}
-                style={{
-                  display: "grid",
-                  gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
-                  gap: "16px",
-                  alignItems: "start",
-                }}
-              >
-                <Field label="Outward entry no">
-                  <input
-                    readOnly
-                    value={entryMode === "journal" ? (journalEditData?.journal_no || "� (auto)") : (editData?.sl_no != null ? String(editData.sl_no) : "� (auto)")}
-                    style={{ ...inp, background: "#f8fafc", color: "#64748b" }}
-                  />
-                </Field>
-
-                <Field label="Inv No">
-                  <input
-                    type="text"
-                    name="inv_no"
-                    placeholder="Enter invoice number"
-                    value={formData.inv_no}
-                    onChange={handleChange}
-                    style={inp}
-                  />
-                </Field>
-
-                <Field label="Date">
-                  <input type="date" name="date" value={formData.date} onChange={handleChange} required style={inp} />
-                </Field>
-
-                <Field label="Select Employee">
-                  <select name="employee_id" value={formData.employee_id} onChange={handleChange} required style={inp}>
-                    <option value="">Select Employee</option>
-                    {employees.map((e) => (
-                      <option key={getRecordId(e)} value={getRecordId(e)}>
-                        {e.name}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-
-                <Field label="Location">
-                  <select name="location_id" value={formData.location_id} disabled style={{ ...inp, background: "#f8fafc" }}>
-                    <option value="">Location</option>
-                    {locations.map((l) => (
-                      <option key={getRecordId(l)} value={getRecordId(l)}>
-                        {l.name}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-
-                <Field label="Select Warehouse">
-                  {noWarehousesAvailable && !isSelfLoading && (
-                    <div style={{ padding: "8px 12px", marginBottom: "8px", background: "#fef3c7", border: "1px solid #fcd34d", borderRadius: "6px", color: "#92400e", fontSize: "13px" }}>
-                      ⚠️ No warehouse is mapped to the selected location. Please map a warehouse first or select a different location.
-                    </div>
-                  )}
-                  <select 
-                    name="warehouse_id" 
-                    value={formData.warehouse_id} 
-                    onChange={handleChange} 
-                    disabled={isSelfLoading || noWarehousesAvailable} 
-                    style={{ ...inp, background: isSelfLoading || noWarehousesAvailable ? "#f8fafc" : "#fff", borderColor: noWarehousesAvailable && !isSelfLoading ? "#ef4444" : "#cbd5e1" }}
-                  >
-                    <option value="">{isSelfLoading ? "Self Loading - Warehouse Not Required" : "Select Warehouse"}</option>
-                    {warehousesForLocation
-                      .filter((w) => warehouseHasEmployee(w, formData.employee_id, employees))
-                      .map((w) => (
-                      <option key={getRecordId(w)} value={getRecordId(w)}>
-                        {w.location_name ? `${w.name} (${w.location_name})` : w.name}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-
-                <Field label="Select Product">
-                  <select name="product_id" value={formData.product_id} onChange={handleChange} style={inp}>
-                    <option value="">Select Product</option>
-                    {products.map((p) => (
-                      <option key={getRecordId(p)} value={getRecordId(p)}>
-                        {p.name}
-                      </option>
-                    ))}
-                  </select>
-                </Field>
-
-                {entryMode === "journal" ? (
-                  <>
-                    <Field label="FROM Company Name">
-                      <input
-                        value={selectedJournalSource?.company_name || ""}
-                        readOnly
-                        placeholder={journalSourceLoading ? "Loading inward company..." : "Select FROM Party Account first"}
-                        style={{ ...inp, background: "#f8fafc" }}
-                      />
-                    </Field>
-
-                    <Field label="FROM Party Account">
-                      <select
-                        name="journal_from_account_id"
-                        value={formData.journal_from_account_id}
-                        onChange={handleChange}
-                        style={inp}
-                        disabled={!formData.warehouse_id || !formData.product_id || journalSourceLoading}
-                      >
-                        <option value="">{journalSourceLoading ? "Loading inward parties..." : "Select FROM Party Account"}</option>
-                        {journalSourceAccounts.map((account) => (
-                          <option key={getRecordId(account)} value={getRecordId(account)}>
-                            {account.account_name} — Stock: {Number(account.available_qty || 0).toFixed(2)}
-                          </option>
-                        ))}
-                      </select>
-                    </Field>
-
-                    <Field label="TO Company Name">
-                      <div>
-                        <input
-                          list="outward-company-names"
-                          value={formData.company_name || selectedCompany?.name || ""}
-                          onChange={(e) => handleMasterInputChange("company_id", "company_name", companies, "name", e.target.value)}
-                          onKeyDown={(e) => handleMasterInputKeyDown(e, "/companies", "company", e.currentTarget.value, "", companies)}
-                          placeholder="Type TO company name (Alt+C to create, Alt+E to edit)"
-                          style={inp}
-                        />
-                      </div>
-                      <datalist id="outward-company-names">
-                        {companies.map((c) => (
-                          <option key={getRecordId(c)} value={c.name} />
-                        ))}
-                      </datalist>
-                    </Field>
-                  </>
-                ) : (
-                  <Field label="Select Company">
-                    <div>
-                      <input
-                        list="outward-company-names"
-                        value={formData.company_name || selectedCompany?.name || ""}
-                        onChange={(e) => handleMasterInputChange("company_id", "company_name", companies, "name", e.target.value)}
-                        onKeyDown={(e) => handleMasterInputKeyDown(e, "/companies", "company", e.currentTarget.value, "", companies)}
-                        placeholder="Type company name (Alt+C to create, Alt+E to edit)"
-                        style={inp}
-                      />
-                    </div>
-                    <datalist id="outward-company-names">
-                      {companies.map((c) => (
-                        <option key={getRecordId(c)} value={c.name} />
-                      ))}
-                    </datalist>
-                  </Field>
-                )}
-
-                <Field label={entryMode === "journal" ? "TO Company Account" : "Select Account"}>
-                  {entryMode === "journal" ? (
-                    <select
-                      name="company_account_id"
-                      value={formData.company_account_id}
-                      onChange={handleChange}
-                      style={inp}
-                    >
-                      <option value="">{formData.company_id ? "Select TO Company Account" : "Select TO Company Name first"}</option>
-                      {companyAccounts
-                        .filter((acc) => !formData.company_id || accountBelongsToCompany(acc, formData.company_id, companyLookup.get(String(formData.company_id))))
-                        .map((acc) => (
-                          <option key={getRecordId(acc)} value={getRecordId(acc)}>
-                            {acc.account_name}
-                          </option>
-                        ))}
-                    </select>
-                  ) : (
-                    <>
-                      <div>
-                        <input
-                          list="outward-account-names"
-                          value={formData.account_name || selectedAccount?.account_name || ""}
-                          onChange={(e) => handleMasterInputChange("company_account_id", "account_name", companyAccounts.filter((item) => accountBelongsToCompany(item, formData.company_id, companyLookup.get(String(formData.company_id)))), "account_name", e.target.value)}
-                          onKeyDown={(e) => handleMasterInputKeyDown(e, "/company-accounts", "account", e.currentTarget.value, formData.company_id, companyAccounts, "account_name")}
-                          placeholder="Type account name (Alt+C to create, Alt+E to edit)"
-                          style={inp}
-                        />
-                      </div>
-                      <datalist id="outward-account-names">
-                        {formData.company_id && companyAccounts
-                          .filter((acc) => accountBelongsToCompany(
-                            acc,
-                            formData.company_id,
-                            companyLookup.get(String(formData.company_id))
-                          ))
-                          .map((acc) => (
-                            <option key={getRecordId(acc)} value={acc.account_name} />
-                          ))}
-                      </datalist>
-                    </>
-                  )}
-                </Field>
-
-                <Field label="Lorry No">
-                  <input
-                    type="text"
-                    name="lorry_no"
-                    placeholder="Lorry No"
-                    value={formData.lorry_no}
-                    onChange={handleChange}
-                    style={inp}
-                  />
-                </Field>
-
-                <Field label="Weight">
-                  <input
-                    type="number"
-                    name="weight"
-                    placeholder="Weight"
-                    value={formData.weight}
-                    onChange={handleChange}
-                    style={inp}
-                  />
-                </Field>
-
-                <Field label="Available Stock">
-                  <div>
-                    <input
-                      readOnly
-                      value={entryMode === "journal"
-                        ? (!formData.warehouse_id || !formData.product_id
-                          ? "Select warehouse and product"
-                          : (journalSourceLoading ? "Loading inward parties..." : (formData.journal_from_account_id ? journalAvailableSourceStock.toFixed(2) : "Select FROM party")))
-                        : (isSelfLoading ? "N/A for Self Loading" : hasStockSelection ? (warehouseStock.loading ? "Loading..." : availableStock.toFixed(2)) : "Select warehouse and product")}
-                      style={{ ...inp, background: "#f8fafc", color: hasInsufficientStock ? "#dc2626" : "#0f172a", fontWeight: 700 }}
-                    />
-                    {!isSelfLoading && hasStockSelection ? (
-                      <div style={{ marginTop: "6px", fontSize: "12px", color: hasInsufficientStock ? "#dc2626" : warehouseStock.error ? "#dc2626" : "#475569" }}>
-                        {warehouseStock.error || `Current: ${warehouseStock.currentStock.toFixed(2)} | Outward Entry: ${requestedQty.toFixed(2)} | Available: ${availableStock.toFixed(2)}`}
-                        {!warehouseStock.error ? (
-                          <div style={{ marginTop: "3px", color: "#475569", fontWeight: 600 }}>
-                            Pending Adjustment: {(editData ? warehouseStock.pendingAdjustmentQtyForCurrentOutward : requestedQty).toFixed(2)}
-                          </div>
-                        ) : null}
-                        {entryMode === "journal" && formData.journal_from_account_id ? (
-                          <div style={{ marginTop: "3px", color: "#7c3aed", fontWeight: 700 }}>
-                            FROM Party Stock: {journalAvailableSourceStock.toFixed(2)}
-                          </div>
-                        ) : null}
-                      </div>
-                    ) : null}
-                  </div>
-                </Field>
-
-                <Field label="Self Loading">
-                  <select name="self_loading" value={formData.self_loading} onChange={handleChange} style={inp}>
-                    <option value="No">No</option>
-                    <option value="Yes">Yes</option>
-                  </select>
-                </Field>
-
-                <Field label="Rate">
-                  <input
-                    type="number"
-                    name="rate"
-                    placeholder="Rate"
-                    value={formData.rate}
-                    onChange={handleChange}
-                    style={inp}
-                  />
-                </Field>
-
-                {entryMode !== "journal" && <Field label="Select buyer name">
-                  <div>
-                    <input
-                      list="outward-buyer-names"
-                      value={formData.buyer_name || selectedBuyer?.name || ""}
-                      onChange={(e) => handleMasterInputChange("buyer_id", "buyer_name", buyerNames, "name", e.target.value)}
-                      onKeyDown={(e) => handleMasterInputKeyDown(e, "/buyer-names", "buyer", e.currentTarget.value, "", buyerNames)}
-                      placeholder="Type buyer name (Alt+C to create, Alt+E to edit)"
-                      style={inp}
-                    />
-                  </div>
-                  <datalist id="outward-buyer-names">
-                    {buyerNames.map((b) => <option key={getRecordId(b)} value={b.name} />)}
-                  </datalist>
-                </Field>}
-
-                {entryMode !== "journal" && <Field label="Select consignee">
-                  <div>
-                    <input
-                      list="outward-consignee-names"
-                      value={formData.consignee_name || selectedConsignee?.name || ""}
-                      onChange={(e) => handleMasterInputChange("consignee_id", "consignee_name", consigneesForBuyer, "name", e.target.value)}
-                      onKeyDown={(e) => handleMasterInputKeyDown(e, "/consignee-names", "consignee", e.currentTarget.value, formData.buyer_id, consigneesForBuyer)}
-                      placeholder={formData.buyer_id ? "Type consignee name (Alt+C to create, Alt+E to edit)" : "Select buyer first"}
-                      disabled={!formData.buyer_id}
-                      style={{ ...inp, opacity: formData.buyer_id ? 1 : 0.65 }}
-                    />
-                  </div>
-                  <datalist id="outward-consignee-names">
-                      {consigneesForBuyer.map((c) => (
-                        <option key={getRecordId(c)} value={c.name} />
-                      ))}
-                  </datalist>
-                </Field>}
-
-                <div style={{ gridColumn: "1 / -1", display: "flex", flexDirection: "column", gap: "8px", marginTop: "6px" }}>
-                  <div style={{ display: "flex", gap: "12px", flexWrap: "wrap" }}>
-                    <button
-                      type="submit"
-                      disabled={(editData ? !canEdit : !canCreate) || hasInsufficientStock || isSaving}
-                      style={{
-                        ...btnPrimary,
-                        opacity: ((editData ? !canEdit : !canCreate) || hasInsufficientStock || isSaving) ? 0.5 : 1,
-                        cursor: ((editData ? !canEdit : !canCreate) || hasInsufficientStock || isSaving) ? "not-allowed" : "pointer",
-                      }}
-                    >
-                      {isSaving ? "Saving..." : "Save"}
-                    </button>
-                    <button type="button" onClick={closeFormModal} style={btnPrimary}>
-                      Back To Outward List
-                    </button>
-                  </div>
-                  {warehouseStock.loading && !isSelfLoading ? (
-                    <div style={{ color: "#475569", fontSize: "12px" }}>
-                      Loading warehouse stock... Save will still work once the data is ready.
-                    </div>
-                  ) : null}
-                  {hasInsufficientStock ? (
-                    <div style={{ color: "#dc2626", fontSize: "12px" }}>
-                      Insufficient stock: available {availableStock.toFixed(2)}. Reduce weight or choose another warehouse/product.
-                    </div>
-                  ) : null}
-                </div>
-              </form>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div style={{ ...cardStyle, overflow: "hidden" }}>
-        <div style={{ padding: "12px 16px", borderBottom: "1px solid #e2e8f0" }}>
-          <div style={{ display: "flex", flexWrap: "wrap", alignItems: "center", gap: "12px", justifyContent: "space-between" }}>
-            <h3 style={{ margin: 0, color: "#0f172a", fontSize: "22px", fontWeight: 800 }}>Outward Entries</h3>
-            <div style={{ color: "#64748b", fontSize: "13px" }}>Use row actions to edit, copy, adjust, or settle records quickly.</div>
-          </div>
-        </div>
-        <div style={{ overflowX: "auto", overflowY: "auto", maxHeight: "78vh" }} className="ledger-desktop-table">
-          <table
-            style={{
-              width: "100%",
-              borderCollapse: "separate",
-              borderSpacing: 0,
-              fontSize: tableFontSize,
-              minWidth: "1080px",
-            }}
-          >
-            <thead>
-              <tr>
-                <th style={thStyle}>Outward no</th>
-                <th style={thStyle}>Inv No</th>
-                <th style={thStyle}>Date</th>
-                <th style={thStyle}>Employee</th>
-                <th style={thStyle}>Location</th>
-                <th style={thStyle}>Warehouse</th>
-                <th style={thStyle}>Product</th>
-                <th style={thStyle}>Company</th>
-                <th style={thStyle}>Party</th>
-                <th style={thStyle}>Account</th>
-                <th style={thStyle}>Lorry</th>
-                <th style={thStyle}>Weight</th>
-                <th style={thStyle}>Rate</th>
-                <th style={thStyle}>Self Loading</th>
-                <th style={thStyle}>Buyer</th>
-                <th style={thStyle}>Consignee</th>
-                <th style={thActionsStyle}>Actions</th>
-              </tr>
-            </thead>
-
-            <tbody>
-              {filteredOutwards.length > 0 ? (
-                filteredOutwards.map((row, idx) => {
-                  const baseBg = idx % 2 === 0 ? "#ffffff" : "#f8fafc";
-                  const rowBg = hoveredOutwardId === row.id ? rowHoverBg : baseBg;
-                  const cellBase = { ...tdStyle, background: rowBg };
-                  const cellRight = { ...tdStyleRight, background: rowBg };
-                  const actionsCell = {
-                    ...tdStyle,
-                    background: rowBg,
-                    position: "sticky",
-                    right: 0,
-                    zIndex: 2,
-                    minWidth: "210px",
-                    verticalAlign: "middle",
-                    boxShadow: "-6px 0 10px rgba(15, 23, 42, 0.06)",
-                  };
-                  const isSelected = selectedUnloadingOutward && String(selectedUnloadingOutward.id) === String(row.id);
-                  return (
-                    <React.Fragment key={row.id}>
-                      <tr
-                        ref={(el) => {
-                          if (el) rowRefs.current[String(row.id)] = el;
-                        }}
-                        onMouseEnter={() => setHoveredOutwardId(row.id)}
-                        onMouseLeave={() => setHoveredOutwardId(null)}
-                        onClick={() => openUnloadingDetails(row)}
-                        style={{ background: rowBg, transition: "background-color 0.15s ease", cursor: "pointer" }}
-                      >
-                        <td style={cellBase}>{row.sl_no != null ? row.sl_no : row.id}</td>
-                        <td style={cellBase}>{row.inv_no || "�"}</td>
-                        <td style={cellBase}>{formatDate(row.date)}</td>
-                        <td style={cellBase}>{displayName(row, row.employee_id, employeeLookup, ["name", "employee_name", "username"], "Employee")}</td>
-                        <td style={cellBase}>{displayName(row, row.location_id, locationLookup, ["name", "location_name"], "Location")}</td>
-                        <td style={cellBase}>{displayName(row, row.warehouse_id, warehouseLookup, ["name", "warehouse_name"], "Warehouse")}</td>
-                        <td style={cellBase}>{displayName(row, row.product_id, productLookup, ["name", "product_name"], "Product")}</td>
-                        <td style={cellBase}>{displayName(row, row.company_id, companyLookup, ["name", "company_name"], "Company")}</td>
-                        <td style={cellBase}>{row.party_name || row.company_name || "-"}</td>
-                        <td style={cellBase}>{displayName(row, row.company_account_id, accountLookup, ["account_name", "name", "party_name"], "Account")}</td>
-                        <td style={cellBase}>{row.lorry_no}</td>
-                        <td style={cellRight}>{formatWeight(row.weight)}</td>
-                        <td style={cellRight}>{formatRate(row.rate)}</td>
-                        <td style={cellBase}>{row.self_loading || "No"}</td>
-                        <td style={cellBase}>{row.buyer_name}</td>
-                        <td style={cellBase}>{row.consignee_name}</td>
-                        <td style={actionsCell}>
-                          <div
-                            style={{
-                              display: "flex",
-                              flexDirection: "row",
-                              flexWrap: "nowrap",
-                              gap: "6px",
-                              justifyContent: "center",
-                              alignItems: "center",
-                              maxWidth: "100%",
-                              margin: "0 auto",
-                              WebkitOverflowScrolling: "touch",
-                            }}
-                          >
-                            {canEdit ? (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleEdit(row);
-                                }}
-                                title="Edit"
-                                aria-label="Edit"
-                                style={{ ...actionBtnStyle, background: "#3b82f6", color: "#fff", boxShadow: "0 10px 18px rgba(59, 130, 246, 0.28)" }}
-                              >
-                                <span style={actionIconStyle}>✎</span>
-                                <span>Edit</span>
-                              </button>
-                            ) : null}
-                            {canDelete ? (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleDelete(row.id);
-                                }}
-                                title="Delete"
-                                aria-label="Delete"
-                                style={{ ...actionBtnStyle, background: "#ef4444", color: "#fff", boxShadow: "0 10px 18px rgba(239, 68, 68, 0.26)" }}
-                              >
-                                <span style={actionIconStyle}>🗑</span>
-                              </button>
-                            ) : null}
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleCopy(row);
-                              }}
-                              title="Copy"
-                              aria-label="Copy"
-                              style={{ ...actionBtnStyle, background: "#64748b", color: "#fff", boxShadow: "0 10px 18px rgba(100, 116, 139, 0.24)" }}
-                            >
-                              <span style={actionIconStyle}>⧉</span>
-                            </button>
-                            {canAdjust ? (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  openAdjustmentModal(row);
-                                }}
-                                title="Adjust"
-                                aria-label="Adjust"
-                                style={{ ...actionBtnStyle, background: "#f59e0b", color: "#fff", boxShadow: "0 10px 18px rgba(245, 158, 11, 0.28)" }}
-                              >
-                                <span style={actionIconStyle}>⚙</span>
-                              </button>
-                            ) : null}
-                            {canEdit ? (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  openSettlementModal(row);
-                                }}
-                                title="Settlement"
-                                aria-label="Settlement"
-                                style={{ ...actionBtnStyle, background: "#22c55e", color: "#fff", boxShadow: "0 10px 18px rgba(34, 197, 94, 0.28)" }}
-                              >
-                                <span style={actionIconStyle}>₹</span>
-                              </button>
-                            ) : null}
-                          </div>
-                        </td>
-                      </tr>
-                      {isSelected ? (
-                        <tr>
-                          <td colSpan="16" style={{ padding: 0, border: "none", background: "#ecfdf5" }}>
-                            <div ref={selectedRowDetailRef} style={{ margin: 0, padding: "18px 20px", background: "#f8fafc", borderTop: "1px solid #d1fae5", borderBottom: "1px solid #d1fae5", borderRadius: "0 0 12px 12px" }}>
-                              <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 12, alignItems: "flex-start" }}>
-                                <div>
-                                  <div style={{ fontSize: 16, fontWeight: 800, color: "#0f172a" }}>
-                                    Selected Outward: {selectedUnloadingOutward.sl_no != null ? selectedUnloadingOutward.sl_no : selectedUnloadingOutward.id} {selectedUnloadingOutward.inv_no ? `(${selectedUnloadingOutward.inv_no})` : ""}
-                                  </div>
-                                </div>
-                                <button
-                                  type="button"
-                                  onClick={() => setSelectedUnloadingOutward(null)}
-                                  style={{ ...btnPrimary, background: "#ef4444", minWidth: 120 }}
-                                >
-                                  Close details
-                                </button>
-                              </div>
-                              <div style={{ marginTop: 20 }}>
-                                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-                                  <div style={{ fontSize: 15, fontWeight: 800, color: "#14532d" }}>Unloading / Buyer Details</div>
-                                  {selectedUnloadingLoading ? (
-                                    <div style={{ color: "#0ea5a4", fontWeight: 700 }}>Loading details...</div>
-                                  ) : null}
-                                </div>
-                                {selectedUnloadingError ? (
-                                  <div style={{ color: "#dc2626", padding: 12, background: "#fef2f2", borderRadius: 10 }}>{selectedUnloadingError}</div>
-                                ) : selectedUnloadingDetails.length === 0 && !selectedUnloadingLoading ? (
-                                  <div style={{ color: "#475569", padding: 14, borderRadius: 10, background: "#f8fafc" }}>
-                                    No unloading details found for this entry.
-                                  </div>
-                                ) : (
-                                  <>
-                                    <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12, marginBottom: 16 }}>
-                                      <div style={{ background: "#ffffff", border: "1px solid #d1fae5", borderRadius: 12, padding: 14 }}>
-                                        <div style={{ fontSize: 13, fontWeight: 700, color: "#0f766e", marginBottom: 10 }}>Godowan / Palti weight</div>
-                                        <div style={{ fontSize: 14, fontWeight: 700, color: "#14532d" }}>{selectedUnloadingTotals.totalGodawanPaltiWeight.toFixed(2)} kg</div>
-                                        <div style={{ fontSize: 12, color: "#475569", marginTop: 6 }}>Total Godowan and Palti unloading weight</div>
-                                      </div>
-                                      <div style={{ background: "#ffffff", border: "1px solid #d1fae5", borderRadius: 12, padding: 14 }}>
-                                        <div style={{ fontSize: 13, fontWeight: 700, color: "#0f766e", marginBottom: 10 }}>Consignee / Rate summary</div>
-                                        <div style={{ fontSize: 14, fontWeight: 700, color: "#14532d" }}>{selectedUnloadingTotals.consigneeWeight.toFixed(2)} kg</div>
-                                        <div style={{ fontSize: 12, color: "#475569", marginTop: 6 }}>Total weight from consignee/rate lines</div>
-                                        <div style={{ marginTop: 12, fontSize: 14, fontWeight: 700, color: "#14532d" }}>{selectedUnloadingTotals.avgRate.toFixed(2)}</div>
-                                        <div style={{ fontSize: 12, color: "#475569", marginTop: 6 }}>Average rate by consignee rate line weight</div>
-                                        <div style={{ marginTop: 14, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                                          <div>
-                                            <div style={{ fontSize: 12, color: "#475569" }}>Claim total</div>
-                                            <div style={{ fontSize: 14, fontWeight: 700, color: "#14532d" }}>{selectedUnloadingTotals.totalClaim.toFixed(2)}</div>
-                                          </div>
-                                          <div>
-                                            <div style={{ fontSize: 12, color: "#475569" }}>Deduction total</div>
-                                            <div style={{ fontSize: 14, fontWeight: 700, color: "#14532d" }}>{selectedUnloadingTotals.totalOtherDeduction.toFixed(2)}</div>
-                                          </div>
-                                          <div>
-                                            <div style={{ fontSize: 12, color: "#475569" }}>Shortage total</div>
-                                            <div style={{ fontSize: 14, fontWeight: 700, color: "#14532d" }}>{selectedUnloadingTotals.totalShortage.toFixed(2)}</div>
-                                          </div>
-                                          <div>
-                                            <div style={{ fontSize: 12, color: "#475569" }}>Shortage amount</div>
-                                            <div style={{ fontSize: 14, fontWeight: 700, color: "#14532d" }}>{selectedUnloadingTotals.totalShortageAmount.toFixed(2)}</div>
-                                          </div>
-                                        </div>
-                                      </div>
-                                    </div>
-                                    <div style={{ overflowX: "auto" }}>
-                                      <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                                        <thead>
-                                          <tr>
-                                            <th style={{ ...thStyle, background: "#0f766e" }}>#</th>
-                                            <th style={thStyle}>Buyer</th>
-                                            <th style={thStyle}>Consignee</th>
-                                            <th style={thStyle}>Unloading Date</th>
-                                            <th style={thStyle}>Lorry No</th>
-                                            <th style={thStyle}>Unloading Qty</th>
-                                            <th style={thStyle}>Rate</th>
-                                            <th style={thStyle}>Claim</th>
-                                            <th style={thStyle}>Deduction</th>
-                                            <th style={thStyle}>Shortage</th>
-                                            <th style={thStyle}>Shortage Amount</th>
-                                            <th style={thStyle}>Status</th>
-                                          </tr>
-                                        </thead>
-                                        <tbody>
-                                          {selectedUnloadingDetails.map((detail, index) => (
-                                            <tr 
-                                              key={`${detail.id || detail.outward_id}-${index}`}
-                                              onClick={() => handleEditUnloadingDetail(detail)}
-                                              style={{ cursor: "pointer" }}
-                                            >
-                                              <td style={tdStyle}>{index + 1}</td>
-                                              <td style={tdStyle}>{detail.buyer_name || "—"}</td>
-                                              <td style={tdStyle}>{detail.consignee_name || "—"}</td>
-                                              <td style={tdStyle}>{formatDate(detail.unloading_date || selectedUnloadingOutward.unloading_date || selectedUnloadingOutward.date)}</td>
-                                              <td style={tdStyle}>{selectedUnloadingOutward.lorry_no || "—"}</td>
-                                              <td style={tdStyle}>{Number(detail.qty || detail.weight || 0).toFixed(2)}</td>
-                                              <td style={tdStyle}>{Number(detail.rate || 0).toFixed(2)}</td>
-                                              <td style={tdStyle}>{Number(detail.claim || 0).toFixed(2)}</td>
-                                              <td style={tdStyle}>{Number(detail.other_deduction || 0).toFixed(2)}</td>
-                                              <td style={tdStyle}>{Number(detail.shortage || 0).toFixed(2)}</td>
-                                              <td style={tdStyle}>{Number(detail.shortage_amount || 0).toFixed(2)}</td>
-                                              <td style={tdStyle}>{detail.status || "Pending"}</td>
-                                            </tr>
-                                          ))}
-                                          <tr style={{ background: "#f0fdf4" }}>
-                                            <td style={{ ...tdStyle, fontWeight: 700 }} colSpan={5}>Totals</td>
-                                            <td style={{ ...tdStyle, fontWeight: 700 }}>{selectedUnloadingTotals.totalQty.toFixed(2)}</td>
-                                            <td style={{ ...tdStyle, fontWeight: 700 }}>{selectedUnloadingTotals.avgRate.toFixed(2)}</td>
-                                            <td style={{ ...tdStyle, fontWeight: 700 }}>{selectedUnloadingTotals.totalClaim.toFixed(2)}</td>
-                                            <td style={{ ...tdStyle, fontWeight: 700 }}>{selectedUnloadingTotals.totalOtherDeduction.toFixed(2)}</td>
-                                            <td style={{ ...tdStyle, fontWeight: 700 }}>{selectedUnloadingTotals.totalShortage.toFixed(2)}</td>
-                                            <td style={{ ...tdStyle, fontWeight: 700 }}>{selectedUnloadingTotals.totalShortageAmount.toFixed(2)}</td>
-                                            <td style={tdStyle}></td>
-                                          </tr>
-                                        </tbody>
-                                      </table>
-                                    </div>
-                                  </>
-                                )}
-                              </div>
-                            </div>
-                          </td>
-                        </tr>
-                      ) : null}
-                    </React.Fragment>
-                  );
-                })
-              ) : (
-                <tr>
-                  <td style={{ ...tdStyle, textAlign: "center" }} colSpan="16">
-                    No outward records found
-                  </td>
-                </tr>
-              )}
-              </tbody>
-            </table>
-          </div>
-
-        <div className="ledger-mobile-view" style={{ marginTop: 12, display: "grid", gap: 12 }}>
-          {filteredOutwards.length > 0 ? (
-            filteredOutwards.map((row, idx) => {
-              const isSelected = selectedUnloadingOutward && String(selectedUnloadingOutward.id) === String(row.id);
-              return (
-                <React.Fragment key={row.id}>
-                  <div key={row.id} style={{ ...mobileCard, cursor: "pointer" }} onClick={() => openUnloadingDetails(row)}>
-                    <div style={mobileCardTitle}>
-                      <div>
-                        <div style={{ fontSize: 16, fontWeight: 800, color: "#1f3d05" }}>
-                          {row.sl_no != null ? row.sl_no : row.id} � {row.inv_no || "-"}
-                        </div>
-                        <div style={{ fontSize: 13, color: "#365314", marginTop: 2 }}>
-                          {formatDate(row.date)} � {row.self_loading || "No"}
-                        </div>
-                      </div>
-                      <span style={mobileCardBadge}>{row.lorry_no || "No Lorry"}</span>
-                    </div>
-
-                    <div style={{ ...mobileRow, alignItems: "center" }}>
-                      <span style={mobileLabel}>Actions</span>
-                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
-                        {canEdit ? (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleEdit(row);
-                            }}
-                            style={{ background: "#3b82f6", color: "#fff", border: "none", padding: "8px 12px", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 700 }}
-                          >
-                            Edit
-                          </button>
-                        ) : null}
-                        {canDelete ? (
-                          <button
-                            type="button"
-                            onClick={() => handleDelete(row.id)}
-                            style={{ background: "#ef4444", color: "#fff", border: "none", padding: "8px 12px", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 700 }}
-                          >
-                            Delete
-                          </button>
-                        ) : null}
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleCopy(row);
-                          }}
-                          style={{ background: "#64748b", color: "#fff", border: "none", padding: "8px 12px", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 700 }}
-                        >
-                          Copy
-                        </button>
-                        {canAdjust ? (
-                          <button
-                            type="button"
-                            onClick={() => openAdjustmentModal(row)}
-                            style={{ background: "#f59e0b", color: "#fff", border: "none", padding: "8px 12px", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 700 }}
-                          >
-                            Adjust
-                          </button>
-                        ) : null}
-                        {canEdit ? (
-                          <button
-                            type="button"
-                            onClick={() => openSettlementModal(row)}
-                            style={{ background: "#22c55e", color: "#fff", border: "none", padding: "8px 12px", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 700 }}
-                          >
-                            Settle
-                          </button>
-                        ) : null}
-                      </div>
-                    </div>
-                  </div>
-                  {isSelected ? (
-                    <div style={{ ...cardStyle, marginTop: 10, padding: "16px 18px", background: "#fff" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 12, alignItems: "flex-start" }}>
-                        <div>
-                          <div style={{ fontSize: 16, fontWeight: 800, color: "#0f172a" }}>
-                            Selected Outward: {selectedUnloadingOutward.sl_no != null ? selectedUnloadingOutward.sl_no : selectedUnloadingOutward.id} {selectedUnloadingOutward.inv_no ? `(${selectedUnloadingOutward.inv_no})` : ""}
-                          </div>
-                          <div style={{ fontSize: 13, color: "#475569", marginTop: 6 }}>
-                            {formatDate(selectedUnloadingOutward.date)} • {selectedUnloadingOutward.warehouse_name || selectedUnloadingOutward.location_name || "—"}
-                          </div>
-                          <div style={{ fontSize: 13, color: "#475569", marginTop: 4 }}>
-                            Lorry No: {selectedUnloadingOutward.lorry_no || "—"}
-                          </div>
-                          <div style={{ fontSize: 13, color: "#475569", marginTop: 4 }}>
-                            Unloading Weight: {formatWeight(selectedUnloadingOutward.weight || selectedUnloadingOutward.qty || selectedUnloadingOutward.unloading_qty || 0)} kg
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => setSelectedUnloadingOutward(null)}
-                          style={{ ...btnPrimary, background: "#ef4444", minWidth: 120 }}
-                        >
-                          Close details
-                        </button>
-                      </div>
-                      <div style={{ marginTop: 20 }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-                          <div style={{ fontSize: 15, fontWeight: 800, color: "#14532d" }}>Unloading / Buyer Details</div>
-                          {selectedUnloadingLoading ? (
-                            <div style={{ color: "#0ea5a4", fontWeight: 700 }}>Loading details...</div>
-                          ) : null}
-                        </div>
-                        {selectedUnloadingError ? (
-                          <div style={{ color: "#dc2626", padding: 12, background: "#fef2f2", borderRadius: 10 }}>{selectedUnloadingError}</div>
-                        ) : selectedUnloadingDetails.length === 0 && !selectedUnloadingLoading ? (
-                          <div style={{ color: "#475569", padding: 14, borderRadius: 10, background: "#f8fafc" }}>
-                            No unloading details found for this entry.
-                          </div>
-                        ) : (
-                          <>
-                            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12, marginBottom: 16 }}>
-                              <div style={{ background: "#ffffff", border: "1px solid #d1fae5", borderRadius: 12, padding: 14 }}>
-                                <div style={{ fontSize: 13, fontWeight: 700, color: "#0f766e", marginBottom: 10 }}>Godowan / Palti weight</div>
-                                <div style={{ fontSize: 14, fontWeight: 700, color: "#14532d" }}>{selectedUnloadingTotals.totalGodawanPaltiWeight.toFixed(2)} kg</div>
-                                <div style={{ fontSize: 12, color: "#475569", marginTop: 6 }}>Total Godowan and Palti unloading weight</div>
-                              </div>
-                              <div style={{ background: "#ffffff", border: "1px solid #d1fae5", borderRadius: 12, padding: 14 }}>
-                                <div style={{ fontSize: 13, fontWeight: 700, color: "#0f766e", marginBottom: 10 }}>Consignee / Rate summary</div>
-                                <div style={{ fontSize: 14, fontWeight: 700, color: "#14532d" }}>{selectedUnloadingTotals.consigneeWeight.toFixed(2)} kg</div>
-                                <div style={{ fontSize: 12, color: "#475569", marginTop: 6 }}>Total weight from consignee/rate lines</div>
-                                <div style={{ marginTop: 12, fontSize: 14, fontWeight: 700, color: "#14532d" }}>{selectedUnloadingTotals.avgRate.toFixed(2)}</div>
-                                <div style={{ fontSize: 12, color: "#475569", marginTop: 6 }}>Average rate by consignee rate line weight</div>
-                                <div style={{ marginTop: 14, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                                  <div>
-                                    <div style={{ fontSize: 12, color: "#475569" }}>Claim total</div>
-                                    <div style={{ fontSize: 14, fontWeight: 700, color: "#14532d" }}>{selectedUnloadingTotals.totalClaim.toFixed(2)}</div>
-                                  </div>
-                                  <div>
-                                    <div style={{ fontSize: 12, color: "#475569" }}>Deduction total</div>
-                                    <div style={{ fontSize: 14, fontWeight: 700, color: "#14532d" }}>{selectedUnloadingTotals.totalOtherDeduction.toFixed(2)}</div>
-                                  </div>
-                                  <div>
-                                    <div style={{ fontSize: 12, color: "#475569" }}>Shortage total</div>
-                                    <div style={{ fontSize: 14, fontWeight: 700, color: "#14532d" }}>{selectedUnloadingTotals.totalShortage.toFixed(2)}</div>
-                                  </div>
-                                  <div>
-                                    <div style={{ fontSize: 12, color: "#475569" }}>Shortage amount</div>
-                                    <div style={{ fontSize: 14, fontWeight: 700, color: "#14532d" }}>{selectedUnloadingTotals.totalShortageAmount.toFixed(2)}</div>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                            <div style={{ overflowX: "auto" }}>
-                              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                                <thead>
-                                  <tr>
-                                    <th style={{ ...thStyle, background: "#0f766e" }}>#</th>
-                                    <th style={thStyle}>Buyer</th>
-                                    <th style={thStyle}>Consignee</th>
-                                    <th style={thStyle}>Unloading Qty</th>
-                                    <th style={thStyle}>Rate</th>
-                                    <th style={thStyle}>Claim</th>
-                                    <th style={thStyle}>Deduction</th>
-                                    <th style={thStyle}>Shortage</th>
-                                    <th style={thStyle}>Shortage Amount</th>
-                                    <th style={thStyle}>Status</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {selectedUnloadingDetails.map((detail, index) => (
-                                    <tr 
-                                      key={`${detail.id || detail.outward_id}-${index}`}
-                                      onClick={() => handleEditUnloadingDetail(detail)}
-                                      style={{ cursor: "pointer" }}
-                                    >
-                                      <td style={tdStyle}>{index + 1}</td>
-                                      <td style={tdStyle}>{detail.buyer_name || "—"}</td>
-                                      <td style={tdStyle}>{detail.consignee_name || "—"}</td>
-                                      <td style={tdStyle}>{Number(detail.qty || detail.weight || 0).toFixed(2)}</td>
-                                      <td style={tdStyle}>{Number(detail.rate || 0).toFixed(2)}</td>
-                                      <td style={tdStyle}>{Number(detail.claim || 0).toFixed(2)}</td>
-                                      <td style={tdStyle}>{Number(detail.other_deduction || 0).toFixed(2)}</td>
-                                      <td style={tdStyle}>{Number(detail.shortage || 0).toFixed(2)}</td>
-                                      <td style={tdStyle}>{Number(detail.shortage_amount || 0).toFixed(2)}</td>
-                                      <td style={tdStyle}>{detail.status || "Pending"}</td>
-                                    </tr>
-                                  ))}
-                                  <tr style={{ background: "#f0fdf4" }}>
-                                    <td style={{ ...tdStyle, fontWeight: 700 }} colSpan={3}>Totals</td>
-                                    <td style={{ ...tdStyle, fontWeight: 700 }}>{selectedUnloadingTotals.totalQty.toFixed(2)}</td>
-                                    <td style={{ ...tdStyle, fontWeight: 700 }}>{selectedUnloadingTotals.avgRate.toFixed(2)}</td>
-                                    <td style={{ ...tdStyle, fontWeight: 700 }}>{selectedUnloadingTotals.totalClaim.toFixed(2)}</td>
-                                    <td style={{ ...tdStyle, fontWeight: 700 }}>{selectedUnloadingTotals.totalOtherDeduction.toFixed(2)}</td>
-                                    <td style={{ ...tdStyle, fontWeight: 700 }}>{selectedUnloadingTotals.totalShortage.toFixed(2)}</td>
-                                    <td style={{ ...tdStyle, fontWeight: 700 }}>{selectedUnloadingTotals.totalShortageAmount.toFixed(2)}</td>
-                                    <td style={tdStyle}></td>
-                                  </tr>
-                                </tbody>
-                              </table>
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  ) : null}
-                </React.Fragment>
-              );
-            })
-          ) : (
-            <div style={mobileCard}>
-              <div style={{ color: "#365314", textAlign: "center", fontWeight: 600 }}>No outward records found</div>
-            </div>
-          )}
-        </div>
-
-
-      {filterView !== "all" && (
-        <div style={{ ...cardStyle, padding: 12, margin: "10px 16px 16px 16px", background: "#fff" }}>
-          {filterView === "settled" && (
-            <div>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div style={{ fontSize: 16, fontWeight: 800 }}>{totalSettlementsCount} settled</div>
-                <div style={{ fontSize: 12, color: "#475569" }}>{totalSettlementWeight.toFixed(2)} wt</div>
-              </div>
-              <div style={{ marginTop: 10 }}>
-                {(settlementRows || []).length === 0 ? (
-                  <div style={{ color: "#64748b" }}>No settlement records found</div>
-                ) : (
-                  (settlementRows || []).map((s) => (
-                    <div key={s.id || `${s.outward_id}-${s.id}`} style={{ padding: "8px 0", borderBottom: "1px solid #eef2f6" }}>
-                      <div style={{ fontWeight: 700 }}>{s.voucher_no || `Outward ${s.outward_id}`} — {formatDate(s.date)}</div>
-                      <div style={{ fontSize: 12, color: "#475569" }}>{s.company_name || ""} • {s.warehouse_name || ""} • {s.location_name || ""}</div>
-                      <div style={{ marginTop: 6, fontSize: 13 }}>
-                        Dispatch: {s.dispatch_qty || 0} | Unloading: {s.unloading_qty || 0} | Billable: {s.billable_qty || 0}
-                      </div>
-                      {Array.isArray(s.adjustment_details) && s.adjustment_details.length > 0 && (
-                        <table style={{ width: "100%", marginTop: 8, fontSize: 12, borderCollapse: "collapse" }}>
-                          <thead>
-                            <tr>
-                              <th style={{ textAlign: "left", padding: 6, borderBottom: "1px solid #e6eef6" }}>#</th>
-                              <th style={{ textAlign: "left", padding: 6, borderBottom: "1px solid #e6eef6" }}>Source</th>
-                              <th style={{ textAlign: "right", padding: 6, borderBottom: "1px solid #e6eef6" }}>Weight</th>
-                              <th style={{ textAlign: "right", padding: 6, borderBottom: "1px solid #e6eef6" }}>Amount</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {s.adjustment_details.map((ad, i) => (
-                              <tr key={i}>
-                                <td style={{ padding: 6 }}>{i + 1}</td>
-                                <td style={{ padding: 6 }}>{ad.source_type === "inward" ? (ad.inward_voucher_no || "Inward") : (ad.lorry_no || "Palti")}</td>
-                                <td style={{ padding: 6, textAlign: "right" }}>{Number(ad.settlement_weight || 0)}</td>
-                                <td style={{ padding: 6, textAlign: "right" }}>{Number(ad.amount || 0).toFixed(2)}</td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      )}
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-          )}
-
-          {filterView === "adjusted" && (
-            <div>
-              <div style={{ fontSize: 16, fontWeight: 800 }}>{adjustedCount} adjusted</div>
-              <div style={{ marginTop: 10 }}>
-                {outwards.filter((r) => !settledIds.has(String(r.id)) && String(r.status || "").toLowerCase() === "partial").map((r) => (
-                  <div key={r.id} style={{ padding: "8px 0", borderBottom: "1px solid #eef2f6", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <div>
-                      <div style={{ fontWeight: 700 }}>{r.voucher_no || `Outward ${r.id}`} — {formatDate(r.date)}</div>
-                      <div style={{ fontSize: 12, color: "#475569" }}>{r.company_name || ""} • {r.warehouse_name || ""}</div>
-                    </div>
-                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                      <div style={{ fontSize: 13 }}>{formatWeight(r.weight)}</div>
-                      <button type="button" onClick={() => openAdjustmentModal(r)} style={{ ...btnStyle, background: "#f59e0b", color: "#fff" }}>View Adjustment</button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {filterView === "pending" && (
-            <div>
-              <div style={{ fontSize: 16, fontWeight: 800 }}>{pendingCount} pending</div>
-              <div style={{ marginTop: 10 }}>
-                {outwards.filter((r) => !settledIds.has(String(r.id)) && (!r.status || String(r.status || "").toLowerCase() === "pending")).map((r) => (
-                  <div key={r.id} style={{ padding: "8px 0", borderBottom: "1px solid #eef2f6", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <div>
-                      <div style={{ fontWeight: 700 }}>{r.voucher_no || `Outward ${r.id}`} — {formatDate(r.date)}</div>
-                      <div style={{ fontSize: 12, color: "#475569" }}>{r.company_name || ""} • {r.warehouse_name || ""}</div>
-                    </div>
-                    <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                      <div style={{ fontSize: 13 }}>{formatWeight(r.weight)}</div>
-                      <button type="button" onClick={() => openAdjustmentModal(r)} style={{ ...btnStyle, background: "#18b6d9", color: "#fff" }}>Adjust</button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {selectedOutward && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(15, 23, 42, 0.5)",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "flex-start",
-            paddingTop: "24px",
-            zIndex: 1200,
-            overflowY: "auto",
-          }}
-        >
-          <div
-            style={{
-              width: "95%",
-              maxWidth: "1200px",
-              background: "#fff",
-              borderRadius: "20px",
-              boxShadow: "0 24px 60px rgba(15,23,42,0.28)",
-              padding: "18px",
-              position: "relative",
-              marginBottom: "24px",
-            }}
-          >
-            <button
-            onClick={closeAdjustmentModal}
-              style={{
-                position: "absolute",
-                top: "12px",
-                right: "12px",
-                background: "#ef4444",
-                color: "#fff",
-                border: "none",
-                borderRadius: "50%",
-                width: 34,
-                height: 34,
-                cursor: "pointer",
-                fontWeight: 700,
-              }}
-            >
-              X
-            </button>
-
-            <AdjustmentPage
-              key={`adjust-${selectedOutward.id || selectedOutward.voucher_no || "row"}`}
-              outward={selectedOutward}
-              onClose={closeAdjustmentModal}
-              onSaved={() => {
-                toast.success("Adjustment saved successfully", { theme: "colored" });
-                fetchOutwards();
-              }}
-              onDeleted={() => {
-                toast.success("Adjustment deleted successfully", { theme: "colored" });
-                fetchOutwards();
-              }}
-            />
-          </div>
-        </div>
-      )}
-
-      {selectedSettlementOutward && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(15, 23, 42, 0.5)",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "flex-start",
-            paddingTop: "24px",
-            zIndex: 1200,
-            overflowY: "auto",
-          }}
-        >
-          <div
-            style={{
-              width: "95%",
-              maxWidth: "1300px",
-              background: "#fff",
-              borderRadius: "20px",
-              boxShadow: "0 24px 60px rgba(15,23,42,0.28)",
-              padding: "18px",
-              position: "relative",
-              marginBottom: "24px",
-            }}
-          >
-            <button
-            onClick={closeSettlementModal}
-              style={{
-                position: "absolute",
-                top: "12px",
-                right: "12px",
-                background: "#ef4444",
-                color: "#fff",
-                border: "none",
-                borderRadius: "50%",
-                width: 34,
-                height: 34,
-                cursor: "pointer",
-                fontWeight: 700,
-              }}
-            >
-              X
-            </button>
-
-            <OutwardSettlementPage
-              key={`settle-${selectedSettlementOutward.id || selectedSettlementOutward.voucher_no || "row"}`}
-              outward={selectedSettlementOutward}
-              onSaved={fetchOutwards}
-            />
-          </div>
-        </div>
-      )}
-
-      <BuyerAdjustmentListModal
-        isOpen={showBuyerAdjustmentList}
-        onClose={closeBuyerAdjustmentList}
-        onSelectOutward={handleSelectOutwardForBuyerAdjustment}
-        buyerNames={buyerNames}
-      />
-
-      <BuyerAdjustmentSavedListModal
-        isOpen={showBuyerAdjustmentSavedList}
-        onClose={closeBuyerAdjustmentSavedList}
-        onSelectOutward={handleSelectOutwardForBuyerAdjustment}
-      />
-
-      {showBuyerAdjustmentForm && selectedUnloadingOutward && (
-        <div
-          style={{
-            position: "fixed",
-            inset: 0,
-            background: "rgba(15, 23, 42, 0.45)",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "flex-start",
-            padding: "20px 12px",
-            zIndex: 1001,
-            overflowY: "auto",
-          }}
-        >
-          <div
-            style={{
-              width: "100%",
-              maxWidth: "1200px",
-              maxHeight: "70vh",
-              overflowY: "auto",
-              background: "#fff",
-              borderRadius: "12px",
-              padding: "20px 36px",
-              boxShadow: "0 6px 24px rgba(15, 23, 42, 0.08)",
-            }}
-          >
-            <BuyerAdjustmentForm
-              outward={selectedUnloadingOutward}
-              onClose={closeBuyerAdjustmentForm}
-              buyerNames={buyerNames}
-              consigneeNames={consigneeNames}
-              onSave={closeBuyerAdjustmentForm}
-            />
-          </div>
-        </div>
-      )}
-
-      {showCompanyModal ? (
-        <div style={modalOverlay}>
-          <div style={modalCard}>
-            <h3 style={{ marginTop: 0 }}>Create Company</h3>
-            <form onSubmit={handleCompanyQuickCreate} style={{ display: "grid", gap: 12 }}>
-              <input placeholder="Company name" value={companyForm.name} onChange={(e) => setCompanyForm((p) => ({ ...p, name: e.target.value }))} style={inp} />
-              <input placeholder="Mobile" value={companyForm.mobile} onChange={(e) => setCompanyForm((p) => ({ ...p, mobile: e.target.value }))} style={inp} />
-              <textarea placeholder="Address" value={companyForm.address} onChange={(e) => setCompanyForm((p) => ({ ...p, address: e.target.value }))} style={{ ...inp, minHeight: 72 }} />
-              <div style={{ display: "flex", gap: 8 }}>
-                <button type="submit" style={btnPrimary}>Save</button>
-                <button type="button" onClick={() => setShowCompanyModal(false)} style={btnPrimary}>Cancel</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      ) : null}
-
-      {showAccountModal ? (
-        <div style={modalOverlay}>
-          <div style={modalCard}>
-            <h3 style={{ marginTop: 0 }}>Create Company Account</h3>
-            <form onSubmit={handleAccountQuickCreate} style={{ display: "grid", gap: 12 }}>
-              <select value={accountForm.company_id} onChange={(e) => setAccountForm((p) => ({ ...p, company_id: e.target.value }))} style={inp}>
-                <option value="">Select Company</option>
-                {companies.map((c) => (
-                  <option key={getRecordId(c)} value={getRecordId(c)}>{c.name}</option>
-                ))}
-              </select>
-              <input placeholder="Account name" value={accountForm.account_name} onChange={(e) => setAccountForm((p) => ({ ...p, account_name: e.target.value }))} style={inp} />
-              <input placeholder="PAN no" value={accountForm.pan_no} onChange={(e) => setAccountForm((p) => ({ ...p, pan_no: e.target.value }))} style={inp} />
-              <input placeholder="Mobile" value={accountForm.mobile} onChange={(e) => setAccountForm((p) => ({ ...p, mobile: e.target.value }))} style={inp} />
-              <textarea placeholder="Address" value={accountForm.address} onChange={(e) => setAccountForm((p) => ({ ...p, address: e.target.value }))} style={{ ...inp, minHeight: 72 }} />
-              <div style={{ display: "flex", gap: 8 }}>
-                <button type="submit" style={btnPrimary}>Save</button>
-                <button type="button" onClick={() => setShowAccountModal(false)} style={btnPrimary}>Cancel</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      ) : null}
-
-      {showBuyerModal ? (
-        <div style={modalOverlay}>
-          <div style={modalCard}>
-            <h3 style={{ marginTop: 0 }}>Create Buyer</h3>
-            <form onSubmit={handleBuyerQuickCreate} style={{ display: "grid", gap: 12 }}>
-              <input placeholder="Buyer name" value={buyerForm.name} onChange={(e) => setBuyerForm((p) => ({ ...p, name: e.target.value }))} style={inp} />
-              <input placeholder="Mobile" value={buyerForm.mobile} onChange={(e) => setBuyerForm((p) => ({ ...p, mobile: e.target.value }))} style={inp} />
-              <input placeholder="Email" value={buyerForm.email} onChange={(e) => setBuyerForm((p) => ({ ...p, email: e.target.value }))} style={inp} />
-              <input placeholder="GST No" value={buyerForm.gst_no} onChange={(e) => setBuyerForm((p) => ({ ...p, gst_no: e.target.value }))} style={inp} />
-              <input placeholder="PAN No" value={buyerForm.pan_no} onChange={(e) => setBuyerForm((p) => ({ ...p, pan_no: e.target.value }))} style={inp} />
-              <input placeholder="State" value={buyerForm.state} onChange={(e) => setBuyerForm((p) => ({ ...p, state: e.target.value }))} style={inp} />
-              <input placeholder="Location" value={buyerForm.location} onChange={(e) => setBuyerForm((p) => ({ ...p, location: e.target.value }))} style={inp} />
-              <textarea placeholder="Address" value={buyerForm.address} onChange={(e) => setBuyerForm((p) => ({ ...p, address: e.target.value }))} style={{ ...inp, minHeight: 72 }} />
-              <div style={{ display: "flex", gap: 8 }}>
-                <button type="submit" style={btnPrimary}>Save</button>
-                <button type="button" onClick={() => setShowBuyerModal(false)} style={btnPrimary}>Cancel</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      ) : null}
-
-      {showConsigneeModal ? (
-        <div style={modalOverlay}>
-          <div style={modalCard}>
-            <h3 style={{ marginTop: 0 }}>Create Consignee</h3>
-            <form onSubmit={handleConsigneeQuickCreate} style={{ display: "grid", gap: 12 }}>
-              <MultiSelectDropdown
-                label="Buyers"
-                options={buyerNames.map((b) => ({ value: getRecordId(b), label: b.name }))}
-                value={consigneeForm.buyer_ids || []}
-                onChange={(next) => setConsigneeForm((p) => ({ ...p, buyer_ids: next }))}
-                placeholder="Select buyer name(s)"
-                accent="#7c3aed"
-              />
-              <input placeholder="Consignee name" value={consigneeForm.name} onChange={(e) => setConsigneeForm((p) => ({ ...p, name: e.target.value }))} style={inp} />
-              <input placeholder="Mobile" value={consigneeForm.mobile} onChange={(e) => setConsigneeForm((p) => ({ ...p, mobile: e.target.value }))} style={inp} />
-              <input placeholder="Email" value={consigneeForm.email} onChange={(e) => setConsigneeForm((p) => ({ ...p, email: e.target.value }))} style={inp} />
-              <input placeholder="GST No" value={consigneeForm.gst_no} onChange={(e) => setConsigneeForm((p) => ({ ...p, gst_no: e.target.value }))} style={inp} />
-              <input placeholder="PAN No" value={consigneeForm.pan_no} onChange={(e) => setConsigneeForm((p) => ({ ...p, pan_no: e.target.value }))} style={inp} />
-              <input placeholder="State" value={consigneeForm.state} onChange={(e) => setConsigneeForm((p) => ({ ...p, state: e.target.value }))} style={inp} />
-              <input placeholder="Location" value={consigneeForm.location} onChange={(e) => setConsigneeForm((p) => ({ ...p, location: e.target.value }))} style={inp} />
-              <textarea placeholder="Address" value={consigneeForm.address} onChange={(e) => setConsigneeForm((p) => ({ ...p, address: e.target.value }))} style={{ ...inp, minHeight: 72 }} />
-              <div style={{ display: "flex", gap: 8 }}>
-                <button type="submit" style={btnPrimary}>Save</button>
-                <button type="button" onClick={() => setShowConsigneeModal(false)} style={btnPrimary}>Cancel</button>
-              </div>
-            </form>
-          </div>
-        </div>
-      ) : null}
-      </div>
-      </>
-    )}
-  </div>
+  return canAccessWarehouse(
+    user,
+    row.warehouse_id
   );
 }
 
+function escapeRegExp(value) {
+  return String(value).replace(
+    /[.*+?^${}()|[\]\\]/g,
+    "\\$&"
+  );
+}
 
+/*
+====================================================
+MASTER LOOKUP
+====================================================
+*/
 
+async function findMasterByIdOrLegacyOrName(
+  Model,
+  idValue,
+  nameValue,
+  legacyFields = []
+) {
+  if (!Model) {
+    return null;
+  }
 
+  const rawId =
+    normalizeId(idValue);
 
+  const rawName =
+    safeText(nameValue);
 
+  /*
+   * Mongo ObjectId
+   */
+  if (
+    rawId &&
+    isValidObjectId(rawId)
+  ) {
+    try {
+      const doc =
+        await Model.findById(
+          rawId
+        ).lean();
 
+      if (doc) {
+        return doc;
+      }
+    } catch {}
+  }
 
+  /*
+   * Legacy numeric/string ID
+   */
+  if (rawId) {
+    for (
+      const field of legacyFields
+    ) {
+      try {
+        const doc =
+          await Model.findOne({
+            [field]: rawId,
+          }).lean();
 
+        if (doc) {
+          return doc;
+        }
+      } catch {}
 
+      const numeric =
+        Number(rawId);
 
+      if (
+        Number.isFinite(numeric)
+      ) {
+        try {
+          const doc =
+            await Model.findOne({
+              [field]:
+                numeric,
+            }).lean();
 
+          if (doc) {
+            return doc;
+          }
+        } catch {}
+      }
+    }
+  }
 
+  /*
+   * Name lookup
+   */
+  if (rawName) {
+    try {
+      const regex =
+        new RegExp(
+          `^${escapeRegExp(
+            rawName
+          )}$`,
+          "i"
+        );
 
+      const byName =
+        await Model.findOne({
+          name: regex,
+        }).lean();
 
+      if (byName) {
+        return byName;
+      }
 
+      // Spreadsheet exports frequently vary only in spacing (for example,
+      // "NOOR   MAHAMMAD" versus "NOOR MAHAMMAD"). Treat that as the same
+      // master name, while preserving an exact match for every actual word.
+      const nameParts = rawName.split(/\s+/).filter(Boolean);
+      if (nameParts.length > 1) {
+        const flexibleWhitespaceRegex = new RegExp(
+          `^${nameParts.map(escapeRegExp).join("\\s+")}$`,
+          "i"
+        );
+        const byFlexibleName = await Model.findOne({
+          name: flexibleWhitespaceRegex,
+        }).lean();
 
+        if (byFlexibleName) {
+          return byFlexibleName;
+        }
+      }
+    } catch {}
+  }
 
+  /*
+   * Company account uses account_name
+   */
+  if (
+    rawName &&
+    Model === MongoCompanyAccount
+  ) {
+    try {
+      const regex =
+        new RegExp(
+          `^${escapeRegExp(
+            rawName
+          )}$`,
+          "i"
+        );
 
+      const byAccountName =
+        await Model.findOne({
+          account_name:
+            regex,
+        }).lean();
 
+      if (byAccountName) {
+        return byAccountName;
+      }
+    } catch {}
+  }
 
+  return null;
+}
 
+async function resolveOutwardMasters(
+  body
+) {
+  const [
+    employee,
+    location,
+    warehouse,
+    product,
+    company,
+  ] = await Promise.all([
+    findMasterByIdOrLegacyOrName(
+      MongoEmployee,
+      body?.employee_id,
+      body?.employee_name,
+      [
+        "employee_id",
+        "legacy_id",
+        "id",
+      ]
+    ),
 
+    findMasterByIdOrLegacyOrName(
+      MongoLocation,
+      body?.location_id,
+      body?.location_name,
+      [
+        "legacy_id",
+        "id",
+      ]
+    ),
 
+    findMasterByIdOrLegacyOrName(
+      MongoWarehouse,
+      body?.warehouse_id,
+      body?.warehouse_name,
+      [
+        "legacy_id",
+        "id",
+      ]
+    ),
 
+    findMasterByIdOrLegacyOrName(
+      MongoProduct,
+      body?.product_id,
+      body?.product_name,
+      [
+        "legacy_id",
+        "id",
+      ]
+    ),
 
+    findMasterByIdOrLegacyOrName(
+      MongoCompany,
+      body?.company_id,
+      body?.company_name,
+      [
+        "legacy_id",
+        "id",
+      ]
+    ),
+  ]);
+
+  let companyAccount =
+    await findMasterByIdOrLegacyOrName(
+      MongoCompanyAccount,
+      body?.company_account_id,
+      body?.company_account_name,
+      [
+        "legacy_id",
+        "id",
+      ]
+    );
+
+  /*
+   * Resolve first company account of the company
+   * when account ID is not supplied.
+   */
+  if (
+    !companyAccount &&
+    company?._id
+  ) {
+    try {
+      companyAccount =
+        await MongoCompanyAccount.findOne({
+          company_id:
+            company._id,
+        })
+          .sort({
+            _id: 1,
+          })
+          .lean();
+    } catch {}
+  }
+
+  return {
+    employee,
+    location,
+    warehouse,
+    product,
+    company,
+    companyAccount,
+  };
+}
+
+function masterNames(masters) {
+  return {
+    employee_name:
+      masters.employee?.name ||
+      "",
+
+    location_name:
+      masters.location?.name ||
+      "",
+
+    warehouse_name:
+      masters.warehouse?.name ||
+      "",
+
+    product_name:
+      masters.product?.name ||
+      "",
+
+    company_name:
+      masters.company?.name ||
+      "",
+
+    company_account_name:
+      masters.companyAccount
+        ?.account_name ||
+      "",
+  };
+}
+
+/*
+====================================================
+TEMPLATE
+====================================================
+*/
+
+function buildOutwardTemplateRows() {
+  return [
+    {
+      date: "2026-07-21",
+      employee_name:
+        "Employee Name",
+      location_name:
+        "Location Name",
+      warehouse_name:
+        "Warehouse Name",
+      product_name:
+        "Product Name",
+      company_name:
+        "Company Name",
+      company_account_name:
+        "Company Account Name",
+      lorry_no:
+        "WB00A0000",
+      weight: 0,
+      rate: 0,
+      inv_no:
+        "INV-001",
+      buyer_name:
+        "Buyer Name",
+      consignee_name:
+        "Consignee Name",
+      self_loading:
+        "No",
+    },
+  ];
+}
+
+/*
+====================================================
+XLSX NORMALIZATION
+====================================================
+*/
+
+function normalizeOutwardImportRow(
+  row
+) {
+  return {
+    date:
+      row?.date ??
+      row?.Date ??
+      "",
+
+    employee_id:
+      row?.employee_id ??
+      row?.EmployeeID ??
+      row?.EmployeeId ??
+      "",
+
+    employee_name:
+      row?.employee_name ??
+      row?.EmployeeName ??
+      row?.["Employee Name"] ??
+      row?.Employee ??
+      "",
+
+    location_id:
+      row?.location_id ??
+      row?.LocationID ??
+      row?.LocationId ??
+      "",
+
+    location_name:
+      row?.location_name ??
+      row?.LocationName ??
+      row?.["Location Name"] ??
+      row?.Location ??
+      "",
+
+    warehouse_id:
+      row?.warehouse_id ??
+      row?.WarehouseID ??
+      row?.WarehouseId ??
+      "",
+
+    warehouse_name:
+      row?.warehouse_name ??
+      row?.WarehouseName ??
+      row?.["Warehouse Name"] ??
+      row?.Warehouse ??
+      "",
+
+    product_id:
+      row?.product_id ??
+      row?.ProductID ??
+      row?.ProductId ??
+      "",
+
+    product_name:
+      row?.product_name ??
+      row?.ProductName ??
+      row?.["Product Name"] ??
+      row?.Product ??
+      "",
+
+    company_id:
+      row?.company_id ??
+      row?.CompanyID ??
+      row?.CompanyId ??
+      "",
+
+    company_name:
+      row?.company_name ??
+      row?.CompanyName ??
+      row?.["Company Name"] ??
+      row?.Company ??
+      "",
+
+    company_account_id:
+      row?.company_account_id ??
+      row?.CompanyAccountID ??
+      row?.CompanyAccountId ??
+      "",
+
+    company_account_name:
+      row?.company_account_name ??
+      row?.CompanyAccountName ??
+      row?.["Company Account Name"] ??
+      row?.["Company Account"] ??
+      row?.CompanyAccount ??
+      "",
+
+    lorry_no:
+      row?.lorry_no ??
+      row?.LorryNo ??
+      row?.["Lorry No"] ??
+      row?.Lorry ??
+      "",
+
+    weight:
+      row?.weight ??
+      row?.Weight ??
+      "",
+
+    quantity:
+      row?.quantity ??
+      row?.Quantity ??
+      "",
+
+    rate:
+      row?.rate ??
+      row?.Rate ??
+      "",
+
+    inv_no:
+      row?.inv_no ??
+      row?.InvNo ??
+      row?.["Invoice No"] ??
+      row?.InvoiceNo ??
+      "",
+
+    buyer_name:
+      row?.buyer_name ??
+      row?.BuyerName ??
+      row?.["Buyer Name"] ??
+      row?.Buyer ??
+      "",
+
+    consignee_name:
+      row?.consignee_name ??
+      row?.ConsigneeName ??
+      row?.["Consignee Name"] ??
+      row?.Consignee ??
+      "",
+
+    self_loading:
+      row?.self_loading ??
+      row?.SelfLoading ??
+      row?.["Self Loading"] ??
+      "No",
+  };
+}
+
+/*
+====================================================
+NEXT OUTWARD SERIAL
+====================================================
+*/
+
+async function getNextOutwardSlNo() {
+  const last =
+    await MongoOutward.findOne({})
+      .sort({
+        sl_no: -1,
+        legacy_id: -1,
+        _id: -1,
+      })
+      .select({
+        sl_no: 1,
+        legacy_id: 1,
+      })
+      .lean();
+
+  const current =
+    Number(
+      last?.sl_no ??
+        last?.legacy_id ??
+        0
+    ) || 0;
+
+  return current + 1;
+}
+
+/*
+====================================================
+OUTWARD IDENTIFIER
+====================================================
+*/
+
+async function findMongoOutward(
+  id
+) {
+  if (
+    isValidObjectId(id)
+  ) {
+    const byObjectId =
+      await MongoOutward.findById(
+        id
+      ).lean();
+
+    if (byObjectId) {
+      return byObjectId;
+    }
+  }
+
+  const numeric =
+    Number(id);
+
+  if (
+    Number.isFinite(numeric)
+  ) {
+    const byLegacyId =
+      await MongoOutward.findOne({
+        legacy_id:
+          numeric,
+      }).lean();
+
+    if (byLegacyId) {
+      return byLegacyId;
+    }
+
+    const bySlNo =
+      await MongoOutward.findOne({
+        sl_no:
+          numeric,
+      }).lean();
+
+    if (bySlNo) {
+      return bySlNo;
+    }
+  }
+
+  const byVoucher =
+    await MongoOutward.findOne({
+      $or: [
+        {
+          voucher_no:
+            String(id),
+        },
+        {
+          outward_no:
+            String(id),
+        },
+        {
+          inv_no:
+            String(id),
+        },
+      ],
+    }).lean();
+
+  return byVoucher;
+}
+
+/*
+====================================================
+DISPLAY DECORATION
+====================================================
+*/
+
+async function decorateOutwardDocs(
+  docs
+) {
+  const result = await Promise.all(
+    (docs || []).map(async (doc) => {
+    const masters =
+      await resolveOutwardMasters({
+        employee_id:
+          doc?.employee_id,
+
+        employee_name:
+          doc?.employee_name,
+
+        location_id:
+          doc?.location_id,
+
+        location_name:
+          doc?.location_name,
+
+        warehouse_id:
+          doc?.warehouse_id,
+
+        warehouse_name:
+          doc?.warehouse_name,
+
+        product_id:
+          doc?.product_id,
+
+        product_name:
+          doc?.product_name,
+
+        company_id:
+          doc?.company_id,
+
+        company_name:
+          doc?.company_name,
+
+        company_account_id:
+          doc?.company_account_id,
+
+        company_account_name:
+          doc?.company_account_name,
+      });
+
+    const names =
+      masterNames(
+        masters
+      );
+
+    const outwardNo =
+      doc?.outward_no ||
+      doc?.voucher_no ||
+      doc?.inv_no ||
+      "";
+
+    return {
+      ...doc,
+
+      mongo_id:
+        String(
+          doc?._id
+        ),
+
+      id:
+        doc?.legacy_id ??
+        doc?.sl_no ??
+        String(
+          doc?._id
+        ),
+
+      legacy_id:
+        doc?.legacy_id ??
+        null,
+
+      sl_no:
+        doc?.sl_no ??
+        doc?.legacy_id ??
+        null,
+
+      voucher_no:
+        outwardNo,
+
+      outward_no:
+        doc?.outward_no ||
+        outwardNo,
+
+      date:
+        normalizeDate(
+          doc?.date
+        )
+          ? normalizeDate(
+              doc?.date
+            )
+              .toISOString()
+              .slice(0, 10)
+          : safeText(
+              doc?.date
+            ) || "",
+
+      employee_name:
+        names.employee_name ||
+        doc?.employee_name ||
+        "",
+
+      location_name:
+        names.location_name ||
+        doc?.location_name ||
+        doc?.location ||
+        "",
+
+      warehouse_name:
+        names.warehouse_name ||
+        doc?.warehouse_name ||
+        "",
+
+      product_name:
+        names.product_name ||
+        doc?.product_name ||
+        doc?.product ||
+        "",
+
+      company_name:
+        names.company_name ||
+        doc?.company_name ||
+        doc?.buyer_name ||
+        doc?.buyer ||
+        "",
+
+      company_account_name:
+        names.company_account_name ||
+        doc?.company_account_name ||
+        "",
+
+      party_name:
+        names.company_account_name ||
+        doc?.party_name ||
+        doc?.company_account_name ||
+        "",
+
+      quantity:
+        safeNumber(
+          doc?.quantity ??
+            doc?.weight
+        ),
+
+      weight:
+        safeNumber(
+          doc?.weight ??
+            doc?.quantity
+        ),
+
+      rate:
+        safeNumber(
+          doc?.rate
+        ),
+
+      amount:
+        safeNumber(
+          doc?.amount
+        ),
+    };
+    })
+  );
+
+  return result;
+}
+
+/*
+====================================================
+MIRROR ADJUSTMENT HELPERS
+====================================================
+*/
+
+/*
+ * Existing Adjustment mongoose schema does not contain:
+ * inward_id / outward_id / qty.
+ *
+ * Therefore legacy FIFO adjustment rows are kept in
+ * MirrorRow with table = "adjustment".
+ */
+
+async function getAdjustmentRows() {
+  if (
+    !MirrorRow ||
+    typeof
+      MirrorRow.find !==
+        "function"
+  ) {
+    return [];
+  }
+
+  const rows =
+    await MirrorRow.find({
+      table:
+        "adjustment",
+    })
+      .sort({
+        row_id: 1,
+      })
+      .lean();
+
+  return (
+    rows || []
+  ).map(
+    (row) => ({
+      id:
+        row?.row_id,
+
+      ...(row?.data || {}),
+    })
+  );
+}
+
+async function getAdjustmentsForOutward(
+  outwardId
+) {
+  const rows =
+    await getAdjustmentRows();
+
+  const normalized =
+    normalizeId(
+      outwardId
+    );
+
+  return rows.filter(
+    (row) =>
+      normalizeId(
+        row?.outward_id
+      ) === normalized
+  );
+}
+
+async function getAdjustedQtyForOutward(
+  outwardId
+) {
+  const rows =
+    await getAdjustmentsForOutward(
+      outwardId
+    );
+
+  return rows.reduce(
+    (sum, row) =>
+      sum +
+      safeNumber(
+        row?.qty
+      ),
+    0
+  );
+}
+
+async function getNextAdjustmentMirrorId() {
+  const last =
+    await MirrorRow.findOne({
+      table:
+        "adjustment",
+    })
+      .sort({
+        row_id:
+          -1,
+      })
+      .select({
+        row_id:
+          1,
+      })
+      .lean();
+
+  return (
+    Number(
+      last?.row_id ||
+        0
+    ) + 1
+  );
+}
+
+async function createAdjustmentMirrorRow(
+  payload
+) {
+  const rowId =
+    await getNextAdjustmentMirrorId();
+
+  await MirrorRow.updateOne(
+    {
+      table:
+        "adjustment",
+
+      row_id:
+        rowId,
+    },
+    {
+      $set: {
+        data:
+          payload,
+
+        updated_at:
+          new Date(),
+      },
+    },
+    {
+      upsert:
+        true,
+    }
+  ).exec();
+
+  return rowId;
+}
+
+/*
+====================================================
+AVAILABLE STOCK
+====================================================
+*/
+
+async function getAvailableWarehouseStock({
+  warehouse_id,
+  product_id,
+  outwardId = null,
+}) {
+  if (
+    !warehouse_id ||
+    !product_id
+  ) {
+    return {
+      currentStock: 0,
+      reservedStock: 0,
+      availableStock: 0,
+    };
+  }
+
+  const warehouseCandidates = mixedIdCandidates(warehouse_id);
+  const productCandidates = mixedIdCandidates(product_id);
+
+  if (
+    warehouseCandidates.length === 0 ||
+    productCandidates.length === 0
+  ) {
+    return {
+      currentStock: 0,
+      reservedStock: 0,
+      availableStock: 0,
+    };
+  }
+
+  /*
+   * IMPORTANT STOCK RULE:
+   * Outward entry is only an outward entry/reservation.
+   * It must NOT be subtracted from warehouse available stock.
+   * Actual warehouse stock is represented by Inward.remaining_qty.
+   *
+   * Example:
+   * Inward 100 | Outward 60 | Adjustment 50
+   * Current 100 | Outward Entry 60 | Available 50
+   * Pending adjustment = 10
+   *
+   * Keep the rest of the outward logic unchanged.
+   */
+  const inwardRows = await MongoInward.find({
+    warehouse_id: {
+      $in: warehouseCandidates,
+    },
+    product_id: {
+      $in: productCandidates,
+    },
+  })
+    .select({
+      remaining_qty: 1,
+      weight: 1,
+      quantity: 1,
+      date: 1,
+      legacy_id: 1,
+      shortage_percent: 1,
+      id: 1,
+      sl_no: 1,
+    })
+    .lean();
+
+  // Match the Stock Report formula used on Dashboard / Party Stock:
+  // Available = Inward (Gross) - Shortage - Already Adjusted.
+  // Do not use Inward.remaining_qty here because that can already include
+  // adjustments and would make the Outward Entry stock disagree with the
+  // Stock Report.
+  const adjustmentRows = MirrorRow && typeof MirrorRow.find === "function"
+    ? await MirrorRow.find({ table: "adjustment" }).select({ row_id: 1, data: 1 }).lean()
+    : [];
+  const adjustedByInward = new Map();
+
+  for (const mirrorRow of adjustmentRows || []) {
+    const data = mirrorRow?.data || {};
+    if (String(data?.source_type || "inward").trim().toLowerCase() !== "inward") continue;
+    const inwardId = String(data?.inward_id ?? "").trim();
+    if (!inwardId) continue;
+    const qty = safeNumber(data?.qty ?? data?.quantity);
+    if (!qty) continue;
+    adjustedByInward.set(
+      inwardId,
+      (adjustedByInward.get(inwardId) || 0) + qty
+    );
+  }
+
+  let currentStock = 0;
+  let availableStock = 0;
+
+  for (const row of inwardRows) {
+    const grossQty = safeNumber(
+      row?.weight ?? row?.quantity
+    );
+
+    const shortageQty = Math.max(
+      0,
+      safeNumber(
+        calculateShortageQty(
+          grossQty,
+          1,
+          row?.shortage_percent
+        )
+      )
+    );
+
+    const inwardAliases = [
+      row?._id,
+      row?.legacy_id,
+      row?.id,
+      row?.sl_no,
+    ]
+      .filter((value) => value !== undefined && value !== null && String(value).trim() !== "")
+      .map(String);
+
+    let adjustedQty = 0;
+    for (const alias of inwardAliases) {
+      if (adjustedByInward.has(alias)) {
+        adjustedQty = safeNumber(adjustedByInward.get(alias));
+        break;
+      }
+    }
+
+    currentStock += grossQty;
+    availableStock += Math.max(
+      grossQty - shortageQty - adjustedQty,
+      0
+    );
+  }
+
+  return {
+    currentStock,
+    // Kept for compatibility with the existing API/UI.
+    // Outward entries are NOT deducted here.
+    reservedStock: 0,
+    availableStock: Math.max(availableStock, 0),
+  };
+}
+
+async function validateOutwardStock({
+  warehouse_id,
+  product_id,
+  qty,
+  outwardId = null,
+}) {
+  const stock =
+    await getAvailableWarehouseStock({
+      warehouse_id,
+      product_id,
+      outwardId,
+    });
+
+  const requestedQty =
+    safeNumber(qty);
+
+  if (
+    stock.availableStock <
+    requestedQty
+  ) {
+    return {
+      ok:
+        false,
+
+      error:
+        `Not enough stock in this warehouse. Available stock is ${stock.availableStock.toFixed(
+          2
+        )}.`,
+
+      stock,
+    };
+  }
+
+  return {
+    ok:
+      true,
+
+    stock,
+  };
+}
+
+/*
+====================================================
+TEMPLATE ROUTES
+====================================================
+*/
+
+router.options(
+  "/template-xlsx",
+  (req, res) =>
+    res.sendStatus(204)
+);
+
+router.options(
+  "/import-xlsx",
+  (req, res) =>
+    res.sendStatus(204)
+);
+
+router.get(
+  "/template-xlsx",
+  (req, res) => {
+    if (
+      !userHasPermission(
+        req.user,
+        "outward.export"
+      )
+    ) {
+      return res
+        .status(403)
+        .json({
+          error:
+            "You do not have permission to download outward template",
+        });
+    }
+
+    const workbook =
+      XLSX.utils.book_new();
+
+    const ws =
+      XLSX.utils.json_to_sheet(
+        buildOutwardTemplateRows()
+      );
+
+    XLSX.utils.book_append_sheet(
+      workbook,
+      ws,
+      "Outward Template"
+    );
+
+    const buffer =
+      XLSX.write(
+        workbook,
+        {
+          bookType:
+            "xlsx",
+
+          type:
+            "buffer",
+        }
+      );
+
+    res.setHeader(
+      "Content-Disposition",
+      'attachment; filename="outward-template.xlsx"'
+    );
+
+    res.setHeader(
+      "Content-Type",
+      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    );
+
+    return res.send(
+      buffer
+    );
+  }
+);
+
+/*
+====================================================
+XLSX IMPORT
+====================================================
+*/
+
+async function importOutwardRows(
+  rows,
+  req,
+  res
+) {
+  if (!ensureMongo(res)) {
+    return;
+  }
+
+  let inserted =
+    0;
+
+  let skipped =
+    0;
+
+  const errors =
+    [];
+
+  let nextSl =
+    await getNextOutwardSlNo();
+
+  for (
+    let index = 0;
+    index < rows.length;
+    index += 1
+  ) {
+    const row =
+      rows[index] || {};
+
+    const date =
+      normalizeDate(
+        row?.date
+      );
+
+    const qty =
+      safeNumber(
+        row?.quantity ??
+          row?.weight
+      );
+
+    const rate =
+      safeNumber(
+        row?.rate
+      );
+
+    const amount =
+      qty * rate;
+
+    const selfLoading =
+      normalizeSelfLoading(
+        row?.self_loading
+      );
+
+    const missing =
+      [];
+
+    if (!date) {
+      missing.push(
+        "date"
+      );
+    }
+
+    const masters =
+      await resolveOutwardMasters(
+        row
+      );
+
+    if (
+      !masters.product
+    ) {
+      missing.push(
+        "product"
+      );
+    }
+
+    if (
+      !masters.company
+    ) {
+      missing.push(
+        "company"
+      );
+    }
+
+    if (
+      !selfLoading &&
+      !masters.warehouse
+    ) {
+      missing.push(
+        "warehouse"
+      );
+    }
+
+    if (
+      missing.length
+    ) {
+      skipped +=
+        1;
+
+      errors.push({
+        row:
+          index + 2,
+
+        error:
+          `Missing or unmatched required field(s): ${missing.join(
+            ", "
+          )}`,
+
+        // Return the interpreted row values so the upload screen can show
+        // exactly which Product/Company/Warehouse value could not be matched.
+        sample_row: {
+          product: row?.product_name || row?.product_id || "",
+          company: row?.company_name || row?.company_id || "",
+          warehouse: row?.warehouse_name || row?.warehouse_id || "",
+        },
+      });
+
+      continue;
+    }
+
+    const warehouseId =
+      selfLoading ===
+      "Yes"
+        ? null
+        : masters.warehouse
+            ?._id;
+
+    if (
+      warehouseId &&
+      !canAccessWarehouse(
+        req.user,
+        warehouseId
+      )
+    ) {
+      skipped +=
+        1;
+
+      errors.push({
+        row:
+          index + 2,
+
+        error:
+          "You can only import entries for your assigned warehouse",
+      });
+
+      continue;
+    }
+
+    const nextVoucher =
+      formatOutwardVoucher(
+        nextSl
+      );
+
+    const names =
+      masterNames(
+        masters
+      );
+
+    try {
+      await MongoOutward.create({
+        legacy_id:
+          nextSl,
+
+        sl_no:
+          nextSl,
+
+        voucher_no:
+          nextVoucher,
+
+        outward_no:
+          nextVoucher,
+
+        date,
+
+        employee_id:
+          masters.employee?._id ??
+          null,
+
+        location_id:
+          masters.location?._id ??
+          null,
+
+        warehouse_id:
+          warehouseId,
+
+        product_id:
+          masters.product?._id ??
+          null,
+
+        company_id:
+          masters.company?._id ??
+          null,
+
+        company_account_id:
+          masters.companyAccount?._id ??
+          null,
+
+        ...names,
+
+        buyer:
+          safeText(
+            row?.buyer_name
+          ) || "",
+
+        buyer_name:
+          safeText(
+            row?.buyer_name
+          ) || "",
+
+        consignee_name:
+          safeText(
+            row?.consignee_name
+          ) || "",
+
+        lorry_no:
+          safeText(
+            row?.lorry_no
+          ) || "",
+
+        transporter:
+          safeText(
+            row?.lorry_no
+          ) || "",
+
+        product:
+          names.product_name ||
+          "",
+
+        quantity:
+          qty,
+
+        weight:
+          qty,
+
+        rate,
+
+        amount,
+
+        inv_no:
+          safeText(
+            row?.inv_no
+          ) || "",
+
+        self_loading:
+          selfLoading,
+
+        status:
+          "Pending",
+
+        narration:
+          "",
+
+        created_at:
+          new Date(),
+
+        updated_at:
+          new Date(),
+      });
+
+      inserted +=
+        1;
+
+      nextSl +=
+        1;
+    } catch (error) {
+      skipped +=
+        1;
+
+      errors.push({
+        row:
+          index + 2,
+
+        error:
+          error.message,
+      });
+    }
+  }
+
+  return res.json({
+    total:
+      rows.length,
+
+    inserted,
+
+    skipped,
+
+    errors,
+
+    source:
+      "mongodb",
+  });
+}
+
+router.post(
+  "/import-xlsx",
+  upload.single("file"),
+  async (req, res) => {
+    if (
+      !userHasPermission(
+        req.user,
+        "outward.import"
+      )
+    ) {
+      return res
+        .status(403)
+        .json({
+          error:
+            "You do not have permission to import outward entries",
+        });
+    }
+
+    if (
+      !req.file?.buffer
+    ) {
+      return res
+        .status(400)
+        .json({
+          error:
+            "XLSX file is required",
+        });
+    }
+
+    if (!ensureMongo(res)) {
+      return;
+    }
+
+    let rows =
+      [];
+
+    try {
+      const workbook =
+        XLSX.read(
+          req.file.buffer,
+          {
+            type:
+              "buffer",
+
+            cellDates:
+              true,
+          }
+        );
+
+      const firstSheet =
+        workbook
+          .SheetNames?.[0];
+
+      if (!firstSheet) {
+        return res
+          .status(400)
+          .json({
+            error:
+              "No sheet found in file",
+          });
+      }
+
+      rows =
+        XLSX.utils.sheet_to_json(
+          workbook.Sheets[
+            firstSheet
+          ],
+          {
+            defval:
+              "",
+          }
+        );
+    } catch (error) {
+      return res
+        .status(400)
+        .json({
+          error:
+            "Invalid XLSX file",
+        });
+    }
+
+    const normalized =
+      (
+        Array.isArray(
+          rows
+        )
+          ? rows
+          : []
+      ).map(
+        normalizeOutwardImportRow
+      );
+
+    if (
+      normalized.length ===
+      0
+    ) {
+      return res
+        .status(400)
+        .json({
+          error:
+            "No rows found in XLSX",
+        });
+    }
+
+    return importOutwardRows(
+      normalized,
+      req,
+      res
+    );
+  }
+);
+
+/*
+====================================================
+AVAILABLE STOCK
+====================================================
+*/
+
+router.get(
+  "/available-stock",
+  async (req, res) => {
+    if (
+      !userHasPermission(
+        req.user,
+        "outward.view"
+      ) &&
+      !userHasPermission(
+        req.user,
+        "outward.create"
+      ) &&
+      !userHasPermission(
+        req.user,
+        "outward.edit"
+      )
+    ) {
+      return res
+        .status(403)
+        .json({
+          error:
+            "You do not have permission to view outward stock",
+        });
+    }
+
+    if (!ensureMongo(res)) {
+      return;
+    }
+
+    let warehouseId =
+      req.query
+        .warehouse_id;
+
+    let productId =
+      req.query
+        .product_id;
+
+    const outwardId =
+      req.query
+        .outward_id ||
+      null;
+
+    const masters =
+      await resolveOutwardMasters({
+        warehouse_id:
+          warehouseId,
+
+        product_id:
+          productId,
+      });
+
+    warehouseId =
+      masters.warehouse?._id ||
+      warehouseId;
+
+    productId =
+      masters.product?._id ||
+      productId;
+
+    if (
+      !warehouseId ||
+      !productId
+    ) {
+      return res.json({
+        currentStock:
+          0,
+
+        reservedStock:
+          0,
+
+        availableStock:
+          0,
+      });
+    }
+
+    if (
+      !canAccessWarehouse(
+        req.user,
+        warehouseId
+      )
+    ) {
+      return res
+        .status(403)
+        .json({
+          error:
+            "You can only view stock for your assigned warehouse",
+        });
+    }
+
+    try {
+      const stock =
+        await getAvailableWarehouseStock({
+          warehouse_id:
+            warehouseId,
+
+          product_id:
+            productId,
+
+          outwardId,
+        });
+
+      return res.json(
+        stock
+      );
+    } catch (error) {
+      console.error(
+        "Mongo outward stock calculation failed:",
+        error
+      );
+
+      return res
+        .status(500)
+        .json({
+          error:
+            error.message,
+        });
+    }
+  }
+);
+
+/*
+====================================================
+PENDING OUTWARD
+====================================================
+*/
+
+router.get(
+  "/pending",
+  async (req, res) => {
+    if (
+      !userHasPermission(
+        req.user,
+        "outward.view"
+      )
+    ) {
+      return res
+        .status(403)
+        .json({
+          error:
+            "You do not have permission to view outward entries",
+        });
+    }
+
+    if (!ensureMongo(res)) {
+      return;
+    }
+
+    try {
+      const docs =
+        await MongoOutward.find({
+          status: {
+            $in: [
+              "Pending",
+              "Partial",
+            ],
+          },
+        })
+          .sort({
+            created_at:
+              -1,
+
+            _id:
+              -1,
+          })
+          .lean();
+
+      const rows =
+        await decorateOutwardDocs(
+          docs
+        );
+
+      const filtered =
+        rows.filter(
+          (row) =>
+            canAccessOutwardRow(
+              req.user,
+              row
+            )
+        );
+
+      return res.json(
+        filtered
+      );
+    } catch (error) {
+      console.error(
+        "Mongo outward pending fetch failed:",
+        error
+      );
+
+      return res
+        .status(500)
+        .json({
+          error:
+            error.message,
+        });
+    }
+  }
+);
+
+/*
+====================================================
+STOCK JOURNAL HELPER
+====================================================
+
+This is an additive journal only. It does NOT change the existing FIFO,
+remaining_qty, validation, or outward status logic.
+*/
+async function createStockJournalForAllocation({ outward, inward, qty }) {
+  const quantity = safeNumber(qty);
+  if (!outward || !inward || quantity <= 0) return null;
+
+  const costRate = safeNumber(inward?.rate);
+  const saleRate = safeNumber(outward?.rate);
+  const costAmount = quantity * costRate;
+  const saleAmount = quantity * saleRate;
+  const profitLoss = saleAmount - costAmount;
+
+  const outwardId = outward?.legacy_id ?? outward?.sl_no ?? String(outward?._id);
+  const inwardId = inward?.legacy_id ?? inward?.sl_no ?? String(inward?._id);
+
+  const fromPartyId = inward?.company_account_id ?? null;
+  const fromPartyName =
+    safeText(inward?.company_account_name) ||
+    safeText(inward?.company_name) ||
+    safeText(inward?.party_name) ||
+    "";
+  const toPartyId = outward?.buyer_id ?? null;
+  const toPartyName = safeText(outward?.buyer_name) || safeText(outward?.buyer) || "";
+
+  try {
+    return await MongoStockJournal.findOneAndUpdate(
+      {
+        outward_id: outwardId,
+        inward_id: inwardId,
+        movement_type: "PARTY_STOCK_TRANSFER",
+      },
+      {
+        $setOnInsert: {
+          journal_no: `SJ-${outwardId}-${inwardId}`,
+          movement_type: "PARTY_STOCK_TRANSFER",
+          date: outward?.date || new Date(),
+          outward_id: outwardId,
+          outward_voucher_no: outward?.voucher_no || outward?.outward_no || "",
+          inward_id: inwardId,
+          inward_voucher_no: inward?.inward_no || inward?.voucher_no || "",
+          warehouse_id: outward?.warehouse_id ?? inward?.warehouse_id ?? null,
+          warehouse_name: outward?.warehouse_name || inward?.warehouse_name || "",
+          location_id: outward?.location_id ?? inward?.location_id ?? null,
+          location_name: outward?.location_name || inward?.location_name || "",
+          product_id: outward?.product_id ?? inward?.product_id ?? null,
+          product_name: outward?.product_name || inward?.product_name || outward?.product || inward?.product || "",
+          from_party_id: fromPartyId,
+          from_party_name: fromPartyName,
+          to_party_id: toPartyId,
+          to_party_name: toPartyName,
+          qty: quantity,
+          cost_rate: costRate,
+          cost_amount: costAmount,
+          sale_rate: saleRate,
+          sale_amount: saleAmount,
+          profit_loss: profitLoss,
+          lorry_no: safeText(outward?.lorry_no) || "",
+          employee_id: outward?.employee_id ?? null,
+          employee_name: outward?.employee_name || "",
+          company_id: outward?.company_id ?? null,
+          company_name: outward?.company_name || "",
+          buyer_name: outward?.buyer_name || "",
+          consignee_name: outward?.consignee_name || "",
+          created_at: new Date(),
+          updated_at: new Date(),
+        },
+      },
+      { upsert: true, new: true }
+    ).lean();
+  } catch (error) {
+    // A journal failure must never change the existing stock/FIFO outcome.
+    console.error("Stock journal create failed:", error);
+    return null;
+  }
+}
+
+/*
+====================================================
+FIFO COMPLETE
+====================================================
+*/
+
+router.put(
+  "/complete/:id",
+  async (req, res) => {
+    if (
+      !userHasPermission(
+        req.user,
+        "outward.edit"
+      )
+    ) {
+      return res
+        .status(403)
+        .json({
+          error:
+            "You do not have permission to complete outward entries",
+        });
+    }
+
+    if (!ensureMongo(res)) {
+      return;
+    }
+
+    const outward =
+      await findMongoOutward(
+        req.params.id
+      );
+
+    if (!outward) {
+      return res
+        .status(404)
+        .json({
+          error:
+            "Outward not found",
+        });
+    }
+
+    if (
+      !canAccessOutwardRow(
+        req.user,
+        outward
+      )
+    ) {
+      return res
+        .status(403)
+        .json({
+          error:
+            "You can only update entries for your assigned warehouse",
+        });
+    }
+
+    const requestedQty =
+      safeNumber(
+        outward?.quantity ??
+          outward?.weight
+      );
+
+    const currentAdjustedQty =
+      await getAdjustedQtyForOutward(
+        outward?.legacy_id ??
+          outward?._id
+      );
+
+    let remaining =
+      Math.max(
+        requestedQty -
+          currentAdjustedQty,
+        0
+      );
+
+    if (
+      remaining <= 0
+    ) {
+      await MongoOutward.updateOne(
+        {
+          _id:
+            outward._id,
+        },
+        {
+          $set: {
+            status:
+              "Completed",
+
+            updated_at:
+              new Date(),
+          },
+        }
+      );
+
+      return res.json({
+        message:
+          "FIFO Adjustment Done",
+
+        remaining_qty:
+          0,
+
+        status:
+          "Completed",
+
+        source:
+          "mongodb",
+      });
+    }
+
+    const warehouseId =
+      normalizeId(
+        outward.warehouse_id
+      );
+
+    const productId =
+      normalizeId(
+        outward.product_id
+      );
+
+    if (
+      !warehouseId ||
+      !productId
+    ) {
+      return res
+        .status(400)
+        .json({
+          error:
+            "Warehouse or product is missing from outward entry",
+        });
+    }
+
+    /*
+     * FIFO:
+     * Oldest inward first.
+     */
+    const inwardFilter = {
+      warehouse_id:
+        warehouseId,
+
+      product_id:
+        productId,
+    };
+
+    const inwardRows =
+      await MongoInward.find(
+        inwardFilter
+      )
+        .sort({
+          date:
+            1,
+
+          sl_no:
+            1,
+
+          legacy_id:
+            1,
+
+          _id:
+            1,
+        })
+        .lean();
+
+    for (
+      const inward of
+        inwardRows
+    ) {
+      if (
+        remaining <= 0
+      ) {
+        break;
+      }
+
+      const available =
+        safeNumber(
+          inward?.remaining_qty ??
+            inward?.weight ??
+            inward?.quantity
+        );
+
+      if (
+        available <= 0
+      ) {
+        continue;
+      }
+
+      const useQty =
+        Math.min(
+          available,
+          remaining
+        );
+
+      const inwardQuery =
+        inward?._id
+          ? {
+              _id:
+                inward._id,
+            }
+          : {
+              legacy_id:
+                inward.legacy_id,
+            };
+
+      /*
+       * Atomic-ish conditional update:
+       * only consume if remaining_qty is still enough.
+       */
+      const updateResult =
+        await MongoInward.updateOne(
+          inwardQuery,
+          {
+            $set: {
+              updated_at:
+                new Date(),
+            },
+
+            $inc: {
+              remaining_qty:
+                -useQty,
+            },
+          }
+        );
+
+      if (
+        !updateResult?.matchedCount
+      ) {
+        continue;
+      }
+
+    const adjustmentOutwardId =
+  outward?.legacy_id ??
+  outward?.sl_no ??
+  String(
+    outward?._id
+  );
+
+const adjustmentInwardId =
+  inward?.legacy_id ??
+  inward?.sl_no ??
+  String(
+    inward?._id
+  );
+
+      await createAdjustmentMirrorRow({
+        outward_id:
+          adjustmentOutwardId,
+
+        inward_id:
+          adjustmentInwardId,
+
+        qty:
+          useQty,
+
+        created_at:
+          new Date(),
+
+        date:
+          new Date(),
+      });
+
+      // Additive journal only. Existing FIFO/stock logic remains unchanged.
+      await createStockJournalForAllocation({
+        outward,
+        inward,
+        qty: useQty,
+      });
+
+      remaining -=
+        useQty;
+    }
+
+    const status =
+      remaining > 0
+        ? "Partial"
+        : "Completed";
+
+    await MongoOutward.updateOne(
+      {
+        _id:
+          outward._id,
+      },
+      {
+        $set: {
+          status,
+
+          updated_at:
+            new Date(),
+        },
+      }
+    );
+
+    return res.json({
+      message:
+        "FIFO Adjustment Done",
+
+      remaining_qty:
+        remaining,
+
+      status,
+
+      source:
+        "mongodb",
+    });
+  }
+);
+
+/*
+====================================================
+OUTWARD LIST
+====================================================
+*/
+
+router.get(
+  "/",
+  async (req, res) => {
+    if (
+      !userHasPermission(
+        req.user,
+        "outward.view"
+      )
+    ) {
+      return res
+        .status(403)
+        .json({
+          error:
+            "You do not have permission to view outward entries",
+        });
+    }
+
+    if (!ensureMongo(res)) {
+      return;
+    }
+
+    try {
+      const docs =
+        await MongoOutward.find({})
+          .sort({
+            created_at:
+              -1,
+
+            date:
+              -1,
+
+            legacy_id:
+              -1,
+
+            _id:
+              -1,
+          })
+          .lean();
+
+      const rows =
+        await decorateOutwardDocs(
+          docs
+        );
+
+      const filtered =
+        rows.filter(
+          (row) =>
+            canAccessOutwardRow(
+              req.user,
+              row
+            )
+        );
+
+      return res.json(
+        filtered
+      );
+    } catch (error) {
+      console.error(
+        "Mongo outward fetch failed:",
+        error
+      );
+
+      return res
+        .status(500)
+        .json({
+          error:
+            error.message,
+        });
+    }
+  }
+);
+
+/*
+====================================================
+CREATE OUTWARD
+====================================================
+*/
+
+router.post(
+  "/",
+  async (req, res) => {
+    if (
+      !userHasPermission(
+        req.user,
+        "outward.create"
+      )
+    ) {
+      return res
+        .status(403)
+        .json({
+          error:
+            "You do not have permission to create outward entries",
+        });
+    }
+
+    if (!ensureMongo(res)) {
+      return;
+    }
+
+    const {
+      date,
+      employee_id,
+      employee_name,
+      location_id,
+      location_name,
+      warehouse_id,
+      warehouse_name,
+      product_id,
+      product_name,
+      company_id,
+      company_name,
+      company_account_id,
+      company_account_name,
+      buyer_name,
+      consignee_name,
+      lorry_no,
+      weight,
+      quantity,
+      rate,
+      inv_no,
+      self_loading,
+      narration,
+    } = req.body;
+
+    const normalizedDate =
+      normalizeDate(
+        date
+      );
+
+    if (
+      !normalizedDate
+    ) {
+      return res
+        .status(400)
+        .json({
+          error:
+            "Valid date is required",
+        });
+    }
+
+    const qty =
+      safeNumber(
+        quantity ??
+          weight
+      );
+
+    const rateValue =
+      safeNumber(
+        rate
+      );
+
+    const amount =
+      qty *
+      rateValue;
+
+    const selfLoading =
+      normalizeSelfLoading(
+        self_loading
+      );
+
+    try {
+      const masters =
+        await resolveOutwardMasters({
+          employee_id,
+          employee_name,
+
+          location_id,
+          location_name,
+
+          warehouse_id,
+          warehouse_name,
+
+          product_id,
+          product_name,
+
+          company_id,
+          company_name,
+
+          company_account_id,
+          company_account_name,
+        });
+
+      if (
+        !masters.product
+      ) {
+        return res
+          .status(400)
+          .json({
+            error:
+              "Product could not be resolved. Please select a valid product.",
+          });
+      }
+
+      if (
+        !masters.company
+      ) {
+        return res
+          .status(400)
+          .json({
+            error:
+              "Company could not be resolved. Please select a valid company.",
+          });
+      }
+
+      /*
+       * Self-loading does not require a warehouse.
+       */
+      const normalizedWarehouseId =
+        selfLoading === "Yes"
+          ? null
+          : masters.warehouse?._id ||
+            warehouse_id;
+
+      if (
+        selfLoading !== "Yes" &&
+        !normalizedWarehouseId
+      ) {
+        return res
+          .status(400)
+          .json({
+            error:
+              "Warehouse could not be resolved. Please select a valid warehouse.",
+          });
+      }
+
+      if (
+        normalizedWarehouseId &&
+        !canAccessWarehouse(
+          req.user,
+          normalizedWarehouseId
+        )
+      ) {
+        return res
+          .status(403)
+          .json({
+            error:
+              "You can only create entries for your assigned warehouse",
+          });
+      }
+
+      /*
+       * Validate stock only for normal warehouse outward.
+       */
+      if (
+        normalizedWarehouseId
+      ) {
+        const stockValidation =
+          await validateOutwardStock({
+            warehouse_id:
+              normalizedWarehouseId,
+
+            product_id:
+              masters.product?._id ||
+              product_id,
+
+            qty,
+          });
+
+        if (
+          !stockValidation.ok
+        ) {
+          return res
+            .status(400)
+            .json({
+              error:
+                stockValidation.error,
+
+              stock:
+                stockValidation.stock,
+            });
+        }
+      }
+
+      const nextSl =
+        await getNextOutwardSlNo();
+
+      const voucherNo =
+        formatOutwardVoucher(
+          nextSl
+        );
+
+      const names =
+        masterNames(
+          masters
+        );
+
+      const doc =
+        await MongoOutward.create({
+          legacy_id:
+            nextSl,
+
+          sl_no:
+            nextSl,
+
+          voucher_no:
+            voucherNo,
+
+          outward_no:
+            voucherNo,
+
+          date:
+            normalizedDate,
+
+          employee_id:
+            masters.employee?._id ??
+            null,
+
+          location_id:
+            masters.location?._id ??
+            null,
+
+          warehouse_id:
+            normalizedWarehouseId,
+
+          product_id:
+            masters.product?._id ??
+            product_id ??
+            null,
+
+          company_id:
+            masters.company?._id ??
+            company_id ??
+            null,
+
+          company_account_id:
+            masters.companyAccount?._id ??
+            null,
+
+          ...names,
+
+          buyer:
+            safeText(
+              buyer_name
+            ) || "",
+
+          buyer_name:
+            safeText(
+              buyer_name
+            ) || "",
+
+          consignee_name:
+            safeText(
+              consignee_name
+            ) || "",
+
+          product:
+            names.product_name ||
+            "",
+
+          quantity:
+            qty,
+
+          weight:
+            safeNumber(
+              weight
+            ) || qty,
+
+          rate:
+            rateValue,
+
+          amount,
+
+          lorry_no:
+            safeText(
+              lorry_no
+            ) || "",
+
+          transporter:
+            safeText(
+              lorry_no
+            ) || "",
+
+          inv_no:
+            safeText(
+              inv_no
+            ) || "",
+
+          self_loading:
+            selfLoading,
+
+          status:
+            "Pending",
+
+          narration:
+            safeText(
+              narration
+            ) || "",
+
+          created_at:
+            new Date(),
+
+          updated_at:
+            new Date(),
+        });
+
+      return res.json({
+        id:
+          doc.legacy_id ??
+          String(
+            doc._id
+          ),
+
+        mongo_id:
+          String(
+            doc._id
+          ),
+
+        sl_no:
+          doc.sl_no,
+
+        voucher_no:
+          doc.voucher_no,
+
+        source:
+          "mongodb",
+      });
+    } catch (error) {
+      console.error(
+        "Mongo outward create failed:",
+        error
+      );
+
+      return res
+        .status(500)
+        .json({
+          error:
+            error.message,
+        });
+    }
+  }
+);
+
+/*
+====================================================
+EDIT OUTWARD
+====================================================
+*/
+
+router.put(
+  "/:id",
+  async (req, res) => {
+    if (
+      !userHasPermission(
+        req.user,
+        "outward.edit"
+      )
+    ) {
+      return res
+        .status(403)
+        .json({
+          error:
+            "You do not have permission to edit outward entries",
+        });
+    }
+
+    if (!ensureMongo(res)) {
+      return;
+    }
+
+    const existing =
+      await findMongoOutward(
+        req.params.id
+      );
+
+    if (!existing) {
+      return res
+        .status(404)
+        .json({
+          error:
+            "Outward not found",
+        });
+    }
+
+    if (
+      !canAccessOutwardRow(
+        req.user,
+        existing
+      )
+    ) {
+      return res
+        .status(403)
+        .json({
+          error:
+            "You can only edit entries for your assigned warehouse",
+        });
+    }
+
+    const {
+      date,
+      employee_id,
+      employee_name,
+      location_id,
+      location_name,
+      warehouse_id,
+      warehouse_name,
+      product_id,
+      product_name,
+      company_id,
+      company_name,
+      company_account_id,
+      company_account_name,
+      buyer_name,
+      consignee_name,
+      lorry_no,
+      weight,
+      quantity,
+      rate,
+      inv_no,
+      self_loading,
+      narration,
+    } = req.body;
+
+    const normalizedDate =
+      normalizeDate(
+        date
+      );
+
+    if (
+      !normalizedDate
+    ) {
+      return res
+        .status(400)
+        .json({
+          error:
+            "Valid date is required",
+        });
+    }
+
+    const qty =
+      safeNumber(
+        quantity ??
+          weight
+      );
+
+    const rateValue =
+      safeNumber(
+        rate
+      );
+
+    const amount =
+      qty *
+      rateValue;
+
+    const selfLoading =
+      normalizeSelfLoading(
+        self_loading
+      );
+
+    try {
+      const masters =
+        await resolveOutwardMasters({
+          employee_id,
+          employee_name,
+
+          location_id,
+          location_name,
+
+          warehouse_id,
+          warehouse_name,
+
+          product_id,
+          product_name,
+
+          company_id,
+          company_name,
+
+          company_account_id,
+          company_account_name,
+        });
+
+      if (
+        !masters.product
+      ) {
+        return res
+          .status(400)
+          .json({
+            error:
+              "Product could not be resolved",
+          });
+      }
+
+      if (
+        !masters.company
+      ) {
+        return res
+          .status(400)
+          .json({
+            error:
+              "Company could not be resolved",
+          });
+      }
+
+      const normalizedWarehouseId =
+        selfLoading === "Yes"
+          ? null
+          : masters.warehouse?._id ||
+            warehouse_id;
+
+      if (
+        selfLoading !== "Yes" &&
+        !normalizedWarehouseId
+      ) {
+        return res
+          .status(400)
+          .json({
+            error:
+              "Warehouse could not be resolved",
+          });
+      }
+
+      if (
+        normalizedWarehouseId &&
+        !canAccessWarehouse(
+          req.user,
+          normalizedWarehouseId
+        )
+      ) {
+        return res
+          .status(403)
+          .json({
+            error:
+              "You can only edit entries for your assigned warehouse",
+          });
+      }
+
+      /*
+       * If changing an existing Pending outward,
+       * validate the newly requested stock.
+       *
+       * Completed/Partial outward should not silently
+       * rewrite its quantity if FIFO adjustment exists.
+       */
+      const adjustedQty =
+        await getAdjustedQtyForOutward(
+          existing?.legacy_id ??
+            existing?.sl_no ??
+            existing?._id
+        );
+
+      if (
+        adjustedQty > 0 &&
+        qty <
+          adjustedQty
+      ) {
+        return res
+          .status(400)
+          .json({
+            error:
+              `Cannot reduce quantity below already adjusted quantity (${adjustedQty}).`,
+          });
+      }
+
+      if (
+        normalizedWarehouseId
+      ) {
+        const stockValidation =
+          await validateOutwardStock({
+            warehouse_id:
+              normalizedWarehouseId,
+
+            product_id:
+              masters.product?._id ||
+              product_id,
+
+            qty:
+              Math.max(
+                qty -
+                  adjustedQty,
+                0
+              ),
+
+            outwardId:
+              existing?.legacy_id ??
+              existing?._id,
+          });
+
+        if (
+          !stockValidation.ok
+        ) {
+          return res
+            .status(400)
+            .json({
+              error:
+                stockValidation.error,
+
+              stock:
+                stockValidation.stock,
+            });
+        }
+      }
+
+      const names =
+        masterNames(
+          masters
+        );
+
+      const updated =
+        await MongoOutward.findByIdAndUpdate(
+          existing._id,
+          {
+            $set: {
+              date:
+                normalizedDate,
+
+              employee_id:
+                masters.employee?._id ??
+                null,
+
+              location_id:
+                masters.location?._id ??
+                null,
+
+              warehouse_id:
+                normalizedWarehouseId,
+
+              product_id:
+                masters.product?._id ??
+                product_id ??
+                null,
+
+              company_id:
+                masters.company?._id ??
+                company_id ??
+                null,
+
+              company_account_id:
+                masters.companyAccount?._id ??
+                null,
+
+              ...names,
+
+              buyer:
+                safeText(
+                  buyer_name
+                ) || "",
+
+              buyer_name:
+                safeText(
+                  buyer_name
+                ) || "",
+
+              consignee_name:
+                safeText(
+                  consignee_name
+                ) || "",
+
+              product:
+                names.product_name ||
+                "",
+
+              quantity:
+                qty,
+
+              weight:
+                safeNumber(
+                  weight
+                ) || qty,
+
+              rate:
+                rateValue,
+
+              amount,
+
+              lorry_no:
+                safeText(
+                  lorry_no
+                ) || "",
+
+              transporter:
+                safeText(
+                  lorry_no
+                ) || "",
+
+              inv_no:
+                safeText(
+                  inv_no
+                ) || "",
+
+              self_loading:
+                selfLoading,
+
+              status:
+                "Pending",
+
+              narration:
+                safeText(
+                  narration
+                ) || "",
+
+              updated_at:
+                new Date(),
+            },
+          },
+          {
+            new:
+              true,
+          }
+        ).lean();
+
+      return res.json({
+        updated:
+          1,
+
+        id:
+          updated?.legacy_id ??
+          String(
+            updated?._id
+          ),
+
+        source:
+          "mongodb",
+      });
+    } catch (error) {
+      console.error(
+        "Mongo outward update failed:",
+        error
+      );
+
+      return res
+        .status(500)
+        .json({
+          error:
+            error.message,
+        });
+    }
+  }
+);
+
+/*
+====================================================
+DELETE OUTWARD
+====================================================
+*/
+
+router.delete(
+  "/:id",
+  async (req, res) => {
+    if (
+      !userHasPermission(
+        req.user,
+        "outward.delete"
+      )
+    ) {
+      return res
+        .status(403)
+        .json({
+          error:
+            "You do not have permission to delete outward entries",
+        });
+    }
+
+    if (!ensureMongo(res)) {
+      return;
+    }
+
+    const existing =
+      await findMongoOutward(
+        req.params.id
+      );
+
+    if (!existing) {
+      return res
+        .status(404)
+        .json({
+          error:
+            "Outward not found",
+        });
+    }
+
+    if (
+      !canAccessOutwardRow(
+        req.user,
+        existing
+      )
+    ) {
+      return res
+        .status(403)
+        .json({
+          error:
+            "You can only delete entries for your assigned warehouse",
+        });
+    }
+
+    const adjustedQty =
+      await getAdjustedQtyForOutward(
+        existing?.legacy_id ??
+          existing?.sl_no ??
+          existing?._id
+      );
+
+    if (
+      adjustedQty > 0
+    ) {
+      return res
+        .status(400)
+        .json({
+          error:
+            "Cannot delete. Adjustment exists.",
+        });
+    }
+
+    try {
+      const result =
+        await MongoOutward.deleteOne({
+          _id:
+            existing._id,
+        });
+
+      return res.json({
+        deleted:
+          Number(
+            result.deletedCount ||
+              0
+          ),
+
+        deleted_from:
+          "mongodb",
+      });
+    } catch (error) {
+      console.error(
+        "Mongo outward delete failed:",
+        error
+      );
+
+      return res
+        .status(500)
+        .json({
+          error:
+            error.message,
+        });
+    }
+  }
+);
+
+/*
+====================================================
+MANUAL PARTY STOCK JOURNAL ENTRY
+====================================================
+
+This is a separate additive flow. Existing normal Outward/FIFO logic is not
+changed. A Journal Entry moves actual remaining stock ownership from one
+Inward party account to another party account in the same warehouse/product.
+*/
+router.get("/journal-source-accounts", async (req, res) => {
+  if (!userHasPermission(req.user, "outward.view") && !userHasPermission(req.user, "outward.create")) {
+    return res.status(403).json({ error: "You do not have permission to view journal source stock" });
+  }
+  if (!ensureMongo(res)) return;
+
+  try {
+    const { warehouse_id, product_id } = req.query;
+    if (!warehouse_id || !product_id) return res.json({ rows: [] });
+
+    if (!canAccessWarehouse(req.user, warehouse_id)) {
+      return res.status(403).json({ error: "You can only access your assigned warehouse" });
+    }
+
+    const rows = await MongoInward.find({
+      warehouse_id: { $in: mixedIdCandidates(warehouse_id) },
+      product_id: { $in: mixedIdCandidates(product_id) },
+      remaining_qty: { $gt: 0 },
+      company_account_id: { $exists: true, $ne: null },
+    })
+      .select({
+        company_account_id: 1,
+        company_account_name: 1,
+        company_id: 1,
+        company_name: 1,
+        remaining_qty: 1,
+      })
+      .sort({ company_account_name: 1, _id: 1 })
+      .lean();
+
+    const grouped = new Map();
+    for (const row of rows) {
+      const id = normalizeId(row.company_account_id);
+      if (!id) continue;
+      const existing = grouped.get(id);
+      const qty = safeNumber(row.remaining_qty);
+      if (existing) {
+        existing.available_qty += qty;
+      } else {
+        grouped.set(id, {
+          id,
+          account_name: safeText(row.company_account_name) || `Account ${id}`,
+          company_id: row.company_id ?? null,
+          company_name: safeText(row.company_name) || "",
+          available_qty: qty,
+        });
+      }
+    }
+
+    return res.json({
+      rows: Array.from(grouped.values()).map((row) => ({
+        ...row,
+        available_qty: Number(row.available_qty.toFixed(4)),
+      })),
+    });
+  } catch (error) {
+    console.error("Journal source accounts failed:", error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+async function createManualJournalEntry({
+  date,
+  employee_id,
+  location_id,
+  warehouse_id,
+  product_id,
+  from_account_id,
+  to_account_id,
+  quantity,
+  rate,
+  lorry_no,
+  narration,
+  session,
+  journalNo,
+}) {
+  const qtyRequested = safeNumber(quantity);
+  const toCandidates = mixedIdCandidates(to_account_id);
+  const fromCandidates = mixedIdCandidates(from_account_id);
+  const warehouseCandidates = mixedIdCandidates(warehouse_id);
+  const productCandidates = mixedIdCandidates(product_id);
+
+  const toAccount = await MongoCompanyAccount.findOne({ _id: { $in: toCandidates } }).session(session).lean();
+  if (!toAccount) throw new Error("TO Party Account not found");
+  const toCompany = toAccount.company_id
+    ? await MongoCompany.findById(toAccount.company_id).session(session).lean()
+    : null;
+
+  const sourceRows = await MongoInward.find({
+    warehouse_id: { $in: warehouseCandidates },
+    product_id: { $in: productCandidates },
+    company_account_id: { $in: fromCandidates },
+    remaining_qty: { $gt: 0 },
+  })
+    .sort({ date: 1, sl_no: 1, legacy_id: 1, _id: 1 })
+    .session(session)
+    .lean();
+
+  const totalSourceQty = sourceRows.reduce((sum, row) => sum + safeNumber(row.remaining_qty), 0);
+  if (totalSourceQty + 0.000001 < qtyRequested) {
+    throw new Error(`Not enough stock for FROM Party. Available stock is ${totalSourceQty.toFixed(2)}.`);
+  }
+
+  let remaining = qtyRequested;
+  let createdQty = 0;
+  let allocationCount = 0;
+  const journalDate = date ? new Date(date) : new Date();
+  const transferRateInput = safeNumber(rate);
+
+  for (const source of sourceRows) {
+    if (remaining <= 0) break;
+    const sourceRemaining = safeNumber(source.remaining_qty);
+    const useQty = Math.min(remaining, sourceRemaining);
+    if (useQty <= 0) continue;
+
+    const sourceId = source._id;
+    const updated = await MongoInward.findOneAndUpdate(
+      { _id: sourceId, remaining_qty: { $gte: useQty } },
+      {
+        $inc: { remaining_qty: -useQty, journal_adjusted_qty: useQty },
+        $set: { outward_date: journalDate, updated_at: new Date() },
+      },
+      { new: true, session }
+    ).lean();
+    if (!updated) throw new Error("Stock changed while saving the journal entry. Please try again.");
+
+    const sourceRate = safeNumber(source.rate);
+    const transferRate = transferRateInput > 0 ? transferRateInput : sourceRate;
+    const amount = useQty * transferRate;
+    const sourceIdText = normalizeId(source._id);
+    const destinationVoucher = `${journalNo}-${allocationCount + 1}`;
+
+    const destinationDocs = await MongoInward.create([{
+      voucher_no: destinationVoucher,
+      inward_no: destinationVoucher,
+      date: journalDate,
+      employee_id: employee_id || null,
+      location_id: location_id || source.location_id || null,
+      warehouse_id,
+      product_id,
+      company_id: toAccount.company_id ?? null,
+      company_account_id: toAccount._id,
+      employee_name: "",
+      location_name: source.location_name || "",
+      warehouse_name: source.warehouse_name || "",
+      product_name: source.product_name || "",
+      company_name: toCompany?.name || "",
+      company_account_name: toAccount.account_name || "",
+      lorry_no: safeText(lorry_no) || source.lorry_no || "",
+      quantity: useQty,
+      weight: useQty,
+      remaining_qty: useQty,
+      rate: transferRate,
+      amount,
+      shortage_percent: 0,
+      narration: `Journal Transfer ${journalNo}${narration ? ` | ${safeText(narration)}` : ""}`,
+      created_at: new Date(),
+      updated_at: new Date(),
+    }], { session });
+    const destination = destinationDocs[0];
+
+    await MongoStockJournal.create([{
+      journal_no: journalNo,
+      movement_type: "MANUAL_PARTY_STOCK_TRANSFER",
+      date: journalDate,
+      outward_id: journalNo,
+      outward_voucher_no: journalNo,
+      inward_id: sourceIdText,
+      inward_voucher_no: source.voucher_no || source.inward_no || "",
+      destination_inward_id: destination._id,
+      destination_voucher_no: destinationVoucher,
+      warehouse_id,
+      warehouse_name: source.warehouse_name || "",
+      location_id: location_id || source.location_id || null,
+      location_name: source.location_name || "",
+      product_id,
+      product_name: source.product_name || "",
+      from_party_id: source.company_account_id,
+      from_party_name: source.company_account_name || "",
+      to_party_id: toAccount._id,
+      to_party_name: toAccount.account_name || "",
+      qty: useQty,
+      cost_rate: sourceRate,
+      cost_amount: useQty * sourceRate,
+      sale_rate: transferRate,
+      sale_amount: amount,
+      profit_loss: amount - (useQty * sourceRate),
+      lorry_no: safeText(lorry_no) || source.lorry_no || "",
+      employee_id: employee_id || null,
+      employee_name: "",
+      company_id: toAccount.company_id ?? null,
+      company_name: toCompany?.name || "",
+      buyer_name: "",
+      consignee_name: "",
+      created_at: new Date(),
+      updated_at: new Date(),
+    }], { session });
+
+    createdQty += useQty;
+    allocationCount += 1;
+    remaining -= useQty;
+  }
+
+  return { quantity: Number(createdQty.toFixed(4)), allocations: allocationCount, journal_no: journalNo };
+}
+
+async function reverseManualJournalEntry(journalNo, session) {
+  const rows = await MongoStockJournal.find({
+    journal_no: journalNo,
+    movement_type: "MANUAL_PARTY_STOCK_TRANSFER",
+  }).sort({ created_at: 1, _id: 1 }).session(session).lean();
+  if (!rows.length) throw new Error("Journal Entry not found");
+
+  const legacyPrefix = String(journalNo).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const legacyDestinations = await MongoInward.find({
+    voucher_no: { $regex: `^${legacyPrefix}-` },
+  }).sort({ created_at: 1, _id: 1 }).session(session).lean();
+  let legacyDestinationIndex = 0;
+
+  for (const row of rows) {
+    let destination = null;
+    if (row.destination_inward_id) {
+      destination = await MongoInward.findById(row.destination_inward_id).session(session).lean();
+    } else if (row.destination_voucher_no) {
+      destination = await MongoInward.findOne({ voucher_no: row.destination_voucher_no }).session(session).lean();
+    } else {
+      destination = legacyDestinations[legacyDestinationIndex] || null;
+      legacyDestinationIndex += 1;
+    }
+
+    if (!destination) {
+      throw new Error(`Journal ${journalNo} cannot be edited/deleted because its transferred stock record was not found.`);
+    }
+    if (Math.abs(safeNumber(destination.remaining_qty) - safeNumber(row.qty)) > 0.000001) {
+      throw new Error(`Journal ${journalNo} cannot be edited/deleted because transferred stock has already been used in another transaction.`);
+    }
+
+    const sourceId = row.inward_id;
+    if (sourceId) {
+      await MongoInward.updateOne(
+        { _id: sourceId },
+        {
+          $inc: {
+            remaining_qty: safeNumber(row.qty),
+            journal_adjusted_qty: -safeNumber(row.qty),
+          },
+          $set: { updated_at: new Date() },
+        },
+        { session }
+      );
+    }
+
+    if (destination) {
+      await MongoInward.deleteOne({ _id: destination._id }, { session });
+    }
+  }
+
+  await MongoStockJournal.deleteMany({
+    journal_no: journalNo,
+    movement_type: "MANUAL_PARTY_STOCK_TRANSFER",
+  }, { session });
+
+  // Rebuild the journal date on source rows from any remaining manual journal.
+  const affectedSourceIds = [...new Set(rows.map((r) => normalizeId(r.inward_id)).filter(Boolean))];
+  for (const sourceId of affectedSourceIds) {
+    const remainingManual = await MongoStockJournal.find({
+      inward_id: sourceId,
+      movement_type: "MANUAL_PARTY_STOCK_TRANSFER",
+    }).sort({ date: -1, created_at: -1 }).session(session).lean();
+    const totalAdjusted = remainingManual.reduce((sum, r) => sum + safeNumber(r.qty), 0);
+    const source = await MongoInward.findById(sourceId).session(session).lean();
+    if (source) {
+      await MongoInward.updateOne(
+        { _id: sourceId },
+        {
+          $set: {
+            journal_adjusted_qty: totalAdjusted,
+            outward_date: remainingManual.length ? remainingManual[0].date : null,
+            updated_at: new Date(),
+          },
+        },
+        { session }
+      );
+    }
+  }
+
+  return rows;
+}
+
+router.post("/journal-entry", async (req, res) => {
+  if (!userHasPermission(req.user, "outward.create")) {
+    return res.status(403).json({ error: "You do not have permission to create journal entries" });
+  }
+  if (!ensureMongo(res)) return;
+
+  const { date, employee_id, location_id, warehouse_id, product_id, from_account_id, to_account_id, quantity, rate, lorry_no, narration } = req.body || {};
+  const qtyRequested = safeNumber(quantity);
+  if (!warehouse_id || !product_id || !from_account_id || !to_account_id || qtyRequested <= 0) {
+    return res.status(400).json({ error: "Warehouse, product, FROM party, TO party and quantity are required" });
+  }
+  if (normalizeId(from_account_id) === normalizeId(to_account_id)) {
+    return res.status(400).json({ error: "FROM Party and TO Party must be different" });
+  }
+  if (!canAccessWarehouse(req.user, warehouse_id)) return res.status(403).json({ error: "You can only create entries for your assigned warehouse" });
+
+  const session = await mongoose.startSession();
+  const journalNo = `JE-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+  try {
+    let result;
+    await session.withTransaction(async () => {
+      result = await createManualJournalEntry({ date, employee_id, location_id, warehouse_id, product_id, from_account_id, to_account_id, quantity, rate, lorry_no, narration, session, journalNo });
+    });
+    return res.status(201).json({ success: true, ...result, message: "Journal Entry saved and stock transferred FROM party TO party" });
+  } catch (error) {
+    console.error("Manual party stock journal failed:", error);
+    return res.status(400).json({ error: error.message || "Failed to save journal entry" });
+  } finally { await session.endSession(); }
+});
+
+router.get("/journal-history", async (req, res) => {
+  if (!userHasPermission(req.user, "outward.view") && !userHasPermission(req.user, "report.partyStock")) {
+    return res.status(403).json({ error: "You do not have permission to view journal history" });
+  }
+  if (!ensureMongo(res)) return;
+  try {
+    const query = { movement_type: "MANUAL_PARTY_STOCK_TRANSFER" };
+    if (req.query.warehouse_id) query.warehouse_id = req.query.warehouse_id;
+    if (req.query.product_id) query.product_id = req.query.product_id;
+    const docs = await MongoStockJournal.find(query).sort({ date: -1, created_at: -1, _id: -1 }).limit(5000).lean();
+    const grouped = new Map();
+    const fromAccountIds = [...new Set(docs.map((row) => normalizeId(row.from_party_id)).filter(Boolean))];
+    const accountCandidates = fromAccountIds.flatMap((id) => mixedIdCandidates(id));
+    const fromAccounts = accountCandidates.length
+      ? await MongoCompanyAccount.find({ _id: { $in: accountCandidates } }).lean()
+      : [];
+    const fromAccountMap = new Map(fromAccounts.map((account) => [normalizeId(account._id), account]));
+    const companyIds = [...new Set(fromAccounts.map((account) => normalizeId(account.company_id)).filter(Boolean))];
+    const companyCandidates = companyIds.flatMap((id) => mixedIdCandidates(id));
+    const fromCompanies = companyCandidates.length
+      ? await MongoCompany.find({ _id: { $in: companyCandidates } }).lean()
+      : [];
+    const fromCompanyMap = new Map(fromCompanies.map((company) => [normalizeId(company._id), company]));
+
+    for (const row of docs) {
+      if (!canAccessWarehouse(req.user, row.warehouse_id)) continue;
+      const key = row.journal_no;
+      if (!key) continue;
+      const existing = grouped.get(key);
+      if (existing) {
+        existing.qty += safeNumber(row.qty);
+        existing.allocations += 1;
+      } else {
+        const fromAccount = fromAccountMap.get(normalizeId(row.from_party_id));
+        const fromCompany = fromAccount ? fromCompanyMap.get(normalizeId(fromAccount.company_id)) : null;
+        grouped.set(key, {
+          journal_no: row.journal_no,
+          date: row.date,
+          warehouse_id: row.warehouse_id,
+          warehouse_name: row.warehouse_name || "",
+          product_id: row.product_id,
+          product_name: row.product_name || "",
+          from_company_id: fromAccount?.company_id ?? null,
+          from_company_name: fromCompany?.name || "",
+          from_account_id: row.from_party_id,
+          from_account_name: row.from_party_name || fromAccount?.account_name || "",
+          to_company_id: row.company_id ?? null,
+          to_company_name: row.company_name || "",
+          to_account_id: row.to_party_id,
+          to_account_name: row.to_party_name || "",
+          qty: safeNumber(row.qty),
+          rate: safeNumber(row.sale_rate),
+          lorry_no: row.lorry_no || "",
+          employee_id: row.employee_id || null,
+          location_id: row.location_id || null,
+          allocations: 1,
+        });
+      }
+    }
+    return res.json({ rows: Array.from(grouped.values()), total: grouped.size });
+  } catch (error) {
+    console.error("Journal history failed:", error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+router.put("/journal-entry/:journalNo", async (req, res) => {
+  if (!userHasPermission(req.user, "outward.create")) return res.status(403).json({ error: "You do not have permission to edit journal entries" });
+  if (!ensureMongo(res)) return;
+  const { journalNo } = req.params;
+  const { date, employee_id, location_id, warehouse_id, product_id, from_account_id, to_account_id, quantity, rate, lorry_no, narration } = req.body || {};
+  if (!journalNo || !warehouse_id || !product_id || !from_account_id || !to_account_id || safeNumber(quantity) <= 0) {
+    return res.status(400).json({ error: "Journal No, warehouse, product, FROM party, TO party and quantity are required" });
+  }
+  if (normalizeId(from_account_id) === normalizeId(to_account_id)) return res.status(400).json({ error: "FROM Party and TO Party must be different" });
+  if (!canAccessWarehouse(req.user, warehouse_id)) return res.status(403).json({ error: "You can only edit entries for your assigned warehouse" });
+
+  const session = await mongoose.startSession();
+  try {
+    let result;
+    await session.withTransaction(async () => {
+      await reverseManualJournalEntry(journalNo, session);
+      result = await createManualJournalEntry({ date, employee_id, location_id, warehouse_id, product_id, from_account_id, to_account_id, quantity, rate, lorry_no, narration, session, journalNo });
+    });
+    return res.json({ success: true, ...result, journal_no: journalNo, message: "Journal Entry updated and stock recalculated" });
+  } catch (error) {
+    console.error("Journal edit failed:", error);
+    return res.status(400).json({ error: error.message || "Failed to edit journal entry" });
+  } finally { await session.endSession(); }
+});
+
+router.delete("/journal-entry/:journalNo", async (req, res) => {
+  if (!userHasPermission(req.user, "outward.create")) return res.status(403).json({ error: "You do not have permission to delete journal entries" });
+  if (!ensureMongo(res)) return;
+  const { journalNo } = req.params;
+  const session = await mongoose.startSession();
+  try {
+    await session.withTransaction(async () => { await reverseManualJournalEntry(journalNo, session); });
+    return res.json({ success: true, journal_no: journalNo, message: "Journal Entry deleted and stock restored" });
+  } catch (error) {
+    console.error("Journal delete failed:", error);
+    return res.status(400).json({ error: error.message || "Failed to delete journal entry" });
+  } finally { await session.endSession(); }
+});
+
+/*
+====================================================
+STOCK JOURNAL REPORT
+====================================================
+*/
+router.get("/stock-journal", async (req, res) => {
+  if (!userHasPermission(req.user, "outward.view") && !userHasPermission(req.user, "report.partyStock")) {
+    return res.status(403).json({ error: "You do not have permission to view stock journal" });
+  }
+
+  if (!ensureMongo(res)) return;
+
+  try {
+    const query = {};
+    if (req.query.from_date || req.query.to_date) {
+      query.date = {};
+      if (req.query.from_date) query.date.$gte = new Date(`${req.query.from_date}T00:00:00.000Z`);
+      if (req.query.to_date) query.date.$lte = new Date(`${req.query.to_date}T23:59:59.999Z`);
+    }
+    if (req.query.warehouse_id) query.warehouse_id = req.query.warehouse_id;
+    if (req.query.location_id) query.location_id = req.query.location_id;
+    if (req.query.product_id) query.product_id = req.query.product_id;
+    if (req.query.employee_id) query.employee_id = req.query.employee_id;
+    if (req.query.from_party_id) query.from_party_id = req.query.from_party_id;
+    if (req.query.to_party_id) query.to_party_id = req.query.to_party_id;
+
+    const docs = await MongoStockJournal.find(query).sort({ date: -1, created_at: -1, _id: -1 }).limit(5000).lean();
+    const filtered = docs.filter((row) => !row.warehouse_id || canAccessWarehouse(req.user, row.warehouse_id));
+
+    return res.json({
+      rows: filtered,
+      total: filtered.length,
+      source: "mongodb",
+    });
+  } catch (error) {
+    console.error("Stock journal report failed:", error);
+    return res.status(500).json({ error: error.message });
+  }
+});
+
+module.exports = router;
