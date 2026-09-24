@@ -843,6 +843,15 @@ export default function WarehouseTradingPage() {
           against_purchase_enabled: true,
           against_purchase_links: nextLinks,
         });
+        if (showSalePreview && saleTagTargetId) {
+          try {
+            const refreshed = await API.get(`/api/wh-vouchers/sale/${saleTagTargetId}/summary`);
+            setSalePreviewSummary(refreshed.data || null);
+            if (refreshed.data?.sale) setSalePreviewRow(refreshed.data.sale);
+          } catch {
+            // Keep the just-tagged local list when preview refresh is unavailable.
+          }
+        }
         toast.success("Purchase bill tagged to sale", { theme: "colored", autoClose: 1800 });
       } catch (err) {
         toast.error(err?.response?.data?.error || "Purchase tag save failed", { theme: "colored", autoClose: 3000 });
@@ -1195,8 +1204,17 @@ export default function WarehouseTradingPage() {
 
   useEffect(() => {
     const handleF10TagPurchaseKey = (event) => {
-      if (event.key !== "F10") return;
+      if (event.key !== "F10" && event.code !== "F10") return;
       if (showSalePurchaseTagModal) return;
+
+      // When Sale Summary preview is open, F10 must operate on that exact sale.
+      // This keeps the preview flow independent of the currently selected report row.
+      if (showSalePreview && salePreviewRow) {
+        event.preventDefault();
+        void openSalePurchaseTagging(salePreviewRow);
+        return;
+      }
+
       if (activeTab === "vouchers" && activeVoucherType === "sale" && String(formData.sale_type || "direct").toLowerCase() === "direct") {
         event.preventDefault();
         void openSalePurchaseTagging(formData);
@@ -1209,7 +1227,7 @@ export default function WarehouseTradingPage() {
     };
     window.addEventListener("keydown", handleF10TagPurchaseKey);
     return () => window.removeEventListener("keydown", handleF10TagPurchaseKey);
-  }, [activeTab, activeVoucherType, activeReport, formData, salePreviewRow, selectedSaleReportRow, showSalePurchaseTagModal]);
+  }, [activeTab, activeVoucherType, activeReport, formData, salePreviewRow, selectedSaleReportRow, showSalePurchaseTagModal, showSalePreview]);
 
   useEffect(() => {
     const handleF5TaggedPurchaseKey = (event) => {
@@ -1617,13 +1635,19 @@ export default function WarehouseTradingPage() {
       const source = targetSale || formData || {};
       const isDirectSale = String(source.sale_type || "direct").toLowerCase() === "direct";
       const farmerId = isDirectSale ? (source.farmer_id || undefined) : (source.against_purchase_farmer_id || undefined);
-      const res = await API.get("/api/wh-vouchers/purchase", { params: {
+      const purchaseParams = {
         page: 1, limit: 100, lookup: 1, order: "asc",
         warehouse_id: source.warehouse_id || undefined,
         farmer_id: farmerId,
-        company_account_id: source.company_account_id || undefined,
         product_id: source.product_id || undefined,
-      } });
+      };
+      // For Direct Sale the buyer account is not the purchase-party account.
+      // Keep the farmer/warehouse/product match, but do not hide valid purchase
+      // bills because their company_account_id differs from the sale buyer.
+      if (!isDirectSale && source.company_account_id) {
+        purchaseParams.company_account_id = source.company_account_id;
+      }
+      const res = await API.get("/api/wh-vouchers/purchase", { params: purchaseParams });
       const payload = res.data || {};
       const rows = Array.isArray(payload) ? payload : (Array.isArray(payload.data) ? payload.data : []);
       setSalePurchaseRows(rows);
@@ -7691,6 +7715,7 @@ export default function WarehouseTradingPage() {
           toNumber={toNumber}
           getSalePreviewDataForRow={getSalePreviewDataForRow}
           axios={API}
+          onOpenPurchaseTagging={openSalePurchaseTagging}
         />
       )}
       </div>
