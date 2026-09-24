@@ -124,33 +124,52 @@ function WarehouseSalePreviewModal({
       adjustment: adjustmentAuto.toFixed(2),
       tds: tdsAuto.toFixed(2),
     });
-    setManualMode((prev) => ({
-      shortage: Boolean(prev.shortage),
-      claim: Boolean(prev.claim),
-      freight: saleTransportMode === "manual" || Boolean(prev.freight),
-      other: Boolean(prev.other),
-      cd: Boolean(prev.cd),
-      adjustment: Boolean(prev.adjustment),
-      tds: Boolean(prev.tds),
-    }));
-    setPurchaseManualValues({
-      claim: "0.00",
-      labour: "0.00",
-      freight: "0.00",
-      cashDiscount: "0.00",
-      tds: "0.00",
-      other: "0.00",
-      adjustment: "0.00",
+    const savedSaleManualModes = salePreviewRow?.sale_deduction_manual_modes || salePreviewSummary?.sale?.sale_deduction_manual_modes || {};
+    setManualMode({
+      shortage: Boolean(savedSaleManualModes.shortage),
+      claim: Boolean(savedSaleManualModes.claim),
+      freight: saleTransportMode === "manual" || Boolean(savedSaleManualModes.freight),
+      other: Boolean(savedSaleManualModes.other),
+      cd: Boolean(savedSaleManualModes.cd),
+      adjustment: Boolean(savedSaleManualModes.adjustment),
+      tds: Boolean(savedSaleManualModes.tds),
     });
-    setPurchaseManualMode((prev) => ({
-      claim: Boolean(prev.claim),
-      labour: Boolean(prev.labour),
-      freight: Boolean(prev.freight),
-      cashDiscount: Boolean(prev.cashDiscount),
-      tds: Boolean(prev.tds),
-      other: Boolean(prev.other),
-      adjustment: Boolean(prev.adjustment),
-    }));
+
+    const savedPurchaseLinks = Array.isArray(salePreviewSummary?.purchase_links)
+      ? salePreviewSummary.purchase_links
+      : (Array.isArray(salePreviewRow?.against_purchase_links) ? salePreviewRow.against_purchase_links : []);
+    const savedPurchaseModes = savedPurchaseLinks.reduce((acc, item) => ({
+      claim: acc.claim || Boolean(item?.purchase_deduction_manual_modes?.claim || item?.sale_summary_manual_modes?.claim),
+      labour: acc.labour || Boolean(item?.purchase_deduction_manual_modes?.labour || item?.sale_summary_manual_modes?.labour),
+      freight: acc.freight || Boolean(item?.purchase_deduction_manual_modes?.freight || item?.sale_summary_manual_modes?.freight),
+      cashDiscount: acc.cashDiscount || Boolean(item?.purchase_deduction_manual_modes?.cashDiscount || item?.sale_summary_manual_modes?.cashDiscount),
+      tds: acc.tds || Boolean(item?.purchase_deduction_manual_modes?.tds || item?.sale_summary_manual_modes?.tds),
+      other: acc.other || Boolean(item?.purchase_deduction_manual_modes?.other || item?.sale_summary_manual_modes?.other),
+      adjustment: acc.adjustment || Boolean(item?.purchase_deduction_manual_modes?.adjustment || item?.sale_summary_manual_modes?.adjustment),
+    }), { claim: false, labour: false, freight: false, cashDiscount: false, tds: false, other: false, adjustment: false });
+    const sumSavedPurchase = (key) => savedPurchaseLinks.reduce((sum, item) => {
+      const purchase = item?.purchase_details || item || {};
+      const map = {
+        claim: purchase.claim_amount ?? purchase.bags_claim,
+        labour: purchase.labour,
+        freight: purchase.transport_charge,
+        cashDiscount: purchase.cd_amount,
+        tds: purchase.tds_amount,
+        other: purchase.other_deduction,
+        adjustment: purchase.adjustment_amount,
+      };
+      return sum + toNumber(map[key]);
+    }, 0);
+    setPurchaseManualValues({
+      claim: sumSavedPurchase("claim").toFixed(2),
+      labour: sumSavedPurchase("labour").toFixed(2),
+      freight: sumSavedPurchase("freight").toFixed(2),
+      cashDiscount: sumSavedPurchase("cashDiscount").toFixed(2),
+      tds: sumSavedPurchase("tds").toFixed(2),
+      other: sumSavedPurchase("other").toFixed(2),
+      adjustment: sumSavedPurchase("adjustment").toFixed(2),
+    });
+    setPurchaseManualMode(savedPurchaseModes);
   }, [salePreviewRow, salePreviewSummary, saleTransportMode, toNumber]);
 
   if (!salePreviewRow) return null;
@@ -177,6 +196,13 @@ function WarehouseSalePreviewModal({
         salePreviewRow?.freight ??
         0
       );
+  const saleAdditionalAmount = toNumber(
+    salePreviewSummary?.summary?.additional_amount ??
+    salePreviewSummary?.additional_amount ??
+    salePreviewRow?.additional_amount ??
+    previewSource?.additional_amount ??
+    0
+  );
   const purchaseQty = hydratedPurchaseLinks.reduce((sum, item) => sum + toNumber(item.quantity ?? item.weight), 0);
   const purchaseAmount = hydratedPurchaseLinks.reduce((sum, item) => sum + toNumber(item.amount ?? (toNumber(item.quantity ?? item.weight) * toNumber(item.rate))), 0);
   const purchaseDeductionTotals = useMemo(() => {
@@ -244,7 +270,7 @@ function WarehouseSalePreviewModal({
   const roundOff = toNumber(salePreviewRow?.round_off);
 
   const totalDeduction = shortageAmount + claimAmount + freightAmount + otherAmount + cdAmount + adjustmentAmount + tdsAmount;
-  const netSale = saleAmount - totalDeduction + roundOff;
+  const netSale = saleAmount - totalDeduction + saleAdditionalAmount + roundOff;
   const netPurchase = purchaseNetAfterDeduction;
   const profitLoss = netSale - netPurchase;
 
@@ -331,6 +357,52 @@ function WarehouseSalePreviewModal({
         salePreviewSummary?.consignee_id ||
         salePreviewSummary?.summary?.consignee_id ||
         "";
+      const purchaseGrossTotal = hydratedPurchaseLinks.reduce((sum, item) => {
+        const purchase = item?.purchase_details || item || {};
+        const qty = toNumber(item?.quantity ?? item?.weight ?? purchase.quantity);
+        const rate = toNumber(item?.rate ?? purchase.rate);
+        return sum + toNumber(item?.amount ?? purchase.amount ?? (qty * rate));
+      }, 0);
+      const purchaseDeductionUpdates = hydratedPurchaseLinks
+        .map((item) => {
+          const purchase = item?.purchase_details || item || {};
+          const qty = toNumber(item?.quantity ?? item?.weight ?? purchase.quantity);
+          const rate = toNumber(item?.rate ?? purchase.rate);
+          const gross = toNumber(item?.amount ?? purchase.amount ?? (qty * rate));
+          const ratio = purchaseGrossTotal > 0
+            ? gross / purchaseGrossTotal
+            : (hydratedPurchaseLinks.length ? 1 / hydratedPurchaseLinks.length : 0);
+          const auto = {
+            claim: toNumber(purchase.claim_amount ?? purchase.bags_claim),
+            labour: toNumber(purchase.labour),
+            freight: saleFreightAutoAmount > 0 ? saleFreightAutoAmount * ratio : toNumber(purchase.transport_charge),
+            cashDiscount: toNumber(purchase.cd_amount),
+            tds: toNumber(purchase.tds_amount),
+            other: toNumber(purchase.other_deduction),
+            adjustment: toNumber(purchase.adjustment_amount),
+            roundOff: toNumber(purchase.round_off),
+          };
+          const final = {
+            claim: purchaseManualMode.claim ? purchaseDeductionFinal.claim * ratio : auto.claim,
+            labour: purchaseManualMode.labour ? purchaseDeductionFinal.labour * ratio : auto.labour,
+            freight: purchaseManualMode.freight ? purchaseDeductionFinal.freight * ratio : auto.freight,
+            cashDiscount: purchaseManualMode.cashDiscount ? purchaseDeductionFinal.cashDiscount * ratio : auto.cashDiscount,
+            tds: purchaseManualMode.tds ? purchaseDeductionFinal.tds * ratio : auto.tds,
+            other: purchaseManualMode.other ? purchaseDeductionFinal.other * ratio : auto.other,
+            adjustment: purchaseManualMode.adjustment ? purchaseDeductionFinal.adjustment * ratio : auto.adjustment,
+            roundOff: auto.roundOff,
+          };
+          final.totalDeduction = Number((
+            final.claim + final.labour + final.freight + final.cashDiscount + final.tds + final.other + final.adjustment
+          ).toFixed(2));
+          return {
+            purchase_id: String(item?.purchase_id || item?.id || item?._id || ""),
+            final,
+            manual_modes: { ...purchaseManualMode },
+          };
+        })
+        .filter((item) => item.purchase_id);
+
       const payload = {
         deduction_only: true,
         sale_type: saleType,
@@ -348,8 +420,11 @@ function WarehouseSalePreviewModal({
         adjustment_amount: adjustmentAmount,
         tds_amount: tdsAmount,
         transport_charge: freightAmount,
+        additional_amount: saleAdditionalAmount,
         round_off: roundOff,
         total_deduction: totalDeduction,
+        sale_deduction_manual_modes: { ...manualMode },
+        purchase_deduction_updates: purchaseDeductionUpdates,
       };
       await axios.put(`/api/wh-vouchers/sale/${saleId}`, payload);
       const updated = await axios.get(`/api/wh-vouchers/sale/${saleId}/summary`);
@@ -442,6 +517,7 @@ function WarehouseSalePreviewModal({
                   <tr><td style={td}>Sale Rate</td><td style={td}>{formatMoney(saleRate)}</td></tr>
                   <tr><td style={td}>Sale Amount</td><td style={{ ...td, fontWeight: 900 }}>{formatMoney(saleAmount)}</td></tr>
                   <tr><td style={td}>Freight (Transport Bilti)</td><td style={{ ...td, fontWeight: 800, color: "#9a3412" }}>{formatMoney(freightAmount)}</td></tr>
+                  <tr><td style={td}>Add Amount</td><td style={{ ...td, fontWeight: 900, color: "#166534" }}>+ {formatMoney(saleAdditionalAmount)}</td></tr>
                   <tr><td style={td}>Net Amount</td><td style={{ ...td, fontWeight: 900, color: "#0f766e" }}>{formatMoney(netSale)}</td></tr>
                   <tr><td style={td}>Buyer</td><td style={td}>{preview.party || previewSource?.buyer_name || previewSource?.buyer || previewSource?.party_name || previewSource?.company_name || "-"}</td></tr>
                 </tbody>
@@ -526,6 +602,13 @@ function WarehouseSalePreviewModal({
                 {isAdmin ? "Admin can switch a deduction to Manual and enter a value." : "Automatic deductions are shown. Manual deduction editing is available to Admin only."}
               </div>
             </div>
+          </div>
+        </div>
+
+        <div style={{ marginTop: 12, display: "flex", justifyContent: "flex-end" }}>
+          <div style={{ padding: "10px 14px", borderRadius: 10, background: "#f0fdf4", border: "1px solid #bbf7d0", minWidth: 180 }}>
+            <div style={{ color: "#166534", fontSize: 11, fontWeight: 900, textTransform: "uppercase" }}>Add Amount</div>
+            <div style={{ marginTop: 3, fontSize: 21, fontWeight: 950, color: "#166534" }}>+ {formatMoney(saleAdditionalAmount)}</div>
           </div>
         </div>
 
