@@ -738,6 +738,7 @@ export default function WarehouseTradingPage() {
       if (formData.company_account_id && String(item.company_account_id || "") !== String(formData.company_account_id)) return false;
       if (formData.product_id && String(item.product_id || "") !== String(formData.product_id)) return false;
       if (formData.warehouse_id && String(item.warehouse_id || "") !== String(formData.warehouse_id)) return false;
+      if (formData.consignee_id && item.consignee_id && String(item.consignee_id) !== String(formData.consignee_id)) return false;
       return true;
     })
     .slice()
@@ -1231,13 +1232,26 @@ export default function WarehouseTradingPage() {
 
   useEffect(() => {
     const handleF5TaggedPurchaseKey = (event) => {
-      if (event.key !== "F5" || !showSalePurchaseTagModal) return;
+      if (event.key !== "F5") return;
+
+      // In Sale Summary preview, F5 should open the same sale's tagging
+      // window and immediately show the previously tagged purchase bills.
+      if (showSalePreview && salePreviewRow) {
+        event.preventDefault();
+        void (async () => {
+          await openSalePurchaseTagging(salePreviewRow);
+          setShowTaggedSalePurchases(true);
+        })();
+        return;
+      }
+
+      if (!showSalePurchaseTagModal) return;
       event.preventDefault();
       setShowTaggedSalePurchases(true);
     };
     window.addEventListener("keydown", handleF5TaggedPurchaseKey);
     return () => window.removeEventListener("keydown", handleF5TaggedPurchaseKey);
-  }, [showSalePurchaseTagModal]);
+  }, [showSalePurchaseTagModal, showSalePreview, salePreviewRow]);
 
   useEffect(() => {
     const loadSaleTransportCharge = async () => {
@@ -1289,13 +1303,13 @@ export default function WarehouseTradingPage() {
 
   useEffect(() => {
     const handleF5SaleKey = (event) => {
-      if (event.key !== "F5" || showSalePurchaseTagModal || activeTab !== "vouchers" || activeVoucherType !== "sale") return;
+      if (event.key !== "F5" || showSalePurchaseTagModal || showSalePreview || salePreviewRow || activeTab !== "vouchers" || activeVoucherType !== "sale") return;
       event.preventDefault();
       setShowSaleAdjustedModal(true);
     };
     window.addEventListener("keydown", handleF5SaleKey);
     return () => window.removeEventListener("keydown", handleF5SaleKey);
-  }, [activeTab, activeVoucherType, showSalePurchaseTagModal]);
+  }, [activeTab, activeVoucherType, showSalePurchaseTagModal, showSalePreview, salePreviewRow]);
 
   useEffect(() => {
     if (activeTab !== "vouchers" || activeVoucherType !== "sale" || formData.sale_type === "direct" || !formData.warehouse_id || !formData.product_id) {
@@ -1634,12 +1648,19 @@ export default function WarehouseTradingPage() {
       }
       const source = targetSale || formData || {};
       const isDirectSale = String(source.sale_type || "direct").toLowerCase() === "direct";
-      const farmerId = isDirectSale ? (source.farmer_id || undefined) : (source.against_purchase_farmer_id || undefined);
+      const farmerId = isDirectSale ? (source.farmer_id || source.against_purchase_farmer_id || undefined) : (source.against_purchase_farmer_id || undefined);
+      const consigneeId =
+        source.consignee_id ||
+        source?.consignee?.id ||
+        salePreviewSummary?.sale?.consignee_id ||
+        salePreviewSummary?.consignee_id ||
+        "";
       const purchaseParams = {
         page: 1, limit: 100, lookup: 1, order: "asc",
         warehouse_id: source.warehouse_id || undefined,
         farmer_id: farmerId,
         product_id: source.product_id || undefined,
+        consignee_id: consigneeId || undefined,
       };
       // For Direct Sale the buyer account is not the purchase-party account.
       // Keep the farmer/warehouse/product match, but do not hide valid purchase
@@ -7715,7 +7736,7 @@ export default function WarehouseTradingPage() {
           toNumber={toNumber}
           getSalePreviewDataForRow={getSalePreviewDataForRow}
           axios={API}
-          onOpenPurchaseTagging={openSalePurchaseTagging}
+          onOpenPurchaseTagging={() => openSalePurchaseTagging(salePreviewRow)}
         />
       )}
       </div>
