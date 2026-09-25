@@ -72,7 +72,11 @@ function WarehouseSalePreviewModal({
 
   useEffect(() => {
     let cancelled = false;
-    const biltiId = salePreviewRow?.bilti_id || salePreviewRow?.transport_bilti_id;
+    const biltiId =
+      salePreviewRow?.bilti_id ||
+      salePreviewRow?.transport_bilti_id ||
+      salePreviewSummary?.transport_bilti_id ||
+      salePreviewSummary?.transport_debug?.matched_bilti_id;
     if (!salePreviewRow || !biltiId || !axios?.get) {
       setSaleBiltiFreightAmount(null);
       return undefined;
@@ -82,6 +86,8 @@ function WarehouseSalePreviewModal({
         const response = await axios.get(`/api/transport-bilti/${biltiId}`);
         const amount = toNumber(
           response.data?.gross_freight ??
+          response.data?.gross_amount ??
+          response.data?.amount ??
           response.data?.transport_charge ??
           response.data?.net_amount ??
           response.data?.payable_amount ??
@@ -94,7 +100,7 @@ function WarehouseSalePreviewModal({
     };
     loadBiltiFreight();
     return () => { cancelled = true; };
-  }, [salePreviewRow?.bilti_id, salePreviewRow?.transport_bilti_id, axios, toNumber]);
+  }, [salePreviewRow?.bilti_id, salePreviewRow?.transport_bilti_id, salePreviewSummary?.transport_bilti_id, salePreviewSummary?.transport_debug?.matched_bilti_id, axios, toNumber]);
 
   useEffect(() => {
     if (!salePreviewRow) return;
@@ -203,6 +209,8 @@ function WarehouseSalePreviewModal({
     : toNumber(
         salePreviewSummary?.transport_charge ??
         salePreviewSummary?.summary?.transport_charge ??
+        salePreviewSummary?.transport_debug?.matched_gross_freight ??
+        salePreviewSummary?.transport_debug?.matched_payable_amount ??
         salePreviewRow?.transport_charge ??
         salePreviewRow?.freight ??
         0
