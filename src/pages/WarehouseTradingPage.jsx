@@ -1375,7 +1375,7 @@ export default function WarehouseTradingPage() {
       }
       try {
         const response = await API.get(`/api/transport-bilti/${biltiId}`);
-        const amount = toNumber(response.data?.transport_charge || response.data?.net_amount || response.data?.payable_amount || response.data?.gross_freight || 0);
+        const amount = toNumber(response.data?.gross_freight || response.data?.transport_charge || response.data?.net_amount || response.data?.payable_amount || 0);
         setFormData((prev) => ({
           ...prev,
           transport_charge: amount > 0 ? amount.toFixed(2) : prev.transport_charge,
