@@ -2299,6 +2299,16 @@ export default function WarehouseTradingPage() {
       numericFields.forEach((field) => {
         payload[field] = formData[field] ? Number(formData[field]) : 0;
       });
+      if (activeVoucherType === "sale") {
+        payload.manual_deduction_values = {
+          claim_amount: String(formData.claim_amount ?? "").trim() !== "" ? Number(formData.claim_amount) : null,
+          other_deduction: String(formData.other_deduction ?? "").trim() !== "" ? Number(formData.other_deduction) : null,
+          transport_charge: String(formData.transport_charge ?? "").trim() !== "" ? Number(formData.transport_charge) : null,
+          tds_amount: String(formData.tds_amount ?? "").trim() !== "" ? Number(formData.tds_amount) : null,
+          adjustment_amount: String(formData.adjustment_amount ?? "").trim() !== "" ? Number(formData.adjustment_amount) : null,
+          round_off: String(formData.round_off ?? "").trim() !== "" ? Number(formData.round_off) : null,
+        };
+      }
       if (activeVoucherType === "purchase") {
         payload.quantity = safePurchaseNetWeight;
         payload.net_weight = safePurchaseNetWeight;
@@ -3577,6 +3587,14 @@ export default function WarehouseTradingPage() {
       round_off: finalRoundOff,
       reject_qty: toNumber(formData.reject_qty),
       amount: saleBillAmountFromData(formData),
+      manual_deduction_values: {
+        claim_amount: manualClaimEntered ? Number(formData.claim_amount) : null,
+        other_deduction: manualOtherDeductionEntered ? Number(formData.other_deduction) : null,
+        transport_charge: manualTransportEntered ? Number(formData.transport_charge) : null,
+        tds_amount: manualTdsEntered ? Number(formData.tds_amount) : null,
+        adjustment_amount: manualAdjustmentEntered ? Number(formData.adjustment_amount) : null,
+        round_off: manualRoundOffEntered ? Number(formData.round_off) : null,
+      },
     };
 
     setLoading(true);
@@ -3642,10 +3660,16 @@ export default function WarehouseTradingPage() {
     const manualClaimEntered = String(formData.claim_amount ?? "").trim() !== "";
     const manualOtherDeductionEntered = String(formData.other_deduction ?? "").trim() !== "";
     const manualTdsEntered = String(formData.tds_amount ?? "").trim() !== "";
+    const manualAdjustmentEntered = String(formData.adjustment_amount ?? "").trim() !== "";
+    const manualTransportEntered = String(formData.transport_charge ?? "").trim() !== "";
+    const manualRoundOffEntered = String(formData.round_off ?? "").trim() !== "";
     const finalClaimAmount = manualClaimEntered ? toNumber(formData.claim_amount) : 0;
     const finalAdditionalAmount = toNumber(formData.additional_amount);
     const finalOtherDeduction = manualOtherDeductionEntered ? toNumber(formData.other_deduction) : saleQualityDeduction;
     const finalTdsAmount = manualTdsEntered ? toNumber(formData.tds_amount) : 0;
+    const finalTransportCharge = manualTransportEntered ? toNumber(formData.transport_charge) : saleTransportCharge;
+    const finalAdjustmentAmount = manualAdjustmentEntered ? toNumber(formData.adjustment_amount) : 0;
+    const finalRoundOff = manualRoundOffEntered ? toNumber(formData.round_off) : 0;
     const finalCdAmount = Number((saleBillAmountFromData(formData) * toNumber(formData.cd_percent) / 100).toFixed(2));
     const unloadingDate = formData.unloading_date || "";
     const dueDays = formData.due_days !== undefined && formData.due_days !== null && String(formData.due_days).trim() !== "" ? toNumber(formData.due_days) : "";
@@ -3672,12 +3696,22 @@ export default function WarehouseTradingPage() {
       claim_amount: finalClaimAmount,
       additional_amount: finalAdditionalAmount,
       other_deduction: finalOtherDeduction,
-      transport_charge: saleTransportCharge,
+      transport_charge: finalTransportCharge,
       cd_amount: finalCdAmount,
-      total_deduction: saleShortageAmount + finalClaimAmount + finalOtherDeduction + saleTransportCharge + finalCdAmount + toNumber(formData.adjustment_amount) + finalTdsAmount,
+      total_deduction: saleShortageAmount + finalClaimAmount + finalOtherDeduction + finalTransportCharge + finalCdAmount + finalAdjustmentAmount + finalTdsAmount,
+      adjustment_amount: finalAdjustmentAmount,
       tds_amount: finalTdsAmount,
+      round_off: finalRoundOff,
       reject_qty: toNumber(formData.reject_qty),
       amount: saleBillAmountFromData(formData),
+      manual_deduction_values: {
+        claim_amount: manualClaimEntered ? Number(formData.claim_amount) : null,
+        other_deduction: manualOtherDeductionEntered ? Number(formData.other_deduction) : null,
+        transport_charge: manualTransportEntered ? Number(formData.transport_charge) : null,
+        tds_amount: manualTdsEntered ? Number(formData.tds_amount) : null,
+        adjustment_amount: manualAdjustmentEntered ? Number(formData.adjustment_amount) : null,
+        round_off: manualRoundOffEntered ? Number(formData.round_off) : null,
+      },
     };
 
     setLoading(true);
