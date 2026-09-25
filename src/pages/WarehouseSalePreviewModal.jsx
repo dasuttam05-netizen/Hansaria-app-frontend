@@ -81,10 +81,10 @@ function WarehouseSalePreviewModal({
       try {
         const response = await axios.get(`/api/transport-bilti/${biltiId}`);
         const amount = toNumber(
+          response.data?.gross_freight ??
           response.data?.transport_charge ??
           response.data?.net_amount ??
           response.data?.payable_amount ??
-          response.data?.gross_freight ??
           0
         );
         if (!cancelled) setSaleBiltiFreightAmount(amount);
