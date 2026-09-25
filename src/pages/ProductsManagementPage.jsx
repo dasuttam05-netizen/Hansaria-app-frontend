@@ -111,19 +111,15 @@ export default function ProductsManagementPage() {
 
       }
 
-      const gstPercent = Number(formData.gst_percent);
-
-      if (formData.gst_percent !== "" && (!Number.isFinite(gstPercent) || gstPercent < 0 || gstPercent > 100)) {
-
+      const gstPercent = Number(formData.gst_percent || 0);
+      if (!Number.isFinite(gstPercent) || gstPercent < 0 || gstPercent > 100) {
         alert("GST % must be between 0 and 100");
-
         return;
-
       }
 
       const payload = {
         ...formData,
-        gst_percent: formData.gst_percent === "" ? 0 : gstPercent,
+        gst_percent: gstPercent,
       };
 
       try {
@@ -182,9 +178,9 @@ export default function ProductsManagementPage() {
         "",
 
       gst_percent:
-        p.gst_percent !== undefined && p.gst_percent !== null
-          ? p.gst_percent
-          : "",
+        p.gst_percent ??
+        p.gst_rate ??
+        "",
     });
 
     setEditId(
@@ -308,7 +304,7 @@ export default function ProductsManagementPage() {
                   step="0.01"
                   value={formData.gst_percent}
                   onChange={handleChange}
-                  placeholder="GST % (e.g. 5, 12, 18)"
+                  placeholder="GST % (e.g. 5)"
                   style={inp}
                 />
 
@@ -452,9 +448,9 @@ export default function ProductsManagementPage() {
                       </td>
 
                       <td style={td}>
-                        {p.gst_percent !== undefined && p.gst_percent !== null && String(p.gst_percent).trim() !== ""
-                          ? `${p.gst_percent}%`
-                          : "-"}
+                        {p.gst_percent !== undefined && p.gst_percent !== null && String(p.gst_percent) !== ""
+                          ? Number(p.gst_percent).toFixed(2)
+                          : "0.00"}
                       </td>
 
                       <td style={td}>
