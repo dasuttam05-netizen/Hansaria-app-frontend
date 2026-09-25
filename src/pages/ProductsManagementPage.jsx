@@ -5,6 +5,7 @@ import { loadSession, hasPermission } from "../utils/auth";
 const emptyForm = () => ({
   name: "",
   hsn_code: "",
+  gst_percent: "",
 });
 
 export default function ProductsManagementPage() {
@@ -110,13 +111,28 @@ export default function ProductsManagementPage() {
 
       }
 
+      const gstPercent = Number(formData.gst_percent);
+
+      if (formData.gst_percent !== "" && (!Number.isFinite(gstPercent) || gstPercent < 0 || gstPercent > 100)) {
+
+        alert("GST % must be between 0 and 100");
+
+        return;
+
+      }
+
+      const payload = {
+        ...formData,
+        gst_percent: formData.gst_percent === "" ? 0 : gstPercent,
+      };
+
       try {
 
         if (editId) {
 
           await axios.put(
             `${API_URL}/${editId}`,
-            formData
+            payload
           );
 
           alert(
@@ -127,7 +143,7 @@ export default function ProductsManagementPage() {
 
           await axios.post(
             API_URL,
-            formData
+            payload
           );
 
           alert(
@@ -164,6 +180,11 @@ export default function ProductsManagementPage() {
         p.hsn_code ||
         p.hsn ||
         "",
+
+      gst_percent:
+        p.gst_percent !== undefined && p.gst_percent !== null
+          ? p.gst_percent
+          : "",
     });
 
     setEditId(
@@ -275,6 +296,24 @@ export default function ProductsManagementPage() {
 
               </Field>
 
+              <Field
+                label="GST %"
+              >
+
+                <input
+                  name="gst_percent"
+                  type="number"
+                  min="0"
+                  max="100"
+                  step="0.01"
+                  value={formData.gst_percent}
+                  onChange={handleChange}
+                  placeholder="GST % (e.g. 5, 12, 18)"
+                  style={inp}
+                />
+
+              </Field>
+
             </div>
 
             <div style={actionRow}>
@@ -372,6 +411,10 @@ export default function ProductsManagementPage() {
                   </th>
 
                   <th style={th}>
+                    GST %
+                  </th>
+
+                  <th style={th}>
                     Actions
                   </th>
 
@@ -406,6 +449,12 @@ export default function ProductsManagementPage() {
                         {p.hsn_code ||
                           p.hsn ||
                           "-"}
+                      </td>
+
+                      <td style={td}>
+                        {p.gst_percent !== undefined && p.gst_percent !== null && String(p.gst_percent).trim() !== ""
+                          ? `${p.gst_percent}%`
+                          : "-"}
                       </td>
 
                       <td style={td}>
@@ -455,7 +504,7 @@ export default function ProductsManagementPage() {
                   <tr>
 
                     <td
-                      colSpan={4}
+                      colSpan={5}
                       style={{
                         ...td,
                         textAlign:
