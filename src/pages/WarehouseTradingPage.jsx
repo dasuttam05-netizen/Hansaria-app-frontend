@@ -82,28 +82,108 @@ const defaultForm = () => ({
   total_deduction: "",
   net_amount_payable: "",
   round_off: "",
+  gst_percent: "",
+  gst_type: "none",
+  cgst_percent: "",
+  sgst_percent: "",
+  igst_percent: "",
+  gst_amount: "",
+  taxable_amount: "",
+  grand_total: "",
   debit_account: "",
   credit_account: "",
   description: "",
   journey_note: "",
   journey_token: "",
   reject_qty: "",
-  gst_percent: "",
-  gst_type: "",
-  cgst_percent: "",
-  sgst_percent: "",
-  igst_percent: "",
-  taxable_amount: "",
-  cgst_amount: "",
-  sgst_amount: "",
-  igst_amount: "",
-  gst_amount: "",
-  grand_total: "",
 });
 
 const toNumber = (value) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
+};
+
+const normalizeGstState = (value) =>
+  String(value || "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+const calculateGst = (taxableAmount, gstPercent, supplierState, partyState) => {
+  const taxable = Math.max(toNumber(taxableAmount), 0);
+  const rate = Math.max(toNumber(gstPercent), 0);
+  const supplier = normalizeGstState(supplierState);
+  const party = normalizeGstState(partyState);
+  const sameState = Boolean(supplier && party && supplier === party);
+  const stateReady = Boolean(supplier && party);
+  const gstAmount = rate > 0
+    ? Number((taxable * rate / 100).toFixed(2))
+    : 0;
+
+  if (!rate) {
+    return {
+      gstPercent: 0,
+      gstType: "none",
+      cgstPercent: 0,
+      sgstPercent: 0,
+      igstPercent: 0,
+      gstAmount: 0,
+      taxableAmount: Number(taxable.toFixed(2)),
+      grandTotal: Number(taxable.toFixed(2)),
+      sameState,
+      stateReady,
+      label: "GST NOT SET",
+    };
+  }
+
+  if (!stateReady) {
+    return {
+      gstPercent: rate,
+      gstType: "state_not_set",
+      cgstPercent: 0,
+      sgstPercent: 0,
+      igstPercent: 0,
+      gstAmount,
+      taxableAmount: Number(taxable.toFixed(2)),
+      grandTotal: Number((taxable + gstAmount).toFixed(2)),
+      sameState: false,
+      stateReady: false,
+      label: `STATE NOT SET @ ${rate.toFixed(2)}%`,
+    };
+  }
+
+  if (sameState) {
+    const half = Number((rate / 2).toFixed(2));
+    return {
+      gstPercent: rate,
+      gstType: "cgst_sgst",
+      cgstPercent: half,
+      sgstPercent: half,
+      igstPercent: 0,
+      gstAmount,
+      taxableAmount: Number(taxable.toFixed(2)),
+      grandTotal: Number((taxable + gstAmount).toFixed(2)),
+      sameState: true,
+      stateReady: true,
+      label: `CGST ${half.toFixed(2)}% + SGST ${half.toFixed(2)}%`,
+    };
+  }
+
+  return {
+    gstPercent: rate,
+    gstType: "igst",
+    cgstPercent: 0,
+    sgstPercent: 0,
+    igstPercent: rate,
+    gstAmount,
+    taxableAmount: Number(taxable.toFixed(2)),
+    grandTotal: Number((taxable + gstAmount).toFixed(2)),
+    sameState: false,
+    stateReady: true,
+    label: `IGST ${rate.toFixed(2)}%`,
+  };
 };
 
 const normalizePaymentMode = (value) => {
@@ -449,14 +529,17 @@ export default function WarehouseTradingPage() {
   const selectedEmployee = employeeById.get(String(formData.employee_id)) || null;
   const selectedFarmer = farmerById.get(String(formData.farmer_id)) || null;
   const selectedBuyer = buyerById.get(String(formData.buyer_id || formData.company_id)) || null;
+  const selectedBuyerCompany = companyById.get(String(formData.company_id || formData.buyer_id)) || null;
   const selectedConsignee = consigneeById.get(String(formData.consignee_id)) || null;
   const selectedProduct = productById.get(String(formData.product_id)) || null;
-  const selectedPurchaseFarmer = farmerById.get(String(formData.farmer_id || formData.against_purchase_farmer_id)) || null;
   const selectedEmployeeMobile = selectedEmployee?.mobile || selectedEmployee?.phone || selectedEmployee?.mobile_no || "";
   const selectedFarmerMobile = selectedFarmer?.mobile || selectedFarmer?.phone || selectedFarmer?.mobile_no || "";
   const selectedFarmerGst = selectedFarmer?.gst_no || selectedFarmer?.gst || "";
   const selectedFarmerPan = selectedFarmer?.pan_no || selectedFarmer?.pan || "";
   const selectedFarmerState = selectedFarmer?.state || "";
+  const selectedWarehouseState = selectedWarehouse?.state || "";
+  const purchasePartyState = selectedConsignee?.state || selectedFarmerState || "";
+  const salePartyState = selectedBuyer?.state || selectedBuyerCompany?.state || selectedConsignee?.state || "";
   const selectedLocationName = selectedWarehouseLocation || selectedManualLocation?.name || "";
   const getProductName = (item) =>
     item?.product_name ||
@@ -571,7 +654,21 @@ export default function WarehouseTradingPage() {
     toNumber(formData.other_deduction) +
     toNumber(formData.adjustment_amount);
   const purchaseRoundOff = toNumber(formData.round_off);
-  const purchaseNetPayable = Math.max(purchaseGrossAmount - purchaseTotalDeduction + purchaseRoundOff, 0);
+  const purchaseGstDetails = calculateGst(
+    purchaseGrossAmount,
+    selectedProduct?.gst_percent ?? formData.gst_percent,
+    selectedWarehouseState,
+    purchasePartyState
+  );
+  const purchaseGrandTotal = purchaseGstDetails.grandTotal;
+  const purchaseNetPayable = Math.max(purchaseGrandTotal - purchaseTotalDeduction + purchaseRoundOff, 0);
+  const saleGstDetails = calculateGst(
+    saleGrossAmountFromData(formData),
+    selectedProduct?.gst_percent ?? formData.gst_percent,
+    selectedWarehouseState,
+    salePartyState
+  );
+  const saleGrandTotal = saleGstDetails.grandTotal;
   const purchaseDeductionDefaults = purchaseBaseline || {
     less_bags_weight: "",
     moisture: "",
@@ -791,47 +888,10 @@ export default function WarehouseTradingPage() {
   const saleEffectiveTdsAmount = toNumber(formData.tds_amount);
   const saleDeductionTotal = saleShortageAmount + saleEffectiveClaimAmount + saleEffectiveOtherDeduction + saleTransportCharge + saleCashDiscountAmount + toNumber(formData.adjustment_amount) + saleEffectiveTdsAmount;
   const saleNetReceivablePreview =
-    saleGrossAmountFromData(formData) -
+    saleGrandTotal -
     saleDeductionTotal +
     saleAdditionalAmount +
     toNumber(formData.round_off);
-
-  const normalizeGstState = (value) => String(value || "").trim().toLowerCase().replace(/[.\-_]+/g, " ").replace(/\s+/g, " ");
-  const buildGstInfo = (party, taxableAmount, netAmount) => {
-    const gstPercent = Math.max(0, Math.min(100, toNumber(selectedProduct?.gst_percent)));
-    const warehouseState = normalizeGstState(selectedWarehouse?.state);
-    const partyState = normalizeGstState(party?.state);
-    const hasStates = Boolean(warehouseState && partyState);
-    const sameState = hasStates && warehouseState === partyState;
-    const gstType = gstPercent <= 0 ? "" : !hasStates ? "STATE NOT SET" : sameState ? "CGST + SGST" : "IGST";
-    const cgstPercent = sameState ? gstPercent / 2 : 0;
-    const sgstPercent = sameState ? gstPercent / 2 : 0;
-    const igstPercent = hasStates && !sameState ? gstPercent : 0;
-    const taxable = Math.max(0, toNumber(taxableAmount));
-    const cgstAmount = sameState ? Number((taxable * cgstPercent / 100).toFixed(2)) : 0;
-    const sgstAmount = sameState ? Number((taxable * sgstPercent / 100).toFixed(2)) : 0;
-    const igstAmount = hasStates && !sameState ? Number((taxable * igstPercent / 100).toFixed(2)) : 0;
-    const gstAmount = Number((cgstAmount + sgstAmount + igstAmount).toFixed(2));
-    return {
-      gst_percent: gstPercent,
-      gst_type: gstType,
-      cgst_percent: cgstPercent,
-      sgst_percent: sgstPercent,
-      igst_percent: igstPercent,
-      taxable_amount: Number(taxable.toFixed(2)),
-      cgst_amount: cgstAmount,
-      sgst_amount: sgstAmount,
-      igst_amount: igstAmount,
-      gst_amount: gstAmount,
-      grand_total: Number((toNumber(netAmount) + (hasStates ? gstAmount : 0)).toFixed(2)),
-      warehouse_state: selectedWarehouse?.state || "",
-      party_state: party?.state || "",
-    };
-  };
-
-  const purchaseGstInfo = buildGstInfo(selectedPurchaseFarmer, purchaseGrossAmount, purchaseNetPayable);
-  const saleGstParty = selectedConsignee?.state ? selectedConsignee : selectedBuyer;
-  const saleGstInfo = buildGstInfo(saleGstParty, saleGrossAmountFromData(formData), saleNetReceivablePreview);
   const saleProfitLossPreview = saleNetReceivablePreview - netPurchaseSummaryValue;
 
   const resetSaleDeductionsToAuto = () => {
@@ -2348,11 +2408,8 @@ export default function WarehouseTradingPage() {
         "cgst_percent",
         "sgst_percent",
         "igst_percent",
-        "taxable_amount",
-        "cgst_amount",
-        "sgst_amount",
-        "igst_amount",
         "gst_amount",
+        "taxable_amount",
         "grand_total",
       ];
       const payload = { ...formData };
@@ -2372,10 +2429,17 @@ export default function WarehouseTradingPage() {
         payload.transport_charge = toNumber(formData.transport_charge);
         payload.total_deduct_amount = purchaseTotalDeduction;
         payload.total_deduction = purchaseTotalDeduction;
+        payload.gst_percent = purchaseGstDetails.gstPercent;
+        payload.gst_type = purchaseGstDetails.gstType;
+        payload.cgst_percent = purchaseGstDetails.cgstPercent;
+        payload.sgst_percent = purchaseGstDetails.sgstPercent;
+        payload.igst_percent = purchaseGstDetails.igstPercent;
+        payload.gst_amount = purchaseGstDetails.gstAmount;
+        payload.taxable_amount = purchaseGstDetails.taxableAmount;
+        payload.grand_total = purchaseGrandTotal;
         payload.amount = purchaseNetPayable;
         payload.net_amount_payable = purchaseNetPayable;
         payload.location_id = payload.location_id || selectedWarehouse?.location_id || "";
-        Object.assign(payload, purchaseGstInfo);
       }
       if (activeVoucherType === "sale") {
         payload.buyer_id = payload.buyer_id || payload.company_id || "";
@@ -2385,6 +2449,14 @@ export default function WarehouseTradingPage() {
         payload.unloading_qty = payload.quantity;
         payload.amount = saleGrossAmountFromData(formData);
         const grossAmount = payload.amount;
+        payload.gst_percent = saleGstDetails.gstPercent;
+        payload.gst_type = saleGstDetails.gstType;
+        payload.cgst_percent = saleGstDetails.cgstPercent;
+        payload.sgst_percent = saleGstDetails.sgstPercent;
+        payload.igst_percent = saleGstDetails.igstPercent;
+        payload.gst_amount = saleGstDetails.gstAmount;
+        payload.taxable_amount = saleGstDetails.taxableAmount;
+        payload.grand_total = saleGrandTotal;
         const claimAmount = saleEffectiveClaimAmount;
         const otherDeduction = saleEffectiveOtherDeduction;
         const cdAmount = Number(payload.cd_amount) || Number((grossAmount * (Number(formData.cd_percent) || 0) / 100).toFixed(2)) || 0;
@@ -2396,12 +2468,11 @@ export default function WarehouseTradingPage() {
         payload.other_deduction = otherDeduction;
         payload.tds_amount = tdsAmount;
         payload.total_deduction = claimAmount + otherDeduction + toNumber(formData.transport_charge) + cdAmount + adjustmentAmount + tdsAmount;
-        const netAmount = grossAmount - claimAmount - otherDeduction - cdAmount - adjustmentAmount - tdsAmount + roundOff;
+        const netAmount = grossAmount + saleGstDetails.gstAmount - claimAmount - otherDeduction - cdAmount - adjustmentAmount - tdsAmount + roundOff;
         payload.net_amount = netAmount;
         payload.net_amount_payable = netAmount;
         payload.net_receivable_amount = netAmount;
         payload.outstanding = netAmount;
-        Object.assign(payload, saleGstInfo);
         const qtyForFifo = Number(payload.unloading_qty || payload.quantity) || 0;
         payload.fifo_rate = qtyForFifo > 0 ? grossAmount / qtyForFifo : 0;
         payload.fifo_amount = grossAmount;
@@ -3639,6 +3710,14 @@ export default function WarehouseTradingPage() {
       round_off: finalRoundOff,
       reject_qty: toNumber(formData.reject_qty),
       amount: saleBillAmountFromData(formData),
+      gst_percent: saleGstDetails.gstPercent,
+      gst_type: saleGstDetails.gstType,
+      cgst_percent: saleGstDetails.cgstPercent,
+      sgst_percent: saleGstDetails.sgstPercent,
+      igst_percent: saleGstDetails.igstPercent,
+      gst_amount: saleGstDetails.gstAmount,
+      taxable_amount: saleGstDetails.taxableAmount,
+      grand_total: saleGrandTotal,
     };
 
     setLoading(true);
@@ -3740,6 +3819,14 @@ export default function WarehouseTradingPage() {
       tds_amount: finalTdsAmount,
       reject_qty: toNumber(formData.reject_qty),
       amount: saleBillAmountFromData(formData),
+      gst_percent: saleGstDetails.gstPercent,
+      gst_type: saleGstDetails.gstType,
+      cgst_percent: saleGstDetails.cgstPercent,
+      sgst_percent: saleGstDetails.sgstPercent,
+      igst_percent: saleGstDetails.igstPercent,
+      gst_amount: saleGstDetails.gstAmount,
+      taxable_amount: saleGstDetails.taxableAmount,
+      grand_total: saleGrandTotal,
     };
 
     setLoading(true);
@@ -5426,6 +5513,8 @@ export default function WarehouseTradingPage() {
                         <div style={{ padding: "10px 12px", background: "#f3f4f6", borderBottom: "1px solid #dbe4ef", fontWeight: 800 }}>ERP Summary</div>
                         <div style={{ padding: 12, display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: 10 }}>
                           <div style={smartInfoBoxStyle}><span>Gross Amount</span><strong>{formatMoney(purchaseGrossAmount)}</strong></div>
+                          <div style={smartInfoBoxStyle}><span>GST Amount</span><strong>{formatMoney(purchaseGstDetails.gstAmount)}</strong></div>
+                          <div style={smartInfoBoxStyle}><span>Grand Total</span><strong>{formatMoney(purchaseGrandTotal)}</strong></div>
                           <div style={smartInfoBoxStyle}><span>Total Deduction</span><strong>{formatMoney(purchaseTotalDeduction)}</strong></div>
                           <div style={smartInfoBoxStyle}><span>Round Off</span><strong>{formatMoney(purchaseRoundOff)}</strong></div>
                           <div style={{ ...smartInfoBoxStyle, background: "#0b2a5b", color: "#fff", borderColor: "#0b2a5b" }}><span>Net Amount Payable</span><strong>{formatMoney(purchaseNetPayable)}</strong></div>
@@ -5454,6 +5543,9 @@ export default function WarehouseTradingPage() {
                         </thead>
                         <tbody>
                           <tr><td style={erpTd}>Gross Amount</td><td style={erpTd}>{formatMoney(purchaseGrossAmount)}</td></tr>
+                          <tr><td style={erpTd}>GST</td><td style={erpTd}>{purchaseGstDetails.label}</td></tr>
+                          <tr><td style={erpTd}>GST Amount</td><td style={erpTd}>{formatMoney(purchaseGstDetails.gstAmount)}</td></tr>
+                          <tr><td style={{ ...erpTd, fontWeight: 800 }}>Grand Total</td><td style={{ ...erpTd, fontWeight: 800 }}>{formatMoney(purchaseGrandTotal)}</td></tr>
                           <tr><td style={erpTd}>Total Deduction</td><td style={erpTd}>{formatMoney(purchaseTotalDeduction)}</td></tr>
                           <tr><td style={erpTd}>Round Off</td><td style={erpTd}>{formatMoney(purchaseRoundOff)}</td></tr>
                           <tr><td style={erpTd}>Net Amount Payable</td><td style={erpTd}>{formatMoney(purchaseNetPayable)}</td></tr>
@@ -5765,11 +5857,10 @@ export default function WarehouseTradingPage() {
                           <div style={{ padding: "8px 10px", background: "#eef4ff", fontWeight: 800, color: "#1e40af" }}>Sale Details</div>
                           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                             <tbody>
-                              <tr><td style={erpTd}>Qty × Rate</td><td style={erpTd}>{formatDecimal4(saleDispatchQtyFromData(formData))} × {formatMoney(toNumber(formData.rate))}</td></tr>
                               <tr><td style={erpTd}>Sale Amount</td><td style={erpTd}>{formatMoney(saleGrossAmountFromData(formData))}</td></tr>
-                              <tr><td style={erpTd}>GST</td><td style={erpTd}>{saleGstInfo.gst_type || "-"} @ {formatMoney(saleGstInfo.gst_percent)}%</td></tr>
-                              <tr><td style={erpTd}>GST Amount</td><td style={erpTd}>{formatMoney(saleGstInfo.gst_amount)}</td></tr>
-                              <tr><td style={{ ...erpTd, fontWeight: 800 }}>Grand Total</td><td style={{ ...erpTd, fontWeight: 800 }}>{formatMoney(saleGstInfo.grand_total)}</td></tr>
+                              <tr><td style={erpTd}>GST</td><td style={erpTd}>{saleGstDetails.label}</td></tr>
+                              <tr><td style={erpTd}>GST Amount</td><td style={erpTd}>{formatMoney(saleGstDetails.gstAmount)}</td></tr>
+                              <tr><td style={{ ...erpTd, fontWeight: 800, background: "#f5f8ff" }}>Grand Total</td><td style={{ ...erpTd, fontWeight: 800, background: "#f5f8ff" }}>{formatMoney(saleGrandTotal)}</td></tr>
                             </tbody>
                           </table>
                           <div style={{ padding: "7px 10px", background: "#f5f8ff", fontWeight: 800, color: "#1e40af", borderTop: "1px solid #d8e3f7" }}>Sale Deduction</div>
@@ -5789,9 +5880,8 @@ export default function WarehouseTradingPage() {
                         </div>
                       </div>
 
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 10, marginTop: 10 }}>
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, minmax(0, 1fr))", gap: 10, marginTop: 10 }}>
                         <div style={{ ...erpTotalPanel, marginTop: 0, background: "#eef4ff" }}><span style={erpTotalLabel}>NET SALE</span><strong style={erpTotalAmount}>{formatMoney(saleNetReceivablePreview)}</strong></div>
-                        <div style={{ ...erpTotalPanel, marginTop: 0, background: "#f8fafc" }}><span style={erpTotalLabel}>GST</span><strong style={erpTotalAmount}>{formatMoney(saleGstInfo.gst_amount)}</strong></div>
                         <div style={{ ...erpTotalPanel, marginTop: 0, background: "#e8f7f1" }}><span style={erpTotalLabel}>NET PURCHASE</span><strong style={erpTotalAmount}>{formatMoney(netPurchaseSummaryValue)}</strong></div>
                         <div style={{ ...erpTotalPanel, marginTop: 0, background: (saleNetReceivablePreview - netPurchaseSummaryValue) >= 0 ? "#ecfdf5" : "#fef2f2" }}><span style={erpTotalLabel}>PROFIT / LOSS</span><strong style={{ ...erpTotalAmount, color: (saleNetReceivablePreview - netPurchaseSummaryValue) >= 0 ? "#047857" : "#b91c1c" }}>{formatMoney(saleNetReceivablePreview - netPurchaseSummaryValue)}</strong></div>
                       </div>
@@ -6237,18 +6327,6 @@ export default function WarehouseTradingPage() {
                         ))}
                       </select>
                     </Field>
-                    <div style={{ gridColumn: "1 / -1", border: "1px solid #dbe4ef", borderRadius: 8, padding: 10, background: "#f8fafc" }}>
-                      <div style={{ fontWeight: 800, color: "#0f172a", marginBottom: 7 }}>GST</div>
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(145px, 1fr))", gap: 8, fontSize: 12 }}>
-                        <div><span style={{ color: "#64748b" }}>Product GST</span><strong style={{ display: "block" }}>{activeVoucherType === "purchase" ? formatMoney(purchaseGstInfo.gst_percent) : formatMoney(saleGstInfo.gst_percent)}%</strong></div>
-                        <div><span style={{ color: "#64748b" }}>GST Type</span><strong style={{ display: "block" }}>{activeVoucherType === "purchase" ? (purchaseGstInfo.gst_type || "-") : (saleGstInfo.gst_type || "-")}</strong></div>
-                        <div><span style={{ color: "#64748b" }}>CGST</span><strong style={{ display: "block" }}>{formatMoney(activeVoucherType === "purchase" ? purchaseGstInfo.cgst_amount : saleGstInfo.cgst_amount)}</strong></div>
-                        <div><span style={{ color: "#64748b" }}>SGST</span><strong style={{ display: "block" }}>{formatMoney(activeVoucherType === "purchase" ? purchaseGstInfo.sgst_amount : saleGstInfo.sgst_amount)}</strong></div>
-                        <div><span style={{ color: "#64748b" }}>IGST</span><strong style={{ display: "block" }}>{formatMoney(activeVoucherType === "purchase" ? purchaseGstInfo.igst_amount : saleGstInfo.igst_amount)}</strong></div>
-                        <div><span style={{ color: "#64748b" }}>GST Amount</span><strong style={{ display: "block" }}>{formatMoney(activeVoucherType === "purchase" ? purchaseGstInfo.gst_amount : saleGstInfo.gst_amount)}</strong></div>
-                        <div><span style={{ color: "#64748b" }}>Grand Total</span><strong style={{ display: "block" }}>{formatMoney(activeVoucherType === "purchase" ? purchaseGstInfo.grand_total : saleGstInfo.grand_total)}</strong></div>
-                      </div>
-                    </div>
                     {activeVoucherType === "sale" && formData.sale_type !== "direct" && (
                       <div style={{ gridColumn: "1 / -1", border: "1px solid #dbe3ef", borderRadius: 8, padding: 12, background: "#f8fafc" }}>
                         <label style={{ display: "flex", alignItems: "center", gap: 8, fontWeight: 700, color: "#334155" }}>
@@ -6487,18 +6565,6 @@ export default function WarehouseTradingPage() {
                               <td style={td}>{formatMoney(purchaseGrossAmount)}</td>
                               <td style={td}>Net Payable</td>
                               <td style={td}>{formatMoney(purchaseNetPayable)}</td>
-                            </tr>
-                            <tr>
-                              <td style={td}>GST</td>
-                              <td style={td}>{purchaseGstInfo.gst_type || "-"} @ {formatMoney(purchaseGstInfo.gst_percent)}%</td>
-                              <td style={td}>GST Amount</td>
-                              <td style={td}>{formatMoney(purchaseGstInfo.gst_amount)}</td>
-                            </tr>
-                            <tr>
-                              <td style={{ ...td, fontWeight: 800 }}>Grand Total</td>
-                              <td style={{ ...td, fontWeight: 800 }}>{formatMoney(purchaseGstInfo.grand_total)}</td>
-                              <td style={td}>CGST / SGST / IGST</td>
-                              <td style={td}>{formatMoney(purchaseGstInfo.cgst_amount)} / {formatMoney(purchaseGstInfo.sgst_amount)} / {formatMoney(purchaseGstInfo.igst_amount)}</td>
                             </tr>
                           </tbody>
                         </table>
