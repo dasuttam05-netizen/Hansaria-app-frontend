@@ -453,6 +453,7 @@ export default function WarehouseTradingPage() {
   const [stockDrilldown, setStockDrilldown] = useState(null);
   const [stockDrilldownFromDate, setStockDrilldownFromDate] = useState("");
   const [stockDrilldownToDate, setStockDrilldownToDate] = useState("");
+  const [importingSale, setImportingSale] = useState(false);
   const [importingPurchase, setImportingPurchase] = useState(false);
   const [importingPayment, setImportingPayment] = useState(false);
   const [importingReceipt, setImportingReceipt] = useState(false);
@@ -3351,6 +3352,61 @@ export default function WarehouseTradingPage() {
     loadSalePreviewSummary();
   }, [showSalePreview, salePreviewRow]);
 
+  const downloadSaleImportTemplate = async () => {
+    try {
+      const response = await API.get("/api/wh-vouchers/sale/import-template", {
+        responseType: "blob",
+      });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement("a");
+      link.href = url;
+      link.setAttribute("download", "sale_voucher_import_format.xlsx");
+      document.body.appendChild(link);
+      link.click();
+      link.parentNode.removeChild(link);
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error(err);
+      alert(err?.response?.data?.error || "Failed to download sale format");
+    }
+  };
+
+  const handleSaleExcelImport = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+    const fileName = file.name.toLowerCase();
+    if (!fileName.endsWith(".xlsx") && !fileName.endsWith(".xls")) {
+      alert("Please select an Excel file (.xlsx or .xls)");
+      return;
+    }
+    const uploadForm = new FormData();
+    uploadForm.append("file", file);
+    setImportingSale(true);
+    try {
+      const res = await API.post("/api/wh-vouchers/sale/import-xlsx", uploadForm, {
+        headers: { "Content-Type": "multipart/form-data" },
+      });
+      const imported = Number(res.data?.imported || 0);
+      const failed = Number(res.data?.failed || 0);
+      const errors = Array.isArray(res.data?.errors) ? res.data.errors : [];
+      const errorText = errors
+        .slice(0, 10)
+        .map((item) => `Row ${item.row}: ${item.error}`)
+        .join("\n");
+      alert(`Sale import complete.\nImported: ${imported}\nFailed: ${failed}${errorText ? `\n\n${errorText}` : ""}`);
+      setActiveVoucherType("sale");
+      await loadVouchers();
+      if (activeTab === "reports") await loadReport();
+      fetchNextVoucherNo("sale");
+    } catch (err) {
+      console.error(err);
+      alert(err?.response?.data?.error || "Sale import failed");
+    } finally {
+      setImportingSale(false);
+    }
+  };
+
   const downloadPurchaseImportTemplate = async () => {
     try {
       const response = await API.get("/api/wh-vouchers/purchase/import-template", {
@@ -5298,12 +5354,15 @@ export default function WarehouseTradingPage() {
             voucherTypeRow={voucherTypeRow}
             card={card}
             btnAction={btnAction}
+            importingSale={importingSale}
             importingPurchase={importingPurchase}
             importingPayment={importingPayment}
             importingReceipt={importingReceipt}
+            onDownloadSaleTemplate={downloadSaleImportTemplate}
             onDownloadPurchaseTemplate={downloadPurchaseImportTemplate}
             onDownloadPaymentTemplate={downloadPaymentImportTemplate}
             onDownloadReceiptTemplate={downloadReceiptImportTemplate}
+            onImportSale={handleSaleExcelImport}
             onImportPurchase={handlePurchaseExcelImport}
             onImportPayment={handlePaymentExcelImport}
             onImportReceipt={handleReceiptExcelImport}
