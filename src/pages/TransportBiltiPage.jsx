@@ -554,6 +554,12 @@ export default function TransportBiltiPage() {
     try {
       const res = await axios.post(`${API_BASE}/transport-bilti/save`, {
         ...formData,
+        shortage_qty: calculation.shortageQty,
+        shortage_amount: calculation.shortageAmount,
+        gross_freight: calculation.grossFreight,
+        net_amount: calculation.netAmount,
+        tds_amount: calculation.tdsAmount,
+        payable_amount: calculation.payableAmount,
         outward_id: mode === "outward" ? selectedOutwardId : null,
         sale_id: mode === "sale" ? selectedSaleId : null,
       });
@@ -578,6 +584,12 @@ export default function TransportBiltiPage() {
     try {
       const res = await axios.post(`${API_BASE}/transport-bilti/save`, {
         ...formData,
+        shortage_qty: calculation.shortageQty,
+        shortage_amount: calculation.shortageAmount,
+        gross_freight: calculation.grossFreight,
+        net_amount: calculation.netAmount,
+        tds_amount: calculation.tdsAmount,
+        payable_amount: calculation.payableAmount,
         outward_id: mode === "outward" ? selectedOutwardId : null,
         sale_id: mode === "sale" ? selectedSaleId : null,
       });
