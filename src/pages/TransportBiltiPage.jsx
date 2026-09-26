@@ -561,8 +561,8 @@ export default function TransportBiltiPage() {
       });
       alert(res.data.message || (formData.id ? "Bilti updated successfully" : "Bilti saved successfully"));
       await loadMasterData();
-      if (res.data.id) {
-        await loadBilti(res.data.id);
+      if (res.data.id || res.data._id) {
+        await loadBilti(res.data._id || res.data.id);
       }
     } catch (err) {
       console.error(err);
@@ -591,8 +591,8 @@ export default function TransportBiltiPage() {
       });
       alert("Bilti edited successfully");
       await loadMasterData();
-      if (res.data.id) {
-        loadBilti(res.data.id);
+      if (res.data._id || res.data.id) {
+        await loadBilti(res.data._id || res.data.id);
       } else if (mode === "outward" && selectedOutwardId) {
         loadBilti(selectedOutwardId);
       } else if (mode === "sale" && selectedSaleId) {
