@@ -80,6 +80,7 @@ export default function TransportReportPage() {
       records.reduce(
         (acc, row) => {
           acc.gross += Number(row.gross_freight) || 0;
+          acc.net += Number(row.net_amount) || 0;
           acc.shortage += Number(row.shortage_amount) || 0;
           acc.detain += Number(row.detain_amount) || 0;
           acc.others += Number(row.others_exp) || 0;
@@ -88,7 +89,7 @@ export default function TransportReportPage() {
           acc.payable += Number(row.payable_amount) || 0;
           return acc;
         },
-        { gross: 0, shortage: 0, detain: 0, others: 0, advance: 0, tds: 0, payable: 0 }
+        { gross: 0, net: 0, shortage: 0, detain: 0, others: 0, advance: 0, tds: 0, payable: 0 }
       ),
     [records]
   );
@@ -114,6 +115,7 @@ export default function TransportReportPage() {
         "Lorry",
         "Dest",
         "Gross",
+        "Net Amount",
         "Shortage",
         "Detain",
         "Others",
@@ -130,6 +132,7 @@ export default function TransportReportPage() {
         row.lorry_no || row.outward_lorry_no || row.sale_lorry_no || "",
         row.destination,
         num(row.gross_freight),
+        num(row.net_amount),
         num(row.shortage_amount),
         num(row.detain_amount),
         num(row.others_exp),
@@ -146,6 +149,7 @@ export default function TransportReportPage() {
         "",
         "Totals",
         num(totals.gross),
+        num(totals.net),
         num(totals.shortage),
         num(totals.detain),
         num(totals.others),
@@ -223,6 +227,7 @@ export default function TransportReportPage() {
                 <th style={th}>Shortage Qty</th>
                 <th style={th}>Rate</th>
                 <th style={th}>Gross Freight</th>
+                <th style={th}>Net Amount</th>
                 <th style={th}>Shortage Amount</th>
                 <th style={th}>Detain</th>
                 <th style={th}>Others Exp</th>
@@ -251,6 +256,7 @@ export default function TransportReportPage() {
                     <td style={td}>{num(row.shortage_qty)}</td>
                     <td style={td}>{num(row.transport_rate)}</td>
                     <td style={td}>{num(row.gross_freight)}</td>
+                    <td style={td}>{num(row.net_amount)}</td>
                     <td style={td}>{num(row.shortage_amount)}</td>
                     <td style={td}>{num(row.detain_amount)}</td>
                     <td style={td}>{num(row.others_exp)}</td>
@@ -272,7 +278,7 @@ export default function TransportReportPage() {
                 ))
               ) : (
                 <tr>
-                  <td style={td} colSpan="22">No records found</td>
+                  <td style={td} colSpan="23">No records found</td>
                 </tr>
               )}
             </tbody>
