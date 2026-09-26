@@ -15,12 +15,15 @@ function WarehouseVoucherPanel({
   voucherTypeRow,
   card,
   btnAction,
+  importingSale,
   importingPurchase,
   importingPayment,
   importingReceipt,
+  onDownloadSaleTemplate,
   onDownloadPurchaseTemplate,
   onDownloadPaymentTemplate,
   onDownloadReceiptTemplate,
+  onImportSale,
   onImportPurchase,
   onImportPayment,
   onImportReceipt,
@@ -48,14 +51,26 @@ function WarehouseVoucherPanel({
             <h3 style={{ margin: 0 }}>{editId ? "Edit" : "New"} {activeVoucherType.charAt(0).toUpperCase() + activeVoucherType.slice(1)} Voucher</h3>
             <PageBackCloseActions navigate={navigate} size="compact" />
           </div>
-          {(isPurchaseVoucher || isPaymentVoucher || isReceiptVoucher) && (
+          {(activeVoucherType === "sale" || isPurchaseVoucher || isPaymentVoucher || isReceiptVoucher) && (
             (
+              (activeVoucherType === "sale" && (hasPermission(user, "warehouse.trading.sale.create") || hasPermission(user, "warehouse.trading.sale.edit") || hasPermission(user, "warehouse.trading.sale.delete"))) ||
               (isPurchaseVoucher && (hasPermission(user, "warehouse.trading.purchase.create") || hasPermission(user, "warehouse.trading.purchase.edit") || hasPermission(user, "warehouse.trading.purchase.delete"))) ||
               (isPaymentVoucher && (hasPermission(user, "warehouse.trading.payment.create") || hasPermission(user, "warehouse.trading.payment.edit") || hasPermission(user, "warehouse.trading.payment.delete"))) ||
               (isReceiptVoucher && (hasPermission(user, "warehouse.trading.receipt.create") || hasPermission(user, "warehouse.trading.receipt.edit") || hasPermission(user, "warehouse.trading.receipt.delete")))
             )
           ) && (
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {activeVoucherType === "sale" && (
+                <>
+                  <button type="button" onClick={onDownloadSaleTemplate} style={{ ...btnAction, background: "#0f766e" }}>
+                    Download Excel Format
+                  </button>
+                  <label style={{ ...btnAction, background: importingSale ? "#94a3b8" : "#2563eb", cursor: importingSale ? "not-allowed" : "pointer" }}>
+                    {importingSale ? "Importing..." : "Import Excel"}
+                    <input type="file" accept=".xlsx,.xls" onChange={onImportSale} disabled={importingSale} style={{ display: "none" }} />
+                  </label>
+                </>
+              )}
               {isPurchaseVoucher && (
                 <>
                   <button type="button" onClick={onDownloadPurchaseTemplate} style={{ ...btnAction, background: "#0f766e" }}>
