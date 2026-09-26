@@ -546,10 +546,6 @@ export default function TransportBiltiPage() {
 
   const saveBilti = async () => {
     if (!formData.transporter_id) return alert("Select transport name");
-    const hasExistingBilti = Boolean(formData.id);
-    if (hasExistingBilti) {
-      return alert("Use 'Edit Bilti' button to update an existing bilti");
-    }
 
     try {
       const res = await axios.post(`${API_BASE}/transport-bilti/save`, {
@@ -563,10 +559,10 @@ export default function TransportBiltiPage() {
         outward_id: mode === "outward" ? selectedOutwardId : null,
         sale_id: mode === "sale" ? selectedSaleId : null,
       });
-      alert(res.data.message || "Bilti saved successfully");
+      alert(res.data.message || (formData.id ? "Bilti updated successfully" : "Bilti saved successfully"));
       await loadMasterData();
       if (res.data.id) {
-        loadBilti(res.data.id);
+        await loadBilti(res.data.id);
       }
     } catch (err) {
       console.error(err);
