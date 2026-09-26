@@ -62,7 +62,11 @@ export default function TransportReportPage() {
   const fetchReport = async () => {
     try {
       const res = await axios.get(`${API_BASE}/transport-bilti/report/list`, {
-        params: filters,
+        params: { ...filters, _t: Date.now() },
+        headers: {
+          "Cache-Control": "no-cache",
+          Pragma: "no-cache",
+        },
       });
       setRecords(res.data || []);
     } catch (err) {
