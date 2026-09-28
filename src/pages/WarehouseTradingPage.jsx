@@ -370,6 +370,7 @@ export default function WarehouseTradingPage() {
   const [activeVoucherType, setActiveVoucherType] = useState("purchase");
   const [activeReport, setActiveReport] = useState("sale");
   const [profitLossMode, setProfitLossMode] = useState("direct");
+  const [profitLossDownloadType, setProfitLossDownloadType] = useState("xlsx");
 
   const [warehouses, setWarehouses] = useState([]);
   const [farmers, setFarmers] = useState([]);
@@ -5084,12 +5085,13 @@ export default function WarehouseTradingPage() {
     return { doc, title };
   };
 
-  const downloadProfitLossExcel = async () => {
+  const downloadProfitLoss = async (format = profitLossDownloadType) => {
     if (activeReport !== "profit-loss") return;
+    const exportType = format === "pdf" ? "pdf" : "xlsx";
     try {
       const params = {
         mode: reportFilters.profit_loss_mode || profitLossMode || "direct",
-        export: "xlsx",
+        export: exportType,
       };
       if (reportFilters.profit_from_date) params.from_date = reportFilters.profit_from_date;
       if (reportFilters.profit_to_date) params.to_date = reportFilters.profit_to_date;
@@ -5102,14 +5104,14 @@ export default function WarehouseTradingPage() {
       const url = window.URL.createObjectURL(response.data);
       const link = document.createElement("a");
       link.href = url;
-      link.download = `warehouse_profit_loss_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      link.download = `warehouse_profit_loss_${new Date().toISOString().slice(0, 10)}.${exportType}`;
       document.body.appendChild(link);
       link.click();
       link.remove();
       window.URL.revokeObjectURL(url);
     } catch (err) {
       console.error(err);
-      alert(err?.response?.data?.error || "Failed to download Profit/Loss Excel");
+      alert(err?.response?.data?.error || `Failed to download Profit/Loss ${exportType.toUpperCase()}`);
     }
   };
 
@@ -6942,7 +6944,20 @@ export default function WarehouseTradingPage() {
                     </>
                   )}
                   <button type="button" onClick={() => { setProfitLossMode("direct"); setReportFilters((prev) => ({ ...prev, profit_loss_mode: "direct", profit_from_date: "", profit_to_date: "", profit_location_id: "", profit_employee_id: "", profit_farmer_id: "" })); setReportPage(1); }} style={{ ...btnAction, background: "#64748b" }}>Clear Filters</button>
-                  <button type="button" onClick={downloadProfitLossExcel} style={{ ...btnAction, background: "#0f766e" }}>Download Excel</button>
+                  <div style={{ display: "flex", gap: 8, alignItems: "end" }}>
+                    <label style={{ display: "flex", flexDirection: "column", gap: 5, minWidth: 135, fontSize: 12, fontWeight: 700, color: "#334155" }}>
+                      Download Format
+                      <select
+                        value={profitLossDownloadType}
+                        onChange={(e) => setProfitLossDownloadType(e.target.value === "pdf" ? "pdf" : "xlsx")}
+                        style={{ ...inp, minHeight: 40 }}
+                      >
+                        <option value="xlsx">Excel</option>
+                        <option value="pdf">PDF</option>
+                      </select>
+                    </label>
+                    <button type="button" onClick={() => downloadProfitLoss(profitLossDownloadType)} style={{ ...btnAction, background: "#0f766e" }}>Download</button>
+                  </div>
                 </div>
               </div>
             )}
