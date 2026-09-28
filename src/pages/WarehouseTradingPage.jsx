@@ -4425,28 +4425,15 @@ export default function WarehouseTradingPage() {
       )],
     ] : [
       ["date", "Date", (item) => formatLedgerDate(item.date)],
-      ["voucher_no", "Sale Inv No", (item) => item.voucher_no || item.bill_no || "-"],
-      ["farmer_name", "Farmer Name", (item) => item.farmer_name || getFarmerName(item) || "-"],
-      ["buyer_name", "Buyer Name", (item) => item.buyer_name || getBuyerName(item) || "-"],
-      ["consignee_name", "Consignee Name", (item) => item.consignee_name || "-"],
-      ["purchase_qty", "Purchase Qty", (item) => formatDecimal4(item.purchase_qty || item.direct_purchase_qty || 0)],
-      ["purchase_rate", "Purchase Rate", (item) => formatMoney(item.purchase_rate || item.direct_purchase_rate || 0)],
-      ["purchase_amount", "Purchase Amount", (item) => formatMoney(item.purchase_amount || item.direct_purchase_amount || 0)],
-      ["quantity", "Sale Qty", (item) => formatDecimal4(item.quantity || item.total_quantity || item.unloading_qty || 0)],
-      ["rate", "Sale Rate", (item) => formatMoney(item.rate || 0)],
-      ["gross_amount", "Gross Amount", (item) => formatMoney(item.gross_amount || item.amount || item.sale_amount || 0)],
-      ["additional_amount", "Total Add", (item) => formatMoney(item.additional_amount || 0)],
-      ["total_less", "Total Less", (item) => formatMoney(item.total_less || item.total_deduction || 0)],
-      ["less_details", "Less Details", (item) => {
-        const parts = [
-          ["Claim", item.claim_amount], ["Shortage", item.shortage_amount], ["Moisture", item.moisture],
-          ["Dunki", item.dunki], ["Fungus", item.fungus], ["Discolour", item.discolour], ["Others", item.others],
-          ["Other Deduction", item.other_deduction], ["CD", item.cd_amount], ["Adjustment", item.adjustment_amount],
-          ["Transport", item.transport_charge], ["TDS", item.tds_amount], ["Round Off", item.round_off],
-        ].filter(([, value]) => toNumber(value) !== 0).map(([label, value]) => `${label}: ${formatMoney(value)}`);
-        return parts.length ? <span style={{ whiteSpace: "pre-line", fontSize: 12 }}>{parts.join("\n")}</span> : "-";
-      }],
-      ["profit_loss", "Profit / Loss", (item) => (
+      ["voucher_no", "Sale Inv", (item) => item.voucher_no || item.bill_no || "-"],
+      ["farmer_name", "Farmer", (item) => item.farmer_name || getFarmerName(item) || "-"],
+      ["buyer_name", "Buyer", (item) => item.buyer_name || getBuyerName(item) || "-"],
+      ["consignee_name", "Consignee", (item) => item.consignee_name || "-"],
+      ["purchase_amount", "P.Amount", (item) => formatMoney(item.purchase_amount || item.direct_purchase_amount || 0)],
+      ["gross_amount", "S.Amount", (item) => formatMoney(item.gross_amount || item.amount || item.sale_amount || 0)],
+      ["additional_amount", "Add", (item) => formatMoney(item.additional_amount || 0)],
+      ["total_less", "Less", (item) => formatMoney(item.total_less || item.total_deduction || 0)],
+      ["profit_loss", "P/L", (item) => (
         <button type="button" onClick={() => showSaleReportPreview(item)} style={{ ...linkButtonStyle, color: Number(item.profit_loss || 0) >= 0 ? "#16a34a" : "#dc2626", fontWeight: 800 }}>
           {formatMoney(item.profit_loss || 0)}
         </button>
