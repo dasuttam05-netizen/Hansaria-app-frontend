@@ -402,6 +402,7 @@ export default function WarehouseTradingPage() {
   const [list, setList] = useState([]);
   const [reportData, setReportData] = useState([]);
   const [reportFilterOptions, setReportFilterOptions] = useState({ account_ids: [], warehouse_ids: [], farmer_ids: [], buyer_ids: [] });
+  const [profitLossFilterOptions, setProfitLossFilterOptions] = useState({ buyers: [], consignees: [], farmers: [], dates: [] });
   const [warehouseStockReport, setWarehouseStockReport] = useState([]);
   const [reportPageInfo, setReportPageInfo] = useState({ page: 1, pageSize: PAGE_SIZE, hasMore: false });
   const [availableSaleStock, setAvailableSaleStock] = useState(null);
@@ -1229,7 +1230,7 @@ export default function WarehouseTradingPage() {
       loadReportFilterOptions();
     }, 40);
     return () => window.clearTimeout(timer);
-  }, [activeTab, activeReport, reportFilters.farmer_id, reportFilters.company_account_id, reportFilters.warehouse_id, reportFilters.sale_buyer_id]);
+  }, [activeTab, activeReport, reportFilters.farmer_id, reportFilters.company_account_id, reportFilters.warehouse_id, reportFilters.sale_buyer_id, reportFilters.profit_from_date, reportFilters.profit_to_date, reportFilters.profit_location_id, reportFilters.profit_employee_id, reportFilters.profit_farmer_id]);
 
   useEffect(() => {
     // Keep bill-wise detail panels hidden by default. Press F5 to reveal and
@@ -1803,6 +1804,50 @@ export default function WarehouseTradingPage() {
   };
 
   const loadReportFilterOptions = async (reportType = activeReport, filters = reportFilters) => {
+    if (reportType === "profit-loss") {
+      try {
+        const params = { type: "profit-loss" };
+        if (filters.profit_from_date) params.from_date = filters.profit_from_date;
+        if (filters.profit_to_date) params.to_date = filters.profit_to_date;
+        if (filters.profit_location_id) params.buyer_id = filters.profit_location_id;
+        if (filters.profit_employee_id) params.consignee_id = filters.profit_employee_id;
+        if (filters.profit_farmer_id) params.farmer_id = filters.profit_farmer_id;
+
+        const cacheKey = JSON.stringify({ reportType, params });
+        const cached = reportFilterCacheRef.current.get(cacheKey);
+        if (cached && Date.now() - cached.time < 5 * 60 * 1000) {
+          setProfitLossFilterOptions(cached.data || { buyers: [], consignees: [], farmers: [], dates: [] });
+          return;
+        }
+
+        const inFlight = reportFilterInFlightRef.current.get(cacheKey);
+        if (inFlight) {
+          const data = await inFlight;
+          if (data) setProfitLossFilterOptions(data);
+          return;
+        }
+
+        const request = API.get("/api/wh-vouchers/report/filter-options", { params })
+          .then((res) => ({
+            buyers: Array.isArray(res.data?.buyers) ? res.data.buyers : [],
+            consignees: Array.isArray(res.data?.consignees) ? res.data.consignees : [],
+            farmers: Array.isArray(res.data?.farmers) ? res.data.farmers : [],
+            dates: Array.isArray(res.data?.dates) ? res.data.dates : [],
+          }))
+          .finally(() => {
+            reportFilterInFlightRef.current.delete(cacheKey);
+          });
+        reportFilterInFlightRef.current.set(cacheKey, request);
+        const data = await request;
+        reportFilterCacheRef.current.set(cacheKey, { time: Date.now(), data });
+        setProfitLossFilterOptions(data);
+      } catch (err) {
+        console.error("Failed to load Profit/Loss filter options:", err);
+        setProfitLossFilterOptions({ buyers: [], consignees: [], farmers: [], dates: [] });
+      }
+      return;
+    }
+
     const supported = ["purchase", "purchase-party-ledger", "sale", "sale-party-ledger", "sale-followup", "sale-journey"].includes(reportType);
     if (!supported) {
       setReportFilterOptions({ account_ids: [], warehouse_ids: [], farmer_ids: [], buyer_ids: [], accounts: [], warehouses: [], farmers: [], buyers: [] });
@@ -1832,8 +1877,8 @@ export default function WarehouseTradingPage() {
 
       const request = API
         .get("/api/wh-vouchers/report/filter-options", {
-  params: { ...params, type: reportType }
-})
+          params: { ...params, type: reportType }
+        })
         .then((res) => {
           const nextData = {
             account_ids: Array.isArray(res.data?.account_ids) ? res.data.account_ids : [],
@@ -6925,9 +6970,9 @@ export default function WarehouseTradingPage() {
                     <>
                       <label style={{ display: "flex", flexDirection: "column", gap: 5, minWidth: 145, fontSize: 12, fontWeight: 700, color: "#334155" }}>From Date<input type="date" value={reportFilters.profit_from_date} onChange={(e) => updateReportFilter("profit_from_date", e.target.value)} style={inp} /></label>
                       <label style={{ display: "flex", flexDirection: "column", gap: 5, minWidth: 145, fontSize: 12, fontWeight: 700, color: "#334155" }}>To Date<input type="date" value={reportFilters.profit_to_date} onChange={(e) => updateReportFilter("profit_to_date", e.target.value)} style={inp} /></label>
-                      <SearchableSelect label="Buyer" value={reportFilters.profit_location_id} options={(buyerNames || []).map((x) => ({ value: x.id || x._id || x.legacy_id, label: x.name || x.buyer_name || x.company_name }))} onChange={(v) => updateReportFilter("profit_location_id", v)} placeholder="All Buyers" />
-                      <SearchableSelect label="Consignee" value={reportFilters.profit_employee_id} options={(consignees || []).map((x) => ({ value: x.id || x._id || x.legacy_id, label: x.name || x.consignee_name }))} onChange={(v) => updateReportFilter("profit_employee_id", v)} placeholder="All Consignees" />
-                      <SearchableSelect label="All Farmers" value={reportFilters.profit_farmer_id} options={(farmers || []).map((x) => ({ value: x.id || x._id || x.legacy_id, label: x.name || x.farmer_name }))} onChange={(v) => updateReportFilter("profit_farmer_id", v)} placeholder="All Farmers" />
+                      <SearchableSelect label="Buyer" value={reportFilters.profit_location_id} options={(profitLossFilterOptions.buyers || []).map((x) => ({ value: x.id, label: x.name }))} onChange={(v) => updateReportFilter("profit_location_id", v)} placeholder="All Buyers" />
+                      <SearchableSelect label="Consignee" value={reportFilters.profit_employee_id} options={(profitLossFilterOptions.consignees || []).map((x) => ({ value: x.id, label: x.name }))} onChange={(v) => updateReportFilter("profit_employee_id", v)} placeholder="All Consignees" />
+                      <SearchableSelect label="All Farmers" value={reportFilters.profit_farmer_id} options={(profitLossFilterOptions.farmers || []).map((x) => ({ value: x.id, label: x.name }))} onChange={(v) => updateReportFilter("profit_farmer_id", v)} placeholder="All Farmers" />
                     </>
                   )}
                   <button type="button" onClick={() => { setProfitLossMode("direct"); setReportFilters((prev) => ({ ...prev, profit_loss_mode: "direct", profit_from_date: "", profit_to_date: "", profit_location_id: "", profit_employee_id: "", profit_farmer_id: "" })); setReportPage(1); }} style={{ ...btnAction, background: "#64748b" }}>Clear Filters</button>
