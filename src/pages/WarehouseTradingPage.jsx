@@ -1155,8 +1155,8 @@ export default function WarehouseTradingPage() {
     return () => window.clearTimeout(timer);
   }, [activeTab, activeVoucherType]);
 
-  // Profit/Loss filters also need the master lists when Reports is opened
-  // directly. Reuse the existing cached loader; no voucher logic changes.
+  // Profit/Loss filters also need Buyer + Consignee + Farmer master lists
+  // when Reports is opened directly. Reuse the existing cached loader.
   useEffect(() => {
     if (activeTab !== "reports" || activeReport !== "profit-loss") return;
     loadData();
@@ -1497,7 +1497,7 @@ export default function WarehouseTradingPage() {
           employees: API.get("/api/employees"),
           locations: API.get("/api/locations"),
         };
-        const requiredMasters = activeVoucherType === "purchase"
+        const baseRequiredMasters = activeVoucherType === "purchase"
           ? ["warehouses", "farmers", "companyAccounts", "consignees", "products", "employees", "locations"]
           : activeVoucherType === "sale"
             ? ["warehouses", "farmers", "buyerNames", "companies", "companyAccounts", "consignees", "products", "employees", "locations"]
@@ -1506,6 +1506,11 @@ export default function WarehouseTradingPage() {
               : activeVoucherType === "receipt"
                 ? ["warehouses", "buyerNames", "companies", "companyAccounts"]
                 : [];
+        // Profit/Loss needs Buyer + Consignee + Farmer lists even when the
+        // current voucher type would not normally load all three masters.
+        const requiredMasters = activeTab === "reports" && activeReport === "profit-loss"
+          ? [...new Set([...baseRequiredMasters, "buyerNames", "consignees", "farmers"])]
+          : baseRequiredMasters;
         const results = await Promise.allSettled(requiredMasters.map((key) => masterRequests[key]));
         const dataOf = (index) => {
           const result = results[index];
@@ -1900,8 +1905,8 @@ export default function WarehouseTradingPage() {
         params.mode = filters.profit_loss_mode || profitLossMode || "direct";
         if (filters.profit_from_date) params.from_date = filters.profit_from_date;
         if (filters.profit_to_date) params.to_date = filters.profit_to_date;
-        if (filters.profit_location_id) params.location_id = filters.profit_location_id;
-        if (filters.profit_employee_id) params.employee_id = filters.profit_employee_id;
+        if (filters.profit_location_id) params.buyer_id = filters.profit_location_id;
+        if (filters.profit_employee_id) params.consignee_id = filters.profit_employee_id;
         if (filters.profit_farmer_id) params.farmer_id = filters.profit_farmer_id;
         if (normalizedSearch) params.search = normalizedSearch;
       }
@@ -5088,8 +5093,8 @@ export default function WarehouseTradingPage() {
       };
       if (reportFilters.profit_from_date) params.from_date = reportFilters.profit_from_date;
       if (reportFilters.profit_to_date) params.to_date = reportFilters.profit_to_date;
-      if (reportFilters.profit_location_id) params.location_id = reportFilters.profit_location_id;
-      if (reportFilters.profit_employee_id) params.employee_id = reportFilters.profit_employee_id;
+      if (reportFilters.profit_location_id) params.buyer_id = reportFilters.profit_location_id;
+      if (reportFilters.profit_employee_id) params.consignee_id = reportFilters.profit_employee_id;
       if (reportFilters.profit_farmer_id) params.farmer_id = reportFilters.profit_farmer_id;
       const search = String(globalSearch || "").trim();
       if (search) params.search = search;
@@ -6931,9 +6936,9 @@ export default function WarehouseTradingPage() {
                     <>
                       <label style={{ display: "flex", flexDirection: "column", gap: 5, minWidth: 145, fontSize: 12, fontWeight: 700, color: "#334155" }}>From Date<input type="date" value={reportFilters.profit_from_date} onChange={(e) => updateReportFilter("profit_from_date", e.target.value)} style={inp} /></label>
                       <label style={{ display: "flex", flexDirection: "column", gap: 5, minWidth: 145, fontSize: 12, fontWeight: 700, color: "#334155" }}>To Date<input type="date" value={reportFilters.profit_to_date} onChange={(e) => updateReportFilter("profit_to_date", e.target.value)} style={inp} /></label>
-                      <SearchableSelect label="Location" value={reportFilters.profit_location_id} options={(locations || []).map((x) => ({ value: x.id || x._id, label: x.name }))} onChange={(v) => updateReportFilter("profit_location_id", v)} placeholder="All Locations" />
-                      <SearchableSelect label="Employee" value={reportFilters.profit_employee_id} options={(employees || []).map((x) => ({ value: x.id || x._id, label: x.name }))} onChange={(v) => updateReportFilter("profit_employee_id", v)} placeholder="All Employees" />
-                      <SearchableSelect label="Farmer" value={reportFilters.profit_farmer_id} options={(farmers || []).map((x) => ({ value: x.id || x._id, label: x.name }))} onChange={(v) => updateReportFilter("profit_farmer_id", v)} placeholder="All Farmers" />
+                      <SearchableSelect label="Buyer" value={reportFilters.profit_location_id} options={(buyerNames || []).map((x) => ({ value: x.id || x._id || x.legacy_id, label: x.name || x.buyer_name || x.company_name }))} onChange={(v) => updateReportFilter("profit_location_id", v)} placeholder="All Buyers" />
+                      <SearchableSelect label="Consignee" value={reportFilters.profit_employee_id} options={(consignees || []).map((x) => ({ value: x.id || x._id || x.legacy_id, label: x.name || x.consignee_name }))} onChange={(v) => updateReportFilter("profit_employee_id", v)} placeholder="All Consignees" />
+                      <SearchableSelect label="All Farmers" value={reportFilters.profit_farmer_id} options={(farmers || []).map((x) => ({ value: x.id || x._id || x.legacy_id, label: x.name || x.farmer_name }))} onChange={(v) => updateReportFilter("profit_farmer_id", v)} placeholder="All Farmers" />
                     </>
                   )}
                   <button type="button" onClick={() => { setProfitLossMode("direct"); setReportFilters((prev) => ({ ...prev, profit_loss_mode: "direct", profit_from_date: "", profit_to_date: "", profit_location_id: "", profit_employee_id: "", profit_farmer_id: "" })); setReportPage(1); }} style={{ ...btnAction, background: "#64748b" }}>Clear Filters</button>
