@@ -1157,11 +1157,37 @@ export default function WarehouseTradingPage() {
     return () => window.clearTimeout(timer);
   }, [activeTab, activeVoucherType]);
 
-  // Profit/Loss filters also need Buyer + Consignee + Farmer master lists
-  // when Reports is opened directly. Reuse the existing cached loader.
+  // Profit/Loss filters need the full Buyer + Consignee + Farmer master lists
+  // even when Reports is opened directly while the voucher type is Purchase.
+  // Keep the normal master loader, then explicitly ensure these four masters
+  // are populated so the dropdowns never depend on the current voucher tab.
   useEffect(() => {
     if (activeTab !== "reports" || activeReport !== "profit-loss") return;
-    loadData();
+    let cancelled = false;
+    (async () => {
+      try {
+        await loadData();
+      } catch {}
+      const results = await Promise.allSettled([
+        API.get("/api/buyer-names"),
+        API.get("/api/companies"),
+        API.get("/api/consignee-names"),
+        API.get("/api/farmers"),
+      ]);
+      if (cancelled) return;
+      const valueOf = (result) => result?.status === "fulfilled" && Array.isArray(result.value?.data)
+        ? result.value.data
+        : [];
+      const buyerRows = valueOf(results[0]);
+      const companyRows = valueOf(results[1]);
+      const consigneeRows = valueOf(results[2]);
+      const farmerRows = valueOf(results[3]);
+      if (buyerRows.length) setBuyerNames(buyerRows);
+      if (companyRows.length) setCompanies(companyRows);
+      if (consigneeRows.length) setConsignees(consigneeRows);
+      if (farmerRows.length) setFarmers(farmerRows);
+    })();
+    return () => { cancelled = true; };
   }, [activeTab, activeReport]);
 
   // Load voucher list when type changes
@@ -1809,9 +1835,9 @@ export default function WarehouseTradingPage() {
         const params = { type: "profit-loss" };
         if (filters.profit_from_date) params.from_date = filters.profit_from_date;
         if (filters.profit_to_date) params.to_date = filters.profit_to_date;
-        if (filters.profit_location_id) params.buyer_id = filters.profit_location_id;
-        if (filters.profit_employee_id) params.consignee_id = filters.profit_employee_id;
-        if (filters.profit_farmer_id) params.farmer_id = filters.profit_farmer_id;
+        // Keep dropdown options complete. Selecting Buyer/Consignee/Farmer
+        // must not shrink the option list for the other dropdowns. The selected
+        // values are applied only to the Profit/Loss report query itself.
 
         const cacheKey = JSON.stringify({ reportType, params });
         const cached = reportFilterCacheRef.current.get(cacheKey);
@@ -4636,6 +4662,47 @@ export default function WarehouseTradingPage() {
   const saleReportAccounts = purchasePartyLedgerCompanyAccounts;
   const saleReportWarehouses = purchasePartyLedgerWarehouses;
   const saleReportFarmers = purchasePartyLedgerFarmers;
+
+  const profitLossBuyerOptions = useMemo(() => {
+    const map = new Map();
+    const add = (item) => {
+      const value = String(item?.id ?? item?._id ?? item?.legacy_id ?? "").trim();
+      const label = String(item?.name ?? item?.buyer_name ?? item?.company_name ?? item?.party_name ?? "").trim();
+      if (!value || !label || label === "-") return;
+      map.set(value, { id: value, name: label });
+    };
+    (profitLossFilterOptions.buyers || []).forEach(add);
+    (buyerNames || []).forEach(add);
+    (companies || []).forEach(add);
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
+  }, [buyerNames, companies, profitLossFilterOptions.buyers]);
+
+  const profitLossConsigneeOptions = useMemo(() => {
+    const map = new Map();
+    const add = (item) => {
+      const value = String(item?.id ?? item?._id ?? item?.legacy_id ?? "").trim();
+      const label = String(item?.name ?? item?.consignee_name ?? "").trim();
+      if (!value || !label || label === "-") return;
+      map.set(value, { id: value, name: label });
+    };
+    (profitLossFilterOptions.consignees || []).forEach(add);
+    (consignees || []).forEach(add);
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
+  }, [consignees, profitLossFilterOptions.consignees]);
+
+  const profitLossFarmerOptions = useMemo(() => {
+    const map = new Map();
+    const add = (item) => {
+      const value = String(item?.id ?? item?._id ?? item?.legacy_id ?? "").trim();
+      const label = String(item?.name ?? item?.farmer_name ?? item?.account_holder_name ?? "").trim();
+      if (!value || !label || label === "-") return;
+      map.set(value, { id: value, name: label });
+    };
+    (profitLossFilterOptions.farmers || []).forEach(add);
+    (farmers || []).forEach(add);
+    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
+  }, [farmers, profitLossFilterOptions.farmers]);
+
   const saleReportBuyers = useMemo(() => {
     const byId = new Map();
     const add = (item) => {
@@ -6970,9 +7037,9 @@ export default function WarehouseTradingPage() {
                     <>
                       <label style={{ display: "flex", flexDirection: "column", gap: 5, minWidth: 145, fontSize: 12, fontWeight: 700, color: "#334155" }}>From Date<input type="date" value={reportFilters.profit_from_date} onChange={(e) => updateReportFilter("profit_from_date", e.target.value)} style={inp} /></label>
                       <label style={{ display: "flex", flexDirection: "column", gap: 5, minWidth: 145, fontSize: 12, fontWeight: 700, color: "#334155" }}>To Date<input type="date" value={reportFilters.profit_to_date} onChange={(e) => updateReportFilter("profit_to_date", e.target.value)} style={inp} /></label>
-                      <SearchableSelect label="Buyer" value={reportFilters.profit_location_id} options={(profitLossFilterOptions.buyers || []).map((x) => ({ value: x.id, label: x.name }))} onChange={(v) => updateReportFilter("profit_location_id", v)} placeholder="All Buyers" />
-                      <SearchableSelect label="Consignee" value={reportFilters.profit_employee_id} options={(profitLossFilterOptions.consignees || []).map((x) => ({ value: x.id, label: x.name }))} onChange={(v) => updateReportFilter("profit_employee_id", v)} placeholder="All Consignees" />
-                      <SearchableSelect label="All Farmers" value={reportFilters.profit_farmer_id} options={(profitLossFilterOptions.farmers || []).map((x) => ({ value: x.id, label: x.name }))} onChange={(v) => updateReportFilter("profit_farmer_id", v)} placeholder="All Farmers" />
+                      <SearchableSelect label="Buyer" value={reportFilters.profit_location_id} options={profitLossBuyerOptions.map((x) => ({ value: x.id, label: x.name }))} onChange={(v) => updateReportFilter("profit_location_id", v)} placeholder="All Buyers" />
+                      <SearchableSelect label="Consignee" value={reportFilters.profit_employee_id} options={profitLossConsigneeOptions.map((x) => ({ value: x.id, label: x.name }))} onChange={(v) => updateReportFilter("profit_employee_id", v)} placeholder="All Consignees" />
+                      <SearchableSelect label="All Farmers" value={reportFilters.profit_farmer_id} options={profitLossFarmerOptions.map((x) => ({ value: x.id, label: x.name }))} onChange={(v) => updateReportFilter("profit_farmer_id", v)} placeholder="All Farmers" />
                     </>
                   )}
                   <button type="button" onClick={() => { setProfitLossMode("direct"); setReportFilters((prev) => ({ ...prev, profit_loss_mode: "direct", profit_from_date: "", profit_to_date: "", profit_location_id: "", profit_employee_id: "", profit_farmer_id: "" })); setReportPage(1); }} style={{ ...btnAction, background: "#64748b" }}>Clear Filters</button>
