@@ -1155,6 +1155,13 @@ export default function WarehouseTradingPage() {
     return () => window.clearTimeout(timer);
   }, [activeTab, activeVoucherType]);
 
+  // Profit/Loss filters also need the master lists when Reports is opened
+  // directly. Reuse the existing cached loader; no voucher logic changes.
+  useEffect(() => {
+    if (activeTab !== "reports" || activeReport !== "profit-loss") return;
+    loadData();
+  }, [activeTab, activeReport]);
+
   // Load voucher list when type changes
   useEffect(() => {
     if (activeTab !== "vouchers") return;
@@ -4397,8 +4404,14 @@ export default function WarehouseTradingPage() {
     ],
     "profit-loss": profitLossMode === "warehouse" ? [
       ["warehouse", "Warehouse", (item) => item.warehouse_name || getWarehouseName(item)],
-      ["sale_amount", "Sale Amount", (item) => formatMoney(item.sale_amount || 0)],
+      ["purchase_qty", "Purchase Qty", (item) => formatDecimal4(item.purchase_qty || 0)],
+      ["purchase_rate", "Purchase Rate", (item) => formatMoney(item.purchase_rate || 0)],
       ["purchase_amount", "Purchase Amount", (item) => formatMoney(item.purchase_amount || 0)],
+      ["sale_qty", "Sale Qty", (item) => formatDecimal4(item.sale_qty || 0)],
+      ["sale_rate", "Sale Rate", (item) => formatMoney(item.sale_rate || 0)],
+      ["gross_amount", "Gross Amount", (item) => formatMoney(item.gross_amount || item.sale_amount || 0)],
+      ["additional_amount", "Total Add", (item) => formatMoney(item.additional_amount || 0)],
+      ["total_less", "Total Less", (item) => formatMoney(item.total_less || item.total_deduction || 0)],
       ["profit_loss", "Profit/Loss", (item) => (
         <span style={{ color: Number(item.profit_loss || 0) >= 0 ? "#16a34a" : "#dc2626", fontWeight: 800 }}>
           {formatMoney(item.profit_loss || 0)}
@@ -4410,12 +4423,27 @@ export default function WarehouseTradingPage() {
       ["farmer_name", "Farmer Name", (item) => item.farmer_name || getFarmerName(item) || "-"],
       ["buyer_name", "Buyer Name", (item) => item.buyer_name || getBuyerName(item) || "-"],
       ["consignee_name", "Consignee Name", (item) => item.consignee_name || "-"],
-      ["lorry_no", "Lorry No", (item) => item.lorry_no || "-"],
-      ["quantity", "Qty", (item) => formatDecimal4(item.quantity || item.total_quantity || item.unloading_qty || 0)],
+      ["purchase_qty", "Purchase Qty", (item) => formatDecimal4(item.purchase_qty || item.direct_purchase_qty || 0)],
+      ["purchase_rate", "Purchase Rate", (item) => formatMoney(item.purchase_rate || item.direct_purchase_rate || 0)],
+      ["purchase_amount", "Purchase Amount", (item) => formatMoney(item.purchase_amount || item.direct_purchase_amount || 0)],
+      ["quantity", "Sale Qty", (item) => formatDecimal4(item.quantity || item.total_quantity || item.unloading_qty || 0)],
+      ["rate", "Sale Rate", (item) => formatMoney(item.rate || 0)],
+      ["gross_amount", "Gross Amount", (item) => formatMoney(item.gross_amount || item.amount || item.sale_amount || 0)],
+      ["additional_amount", "Total Add", (item) => formatMoney(item.additional_amount || 0)],
+      ["total_less", "Total Less", (item) => formatMoney(item.total_less || item.total_deduction || 0)],
+      ["less_details", "Less Details", (item) => {
+        const parts = [
+          ["Claim", item.claim_amount], ["Shortage", item.shortage_amount], ["Moisture", item.moisture],
+          ["Dunki", item.dunki], ["Fungus", item.fungus], ["Discolour", item.discolour], ["Others", item.others],
+          ["Other Deduction", item.other_deduction], ["CD", item.cd_amount], ["Adjustment", item.adjustment_amount],
+          ["Transport", item.transport_charge], ["TDS", item.tds_amount], ["Round Off", item.round_off],
+        ].filter(([, value]) => toNumber(value) !== 0).map(([label, value]) => `${label}: ${formatMoney(value)}`);
+        return parts.length ? <span style={{ whiteSpace: "pre-line", fontSize: 12 }}>{parts.join("\n")}</span> : "-";
+      }],
       ["profit_loss", "Profit / Loss", (item) => (
-        <span style={{ color: Number(item.profit_loss || 0) >= 0 ? "#16a34a" : "#dc2626", fontWeight: 800 }}>
+        <button type="button" onClick={() => showSaleReportPreview(item)} style={{ ...linkButtonStyle, color: Number(item.profit_loss || 0) >= 0 ? "#16a34a" : "#dc2626", fontWeight: 800 }}>
           {formatMoney(item.profit_loss || 0)}
-        </span>
+        </button>
       )],
     ],
   };
@@ -5049,6 +5077,35 @@ export default function WarehouseTradingPage() {
     });
 
     return { doc, title };
+  };
+
+  const downloadProfitLossExcel = async () => {
+    if (activeReport !== "profit-loss") return;
+    try {
+      const params = {
+        mode: reportFilters.profit_loss_mode || profitLossMode || "direct",
+        export: "xlsx",
+      };
+      if (reportFilters.profit_from_date) params.from_date = reportFilters.profit_from_date;
+      if (reportFilters.profit_to_date) params.to_date = reportFilters.profit_to_date;
+      if (reportFilters.profit_location_id) params.location_id = reportFilters.profit_location_id;
+      if (reportFilters.profit_employee_id) params.employee_id = reportFilters.profit_employee_id;
+      if (reportFilters.profit_farmer_id) params.farmer_id = reportFilters.profit_farmer_id;
+      const search = String(globalSearch || "").trim();
+      if (search) params.search = search;
+      const response = await API.get("/api/wh-vouchers/report/profit-loss", { params, responseType: "blob" });
+      const url = window.URL.createObjectURL(response.data);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `warehouse_profit_loss_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error(err);
+      alert(err?.response?.data?.error || "Failed to download Profit/Loss Excel");
+    }
   };
 
   const downloadLedgerPdf = (ledgerType = activeReport) => {
@@ -6880,6 +6937,7 @@ export default function WarehouseTradingPage() {
                     </>
                   )}
                   <button type="button" onClick={() => { setProfitLossMode("direct"); setReportFilters((prev) => ({ ...prev, profit_loss_mode: "direct", profit_from_date: "", profit_to_date: "", profit_location_id: "", profit_employee_id: "", profit_farmer_id: "" })); setReportPage(1); }} style={{ ...btnAction, background: "#64748b" }}>Clear Filters</button>
+                  <button type="button" onClick={downloadProfitLossExcel} style={{ ...btnAction, background: "#0f766e" }}>Download Excel</button>
                 </div>
               </div>
             )}
