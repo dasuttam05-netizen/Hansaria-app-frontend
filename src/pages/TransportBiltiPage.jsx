@@ -306,11 +306,18 @@ export default function TransportBiltiPage() {
         row.sale_entry_date ||
         row.outward_date ||
         row.date;
+      // Warehouse Sale has two different quantities:
+      // quantity = sale/dispatch weight, unloading_qty = actual unloading weight.
+      // Do not use unloading_qty as the sale weight because that makes Bilti
+      // show the wrong weight whenever there is a shortage/difference.
       const sourceQty =
-        row.outward_quantity ||
-        row.outward_weight ||
-        row.sale_unloading_qty ||
-        row.sale_quantity;
+        source === "sale"
+          ? (row.sale_quantity ?? row.quantity ?? row.sale_unloading_qty ?? row.unloading_qty)
+          : (row.outward_quantity ?? row.outward_weight ?? row.quantity ?? row.weight);
+      const sourceDispatchQty =
+        source === "sale"
+          ? (row.sale_unloading_qty ?? row.unloading_qty ?? sourceQty)
+          : (row.outward_qty ?? row.quantity ?? row.weight ?? sourceQty);
       const sourceRate = row.outward_master_rate || row.sale_master_rate;
       const dispatchDate = row.dispatch_date || row.sale_unloading_date || sourceDate || "";
 
@@ -336,7 +343,7 @@ export default function TransportBiltiPage() {
         buyer_name: row.outward_buyer_name || row.sale_buyer_name || row.buyer_name || "",
         consignee_name: row.outward_consignee_name || row.sale_consignee_name || row.consignee_name || "",
         outward_qty: row.outward_qty ?? num(sourceQty),
-        dispatch_qty: row.dispatch_qty ?? num(sourceQty),
+        dispatch_qty: row.dispatch_qty ?? num(sourceDispatchQty),
         shortage_free_kg: String(row.shortage_free_kg ?? 100),
         outward_rate: row.outward_rate ?? num(sourceRate),
         transport_rate: row.transport_rate ?? "",
@@ -1076,7 +1083,7 @@ const shareToWhatsApp = async () => {
                     <td style={sourceTd}>{row.consignee_name || "-"}</td>
                     <td style={sourceTd}>{row.warehouse_name || "-"}</td>
                     <td style={sourceTd}>{row.product_name || "-"}</td>
-                    <td style={sourceTd}>{num(row.unloading_qty || row.quantity).toFixed(4)}</td>
+                    <td style={sourceTd}>{num(row.quantity ?? row.unloading_qty).toFixed(4)}</td>
                     <td style={sourceTd}>{num(row.rate).toFixed(2)}</td>
                     <td style={sourceTd}>
                       <button
