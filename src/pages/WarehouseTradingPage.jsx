@@ -4207,16 +4207,25 @@ export default function WarehouseTradingPage() {
       .filter((row) => {
         const rowBuyerId = String(row.buyer_id || row.company_id || "").trim();
         return rowBuyerId === selectedBuyerId;
+      })
+      .filter((row) => {
+        // PDF must contain exactly the data currently selected on the Sale Follow-up page.
+        if (saleFollowupFilter === "all") return true;
+        return String(row.followup_status || "pending").toLowerCase() === String(saleFollowupFilter).toLowerCase();
       });
+
+    if (!allBuyerRows.length) {
+      throw new Error("Selected Buyer has no data in the current Sale Follow-up filter.");
+    }
 
     const pendingRows = allBuyerRows.filter((row) => {
       const balance = Number(row.balance ?? row.bill_balance ?? row.outstanding ?? 0) || 0;
-      return balance > 0.0001 && String(row.followup_status || "").toLowerCase() !== "payment_done";
+      return balance > 0.0001;
     });
 
-    if (!pendingRows.length) {
-      throw new Error("Selected Buyer has no outstanding payment pending.");
-    }
+    // The table follows the selected filter. For Payment Pending/All this is the
+    // outstanding list; for Payment Done/Unloading Pending it is the filtered data itself.
+    const statementRows = allBuyerRows;
 
     const first = pendingRows[0] || allBuyerRows[0] || {};
     const buyerName = String(
@@ -4240,17 +4249,17 @@ export default function WarehouseTradingPage() {
       ""
     ).replace(/\D/g, "");
 
-    const totalOutstanding = pendingRows.reduce((sum, row) => {
+    const totalOutstanding = allBuyerRows.reduce((sum, row) => {
       const balance = Number(row.balance ?? row.bill_balance ?? row.outstanding ?? 0) || 0;
       return sum + Math.max(0, balance);
     }, 0);
 
-    const totalBills = pendingRows.length;
+    const totalBills = allBuyerRows.length;
     const today = formatLedgerDate(new Date().toISOString().slice(0, 10));
 
     // Summary values are based on the selected Buyer's complete follow-up data,
     // while the detailed table below continues to show only outstanding bills.
-    const totalAmount = allBuyerRows.reduce((sum, row) => {
+    const totalAmount = statementRows.reduce((sum, row) => {
       const amount = Number(
         row?.gross_receivable ??
         row?.net_receivable_amount ??
@@ -4263,7 +4272,7 @@ export default function WarehouseTradingPage() {
       return sum + Math.max(0, amount);
     }, 0);
 
-    const paymentReceived = allBuyerRows.reduce((sum, row) => {
+    const paymentReceived = statementRows.reduce((sum, row) => {
       const paid = Number(
         row?.receipt_adjusted_amount ??
         row?.paid_amount ??
@@ -4273,12 +4282,12 @@ export default function WarehouseTradingPage() {
       return sum + Math.max(0, paid);
     }, 0);
 
-    const paymentDue = pendingRows.reduce((sum, row) => {
+    const paymentDue = statementRows.reduce((sum, row) => {
       const balance = Number(row.balance ?? row.bill_balance ?? row.outstanding ?? 0) || 0;
       return sum + Math.max(0, balance);
     }, 0);
 
-    const unloadingPendingRows = allBuyerRows.filter((row) =>
+    const unloadingPendingRows = statementRows.filter((row) =>
       String(row?.followup_status || "").toLowerCase() === "unloading_pending"
     );
     const unloadingPendingAmount = unloadingPendingRows.reduce((sum, row) => {
@@ -4341,7 +4350,7 @@ export default function WarehouseTradingPage() {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(8);
     doc.setTextColor(71, 85, 105);
-    doc.text("TOTAL OUTSTANDING", pageWidth - margin - 70, y + 7);
+    doc.text("TOTAL OUTSTANDING", pageWidth - margin - 6, y + 7, { align: "right" });
     doc.setFontSize(15);
     doc.setTextColor(185, 28, 28);
     doc.text(`Rs.${formatMoney(totalOutstanding)}`, pageWidth - margin - 6, y + 15, { align: "right" });
@@ -4384,7 +4393,7 @@ export default function WarehouseTradingPage() {
     doc.text(`OUTSTANDING BILLS (${totalBills})`, margin, y);
     y += 4;
 
-    const bodyRows = pendingRows.map((row) => {
+    const bodyRows = statementRows.map((row) => {
       const balance = Number(row.balance ?? row.bill_balance ?? row.outstanding ?? 0) || 0;
       const amount = Number(row.amount ?? row.sale_amount ?? row.total_amount ?? 0) || 0;
       const overdueDays = Number(row.overdue_days ?? row.days_overdue ?? 0) || 0;
@@ -4464,6 +4473,19 @@ export default function WarehouseTradingPage() {
     doc.text(`Email: ${email || "Not available"}`, margin + 24, y);
     doc.text(`Mobile: ${mobile || "Not available"}`, margin + 96, y);
 
+    // Keep the payment message at the bottom of the statement, without a
+    // separate "Payment Request Draft" heading.
+    const bottomMessage = saleFollowupFilter === "payment_done"
+      ? "Payment received against the selected Sale Follow-up entries."
+      : saleFollowupFilter === "unloading_pending"
+        ? "Unloading is pending against the selected Sale Follow-up entries."
+        : saleFollowupFilter === "pending"
+          ? "Payment is pending against the selected Sale Follow-up entries."
+          : "Sale Follow-up statement for the selected Buyer.";
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7.2);
+    doc.setTextColor(71, 85, 105);
+    doc.text(bottomMessage, margin, pageHeight - 12);
     doc.setFontSize(7);
     doc.setTextColor(100, 116, 139);
     doc.text("Computer generated statement", margin, pageHeight - 7);
