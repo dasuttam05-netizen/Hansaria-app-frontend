@@ -370,7 +370,6 @@ export default function WarehouseTradingPage() {
   const [activeVoucherType, setActiveVoucherType] = useState("purchase");
   const [activeReport, setActiveReport] = useState("sale");
   const [profitLossMode, setProfitLossMode] = useState("direct");
-  const [profitLossDownloadType, setProfitLossDownloadType] = useState("xlsx");
 
   const [warehouses, setWarehouses] = useState([]);
   const [farmers, setFarmers] = useState([]);
@@ -1156,13 +1155,6 @@ export default function WarehouseTradingPage() {
     return () => window.clearTimeout(timer);
   }, [activeTab, activeVoucherType]);
 
-  // Profit/Loss filters also need Buyer + Consignee + Farmer master lists
-  // when Reports is opened directly. Reuse the existing cached loader.
-  useEffect(() => {
-    if (activeTab !== "reports" || activeReport !== "profit-loss") return;
-    loadData();
-  }, [activeTab, activeReport]);
-
   // Load voucher list when type changes
   useEffect(() => {
     if (activeTab !== "vouchers") return;
@@ -1498,7 +1490,7 @@ export default function WarehouseTradingPage() {
           employees: API.get("/api/employees"),
           locations: API.get("/api/locations"),
         };
-        const baseRequiredMasters = activeVoucherType === "purchase"
+        const requiredMasters = activeVoucherType === "purchase"
           ? ["warehouses", "farmers", "companyAccounts", "consignees", "products", "employees", "locations"]
           : activeVoucherType === "sale"
             ? ["warehouses", "farmers", "buyerNames", "companies", "companyAccounts", "consignees", "products", "employees", "locations"]
@@ -1507,11 +1499,6 @@ export default function WarehouseTradingPage() {
               : activeVoucherType === "receipt"
                 ? ["warehouses", "buyerNames", "companies", "companyAccounts"]
                 : [];
-        // Profit/Loss needs Buyer + Consignee + Farmer lists even when the
-        // current voucher type would not normally load all three masters.
-        const requiredMasters = activeTab === "reports" && activeReport === "profit-loss"
-          ? [...new Set([...baseRequiredMasters, "buyerNames", "consignees", "farmers"])]
-          : baseRequiredMasters;
         const results = await Promise.allSettled(requiredMasters.map((key) => masterRequests[key]));
         const dataOf = (index) => {
           const result = results[index];
@@ -1906,8 +1893,8 @@ export default function WarehouseTradingPage() {
         params.mode = filters.profit_loss_mode || profitLossMode || "direct";
         if (filters.profit_from_date) params.from_date = filters.profit_from_date;
         if (filters.profit_to_date) params.to_date = filters.profit_to_date;
-        if (filters.profit_location_id) params.buyer_id = filters.profit_location_id;
-        if (filters.profit_employee_id) params.consignee_id = filters.profit_employee_id;
+        if (filters.profit_location_id) params.location_id = filters.profit_location_id;
+        if (filters.profit_employee_id) params.employee_id = filters.profit_employee_id;
         if (filters.profit_farmer_id) params.farmer_id = filters.profit_farmer_id;
         if (normalizedSearch) params.search = normalizedSearch;
       }
@@ -4120,55 +4107,10 @@ export default function WarehouseTradingPage() {
     return account?.account_name || account?.name || item.company_account_name || item.account_name || item.account || "-";
   };
 
-  const getReceiptBuyerName = (item) => {
-    const raw = item?.data && typeof item.data === "object" ? item.data : {};
-    const buyerId = String(
-      item?.buyer_id ||
-      item?.company_id ||
-      raw?.buyer_id ||
-      raw?.company_id ||
-      ""
-    ).trim();
-
-    const pendingBuyer = (Array.isArray(pendingReceiptBuyers) ? pendingReceiptBuyers : []).find((row) => {
-      const rowId = String(row?.buyer_id || row?.company_id || row?.id || row?._id || "").trim();
-      return buyerId && rowId && rowId === buyerId;
-    }) || {};
-    const buyer = buyerId ? (buyerById.get(buyerId) || {}) : {};
-    const company = buyerId ? (companyById.get(buyerId) || {}) : {};
-
-    const candidates = [
-      item?.buyer_name,
-      item?.party_name,
-      raw?.buyer_name,
-      raw?.party_name,
-      pendingBuyer?.buyer_name,
-      pendingBuyer?.party_name,
-      pendingBuyer?.company_name,
-      pendingBuyer?.name,
-      buyer?.name,
-      buyer?.buyer_name,
-      buyer?.company_name,
-      buyer?.party_name,
-      company?.name,
-      company?.company_name,
-      item?.company_name,
-      raw?.company_name,
-    ];
-
-    const found = candidates.find((value) => {
-      const text = String(value ?? "").trim();
-      return text && text !== "-" && text.toLowerCase() !== "unknown party";
-    });
-    return found || "-";
-  };
-
   const getCompanyName = (item) =>
-    getReceiptBuyerName(item) !== "-"
-      ? getReceiptBuyerName(item)
-      : (item?.company_name ||
-        companies.find((c) => String(c.id || c._id) === String(item?.company_id))?.name ||
-        "-");
+    item?.company_name ||
+    companies.find((c) => String(c.id || c._id) === String(item?.company_id))?.name ||
+    "-";
 
   const reportColumns = {
     purchase: [
@@ -4455,14 +4397,8 @@ export default function WarehouseTradingPage() {
     ],
     "profit-loss": profitLossMode === "warehouse" ? [
       ["warehouse", "Warehouse", (item) => item.warehouse_name || getWarehouseName(item)],
-      ["purchase_qty", "Purchase Qty", (item) => formatDecimal4(item.purchase_qty || 0)],
-      ["purchase_rate", "Purchase Rate", (item) => formatMoney(item.purchase_rate || 0)],
+      ["sale_amount", "Sale Amount", (item) => formatMoney(item.sale_amount || 0)],
       ["purchase_amount", "Purchase Amount", (item) => formatMoney(item.purchase_amount || 0)],
-      ["sale_qty", "Sale Qty", (item) => formatDecimal4(item.sale_qty || 0)],
-      ["sale_rate", "Sale Rate", (item) => formatMoney(item.sale_rate || 0)],
-      ["gross_amount", "Gross Amount", (item) => formatMoney(item.gross_amount || item.sale_amount || 0)],
-      ["additional_amount", "Total Add", (item) => formatMoney(item.additional_amount || 0)],
-      ["total_less", "Total Less", (item) => formatMoney(item.total_less || item.total_deduction || 0)],
       ["profit_loss", "Profit/Loss", (item) => (
         <span style={{ color: Number(item.profit_loss || 0) >= 0 ? "#16a34a" : "#dc2626", fontWeight: 800 }}>
           {formatMoney(item.profit_loss || 0)}
@@ -4470,18 +4406,16 @@ export default function WarehouseTradingPage() {
       )],
     ] : [
       ["date", "Date", (item) => formatLedgerDate(item.date)],
-      ["voucher_no", "Sale Inv", (item) => item.voucher_no || item.bill_no || "-"],
-      ["farmer_name", "Farmer", (item) => item.farmer_name || getFarmerName(item) || "-"],
-      ["buyer_name", "Buyer", (item) => item.buyer_name || getBuyerName(item) || "-"],
-      ["consignee_name", "Consignee", (item) => item.consignee_name || "-"],
-      ["purchase_amount", "P.Amount", (item) => formatMoney(item.purchase_amount || item.direct_purchase_amount || 0)],
-      ["gross_amount", "S.Amount", (item) => formatMoney(item.gross_amount || item.amount || item.sale_amount || 0)],
-      ["additional_amount", "Add", (item) => formatMoney(item.additional_amount || 0)],
-      ["total_less", "Less", (item) => formatMoney(item.total_less || item.total_deduction || 0)],
-      ["profit_loss", "P/L", (item) => (
-        <button type="button" onClick={() => showSaleReportPreview(item)} style={{ ...linkButtonStyle, color: Number(item.profit_loss || 0) >= 0 ? "#16a34a" : "#dc2626", fontWeight: 800 }}>
+      ["voucher_no", "Sale Inv No", (item) => item.voucher_no || item.bill_no || "-"],
+      ["farmer_name", "Farmer Name", (item) => item.farmer_name || getFarmerName(item) || "-"],
+      ["buyer_name", "Buyer Name", (item) => item.buyer_name || getBuyerName(item) || "-"],
+      ["consignee_name", "Consignee Name", (item) => item.consignee_name || "-"],
+      ["lorry_no", "Lorry No", (item) => item.lorry_no || "-"],
+      ["quantity", "Qty", (item) => formatDecimal4(item.quantity || item.total_quantity || item.unloading_qty || 0)],
+      ["profit_loss", "Profit / Loss", (item) => (
+        <span style={{ color: Number(item.profit_loss || 0) >= 0 ? "#16a34a" : "#dc2626", fontWeight: 800 }}>
           {formatMoney(item.profit_loss || 0)}
-        </button>
+        </span>
       )],
     ],
   };
@@ -4662,47 +4596,6 @@ export default function WarehouseTradingPage() {
   // Do not run a second client-side filter/sort/slice over the complete dataset.
   const filteredVoucherListAll = list;
   const filteredVoucherList = list;
-
-  // Receipt list: the Company column must show the Buyer/Party name.
-  // Keep the original voucher rows intact and decorate only the display rows.
-  const receiptVoucherTableList = activeVoucherType === "receipt"
-    ? filteredVoucherList.map((item) => {
-        const buyerName = getReceiptBuyerName(item);
-        return {
-          ...item,
-          buyer_name: buyerName !== "-" ? buyerName : (item?.buyer_name || ""),
-          party_name: buyerName !== "-" ? buyerName : (item?.party_name || ""),
-          company_name: buyerName !== "-" ? buyerName : (item?.company_name || ""),
-          receipt_buyer_name: buyerName,
-        };
-      })
-    : filteredVoucherList;
-
-  // WarehouseVoucherTable may resolve its Receipt "Company" cell from the
-  // supplied companies list. For Receipt rows, overlay the matching company
-  // entry with the Buyer name so the column never falls back to "-".
-  const receiptDisplayCompanies = useMemo(() => {
-    if (activeVoucherType !== "receipt") return companies;
-    const byId = new Map(
-      (Array.isArray(companies) ? companies : []).map((company) => [
-        String(company?.id || company?._id || "").trim(),
-        company,
-      ])
-    );
-    receiptVoucherTableList.forEach((row) => {
-      const id = String(row?.company_id || row?.buyer_id || "").trim();
-      const name = String(row?.receipt_buyer_name || row?.buyer_name || row?.party_name || row?.company_name || "").trim();
-      if (!id || !name || name === "-") return;
-      byId.set(id, {
-        ...(byId.get(id) || {}),
-        id,
-        _id: id,
-        name,
-        company_name: name,
-      });
-    });
-    return Array.from(byId.values());
-  }, [activeVoucherType, companies, receiptVoucherTableList]);
 
   const filteredReportDataAll = useMemo(() => {
     const serverPagedReport = ["sale", "purchase", "warehouse-stock", "profit-loss"].includes(activeReport);
@@ -5156,36 +5049,6 @@ export default function WarehouseTradingPage() {
     });
 
     return { doc, title };
-  };
-
-  const downloadProfitLoss = async (format = profitLossDownloadType) => {
-    if (activeReport !== "profit-loss") return;
-    const exportType = format === "pdf" ? "pdf" : "xlsx";
-    try {
-      const params = {
-        mode: reportFilters.profit_loss_mode || profitLossMode || "direct",
-        export: exportType,
-      };
-      if (reportFilters.profit_from_date) params.from_date = reportFilters.profit_from_date;
-      if (reportFilters.profit_to_date) params.to_date = reportFilters.profit_to_date;
-      if (reportFilters.profit_location_id) params.buyer_id = reportFilters.profit_location_id;
-      if (reportFilters.profit_employee_id) params.consignee_id = reportFilters.profit_employee_id;
-      if (reportFilters.profit_farmer_id) params.farmer_id = reportFilters.profit_farmer_id;
-      const search = String(globalSearch || "").trim();
-      if (search) params.search = search;
-      const response = await API.get("/api/wh-vouchers/report/profit-loss", { params, responseType: "blob" });
-      const url = window.URL.createObjectURL(response.data);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = `warehouse_profit_loss_${new Date().toISOString().slice(0, 10)}.${exportType}`;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.URL.revokeObjectURL(url);
-    } catch (err) {
-      console.error(err);
-      alert(err?.response?.data?.error || `Failed to download Profit/Loss ${exportType.toUpperCase()}`);
-    }
   };
 
   const downloadLedgerPdf = (ledgerType = activeReport) => {
@@ -6853,7 +6716,7 @@ export default function WarehouseTradingPage() {
             </button>
             <WarehouseVoucherTable
               activeVoucherType={activeVoucherType}
-              filteredVoucherList={receiptVoucherTableList}
+              filteredVoucherList={filteredVoucherList}
               th={th}
               td={td}
               reportHeaderRowStyle={reportHeaderRowStyle}
@@ -6866,7 +6729,7 @@ export default function WarehouseTradingPage() {
               formatDecimal4={formatDecimal4}
               formatMoney={formatMoney}
               consignees={consignees}
-              companies={activeVoucherType === "receipt" ? receiptDisplayCompanies : companies}
+              companies={companies}
               selectedPaymentId={selectedPaymentId}
               onEditVoucher={handleEditVoucher}
               onDeleteVoucher={handleDeleteVoucher}
@@ -7011,26 +6874,12 @@ export default function WarehouseTradingPage() {
                     <>
                       <label style={{ display: "flex", flexDirection: "column", gap: 5, minWidth: 145, fontSize: 12, fontWeight: 700, color: "#334155" }}>From Date<input type="date" value={reportFilters.profit_from_date} onChange={(e) => updateReportFilter("profit_from_date", e.target.value)} style={inp} /></label>
                       <label style={{ display: "flex", flexDirection: "column", gap: 5, minWidth: 145, fontSize: 12, fontWeight: 700, color: "#334155" }}>To Date<input type="date" value={reportFilters.profit_to_date} onChange={(e) => updateReportFilter("profit_to_date", e.target.value)} style={inp} /></label>
-                      <SearchableSelect label="Buyer" value={reportFilters.profit_location_id} options={(buyerNames || []).map((x) => ({ value: x.id || x._id || x.legacy_id, label: x.name || x.buyer_name || x.company_name }))} onChange={(v) => updateReportFilter("profit_location_id", v)} placeholder="All Buyers" />
-                      <SearchableSelect label="Consignee" value={reportFilters.profit_employee_id} options={(consignees || []).map((x) => ({ value: x.id || x._id || x.legacy_id, label: x.name || x.consignee_name }))} onChange={(v) => updateReportFilter("profit_employee_id", v)} placeholder="All Consignees" />
-                      <SearchableSelect label="All Farmers" value={reportFilters.profit_farmer_id} options={(farmers || []).map((x) => ({ value: x.id || x._id || x.legacy_id, label: x.name || x.farmer_name }))} onChange={(v) => updateReportFilter("profit_farmer_id", v)} placeholder="All Farmers" />
+                      <SearchableSelect label="Location" value={reportFilters.profit_location_id} options={(locations || []).map((x) => ({ value: x.id || x._id, label: x.name }))} onChange={(v) => updateReportFilter("profit_location_id", v)} placeholder="All Locations" />
+                      <SearchableSelect label="Employee" value={reportFilters.profit_employee_id} options={(employees || []).map((x) => ({ value: x.id || x._id, label: x.name }))} onChange={(v) => updateReportFilter("profit_employee_id", v)} placeholder="All Employees" />
+                      <SearchableSelect label="Farmer" value={reportFilters.profit_farmer_id} options={(farmers || []).map((x) => ({ value: x.id || x._id, label: x.name }))} onChange={(v) => updateReportFilter("profit_farmer_id", v)} placeholder="All Farmers" />
                     </>
                   )}
                   <button type="button" onClick={() => { setProfitLossMode("direct"); setReportFilters((prev) => ({ ...prev, profit_loss_mode: "direct", profit_from_date: "", profit_to_date: "", profit_location_id: "", profit_employee_id: "", profit_farmer_id: "" })); setReportPage(1); }} style={{ ...btnAction, background: "#64748b" }}>Clear Filters</button>
-                  <div style={{ display: "flex", gap: 8, alignItems: "end" }}>
-                    <label style={{ display: "flex", flexDirection: "column", gap: 5, minWidth: 135, fontSize: 12, fontWeight: 700, color: "#334155" }}>
-                      Download Format
-                      <select
-                        value={profitLossDownloadType}
-                        onChange={(e) => setProfitLossDownloadType(e.target.value === "pdf" ? "pdf" : "xlsx")}
-                        style={{ ...inp, minHeight: 40 }}
-                      >
-                        <option value="xlsx">Excel</option>
-                        <option value="pdf">PDF</option>
-                      </select>
-                    </label>
-                    <button type="button" onClick={() => downloadProfitLoss(profitLossDownloadType)} style={{ ...btnAction, background: "#0f766e" }}>Download</button>
-                  </div>
                 </div>
               </div>
             )}
