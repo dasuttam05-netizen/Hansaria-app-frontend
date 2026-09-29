@@ -4354,8 +4354,7 @@ export default function WarehouseTradingPage() {
               const saleDate = formatLedgerDate(detail.sale_date || detail.date || "");
               const saleVoucher = detail.sale_voucher_no || detail.voucher_no || "-";
               const billAmount = detail.sale_amount ?? detail.sale_total_amount ?? detail.amount ?? 0;
-              const adjustedAmount = detail.adjusted_amount || 0;
-              return `${paymentDate || "-"} | ${paymentVoucher} | Bill ${saleDate || "-"} | ${saleVoucher} | Bill Amount Rs.${formatMoney(billAmount)} | Adjusted Rs.${formatMoney(adjustedAmount)}`;
+              return `${paymentDate || "-"} | Receipt ${paymentVoucher} | Sale Bill ${saleDate || "-"} | ${saleVoucher} | Total Bill Amount Rs.${formatMoney(billAmount)}`;
             })
           : String(item.adjustment_details || item.particulars || "-").split("; ").filter(Boolean);
         return (
