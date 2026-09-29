@@ -4247,16 +4247,6 @@ export default function WarehouseTradingPage() {
 
     const totalBills = pendingRows.length;
     const today = formatLedgerDate(new Date().toISOString().slice(0, 10));
-    const paymentDraft = [
-      `Dear ${buyerName || "Sir/Madam"},`,
-      "",
-      `As per our accounts, an amount of Rs.${formatMoney(totalOutstanding)} is outstanding against your pending sale bills.`,
-      "Kindly arrange the payment at the earliest against the bills mentioned below.",
-      "",
-      "This is a system-generated payment follow-up statement.",
-      "Thank you for your continued business relationship.",
-    ];
-
     const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
@@ -4344,8 +4334,8 @@ export default function WarehouseTradingPage() {
       body: bodyRows,
       styles: {
         font: "helvetica",
-        fontSize: 7.2,
-        cellPadding: 2.1,
+        fontSize: 7.0,
+        cellPadding: 1.8,
         overflow: "linebreak",
         valign: "middle",
         textColor: [15, 23, 42],
@@ -4356,19 +4346,20 @@ export default function WarehouseTradingPage() {
         fillColor: [8, 75, 70],
         textColor: [255, 255, 255],
         fontStyle: "bold",
-        fontSize: 7.2,
+        fontSize: 7.0,
+        halign: "center",
       },
       alternateRowStyles: { fillColor: [248, 250, 252] },
       columnStyles: {
-        0: { cellWidth: 22 },
-        1: { cellWidth: 31 },
-        2: { cellWidth: 35 },
+        0: { cellWidth: 24 },
+        1: { cellWidth: 40 },
+        2: { cellWidth: 36 },
         3: { cellWidth: 18, halign: "right" },
-        4: { cellWidth: 22, halign: "right" },
-        5: { cellWidth: 30, halign: "right" },
-        6: { cellWidth: 22 },
+        4: { cellWidth: 28, halign: "right" },
+        5: { cellWidth: 42, halign: "right" },
+        6: { cellWidth: 25 },
         7: { cellWidth: 24, halign: "center" },
-        8: { cellWidth: 31, halign: "right", fontStyle: "bold" },
+        8: { cellWidth: 40, halign: "right", fontStyle: "bold" },
       },
       didParseCell: (hook) => {
         if (hook.section === "body" && hook.column.index === 7) {
@@ -4382,40 +4373,30 @@ export default function WarehouseTradingPage() {
     });
 
     y = (doc.lastAutoTable?.finalY || y) + 8;
-    if (y > pageHeight - 72) {
+    if (y > pageHeight - 24) {
       doc.addPage();
       y = 16;
     }
 
-    doc.setFillColor(239, 250, 248);
-    doc.setDrawColor(153, 246, 228);
-    doc.roundedRect(margin, y, contentWidth, 36, 3, 3, "FD");
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(9.5);
-    doc.setTextColor(8, 75, 70);
-    doc.text("PAYMENT REQUEST DRAFT", margin + 6, y + 7);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8.2);
-    doc.setTextColor(30, 41, 59);
-    const draftLines = doc.splitTextToSize(paymentDraft.join("\n"), contentWidth - 12);
-    doc.text(draftLines, margin + 6, y + 13, { lineHeightFactor: 1.35 });
-
-    y += 43;
     doc.setFont("helvetica", "bold");
     doc.setFontSize(8.5);
     doc.setTextColor(71, 85, 105);
-    doc.text("Contact", margin, y);
+    doc.text("CONTACT", margin, y);
     doc.setFont("helvetica", "normal");
-    doc.text(email || "Email: Not available", margin + 28, y);
-    doc.text(mobile || "Mobile: Not available", margin + 95, y);
+    doc.setFontSize(8);
+    doc.setTextColor(30, 41, 59);
+    doc.text(`Email: ${email || "Not available"}`, margin + 24, y);
+    doc.text(`Mobile: ${mobile || "Not available"}`, margin + 96, y);
 
     doc.setFontSize(7);
     doc.setTextColor(100, 116, 139);
-    doc.text("Computer generated statement - payment status should be verified against the latest accounts before remittance.", margin, pageHeight - 7);
+    doc.text("Computer generated statement", margin, pageHeight - 7);
+    doc.text(`Total Outstanding: Rs.${formatMoney(totalOutstanding)}`, pageWidth - margin, pageHeight - 7, { align: "right" });
 
     const safeBuyer = buyerName.replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "") || "Buyer";
     const fileName = `Payment-Followup-${safeBuyer}.pdf`;
-    return { doc, fileName, email, mobile, buyerName, totalOutstanding, message: paymentDraft.join("\n") };
+    const message = `Payment follow-up statement for ${buyerName}. Total Outstanding: Rs.${formatMoney(totalOutstanding)}.`;
+    return { doc, fileName, email, mobile, buyerName, totalOutstanding, message };
   };
 
   const handleSaleFollowupBuyerPdf = async (shareMode = "download") => {
@@ -7636,7 +7617,8 @@ export default function WarehouseTradingPage() {
                       label: buyer.name,
                     }))}
                     onChange={(value) => setReportFilters((prev) => ({ ...prev, sale_buyer_id: value }))}
-                    placeholder="Select Buyer / Search name"
+                    placeholder="Click and type Buyer name"
+                    inlineSearch
                   />
 
                   {reportFilters.sale_buyer_id && (() => {
@@ -8605,7 +8587,7 @@ export default function WarehouseTradingPage() {
   );
 }
 
-function SearchableSelect({ label, value, options, onChange, placeholder = "Select", disabled = false }) {
+function SearchableSelect({ label, value, options, onChange, placeholder = "Select", disabled = false, inlineSearch = false }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const rootRef = useRef(null);
@@ -8624,6 +8606,11 @@ function SearchableSelect({ label, value, options, onChange, placeholder = "Sele
     () => normalizedOptions.find((option) => String(option.value) === String(value)),
     [normalizedOptions, value]
   );
+
+  useEffect(() => {
+    if (!open && selectedOption && inlineSearch) setSearch(selectedOption.label);
+    if (!value && inlineSearch && !open) setSearch("");
+  }, [inlineSearch, open, selectedOption, value]);
 
   const filteredOptions = useMemo(() => {
     const query = String(search || "").trim().toLowerCase();
@@ -8650,25 +8637,55 @@ function SearchableSelect({ label, value, options, onChange, placeholder = "Sele
   return (
     <div ref={rootRef} style={{ position: "relative", minWidth: 260, flex: "1 1 260px" }}>
       <label style={{ marginBottom: 6, display: "block", fontSize: 12, fontWeight: 700, color: "#475569" }}>{label}</label>
-      <button
-        type="button"
-        disabled={disabled}
-        onClick={() => !disabled && setOpen((prev) => !prev)}
-        style={{
-          width: "100%",
-          padding: "10px 12px",
-          borderRadius: 8,
-          border: "1px solid #cbd5e1",
-          background: disabled ? "#f8fafc" : "#fff",
-          textAlign: "left",
-          cursor: disabled ? "not-allowed" : "pointer",
-          color: selectedOption ? "#0f172a" : "#64748b",
-          fontSize: 14,
-          boxSizing: "border-box",
-        }}
-      >
-        {selectedOption ? selectedOption.label : placeholder}
-      </button>
+      {inlineSearch ? (
+        <input
+          type="text"
+          value={open ? search : (selectedOption?.label || "")}
+          disabled={disabled}
+          placeholder={placeholder}
+          onFocus={() => {
+            if (!disabled) {
+              setOpen(true);
+              setSearch("");
+            }
+          }}
+          onChange={(event) => {
+            setSearch(event.target.value);
+            if (!open) setOpen(true);
+          }}
+          style={{
+            width: "100%",
+            padding: "10px 12px",
+            borderRadius: 8,
+            border: "1px solid #cbd5e1",
+            background: disabled ? "#f8fafc" : "#fff",
+            color: "#0f172a",
+            fontSize: 14,
+            boxSizing: "border-box",
+            outline: "none",
+          }}
+        />
+      ) : (
+        <button
+          type="button"
+          disabled={disabled}
+          onClick={() => !disabled && setOpen((prev) => !prev)}
+          style={{
+            width: "100%",
+            padding: "10px 12px",
+            borderRadius: 8,
+            border: "1px solid #cbd5e1",
+            background: disabled ? "#f8fafc" : "#fff",
+            textAlign: "left",
+            cursor: disabled ? "not-allowed" : "pointer",
+            color: selectedOption ? "#0f172a" : "#64748b",
+            fontSize: 14,
+            boxSizing: "border-box",
+          }}
+        >
+          {selectedOption ? selectedOption.label : placeholder}
+        </button>
+      )}
       {open && !disabled ? (
         <div
           style={{
@@ -8684,22 +8701,24 @@ function SearchableSelect({ label, value, options, onChange, placeholder = "Sele
             overflow: "hidden",
           }}
         >
-          <div style={{ padding: 10, borderBottom: "1px solid #e2e8f0", background: "#f8fafc" }}>
-            <input
-              type="text"
-              value={search}
-              onChange={(event) => setSearch(event.target.value)}
-              placeholder="Type to filter"
-              style={{
-                width: "100%",
-                padding: "9px 10px",
-                border: "1px solid #cbd5e1",
-                borderRadius: 8,
-                fontSize: 13,
-                boxSizing: "border-box",
-              }}
-            />
-          </div>
+          {!inlineSearch && (
+            <div style={{ padding: 10, borderBottom: "1px solid #e2e8f0", background: "#f8fafc" }}>
+              <input
+                type="text"
+                value={search}
+                onChange={(event) => setSearch(event.target.value)}
+                placeholder="Type to filter"
+                style={{
+                  width: "100%",
+                  padding: "9px 10px",
+                  border: "1px solid #cbd5e1",
+                  borderRadius: 8,
+                  fontSize: 13,
+                  boxSizing: "border-box",
+                }}
+              />
+            </div>
+          )}
           <div style={{ maxHeight: 240, overflowY: "auto" }}>
             {filteredOptions.length ? (
               filteredOptions.map((option) => (
