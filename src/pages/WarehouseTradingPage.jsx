@@ -4349,9 +4349,13 @@ export default function WarehouseTradingPage() {
         const details = Array.isArray(item.receipt_details) ? item.receipt_details : [];
         const lines = String(item.voucher_type || "") === "Receipt" && details.length
           ? details.map((detail) => {
+              const paymentDate = formatLedgerDate(detail.receipt_date || "");
+              const paymentVoucher = detail.receipt_voucher_no || "-";
               const saleDate = formatLedgerDate(detail.sale_date || detail.date || "");
               const saleVoucher = detail.sale_voucher_no || detail.voucher_no || "-";
-              return `${saleDate || "-"} | ${saleVoucher} | Rs.${formatMoney(detail.adjusted_amount || 0)}`;
+              const billAmount = detail.sale_amount ?? detail.sale_total_amount ?? detail.amount ?? 0;
+              const adjustedAmount = detail.adjusted_amount || 0;
+              return `${paymentDate || "-"} | ${paymentVoucher} | Bill ${saleDate || "-"} | ${saleVoucher} | Bill Amount Rs.${formatMoney(billAmount)} | Adjusted Rs.${formatMoney(adjustedAmount)}`;
             })
           : String(item.adjustment_details || item.particulars || "-").split("; ").filter(Boolean);
         return (
