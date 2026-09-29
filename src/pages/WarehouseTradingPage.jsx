@@ -451,6 +451,7 @@ export default function WarehouseTradingPage() {
   const [selectedPaymentBillId, setSelectedPaymentBillId] = useState("");
   const [showReceiptAdjustPopup, setShowReceiptAdjustPopup] = useState(false);
   const [saleFollowupPaymentMenuId, setSaleFollowupPaymentMenuId] = useState("");
+  const [saleFollowupBuyerPdfLoading, setSaleFollowupBuyerPdfLoading] = useState(false);
   const [receiptAdjustments, setReceiptAdjustments] = useState([]);
   const [selectedReceiptId, setSelectedReceiptId] = useState(null);
   const [stockDrilldown, setStockDrilldown] = useState(null);
@@ -4197,6 +4198,284 @@ export default function WarehouseTradingPage() {
     companies.find((c) => String(c.id || c._id) === String(item?.company_id))?.name ||
     "-";
 
+  const buildSaleFollowupBuyerStatementPdf = async () => {
+    const selectedBuyerId = String(reportFilters.sale_buyer_id || "").trim();
+    if (!selectedBuyerId) throw new Error("Please select a Buyer first");
+
+    const allBuyerRows = (Array.isArray(reportData) ? reportData : [])
+      .filter((row) => row && row.row_type !== "closing")
+      .filter((row) => {
+        const rowBuyerId = String(row.buyer_id || row.company_id || "").trim();
+        return rowBuyerId === selectedBuyerId;
+      });
+
+    const pendingRows = allBuyerRows.filter((row) => {
+      const balance = Number(row.balance ?? row.bill_balance ?? row.outstanding ?? 0) || 0;
+      return balance > 0.0001 && String(row.followup_status || "").toLowerCase() !== "payment_done";
+    });
+
+    if (!pendingRows.length) {
+      throw new Error("Selected Buyer has no outstanding payment pending.");
+    }
+
+    const first = pendingRows[0] || allBuyerRows[0] || {};
+    const buyerName = String(
+      first.party_name ||
+      first.buyer_name ||
+      first.company_name ||
+      saleReportBuyers.find((buyer) => String(buyer.id || buyer._id) === selectedBuyerId)?.name ||
+      "Buyer"
+    ).trim();
+    const accountName = String(first.company_account_name || getAccountName(first) || "").trim();
+    const email = String(
+      first.contact_email ||
+      first.buyer_email ||
+      first.consignee_email ||
+      ""
+    ).trim();
+    const mobile = String(
+      first.contact_mobile ||
+      first.buyer_mobile ||
+      first.consignee_mobile ||
+      ""
+    ).replace(/\D/g, "");
+
+    const totalOutstanding = pendingRows.reduce((sum, row) => {
+      const balance = Number(row.balance ?? row.bill_balance ?? row.outstanding ?? 0) || 0;
+      return sum + Math.max(0, balance);
+    }, 0);
+
+    const totalBills = pendingRows.length;
+    const today = formatLedgerDate(new Date().toISOString().slice(0, 10));
+    const paymentDraft = [
+      `Dear ${buyerName || "Sir/Madam"},`,
+      "",
+      `As per our accounts, an amount of Rs.${formatMoney(totalOutstanding)} is outstanding against your pending sale bills.`,
+      "Kindly arrange the payment at the earliest against the bills mentioned below.",
+      "",
+      "This is a system-generated payment follow-up statement.",
+      "Thank you for your continued business relationship.",
+    ];
+
+    const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
+    const pageWidth = doc.internal.pageSize.getWidth();
+    const pageHeight = doc.internal.pageSize.getHeight();
+    const margin = 10;
+    const contentWidth = pageWidth - margin * 2;
+
+    // Clean professional header.
+    doc.setFillColor(8, 75, 70);
+    doc.rect(0, 0, pageWidth, 17, "F");
+    doc.setFillColor(15, 118, 110);
+    doc.rect(0, 14, pageWidth, 3, "F");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(17);
+    doc.setTextColor(255, 255, 255);
+    doc.text("PAYMENT FOLLOW-UP STATEMENT", margin, 10.5);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7);
+    doc.text("WAREHOUSE TRADING", pageWidth - margin, 9, { align: "right" });
+    doc.text(`Generated: ${today}`, pageWidth - margin, 13, { align: "right" });
+
+    let y = 25;
+    doc.setFillColor(248, 250, 252);
+    doc.setDrawColor(203, 213, 225);
+    doc.roundedRect(margin, y, contentWidth, 28, 3, 3, "FD");
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+    doc.setTextColor(71, 85, 105);
+    doc.text("BUYER", margin + 6, y + 7);
+    doc.setFontSize(12);
+    doc.setTextColor(15, 23, 42);
+    doc.text(buyerName.slice(0, 70), margin + 6, y + 13);
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+    doc.setTextColor(71, 85, 105);
+    doc.text("COMPANY ACCOUNT", pageWidth / 2 - 25, y + 7);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(10);
+    doc.setTextColor(15, 23, 42);
+    doc.text((accountName || "-").slice(0, 55), pageWidth / 2 - 25, y + 13);
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+    doc.setTextColor(71, 85, 105);
+    doc.text("TOTAL OUTSTANDING", pageWidth - margin - 70, y + 7);
+    doc.setFontSize(15);
+    doc.setTextColor(185, 28, 28);
+    doc.text(`Rs.${formatMoney(totalOutstanding)}`, pageWidth - margin - 6, y + 15, { align: "right" });
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7);
+    doc.setTextColor(100, 116, 139);
+    doc.text(`${totalBills} pending bill${totalBills === 1 ? "" : "s"}`, pageWidth - margin - 6, y + 22, { align: "right" });
+
+    y += 34;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9.5);
+    doc.setTextColor(8, 75, 70);
+    doc.text("OUTSTANDING BILLS", margin, y);
+    y += 4;
+
+    const bodyRows = pendingRows.map((row) => {
+      const balance = Number(row.balance ?? row.bill_balance ?? row.outstanding ?? 0) || 0;
+      const amount = Number(row.amount ?? row.sale_amount ?? row.total_amount ?? 0) || 0;
+      const overdueDays = Number(row.overdue_days ?? row.days_overdue ?? 0) || 0;
+      return [
+        formatLedgerDate(row.date || row.unloading_date || ""),
+        row.voucher_no || row.bill_no || "-",
+        row.product_name || getProductName(row) || "-",
+        formatDecimal4(row.quantity ?? row.unloading_qty ?? 0),
+        formatMoney(row.rate || 0),
+        `Rs.${formatMoney(amount)}`,
+        formatLedgerDate(row.due_date || ""),
+        overdueDays > 0 ? String(Math.floor(overdueDays)) : "0",
+        `Rs.${formatMoney(balance)}`,
+      ];
+    });
+
+    autoTable(doc, {
+      startY: y,
+      margin: { left: margin, right: margin },
+      tableWidth: contentWidth,
+      theme: "grid",
+      head: [["Bill Date", "Voucher No", "Product", "Qty", "Rate", "Bill Amount", "Due Date", "Overdue Days", "Outstanding"]],
+      body: bodyRows,
+      styles: {
+        font: "helvetica",
+        fontSize: 7.2,
+        cellPadding: 2.1,
+        overflow: "linebreak",
+        valign: "middle",
+        textColor: [15, 23, 42],
+        lineColor: [226, 232, 240],
+        lineWidth: 0.2,
+      },
+      headStyles: {
+        fillColor: [8, 75, 70],
+        textColor: [255, 255, 255],
+        fontStyle: "bold",
+        fontSize: 7.2,
+      },
+      alternateRowStyles: { fillColor: [248, 250, 252] },
+      columnStyles: {
+        0: { cellWidth: 22 },
+        1: { cellWidth: 31 },
+        2: { cellWidth: 35 },
+        3: { cellWidth: 18, halign: "right" },
+        4: { cellWidth: 22, halign: "right" },
+        5: { cellWidth: 30, halign: "right" },
+        6: { cellWidth: 22 },
+        7: { cellWidth: 24, halign: "center" },
+        8: { cellWidth: 31, halign: "right", fontStyle: "bold" },
+      },
+      didParseCell: (hook) => {
+        if (hook.section === "body" && hook.column.index === 7) {
+          const days = Number(hook.cell.raw || 0) || 0;
+          if (days > 0) {
+            hook.cell.styles.textColor = [185, 28, 28];
+            hook.cell.styles.fontStyle = "bold";
+          }
+        }
+      },
+    });
+
+    y = (doc.lastAutoTable?.finalY || y) + 8;
+    if (y > pageHeight - 72) {
+      doc.addPage();
+      y = 16;
+    }
+
+    doc.setFillColor(239, 250, 248);
+    doc.setDrawColor(153, 246, 228);
+    doc.roundedRect(margin, y, contentWidth, 36, 3, 3, "FD");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9.5);
+    doc.setTextColor(8, 75, 70);
+    doc.text("PAYMENT REQUEST DRAFT", margin + 6, y + 7);
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(8.2);
+    doc.setTextColor(30, 41, 59);
+    const draftLines = doc.splitTextToSize(paymentDraft.join("\n"), contentWidth - 12);
+    doc.text(draftLines, margin + 6, y + 13, { lineHeightFactor: 1.35 });
+
+    y += 43;
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8.5);
+    doc.setTextColor(71, 85, 105);
+    doc.text("Contact", margin, y);
+    doc.setFont("helvetica", "normal");
+    doc.text(email || "Email: Not available", margin + 28, y);
+    doc.text(mobile || "Mobile: Not available", margin + 95, y);
+
+    doc.setFontSize(7);
+    doc.setTextColor(100, 116, 139);
+    doc.text("Computer generated statement - payment status should be verified against the latest accounts before remittance.", margin, pageHeight - 7);
+
+    const safeBuyer = buyerName.replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "") || "Buyer";
+    const fileName = `Payment-Followup-${safeBuyer}.pdf`;
+    return { doc, fileName, email, mobile, buyerName, totalOutstanding, message: paymentDraft.join("\n") };
+  };
+
+  const handleSaleFollowupBuyerPdf = async (shareMode = "download") => {
+    try {
+      setSaleFollowupBuyerPdfLoading(true);
+      const { doc, fileName, email, mobile, buyerName, totalOutstanding, message } = await buildSaleFollowupBuyerStatementPdf();
+      const blob = doc.output("blob");
+      const file = new File([blob], fileName, { type: "application/pdf" });
+      const subject = `Payment Follow-up - ${buyerName}`;
+      const fullMessage = `${message}\n\nTotal Outstanding: Rs.${formatMoney(totalOutstanding)}`;
+
+      if (shareMode === "mail" || shareMode === "whatsapp") {
+        if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
+          const canShareFile = typeof navigator.canShare === "function"
+            ? navigator.canShare({ files: [file] })
+            : false;
+          if (canShareFile) {
+            await navigator.share({
+              title: subject,
+              text: fullMessage,
+              files: [file],
+            });
+            return;
+          }
+        }
+      }
+
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.setTimeout(() => window.URL.revokeObjectURL(url), 1500);
+
+      if (shareMode === "mail") {
+        if (!email) {
+          alert("PDF downloaded, but Buyer email is not available.");
+          return;
+        }
+        window.location.href = `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(`${fullMessage}\n\nPDF file: ${fileName}`)}`;
+        alert("PDF downloaded. This browser cannot attach files directly to email; attach the downloaded PDF in the mail window.");
+      } else if (shareMode === "whatsapp") {
+        if (!mobile) {
+          alert("PDF downloaded, but Buyer mobile number is not available.");
+          return;
+        }
+        window.open(`https://wa.me/${mobile.length === 10 ? `91${mobile}` : mobile}?text=${encodeURIComponent(`${fullMessage}\n\nPDF file: ${fileName}`)}`, "_blank", "noopener,noreferrer");
+        alert("PDF downloaded. This browser cannot attach files directly to WhatsApp; attach the downloaded PDF in WhatsApp.");
+      }
+    } catch (err) {
+      if (err?.name === "AbortError") return;
+      console.error("Sale follow-up buyer statement failed:", err);
+      alert(err?.message || "Unable to prepare Buyer payment statement PDF.");
+    } finally {
+      setSaleFollowupBuyerPdfLoading(false);
+    }
+  };
+
   const reportColumns = {
     purchase: [
       ["sl", "S.L No", (_item, i) => i + 1],
@@ -7357,18 +7636,60 @@ export default function WarehouseTradingPage() {
                       label: buyer.name,
                     }))}
                     onChange={(value) => setReportFilters((prev) => ({ ...prev, sale_buyer_id: value }))}
-                    placeholder="Search Buyer"
+                    placeholder="Select Buyer / Search name"
                   />
-                  {reportFilters.sale_buyer_id && (
-                    <button
-                      type="button"
-                      onClick={() => setReportFilters((prev) => ({ ...prev, sale_buyer_id: "" }))}
-                      style={{ ...btnAction, background: "#64748b", marginBottom: 1 }}
-                    >
-                      Clear Buyer
-                    </button>
-                  )}
+
+                  {reportFilters.sale_buyer_id && (() => {
+                    const selectedRows = (Array.isArray(reportData) ? reportData : []).filter((row) => {
+                      const rowBuyerId = String(row?.buyer_id || row?.company_id || "").trim();
+                      return rowBuyerId === String(reportFilters.sale_buyer_id).trim();
+                    });
+                    const totalOutstanding = selectedRows.reduce((sum, row) => {
+                      const balance = Number(row?.balance ?? row?.bill_balance ?? row?.outstanding ?? 0) || 0;
+                      return sum + Math.max(0, balance);
+                    }, 0);
+                    return (
+                      <div style={{ display: "flex", gap: 8, alignItems: "end", flexWrap: "wrap" }}>
+                        <div style={{ minWidth: 190, padding: "9px 12px", border: "1px solid #fecaca", borderRadius: 10, background: "#fff7f7" }}>
+                          <div style={{ fontSize: 10, fontWeight: 800, color: "#991b1b", textTransform: "uppercase" }}>Total Outstanding</div>
+                          <div style={{ fontSize: 17, fontWeight: 900, color: "#b91c1c", marginTop: 2 }}>Rs.{formatMoney(totalOutstanding)}</div>
+                        </div>
+                        <button
+                          type="button"
+                          disabled={saleFollowupBuyerPdfLoading}
+                          onClick={() => { void handleSaleFollowupBuyerPdf("download"); }}
+                          style={{ ...btnAction, background: "#0f766e", marginBottom: 1, opacity: saleFollowupBuyerPdfLoading ? 0.65 : 1 }}
+                        >
+                          {saleFollowupBuyerPdfLoading ? "Preparing PDF..." : "Buyer PDF"}
+                        </button>
+                        <button
+                          type="button"
+                          disabled={saleFollowupBuyerPdfLoading}
+                          onClick={() => { void handleSaleFollowupBuyerPdf("mail"); }}
+                          style={{ ...btnAction, background: "#2563eb", marginBottom: 1, opacity: saleFollowupBuyerPdfLoading ? 0.65 : 1 }}
+                        >
+                          Mail PDF
+                        </button>
+                        <button
+                          type="button"
+                          disabled={saleFollowupBuyerPdfLoading}
+                          onClick={() => { void handleSaleFollowupBuyerPdf("whatsapp"); }}
+                          style={{ ...btnAction, background: "#15803d", marginBottom: 1, opacity: saleFollowupBuyerPdfLoading ? 0.65 : 1 }}
+                        >
+                          WhatsApp PDF
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setReportFilters((prev) => ({ ...prev, sale_buyer_id: "" }))}
+                          style={{ ...btnAction, background: "#64748b", marginBottom: 1 }}
+                        >
+                          Clear Buyer
+                        </button>
+                      </div>
+                    );
+                  })()}
                 </div>
+
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10, marginBottom: 14 }}>
                   {[
                     ["all", saleFollowupCounts.all],
@@ -7399,6 +7720,7 @@ export default function WarehouseTradingPage() {
                     );
                   })}
                 </div>
+
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
                   {["all", "payment_done", "unloading_pending", "pending"].map((key) => {
                     const meta = saleFollowupStatusMeta[key];
