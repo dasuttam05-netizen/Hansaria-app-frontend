@@ -402,7 +402,6 @@ export default function WarehouseTradingPage() {
   const [list, setList] = useState([]);
   const [reportData, setReportData] = useState([]);
   const [reportFilterOptions, setReportFilterOptions] = useState({ account_ids: [], warehouse_ids: [], farmer_ids: [], buyer_ids: [] });
-  const [profitLossFilterOptions, setProfitLossFilterOptions] = useState({ buyers: [], consignees: [], farmers: [], dates: [] });
   const [warehouseStockReport, setWarehouseStockReport] = useState([]);
   const [reportPageInfo, setReportPageInfo] = useState({ page: 1, pageSize: PAGE_SIZE, hasMore: false });
   const [availableSaleStock, setAvailableSaleStock] = useState(null);
@@ -1157,37 +1156,11 @@ export default function WarehouseTradingPage() {
     return () => window.clearTimeout(timer);
   }, [activeTab, activeVoucherType]);
 
-  // Profit/Loss filters need the full Buyer + Consignee + Farmer master lists
-  // even when Reports is opened directly while the voucher type is Purchase.
-  // Keep the normal master loader, then explicitly ensure these four masters
-  // are populated so the dropdowns never depend on the current voucher tab.
+  // Profit/Loss filters also need Buyer + Consignee + Farmer master lists
+  // when Reports is opened directly. Reuse the existing cached loader.
   useEffect(() => {
     if (activeTab !== "reports" || activeReport !== "profit-loss") return;
-    let cancelled = false;
-    (async () => {
-      try {
-        await loadData();
-      } catch {}
-      const results = await Promise.allSettled([
-        API.get("/api/buyer-names"),
-        API.get("/api/companies"),
-        API.get("/api/consignee-names"),
-        API.get("/api/farmers"),
-      ]);
-      if (cancelled) return;
-      const valueOf = (result) => result?.status === "fulfilled" && Array.isArray(result.value?.data)
-        ? result.value.data
-        : [];
-      const buyerRows = valueOf(results[0]);
-      const companyRows = valueOf(results[1]);
-      const consigneeRows = valueOf(results[2]);
-      const farmerRows = valueOf(results[3]);
-      if (buyerRows.length) setBuyerNames(buyerRows);
-      if (companyRows.length) setCompanies(companyRows);
-      if (consigneeRows.length) setConsignees(consigneeRows);
-      if (farmerRows.length) setFarmers(farmerRows);
-    })();
-    return () => { cancelled = true; };
+    loadData();
   }, [activeTab, activeReport]);
 
   // Load voucher list when type changes
@@ -1256,7 +1229,7 @@ export default function WarehouseTradingPage() {
       loadReportFilterOptions();
     }, 40);
     return () => window.clearTimeout(timer);
-  }, [activeTab, activeReport, reportFilters.farmer_id, reportFilters.company_account_id, reportFilters.warehouse_id, reportFilters.sale_buyer_id, reportFilters.profit_from_date, reportFilters.profit_to_date, reportFilters.profit_location_id, reportFilters.profit_employee_id, reportFilters.profit_farmer_id]);
+  }, [activeTab, activeReport, reportFilters.farmer_id, reportFilters.company_account_id, reportFilters.warehouse_id, reportFilters.sale_buyer_id]);
 
   useEffect(() => {
     // Keep bill-wise detail panels hidden by default. Press F5 to reveal and
@@ -1830,50 +1803,6 @@ export default function WarehouseTradingPage() {
   };
 
   const loadReportFilterOptions = async (reportType = activeReport, filters = reportFilters) => {
-    if (reportType === "profit-loss") {
-      try {
-        const params = { type: "profit-loss" };
-        if (filters.profit_from_date) params.from_date = filters.profit_from_date;
-        if (filters.profit_to_date) params.to_date = filters.profit_to_date;
-        // Keep dropdown options complete. Selecting Buyer/Consignee/Farmer
-        // must not shrink the option list for the other dropdowns. The selected
-        // values are applied only to the Profit/Loss report query itself.
-
-        const cacheKey = JSON.stringify({ reportType, params });
-        const cached = reportFilterCacheRef.current.get(cacheKey);
-        if (cached && Date.now() - cached.time < 5 * 60 * 1000) {
-          setProfitLossFilterOptions(cached.data || { buyers: [], consignees: [], farmers: [], dates: [] });
-          return;
-        }
-
-        const inFlight = reportFilterInFlightRef.current.get(cacheKey);
-        if (inFlight) {
-          const data = await inFlight;
-          if (data) setProfitLossFilterOptions(data);
-          return;
-        }
-
-        const request = API.get("/api/wh-vouchers/report/filter-options", { params })
-          .then((res) => ({
-            buyers: Array.isArray(res.data?.buyers) ? res.data.buyers : [],
-            consignees: Array.isArray(res.data?.consignees) ? res.data.consignees : [],
-            farmers: Array.isArray(res.data?.farmers) ? res.data.farmers : [],
-            dates: Array.isArray(res.data?.dates) ? res.data.dates : [],
-          }))
-          .finally(() => {
-            reportFilterInFlightRef.current.delete(cacheKey);
-          });
-        reportFilterInFlightRef.current.set(cacheKey, request);
-        const data = await request;
-        reportFilterCacheRef.current.set(cacheKey, { time: Date.now(), data });
-        setProfitLossFilterOptions(data);
-      } catch (err) {
-        console.error("Failed to load Profit/Loss filter options:", err);
-        setProfitLossFilterOptions({ buyers: [], consignees: [], farmers: [], dates: [] });
-      }
-      return;
-    }
-
     const supported = ["purchase", "purchase-party-ledger", "sale", "sale-party-ledger", "sale-followup", "sale-journey"].includes(reportType);
     if (!supported) {
       setReportFilterOptions({ account_ids: [], warehouse_ids: [], farmer_ids: [], buyer_ids: [], accounts: [], warehouses: [], farmers: [], buyers: [] });
@@ -1903,8 +1832,8 @@ export default function WarehouseTradingPage() {
 
       const request = API
         .get("/api/wh-vouchers/report/filter-options", {
-          params: { ...params, type: reportType }
-        })
+  params: { ...params, type: reportType }
+})
         .then((res) => {
           const nextData = {
             account_ids: Array.isArray(res.data?.account_ids) ? res.data.account_ids : [],
@@ -4191,10 +4120,55 @@ export default function WarehouseTradingPage() {
     return account?.account_name || account?.name || item.company_account_name || item.account_name || item.account || "-";
   };
 
+  const getReceiptBuyerName = (item) => {
+    const raw = item?.data && typeof item.data === "object" ? item.data : {};
+    const buyerId = String(
+      item?.buyer_id ||
+      item?.company_id ||
+      raw?.buyer_id ||
+      raw?.company_id ||
+      ""
+    ).trim();
+
+    const pendingBuyer = (Array.isArray(pendingReceiptBuyers) ? pendingReceiptBuyers : []).find((row) => {
+      const rowId = String(row?.buyer_id || row?.company_id || row?.id || row?._id || "").trim();
+      return buyerId && rowId && rowId === buyerId;
+    }) || {};
+    const buyer = buyerId ? (buyerById.get(buyerId) || {}) : {};
+    const company = buyerId ? (companyById.get(buyerId) || {}) : {};
+
+    const candidates = [
+      item?.buyer_name,
+      item?.party_name,
+      raw?.buyer_name,
+      raw?.party_name,
+      pendingBuyer?.buyer_name,
+      pendingBuyer?.party_name,
+      pendingBuyer?.company_name,
+      pendingBuyer?.name,
+      buyer?.name,
+      buyer?.buyer_name,
+      buyer?.company_name,
+      buyer?.party_name,
+      company?.name,
+      company?.company_name,
+      item?.company_name,
+      raw?.company_name,
+    ];
+
+    const found = candidates.find((value) => {
+      const text = String(value ?? "").trim();
+      return text && text !== "-" && text.toLowerCase() !== "unknown party";
+    });
+    return found || "-";
+  };
+
   const getCompanyName = (item) =>
-    item?.company_name ||
-    companies.find((c) => String(c.id || c._id) === String(item?.company_id))?.name ||
-    "-";
+    getReceiptBuyerName(item) !== "-"
+      ? getReceiptBuyerName(item)
+      : (item?.company_name ||
+        companies.find((c) => String(c.id || c._id) === String(item?.company_id))?.name ||
+        "-");
 
   const reportColumns = {
     purchase: [
@@ -4662,47 +4636,6 @@ export default function WarehouseTradingPage() {
   const saleReportAccounts = purchasePartyLedgerCompanyAccounts;
   const saleReportWarehouses = purchasePartyLedgerWarehouses;
   const saleReportFarmers = purchasePartyLedgerFarmers;
-
-  const profitLossBuyerOptions = useMemo(() => {
-    const map = new Map();
-    const add = (item) => {
-      const value = String(item?.id ?? item?._id ?? item?.legacy_id ?? "").trim();
-      const label = String(item?.name ?? item?.buyer_name ?? item?.company_name ?? item?.party_name ?? "").trim();
-      if (!value || !label || label === "-") return;
-      map.set(value, { id: value, name: label });
-    };
-    (profitLossFilterOptions.buyers || []).forEach(add);
-    (buyerNames || []).forEach(add);
-    (companies || []).forEach(add);
-    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
-  }, [buyerNames, companies, profitLossFilterOptions.buyers]);
-
-  const profitLossConsigneeOptions = useMemo(() => {
-    const map = new Map();
-    const add = (item) => {
-      const value = String(item?.id ?? item?._id ?? item?.legacy_id ?? "").trim();
-      const label = String(item?.name ?? item?.consignee_name ?? "").trim();
-      if (!value || !label || label === "-") return;
-      map.set(value, { id: value, name: label });
-    };
-    (profitLossFilterOptions.consignees || []).forEach(add);
-    (consignees || []).forEach(add);
-    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
-  }, [consignees, profitLossFilterOptions.consignees]);
-
-  const profitLossFarmerOptions = useMemo(() => {
-    const map = new Map();
-    const add = (item) => {
-      const value = String(item?.id ?? item?._id ?? item?.legacy_id ?? "").trim();
-      const label = String(item?.name ?? item?.farmer_name ?? item?.account_holder_name ?? "").trim();
-      if (!value || !label || label === "-") return;
-      map.set(value, { id: value, name: label });
-    };
-    (profitLossFilterOptions.farmers || []).forEach(add);
-    (farmers || []).forEach(add);
-    return Array.from(map.values()).sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
-  }, [farmers, profitLossFilterOptions.farmers]);
-
   const saleReportBuyers = useMemo(() => {
     const byId = new Map();
     const add = (item) => {
@@ -4729,6 +4662,47 @@ export default function WarehouseTradingPage() {
   // Do not run a second client-side filter/sort/slice over the complete dataset.
   const filteredVoucherListAll = list;
   const filteredVoucherList = list;
+
+  // Receipt list: the Company column must show the Buyer/Party name.
+  // Keep the original voucher rows intact and decorate only the display rows.
+  const receiptVoucherTableList = activeVoucherType === "receipt"
+    ? filteredVoucherList.map((item) => {
+        const buyerName = getReceiptBuyerName(item);
+        return {
+          ...item,
+          buyer_name: buyerName !== "-" ? buyerName : (item?.buyer_name || ""),
+          party_name: buyerName !== "-" ? buyerName : (item?.party_name || ""),
+          company_name: buyerName !== "-" ? buyerName : (item?.company_name || ""),
+          receipt_buyer_name: buyerName,
+        };
+      })
+    : filteredVoucherList;
+
+  // WarehouseVoucherTable may resolve its Receipt "Company" cell from the
+  // supplied companies list. For Receipt rows, overlay the matching company
+  // entry with the Buyer name so the column never falls back to "-".
+  const receiptDisplayCompanies = useMemo(() => {
+    if (activeVoucherType !== "receipt") return companies;
+    const byId = new Map(
+      (Array.isArray(companies) ? companies : []).map((company) => [
+        String(company?.id || company?._id || "").trim(),
+        company,
+      ])
+    );
+    receiptVoucherTableList.forEach((row) => {
+      const id = String(row?.company_id || row?.buyer_id || "").trim();
+      const name = String(row?.receipt_buyer_name || row?.buyer_name || row?.party_name || row?.company_name || "").trim();
+      if (!id || !name || name === "-") return;
+      byId.set(id, {
+        ...(byId.get(id) || {}),
+        id,
+        _id: id,
+        name,
+        company_name: name,
+      });
+    });
+    return Array.from(byId.values());
+  }, [activeVoucherType, companies, receiptVoucherTableList]);
 
   const filteredReportDataAll = useMemo(() => {
     const serverPagedReport = ["sale", "purchase", "warehouse-stock", "profit-loss"].includes(activeReport);
@@ -6879,7 +6853,7 @@ export default function WarehouseTradingPage() {
             </button>
             <WarehouseVoucherTable
               activeVoucherType={activeVoucherType}
-              filteredVoucherList={filteredVoucherList}
+              filteredVoucherList={receiptVoucherTableList}
               th={th}
               td={td}
               reportHeaderRowStyle={reportHeaderRowStyle}
@@ -6892,7 +6866,7 @@ export default function WarehouseTradingPage() {
               formatDecimal4={formatDecimal4}
               formatMoney={formatMoney}
               consignees={consignees}
-              companies={companies}
+              companies={activeVoucherType === "receipt" ? receiptDisplayCompanies : companies}
               selectedPaymentId={selectedPaymentId}
               onEditVoucher={handleEditVoucher}
               onDeleteVoucher={handleDeleteVoucher}
@@ -7037,9 +7011,9 @@ export default function WarehouseTradingPage() {
                     <>
                       <label style={{ display: "flex", flexDirection: "column", gap: 5, minWidth: 145, fontSize: 12, fontWeight: 700, color: "#334155" }}>From Date<input type="date" value={reportFilters.profit_from_date} onChange={(e) => updateReportFilter("profit_from_date", e.target.value)} style={inp} /></label>
                       <label style={{ display: "flex", flexDirection: "column", gap: 5, minWidth: 145, fontSize: 12, fontWeight: 700, color: "#334155" }}>To Date<input type="date" value={reportFilters.profit_to_date} onChange={(e) => updateReportFilter("profit_to_date", e.target.value)} style={inp} /></label>
-                      <SearchableSelect label="Buyer" value={reportFilters.profit_location_id} options={profitLossBuyerOptions.map((x) => ({ value: x.id, label: x.name }))} onChange={(v) => updateReportFilter("profit_location_id", v)} placeholder="All Buyers" />
-                      <SearchableSelect label="Consignee" value={reportFilters.profit_employee_id} options={profitLossConsigneeOptions.map((x) => ({ value: x.id, label: x.name }))} onChange={(v) => updateReportFilter("profit_employee_id", v)} placeholder="All Consignees" />
-                      <SearchableSelect label="All Farmers" value={reportFilters.profit_farmer_id} options={profitLossFarmerOptions.map((x) => ({ value: x.id, label: x.name }))} onChange={(v) => updateReportFilter("profit_farmer_id", v)} placeholder="All Farmers" />
+                      <SearchableSelect label="Buyer" value={reportFilters.profit_location_id} options={(buyerNames || []).map((x) => ({ value: x.id || x._id || x.legacy_id, label: x.name || x.buyer_name || x.company_name }))} onChange={(v) => updateReportFilter("profit_location_id", v)} placeholder="All Buyers" />
+                      <SearchableSelect label="Consignee" value={reportFilters.profit_employee_id} options={(consignees || []).map((x) => ({ value: x.id || x._id || x.legacy_id, label: x.name || x.consignee_name }))} onChange={(v) => updateReportFilter("profit_employee_id", v)} placeholder="All Consignees" />
+                      <SearchableSelect label="All Farmers" value={reportFilters.profit_farmer_id} options={(farmers || []).map((x) => ({ value: x.id || x._id || x.legacy_id, label: x.name || x.farmer_name }))} onChange={(v) => updateReportFilter("profit_farmer_id", v)} placeholder="All Farmers" />
                     </>
                   )}
                   <button type="button" onClick={() => { setProfitLossMode("direct"); setReportFilters((prev) => ({ ...prev, profit_loss_mode: "direct", profit_from_date: "", profit_to_date: "", profit_location_id: "", profit_employee_id: "", profit_farmer_id: "" })); setReportPage(1); }} style={{ ...btnAction, background: "#64748b" }}>Clear Filters</button>
