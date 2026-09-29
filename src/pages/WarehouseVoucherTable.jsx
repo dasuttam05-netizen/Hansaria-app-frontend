@@ -65,7 +65,58 @@ function WarehouseVoucherTable({
                 <td style={td}>{getWarehouseName(item)}</td>
                 <td style={td}>{getAccountName(item)}</td>
                 {(activeVoucherType === "purchase" || activeVoucherType === "payment") && <td style={td}>{getFarmerName(item)}</td>}
-                {(activeVoucherType === "sale" || activeVoucherType === "receipt") && <td style={td}>{activeVoucherType === "sale" ? getBuyerName(item) : (companies.find((c) => String(c.id || c._id) === String(item.company_id))?.name || "-")}</td>}
+                {(activeVoucherType === "sale" || activeVoucherType === "receipt") && (
+                  <td style={td}>
+                    {activeVoucherType === "sale"
+                      ? getBuyerName(item)
+                      : (() => {
+                          const raw = item?.data && typeof item.data === "object" ? item.data : {};
+                          const directNameCandidates = [
+                            item?.receipt_buyer_name,
+                            item?.buyer_name,
+                            item?.party_name,
+                            item?.company_name,
+                            raw?.receipt_buyer_name,
+                            raw?.buyer_name,
+                            raw?.party_name,
+                            raw?.company_name,
+                          ];
+                          const directName = directNameCandidates.find((value) => {
+                            const text = String(value ?? "").trim();
+                            return text && text !== "-" && text.toLowerCase() !== "unknown party";
+                          });
+                          if (directName) return directName;
+
+                          const buyerName = typeof getBuyerName === "function" ? getBuyerName(item) : "";
+                          if (buyerName && buyerName !== "-" && buyerName.toLowerCase() !== "unknown party") {
+                            return buyerName;
+                          }
+
+                          const ids = [
+                            item?.buyer_id,
+                            item?.company_id,
+                            raw?.buyer_id,
+                            raw?.company_id,
+                          ].filter((value) => value !== undefined && value !== null && String(value).trim() !== "");
+                          const company = (Array.isArray(companies) ? companies : []).find((c) => {
+                            const companyIds = [c?.id, c?._id, c?.legacy_id, c?.company_id]
+                              .filter((value) => value !== undefined && value !== null && String(value).trim() !== "")
+                              .map((value) => String(value).trim());
+                            return ids.some((id) => companyIds.includes(String(id).trim()));
+                          });
+                          const companyName = company?.name || company?.company_name || company?.party_name;
+                          if (companyName && String(companyName).trim() !== "-") return companyName;
+
+                          const accountName = typeof getAccountName === "function" ? getAccountName(item) : "";
+                          const directAccountName = item?.company_account_name || item?.account_name || item?.account || "";
+                          return accountName && accountName !== "-"
+                            ? accountName
+                            : directAccountName && directAccountName !== "-"
+                              ? directAccountName
+                              : "-";
+                        })()}
+                  </td>
+                )}
                 {activeVoucherType === "sale" && <td style={td}>{item.consignee_name || consignees.find((c) => String(c.id || c._id) === String(item.consignee_id))?.name || "-"}</td>}
                 {activeVoucherType === "sale" && <td style={td}>{item.against_purchase_enabled ? `${item.against_purchase_links?.length || 0} bill` : "-"}</td>}
                 {(activeVoucherType === "purchase" || activeVoucherType === "sale") && (
