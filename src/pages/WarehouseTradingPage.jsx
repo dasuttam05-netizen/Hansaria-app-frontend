@@ -4473,8 +4473,8 @@ export default function WarehouseTradingPage() {
     doc.text(`Email: ${email || "Not available"}`, margin + 24, y);
     doc.text(`Mobile: ${mobile || "Not available"}`, margin + 96, y);
 
-    // Keep the payment message at the bottom of the statement, without a
-    // separate "Payment Request Draft" heading.
+    // Keep the complete payment follow-up message at the bottom of the statement.
+    // The requested heading is retained; all message lines remain below it.
     const bottomMessage = saleFollowupFilter === "payment_done"
       ? "Payment received against the selected Sale Follow-up entries."
       : saleFollowupFilter === "unloading_pending"
@@ -4482,14 +4482,45 @@ export default function WarehouseTradingPage() {
         : saleFollowupFilter === "pending"
           ? "Payment is pending against the selected Sale Follow-up entries."
           : "Sale Follow-up statement for the selected Buyer.";
+
+    const draftBoxX = margin;
+    const draftBoxW = contentWidth;
+    const draftBoxH = 32;
+    const draftBoxY = pageHeight - 42;
+    doc.setFillColor(240, 253, 250);
+    doc.setDrawColor(153, 246, 228);
+    doc.roundedRect(draftBoxX, draftBoxY, draftBoxW, draftBoxH, 2.5, 2.5, "FD");
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+    doc.setTextColor(8, 75, 70);
+    doc.text("PAYMENT REQUEST DRAFT", draftBoxX + 5, draftBoxY + 7);
+
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(7.2);
-    doc.setTextColor(71, 85, 105);
-    doc.text(bottomMessage, margin, pageHeight - 12);
+    doc.setFontSize(7);
+    doc.setTextColor(30, 41, 59);
+    doc.text(`Dear ${buyerName},`, draftBoxX + 5, draftBoxY + 12);
+    doc.text(
+      `As per our accounts, an amount of Rs.${formatMoney(totalOutstanding)} is outstanding against your pending sale bills.`,
+      draftBoxX + 5,
+      draftBoxY + 17
+    );
+    doc.text(
+      "Kindly arrange the payment at the earliest against the bills mentioned below.",
+      draftBoxX + 5,
+      draftBoxY + 21
+    );
+    doc.text(bottomMessage, draftBoxX + 5, draftBoxY + 25);
+    doc.text(
+      "This is a system-generated payment follow-up statement.",
+      draftBoxX + 5,
+      draftBoxY + 29
+    );
+
     doc.setFontSize(7);
     doc.setTextColor(100, 116, 139);
-    doc.text("Computer generated statement", margin, pageHeight - 7);
-    doc.text(`Total Outstanding: Rs.${formatMoney(totalOutstanding)}`, pageWidth - margin, pageHeight - 7, { align: "right" });
+    doc.text("Computer generated statement", margin, pageHeight - 6);
+    doc.text(`Total Outstanding: Rs.${formatMoney(totalOutstanding)}`, pageWidth - margin, pageHeight - 6, { align: "right" });
 
     const safeBuyer = buyerName.replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "") || "Buyer";
     const fileName = `Payment-Followup-${safeBuyer}.pdf`;
