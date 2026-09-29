@@ -4378,9 +4378,9 @@ export default function WarehouseTradingPage() {
       ["unloading_date", "Unloading Date", (item) => formatLedgerDate(item.unloading_date || "")],
       ["due_date", "Due Date", (item) => formatLedgerDate(item.due_date || item.unloading_date || "")],
       ["due_days", "Due Days", (item) => (item.due_days !== undefined ? item.due_days : diffDays(item.unloading_date, item.due_date))],
-      ["due_note", "Due Date Note", (item) => {
-        const dueDate = item.due_date || item.unloading_date || "";
-        return dueDate ? `Due Date: ${formatLedgerDate(dueDate)}` : "Due date not set";
+      ["overdue_days", "Overdue Days", (item) => {
+        const overdueDays = Number(item.overdue_days ?? item.days_overdue ?? 0);
+        return Number.isFinite(overdueDays) && overdueDays > 0 ? String(Math.floor(overdueDays)) : "0";
       }],
       ["followup_status_label", "Status", (item) => (item.followup_status_label || item.followup_status || "Payment Pending")],
       ["balance", "Balance", (item) => formatMoney(Math.abs(item.balance || item.bill_balance || item.outstanding || 0))],
@@ -4402,7 +4402,9 @@ export default function WarehouseTradingPage() {
           `Sale Bill: ${item.voucher_no || "-"}`,
           `Outstanding Balance: Rs.${formatMoney(Math.abs(item.balance || 0))}`,
           dueDate ? `Due Date: ${formatLedgerDate(dueDate)}` : "Due Date: Not set",
-          item.due_days !== undefined ? `Due Days: ${item.due_days}` : "",
+          Number(item.overdue_days ?? item.days_overdue ?? 0) > 0
+            ? `Overdue Days: ${Math.floor(Number(item.overdue_days ?? item.days_overdue ?? 0))}`
+            : "",
           "",
           statusLabel === "Payment Done"
             ? "Payment has been received against this bill."
@@ -4490,9 +4492,9 @@ export default function WarehouseTradingPage() {
                 <div style={{ borderTop: "1px solid #e2e8f0", margin: "8px 0" }} />
                 <div style={{ fontSize: 11, color: "#64748b", fontWeight: 700 }}>Due Date</div>
                 <div style={{ fontSize: 13, fontWeight: 700, color: "#0f172a", marginTop: 2 }}>{dueDate ? formatLedgerDate(dueDate) : "Not set"}</div>
-                {item.due_days !== undefined && (
-                  <div style={{ fontSize: 11, color: "#64748b", marginTop: 4 }}>Due Days: {item.due_days}</div>
-                )}
+                <div style={{ fontSize: 11, color: "#64748b", marginTop: 4 }}>
+                  Overdue Days: {Math.max(0, Math.floor(Number(item.overdue_days ?? item.days_overdue ?? 0) || 0))}
+                </div>
                 <div style={{ fontSize: 11, color: "#64748b", marginTop: 4 }}>Balance: Rs.{formatMoney(Math.abs(item.balance || 0))}</div>
                 <div style={{ display: "flex", gap: 6, marginTop: 9 }}>
                   <button type="button" onClick={() => { void shareSaleFollowupPdf("mail"); }} style={{ ...btnAction, padding: "6px 9px", background: email ? "#0f766e" : "#cbd5e1" }} disabled={!email}>
@@ -7346,6 +7348,27 @@ export default function WarehouseTradingPage() {
             )}
             {activeReport === "sale-followup" && (
               <>
+                <div style={{ display: "flex", gap: 12, alignItems: "end", flexWrap: "wrap", marginBottom: 14 }}>
+                  <SearchableSelect
+                    label="Buyer"
+                    value={reportFilters.sale_buyer_id}
+                    options={saleReportBuyers.map((buyer) => ({
+                      value: buyer.id || buyer._id,
+                      label: buyer.name,
+                    }))}
+                    onChange={(value) => setReportFilters((prev) => ({ ...prev, sale_buyer_id: value }))}
+                    placeholder="Search Buyer"
+                  />
+                  {reportFilters.sale_buyer_id && (
+                    <button
+                      type="button"
+                      onClick={() => setReportFilters((prev) => ({ ...prev, sale_buyer_id: "" }))}
+                      style={{ ...btnAction, background: "#64748b", marginBottom: 1 }}
+                    >
+                      Clear Buyer
+                    </button>
+                  )}
+                </div>
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10, marginBottom: 14 }}>
                   {[
                     ["all", saleFollowupCounts.all],
