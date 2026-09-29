@@ -4730,6 +4730,70 @@ export default function WarehouseTradingPage() {
   const filteredVoucherListAll = list;
   const filteredVoucherList = list;
 
+  // Receipt table: Company column must show the selected/pending Buyer/Party name.
+  // Keep this display-only so Receipt save/adjustment logic is unchanged.
+  const resolveReceiptBuyerDisplayName = (item) => {
+    const raw = item?.data && typeof item.data === "object" ? item.data : {};
+    const buyerId = String(
+      item?.buyer_id ||
+      item?.company_id ||
+      raw?.buyer_id ||
+      raw?.company_id ||
+      ""
+    ).trim();
+
+    const pendingBuyer = (Array.isArray(pendingReceiptBuyers) ? pendingReceiptBuyers : []).find((row) => {
+      const rowId = String(row?.buyer_id || row?.company_id || row?.id || row?._id || "").trim();
+      return buyerId && rowId && rowId === buyerId;
+    }) || {};
+    const buyer = buyerId ? (buyerById.get(buyerId) || {}) : {};
+    const company = buyerId ? (companyById.get(buyerId) || {}) : {};
+
+    const candidates = [
+      item?.receipt_buyer_name,
+      item?.buyer_name,
+      item?.party_name,
+      raw?.receipt_buyer_name,
+      raw?.buyer_name,
+      raw?.party_name,
+      pendingBuyer?.buyer_name,
+      pendingBuyer?.party_name,
+      pendingBuyer?.company_name,
+      pendingBuyer?.name,
+      buyer?.name,
+      buyer?.buyer_name,
+      buyer?.company_name,
+      buyer?.party_name,
+      company?.name,
+      company?.company_name,
+      company?.buyer_name,
+      company?.party_name,
+      item?.company_name,
+      raw?.company_name,
+      item?.company_account_name,
+      item?.account_name,
+    ];
+
+    const found = candidates.find((value) => {
+      const name = String(value ?? "").trim();
+      return name && name !== "-" && name.toLowerCase() !== "unknown party";
+    });
+    return found || "-";
+  };
+
+  const receiptDisplayVoucherList = activeVoucherType === "receipt"
+    ? filteredVoucherList.map((item) => {
+        const buyerName = resolveReceiptBuyerDisplayName(item);
+        return {
+          ...item,
+          receipt_buyer_name: buyerName,
+          buyer_name: item?.buyer_name || (buyerName !== "-" ? buyerName : ""),
+          party_name: item?.party_name || (buyerName !== "-" ? buyerName : ""),
+          company_name: buyerName !== "-" ? buyerName : (item?.company_name || ""),
+        };
+      })
+    : filteredVoucherList;
+
   const filteredReportDataAll = useMemo(() => {
     const serverPagedReport = ["sale", "purchase", "warehouse-stock", "profit-loss"].includes(activeReport);
     // Sale/Purchase search is already applied in MongoDB before pagination.
@@ -6879,7 +6943,7 @@ export default function WarehouseTradingPage() {
             </button>
             <WarehouseVoucherTable
               activeVoucherType={activeVoucherType}
-              filteredVoucherList={filteredVoucherList}
+              filteredVoucherList={receiptDisplayVoucherList}
               th={th}
               td={td}
               reportHeaderRowStyle={reportHeaderRowStyle}
