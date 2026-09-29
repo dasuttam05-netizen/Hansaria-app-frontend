@@ -4247,25 +4247,74 @@ export default function WarehouseTradingPage() {
 
     const totalBills = pendingRows.length;
     const today = formatLedgerDate(new Date().toISOString().slice(0, 10));
+
+    // Summary values are based on the selected Buyer's complete follow-up data,
+    // while the detailed table below continues to show only outstanding bills.
+    const totalAmount = allBuyerRows.reduce((sum, row) => {
+      const amount = Number(
+        row?.gross_receivable ??
+        row?.net_receivable_amount ??
+        row?.net_amount_payable ??
+        row?.net_amount ??
+        row?.amount ??
+        row?.total_amount ??
+        0
+      ) || 0;
+      return sum + Math.max(0, amount);
+    }, 0);
+
+    const paymentReceived = allBuyerRows.reduce((sum, row) => {
+      const paid = Number(
+        row?.receipt_adjusted_amount ??
+        row?.paid_amount ??
+        row?.payment_received ??
+        0
+      ) || 0;
+      return sum + Math.max(0, paid);
+    }, 0);
+
+    const paymentDue = pendingRows.reduce((sum, row) => {
+      const balance = Number(row.balance ?? row.bill_balance ?? row.outstanding ?? 0) || 0;
+      return sum + Math.max(0, balance);
+    }, 0);
+
+    const unloadingPendingRows = allBuyerRows.filter((row) =>
+      String(row?.followup_status || "").toLowerCase() === "unloading_pending"
+    );
+    const unloadingPendingAmount = unloadingPendingRows.reduce((sum, row) => {
+      const amount = Number(
+        row?.gross_receivable ??
+        row?.net_receivable_amount ??
+        row?.net_amount_payable ??
+        row?.net_amount ??
+        row?.amount ??
+        row?.total_amount ??
+        0
+      ) || 0;
+      return sum + Math.max(0, amount);
+    }, 0);
+
     const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
-    const margin = 10;
+    const margin = 8;
     const contentWidth = pageWidth - margin * 2;
 
-    // Clean professional header.
+    // Full-width professional header. Date is kept on its own line immediately
+    // below the header so it is always aligned and easy to read.
     doc.setFillColor(8, 75, 70);
-    doc.rect(0, 0, pageWidth, 17, "F");
-    doc.setFillColor(15, 118, 110);
-    doc.rect(0, 14, pageWidth, 3, "F");
+    doc.rect(0, 0, pageWidth, 18, "F");
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(17);
+    doc.setFontSize(16);
     doc.setTextColor(255, 255, 255);
-    doc.text("PAYMENT FOLLOW-UP STATEMENT", margin, 10.5);
+    doc.text("PAYMENT FOLLOW-UP STATEMENT", margin, 11);
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(7);
-    doc.text("WAREHOUSE TRADING", pageWidth - margin, 9, { align: "right" });
-    doc.text(`Generated: ${today}`, pageWidth - margin, 13, { align: "right" });
+    doc.setFontSize(8);
+    doc.text("WAREHOUSE TRADING", pageWidth - margin, 8, { align: "right" });
+    doc.text(`Date: ${today}`, pageWidth - margin, 13, { align: "right" });
+    doc.setDrawColor(15, 118, 110);
+    doc.setLineWidth(0.7);
+    doc.line(margin, 20, pageWidth - margin, 20);
 
     let y = 25;
     doc.setFillColor(248, 250, 252);
@@ -4301,11 +4350,38 @@ export default function WarehouseTradingPage() {
     doc.setTextColor(100, 116, 139);
     doc.text(`${totalBills} pending bill${totalBills === 1 ? "" : "s"}`, pageWidth - margin - 6, y + 22, { align: "right" });
 
-    y += 34;
+    y += 32;
+
+    // Clear summary strip: Total Amount, Payment Received, Payment Due,
+    // and Unloading Pending. No "Payment Request Draft" section is included.
+    const summaryGap = 4;
+    const summaryWidth = (contentWidth - summaryGap * 3) / 4;
+    const summaryItems = [
+      ["TOTAL AMOUNT", totalAmount, "#0f172a"],
+      ["PAYMENT RECEIVED", paymentReceived, "#047857"],
+      ["PAYMENT DUE", paymentDue, "#b45309"],
+      ["UNLOADING PENDING", unloadingPendingAmount, "#7c3aed"],
+    ];
+
+    summaryItems.forEach(([label, value, _unused], index) => {
+      const x = margin + index * (summaryWidth + summaryGap);
+      doc.setFillColor(248, 250, 252);
+      doc.setDrawColor(203, 213, 225);
+      doc.roundedRect(x, y, summaryWidth, 17, 2.5, 2.5, "FD");
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(6.8);
+      doc.setTextColor(71, 85, 105);
+      doc.text(label, x + 4, y + 6);
+      doc.setFontSize(11);
+      doc.setTextColor(15, 23, 42);
+      doc.text(`Rs.${formatMoney(value)}`, x + 4, y + 13);
+    });
+
+    y += 23;
     doc.setFont("helvetica", "bold");
     doc.setFontSize(9.5);
     doc.setTextColor(8, 75, 70);
-    doc.text("OUTSTANDING BILLS", margin, y);
+    doc.text(`OUTSTANDING BILLS (${totalBills})`, margin, y);
     y += 4;
 
     const bodyRows = pendingRows.map((row) => {
