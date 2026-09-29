@@ -450,6 +450,7 @@ export default function WarehouseTradingPage() {
   const [paymentBillSearch, setPaymentBillSearch] = useState("");
   const [selectedPaymentBillId, setSelectedPaymentBillId] = useState("");
   const [showReceiptAdjustPopup, setShowReceiptAdjustPopup] = useState(false);
+  const [saleFollowupPaymentMenuId, setSaleFollowupPaymentMenuId] = useState("");
   const [receiptAdjustments, setReceiptAdjustments] = useState([]);
   const [selectedReceiptId, setSelectedReceiptId] = useState(null);
   const [stockDrilldown, setStockDrilldown] = useState(null);
@@ -4354,7 +4355,8 @@ export default function WarehouseTradingPage() {
               const saleDate = formatLedgerDate(detail.sale_date || detail.date || "");
               const saleVoucher = detail.sale_voucher_no || detail.voucher_no || "-";
               const billAmount = detail.sale_amount ?? detail.sale_total_amount ?? detail.amount ?? 0;
-              return `${paymentDate || "-"} | Receipt ${paymentVoucher} | Sale Bill ${saleDate || "-"} | ${saleVoucher} | Total Bill Amount Rs.${formatMoney(billAmount)}`;
+              const adjustedAmount = detail.adjusted_amount || 0;
+              return `${paymentDate || "-"} | ${paymentVoucher} | Bill ${saleDate || "-"} | ${saleVoucher} | Bill Amount Rs.${formatMoney(billAmount)} | Adjusted Rs.${formatMoney(adjustedAmount)}`;
             })
           : String(item.adjustment_details || item.particulars || "-").split("; ").filter(Boolean);
         return (
@@ -4376,8 +4378,11 @@ export default function WarehouseTradingPage() {
       ["unloading_date", "Unloading Date", (item) => formatLedgerDate(item.unloading_date || "")],
       ["due_date", "Due Date", (item) => formatLedgerDate(item.due_date || item.unloading_date || "")],
       ["due_days", "Due Days", (item) => (item.due_days !== undefined ? item.due_days : diffDays(item.unloading_date, item.due_date))],
-      ["days_overdue", "Days Overdue", (item) => (item.days_overdue !== undefined ? item.days_overdue : diffDays(item.due_date, new Date().toISOString().slice(0, 10)))],
-      ["followup_status_label", "Status", (item) => (item.followup_status_label || item.followup_status || "-")],
+      ["due_note", "Due Date Note", (item) => {
+        const dueDate = item.due_date || item.unloading_date || "";
+        return dueDate ? `Due Date: ${formatLedgerDate(dueDate)}` : "Due date not set";
+      }],
+      ["followup_status_label", "Status", (item) => (item.followup_status_label || item.followup_status || "Payment Pending")],
       ["balance", "Balance", (item) => formatMoney(Math.abs(item.balance || item.bill_balance || item.outstanding || 0))],
       ["actions", "Actions", (item) => {
         const email = String(item.contact_email || item.buyer_email || item.consignee_email || "").trim();
@@ -4385,66 +4390,120 @@ export default function WarehouseTradingPage() {
         const mobile = mobileRaw.replace(/\D/g, "");
         const whatsappNumber = mobile.length === 10 ? `91${mobile}` : mobile;
         const dueDate = item.due_date || item.unloading_date || "";
-        const body = encodeURIComponent(
-          [
-            `Dear ${item.party_name || item.buyer_name || item.company_name || "Party"},`,
-            "",
-            `Your outstanding balance is ${formatMoney(Math.abs(item.balance || 0))}.`,
-            dueDate ? `Due Date: ${formatLedgerDate(dueDate)}` : "",
-            item.due_days !== undefined ? `Due Days: ${item.due_days}` : "",
-            item.days_overdue !== undefined ? `Days Overdue: ${item.days_overdue}` : "",
-            "",
-            "Please clear the pending amount at the earliest.",
-            `Voucher No: ${item.voucher_no || "-"}`,
-          ].filter(Boolean).join("\n")
-        );
+        const rowId = String(item.id || item._id || item.voucher_no || "").trim();
+        const isPaymentMenuOpen = rowId && saleFollowupPaymentMenuId === rowId;
+        const statusLabel = String(item.followup_status || "payment_pending").toLowerCase() === "payment_done"
+          ? "Payment Done"
+          : "Payment Pending";
+        const subject = `Payment follow-up - ${item.voucher_no || "Sale Bill"}`;
+        const messageLines = [
+          `Dear ${item.party_name || item.buyer_name || item.company_name || "Party"},`,
+          "",
+          `Sale Bill: ${item.voucher_no || "-"}`,
+          `Outstanding Balance: Rs.${formatMoney(Math.abs(item.balance || 0))}`,
+          dueDate ? `Due Date: ${formatLedgerDate(dueDate)}` : "Due Date: Not set",
+          item.due_days !== undefined ? `Due Days: ${item.due_days}` : "",
+          "",
+          statusLabel === "Payment Done"
+            ? "Payment has been received against this bill."
+            : "Payment is pending against this bill.",
+        ].filter(Boolean);
+        const message = messageLines.join("\n");
+
+        const shareSaleFollowupPdf = async (channel) => {
+          try {
+            const saleId = item.id || item._id;
+            if (!saleId) throw new Error("Sale bill ID not available");
+            const response = await API.get(`/api/wh-vouchers/sale/${saleId}/pdf`, { responseType: "blob" });
+            const pdfBlob = new Blob([response.data], { type: "application/pdf" });
+            const fileName = `Sale-Bill-${item.voucher_no || saleId}.pdf`;
+            const pdfFile = new File([pdfBlob], fileName, { type: "application/pdf" });
+
+            // Native share with the PDF file gives Mail/WhatsApp-compatible attachment
+            // support where the browser/device exposes file sharing.
+            if (typeof navigator !== "undefined" && navigator.share) {
+              const shareData = { title: subject, text: message, files: [pdfFile] };
+              const canShareFile = typeof navigator.canShare === "function"
+                ? navigator.canShare({ files: [pdfFile] })
+                : false;
+              if (canShareFile) {
+                await navigator.share(shareData);
+                return;
+              }
+            }
+
+            const pdfUrl = window.URL.createObjectURL(pdfBlob);
+            const link = document.createElement("a");
+            link.href = pdfUrl;
+            link.download = fileName;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+
+            if (channel === "whatsapp") {
+              window.open(`https://wa.me/${whatsappNumber || ""}?text=${encodeURIComponent(message)}`, "_blank", "noopener,noreferrer");
+              alert("PDF downloaded. This browser cannot attach files directly to WhatsApp from the web share; please attach the downloaded PDF.");
+            } else {
+              if (email) {
+                window.location.href = `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(`${message}\n\nPDF downloaded as: ${fileName}`)}`;
+              } else {
+                alert("Buyer email is not available. The PDF has been downloaded.");
+              }
+            }
+
+            window.setTimeout(() => window.URL.revokeObjectURL(pdfUrl), 1500);
+          } catch (err) {
+            if (err?.name === "AbortError") return;
+            console.error("Sale follow-up share failed:", err);
+            alert(err?.response?.data?.error || err?.message || "Unable to prepare the sale bill PDF.");
+          }
+        };
+
         return (
-          <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
-            <a
-              href={email ? `mailto:${email}?subject=${encodeURIComponent(`Outstanding follow-up for ${item.voucher_no || ""}`.trim())}&body=${body}` : "#"}
-              onClick={(event) => {
-                if (!email) event.preventDefault();
-              }}
-              style={{
-                ...btnAction,
-                background: email ? "#0f766e" : "#cbd5e1",
-                padding: "6px 10px",
-                textDecoration: "none",
-                color: "#fff",
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
+          <div style={{ display: "flex", gap: 6, flexWrap: "wrap", alignItems: "center", position: "relative" }}>
+            <button
+              type="button"
+              onClick={() => setSaleFollowupPaymentMenuId(isPaymentMenuOpen ? "" : rowId)}
+              style={{ ...btnAction, background: statusLabel === "Payment Done" ? "#15803d" : "#2563eb", padding: "6px 10px" }}
+              title="View payment status and due date"
             >
-              Mail
-            </a>
-            <a
-              href={whatsappNumber ? `https://wa.me/${whatsappNumber}?text=${encodeURIComponent([
-                `Dear ${item.party_name || item.buyer_name || item.company_name || "Party"},`,
-                `Your outstanding balance is ${formatMoney(Math.abs(item.balance || 0))}.`,
-                dueDate ? `Due Date: ${formatLedgerDate(dueDate)}` : "",
-                item.due_days !== undefined ? `Due Days: ${item.due_days}` : "",
-                item.days_overdue !== undefined ? `Days Overdue: ${item.days_overdue}` : "",
-                `Voucher No: ${item.voucher_no || "-"}`,
-              ].filter(Boolean).join(" "))}` : "#"}
-              onClick={(event) => {
-                if (!whatsappNumber) event.preventDefault();
-              }}
-              target="_blank"
-              rel="noreferrer"
-              style={{
-                ...btnAction,
-                background: whatsappNumber ? "#15803d" : "#cbd5e1",
-                padding: "6px 10px",
-                textDecoration: "none",
-                color: "#fff",
-                display: "inline-flex",
-                alignItems: "center",
-                justifyContent: "center",
-              }}
-            >
-              WhatsApp
-            </a>
+              Payment ▾
+            </button>
+
+            {isPaymentMenuOpen && (
+              <div
+                style={{
+                  position: "absolute",
+                  right: 0,
+                  top: "calc(100% + 6px)",
+                  zIndex: 50,
+                  minWidth: 240,
+                  padding: 10,
+                  background: "#fff",
+                  border: "1px solid #cbd5e1",
+                  borderRadius: 10,
+                  boxShadow: "0 14px 30px rgba(15,23,42,.16)",
+                }}
+              >
+                <div style={{ fontSize: 11, color: "#64748b", fontWeight: 700 }}>Payment Status</div>
+                <div style={{ fontSize: 14, fontWeight: 800, color: statusLabel === "Payment Done" ? "#166534" : "#1d4ed8", marginTop: 2 }}>{statusLabel}</div>
+                <div style={{ borderTop: "1px solid #e2e8f0", margin: "8px 0" }} />
+                <div style={{ fontSize: 11, color: "#64748b", fontWeight: 700 }}>Due Date</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#0f172a", marginTop: 2 }}>{dueDate ? formatLedgerDate(dueDate) : "Not set"}</div>
+                {item.due_days !== undefined && (
+                  <div style={{ fontSize: 11, color: "#64748b", marginTop: 4 }}>Due Days: {item.due_days}</div>
+                )}
+                <div style={{ fontSize: 11, color: "#64748b", marginTop: 4 }}>Balance: Rs.{formatMoney(Math.abs(item.balance || 0))}</div>
+                <div style={{ display: "flex", gap: 6, marginTop: 9 }}>
+                  <button type="button" onClick={() => { void shareSaleFollowupPdf("mail"); }} style={{ ...btnAction, padding: "6px 9px", background: email ? "#0f766e" : "#cbd5e1" }} disabled={!email}>
+                    Mail + PDF
+                  </button>
+                  <button type="button" onClick={() => { void shareSaleFollowupPdf("whatsapp"); }} style={{ ...btnAction, padding: "6px 9px", background: whatsappNumber ? "#15803d" : "#cbd5e1" }} disabled={!whatsappNumber}>
+                    WhatsApp + PDF
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         );
       }],
@@ -4853,13 +4912,13 @@ export default function WarehouseTradingPage() {
     setReportPage((current) => Math.min(current, totalPages));
   }, [activeReport, reportPageInfo.total, reportPageInfo.pageSize, filteredReportDataAll.length]);
   const saleFollowupCounts = useMemo(() => {
-    const counts = { all: filteredReportDataAll.length, payment_done: 0, unloading_pending: 0, pending: 0, overdue: 0 };
+    const counts = { all: filteredReportDataAll.length, payment_done: 0, unloading_pending: 0, pending: 0 };
     filteredReportDataAll.forEach((row) => {
       const status = String(row.followup_status || "pending").toLowerCase();
       if (counts[status] !== undefined) counts[status] += 1;
     });
     return counts;
-  }, [filteredReportData]);
+  }, [filteredReportDataAll]);
 
   const purchaseReportRows = useMemo(() => {
     const rows = Array.isArray(filteredReportDataAll) ? filteredReportDataAll : [];
@@ -4910,7 +4969,6 @@ export default function WarehouseTradingPage() {
     payment_done: { label: "Payment Done", bg: "#dcfce7", color: "#166534" },
     unloading_pending: { label: "Unloading Pending", bg: "#fef3c7", color: "#92400e" },
     pending: { label: "Payment Pending", bg: "#dbeafe", color: "#1d4ed8" },
-    overdue: { label: "Overdue", bg: "#fee2e2", color: "#b91c1c" },
   };
   const purchaseBillRows = activeReport === "purchase-party-ledger"
     ? displayReportData.filter((row) => row.row_type === "entry" && row.voucher_type === "Purchase")
@@ -7294,7 +7352,6 @@ export default function WarehouseTradingPage() {
                     ["payment_done", saleFollowupCounts.payment_done],
                     ["unloading_pending", saleFollowupCounts.unloading_pending],
                     ["pending", saleFollowupCounts.pending],
-                    ["overdue", saleFollowupCounts.overdue],
                   ].map(([key, count]) => {
                     const meta = saleFollowupStatusMeta[key];
                     const active = saleFollowupFilter === key;
@@ -7320,7 +7377,7 @@ export default function WarehouseTradingPage() {
                   })}
                 </div>
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
-                  {["all", "payment_done", "unloading_pending", "pending", "overdue"].map((key) => {
+                  {["all", "payment_done", "unloading_pending", "pending"].map((key) => {
                     const meta = saleFollowupStatusMeta[key];
                     const active = saleFollowupFilter === key;
                     return (
