@@ -952,26 +952,10 @@ export default function WarehouseTradingPage() {
     const nextLinks = [...salePurchaseLinks.filter((item) => String(item.purchase_id) !== tag.purchase_id), nextTag];
     setSalePurchaseLinks(nextLinks);
 
-    // Tagging a purchase/farmer must also populate the Sale voucher Farmer field.
-    // This is intentionally limited to the Direct Loading tag flow.
-    const taggedFarmerId = String(
-      tag.farmer_id || target.farmer_id || target.against_purchase_farmer_id || ""
-    );
-    if (taggedFarmerId) {
-      setFormData((prev) => ({
-        ...prev,
-        farmer_id: taggedFarmerId,
-        against_purchase_farmer_id: taggedFarmerId,
-        direct_purchase_rate: tag.rate > 0 ? String(tag.rate) : prev.direct_purchase_rate,
-      }));
-    }
-
     if (saleTagTargetId) {
       try {
         await API.put(`/api/wh-vouchers/sale/${saleTagTargetId}`, {
           deduction_only: true,
-          farmer_id: taggedFarmerId,
-          against_purchase_farmer_id: taggedFarmerId,
           against_purchase_enabled: true,
           against_purchase_links: nextLinks,
         });
@@ -2409,16 +2393,6 @@ export default function WarehouseTradingPage() {
         return;
       }
     }
-    if (activeVoucherType === "purchase") {
-      if (!formData.farmer_id) {
-        alert("Please select farmer for purchase voucher");
-        return;
-      }
-      if (toNumber(formData.rate) <= 0) {
-        alert("Please enter purchase rate");
-        return;
-      }
-    }
     if (activeVoucherType === "receipt") {
       const receiptAmount = toNumber(formData.amount);
       if (!formData.company_id) {
@@ -2445,8 +2419,10 @@ export default function WarehouseTradingPage() {
           alert("Please select location for direct sale");
           return;
         }
-        // Farmer is optional at initial Direct Loading entry.
-        // When a farmer is selected/tagged later, that farmer is preserved on edit.
+        if (!formData.farmer_id) {
+          alert("Please select farmer for direct sale purchase entry");
+          return;
+        }
         if (!formData.consignee_id) {
           alert("Please select consignee for direct sale purchase entry");
           return;
@@ -4231,16 +4207,25 @@ export default function WarehouseTradingPage() {
       .filter((row) => {
         const rowBuyerId = String(row.buyer_id || row.company_id || "").trim();
         return rowBuyerId === selectedBuyerId;
+      })
+      .filter((row) => {
+        // PDF must contain exactly the data currently selected on the Sale Follow-up page.
+        if (saleFollowupFilter === "all") return true;
+        return String(row.followup_status || "pending").toLowerCase() === String(saleFollowupFilter).toLowerCase();
       });
+
+    if (!allBuyerRows.length) {
+      throw new Error("Selected Buyer has no data in the current Sale Follow-up filter.");
+    }
 
     const pendingRows = allBuyerRows.filter((row) => {
       const balance = Number(row.balance ?? row.bill_balance ?? row.outstanding ?? 0) || 0;
-      return balance > 0.0001 && String(row.followup_status || "").toLowerCase() !== "payment_done";
+      return balance > 0.0001;
     });
 
-    if (!pendingRows.length) {
-      throw new Error("Selected Buyer has no outstanding payment pending.");
-    }
+    // The table follows the selected filter. For Payment Pending/All this is the
+    // outstanding list; for Payment Done/Unloading Pending it is the filtered data itself.
+    const statementRows = allBuyerRows;
 
     const first = pendingRows[0] || allBuyerRows[0] || {};
     const buyerName = String(
@@ -4264,32 +4249,81 @@ export default function WarehouseTradingPage() {
       ""
     ).replace(/\D/g, "");
 
-    const totalOutstanding = pendingRows.reduce((sum, row) => {
+    const totalOutstanding = allBuyerRows.reduce((sum, row) => {
       const balance = Number(row.balance ?? row.bill_balance ?? row.outstanding ?? 0) || 0;
       return sum + Math.max(0, balance);
     }, 0);
 
-    const totalBills = pendingRows.length;
+    const totalBills = allBuyerRows.length;
     const today = formatLedgerDate(new Date().toISOString().slice(0, 10));
+
+    // Summary values are based on the selected Buyer's complete follow-up data,
+    // while the detailed table below continues to show only outstanding bills.
+    const totalAmount = statementRows.reduce((sum, row) => {
+      const amount = Number(
+        row?.gross_receivable ??
+        row?.net_receivable_amount ??
+        row?.net_amount_payable ??
+        row?.net_amount ??
+        row?.amount ??
+        row?.total_amount ??
+        0
+      ) || 0;
+      return sum + Math.max(0, amount);
+    }, 0);
+
+    const paymentReceived = statementRows.reduce((sum, row) => {
+      const paid = Number(
+        row?.receipt_adjusted_amount ??
+        row?.paid_amount ??
+        row?.payment_received ??
+        0
+      ) || 0;
+      return sum + Math.max(0, paid);
+    }, 0);
+
+    const paymentDue = statementRows.reduce((sum, row) => {
+      const balance = Number(row.balance ?? row.bill_balance ?? row.outstanding ?? 0) || 0;
+      return sum + Math.max(0, balance);
+    }, 0);
+
+    const unloadingPendingRows = statementRows.filter((row) =>
+      String(row?.followup_status || "").toLowerCase() === "unloading_pending"
+    );
+    const unloadingPendingAmount = unloadingPendingRows.reduce((sum, row) => {
+      const amount = Number(
+        row?.gross_receivable ??
+        row?.net_receivable_amount ??
+        row?.net_amount_payable ??
+        row?.net_amount ??
+        row?.amount ??
+        row?.total_amount ??
+        0
+      ) || 0;
+      return sum + Math.max(0, amount);
+    }, 0);
+
     const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
     const pageWidth = doc.internal.pageSize.getWidth();
     const pageHeight = doc.internal.pageSize.getHeight();
-    const margin = 10;
+    const margin = 8;
     const contentWidth = pageWidth - margin * 2;
 
-    // Clean professional header.
+    // Full-width professional header. Date is kept on its own line immediately
+    // below the header so it is always aligned and easy to read.
     doc.setFillColor(8, 75, 70);
-    doc.rect(0, 0, pageWidth, 17, "F");
-    doc.setFillColor(15, 118, 110);
-    doc.rect(0, 14, pageWidth, 3, "F");
+    doc.rect(0, 0, pageWidth, 18, "F");
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(17);
+    doc.setFontSize(16);
     doc.setTextColor(255, 255, 255);
-    doc.text("PAYMENT FOLLOW-UP STATEMENT", margin, 10.5);
+    doc.text("PAYMENT FOLLOW-UP STATEMENT", margin, 11);
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(7);
-    doc.text("WAREHOUSE TRADING", pageWidth - margin, 9, { align: "right" });
-    doc.text(`Generated: ${today}`, pageWidth - margin, 13, { align: "right" });
+    doc.setFontSize(8);
+    doc.text("WAREHOUSE TRADING", pageWidth - margin, 8, { align: "right" });
+    doc.text(`Date: ${today}`, pageWidth - margin, 13, { align: "right" });
+    doc.setDrawColor(15, 118, 110);
+    doc.setLineWidth(0.7);
+    doc.line(margin, 20, pageWidth - margin, 20);
 
     let y = 25;
     doc.setFillColor(248, 250, 252);
@@ -4316,7 +4350,7 @@ export default function WarehouseTradingPage() {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(8);
     doc.setTextColor(71, 85, 105);
-    doc.text("TOTAL OUTSTANDING", pageWidth - margin - 70, y + 7);
+    doc.text("TOTAL OUTSTANDING", pageWidth - margin - 6, y + 7, { align: "right" });
     doc.setFontSize(15);
     doc.setTextColor(185, 28, 28);
     doc.text(`Rs.${formatMoney(totalOutstanding)}`, pageWidth - margin - 6, y + 15, { align: "right" });
@@ -4325,14 +4359,41 @@ export default function WarehouseTradingPage() {
     doc.setTextColor(100, 116, 139);
     doc.text(`${totalBills} pending bill${totalBills === 1 ? "" : "s"}`, pageWidth - margin - 6, y + 22, { align: "right" });
 
-    y += 34;
+    y += 32;
+
+    // Clear summary strip: Total Amount, Payment Received, Payment Due,
+    // and Unloading Pending. No "Payment Request Draft" section is included.
+    const summaryGap = 4;
+    const summaryWidth = (contentWidth - summaryGap * 3) / 4;
+    const summaryItems = [
+      ["TOTAL AMOUNT", totalAmount, "#0f172a"],
+      ["PAYMENT RECEIVED", paymentReceived, "#047857"],
+      ["PAYMENT DUE", paymentDue, "#b45309"],
+      ["UNLOADING PENDING", unloadingPendingAmount, "#7c3aed"],
+    ];
+
+    summaryItems.forEach(([label, value, _unused], index) => {
+      const x = margin + index * (summaryWidth + summaryGap);
+      doc.setFillColor(248, 250, 252);
+      doc.setDrawColor(203, 213, 225);
+      doc.roundedRect(x, y, summaryWidth, 17, 2.5, 2.5, "FD");
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(6.8);
+      doc.setTextColor(71, 85, 105);
+      doc.text(label, x + 4, y + 6);
+      doc.setFontSize(11);
+      doc.setTextColor(15, 23, 42);
+      doc.text(`Rs.${formatMoney(value)}`, x + 4, y + 13);
+    });
+
+    y += 23;
     doc.setFont("helvetica", "bold");
     doc.setFontSize(9.5);
     doc.setTextColor(8, 75, 70);
-    doc.text("OUTSTANDING BILLS", margin, y);
+    doc.text(`OUTSTANDING BILLS (${totalBills})`, margin, y);
     y += 4;
 
-    const bodyRows = pendingRows.map((row) => {
+    const bodyRows = statementRows.map((row) => {
       const balance = Number(row.balance ?? row.bill_balance ?? row.outstanding ?? 0) || 0;
       const amount = Number(row.amount ?? row.sale_amount ?? row.total_amount ?? 0) || 0;
       const overdueDays = Number(row.overdue_days ?? row.days_overdue ?? 0) || 0;
@@ -4412,10 +4473,54 @@ export default function WarehouseTradingPage() {
     doc.text(`Email: ${email || "Not available"}`, margin + 24, y);
     doc.text(`Mobile: ${mobile || "Not available"}`, margin + 96, y);
 
+    // Keep the complete payment follow-up message at the bottom of the statement.
+    // The requested heading is retained; all message lines remain below it.
+    const bottomMessage = saleFollowupFilter === "payment_done"
+      ? "Payment received against the selected Sale Follow-up entries."
+      : saleFollowupFilter === "unloading_pending"
+        ? "Unloading is pending against the selected Sale Follow-up entries."
+        : saleFollowupFilter === "pending"
+          ? "Payment is pending against the selected Sale Follow-up entries."
+          : "Sale Follow-up statement for the selected Buyer.";
+
+    const draftBoxX = margin;
+    const draftBoxW = contentWidth;
+    const draftBoxH = 32;
+    const draftBoxY = pageHeight - 42;
+    doc.setFillColor(240, 253, 250);
+    doc.setDrawColor(153, 246, 228);
+    doc.roundedRect(draftBoxX, draftBoxY, draftBoxW, draftBoxH, 2.5, 2.5, "FD");
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+    doc.setTextColor(8, 75, 70);
+    doc.text("PAYMENT REQUEST DRAFT", draftBoxX + 5, draftBoxY + 7);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(7);
+    doc.setTextColor(30, 41, 59);
+    doc.text(`Dear ${buyerName},`, draftBoxX + 5, draftBoxY + 12);
+    doc.text(
+      `As per our accounts, an amount of Rs.${formatMoney(totalOutstanding)} is outstanding against your pending sale bills.`,
+      draftBoxX + 5,
+      draftBoxY + 17
+    );
+    doc.text(
+      "Kindly arrange the payment at the earliest against the bills mentioned below.",
+      draftBoxX + 5,
+      draftBoxY + 21
+    );
+    doc.text(bottomMessage, draftBoxX + 5, draftBoxY + 25);
+    doc.text(
+      "This is a system-generated payment follow-up statement.",
+      draftBoxX + 5,
+      draftBoxY + 29
+    );
+
     doc.setFontSize(7);
     doc.setTextColor(100, 116, 139);
-    doc.text("Computer generated statement", margin, pageHeight - 7);
-    doc.text(`Total Outstanding: Rs.${formatMoney(totalOutstanding)}`, pageWidth - margin, pageHeight - 7, { align: "right" });
+    doc.text("Computer generated statement", margin, pageHeight - 6);
+    doc.text(`Total Outstanding: Rs.${formatMoney(totalOutstanding)}`, pageWidth - margin, pageHeight - 6, { align: "right" });
 
     const safeBuyer = buyerName.replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "") || "Buyer";
     const fileName = `Payment-Followup-${safeBuyer}.pdf`;
