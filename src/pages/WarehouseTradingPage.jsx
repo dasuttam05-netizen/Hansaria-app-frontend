@@ -451,7 +451,6 @@ export default function WarehouseTradingPage() {
   const [selectedPaymentBillId, setSelectedPaymentBillId] = useState("");
   const [showReceiptAdjustPopup, setShowReceiptAdjustPopup] = useState(false);
   const [saleFollowupPaymentMenuId, setSaleFollowupPaymentMenuId] = useState("");
-  const [saleFollowupBuyerPdfLoading, setSaleFollowupBuyerPdfLoading] = useState(false);
   const [receiptAdjustments, setReceiptAdjustments] = useState([]);
   const [selectedReceiptId, setSelectedReceiptId] = useState(null);
   const [stockDrilldown, setStockDrilldown] = useState(null);
@@ -950,6 +949,32 @@ export default function WarehouseTradingPage() {
       source: "manual",
     };
     const nextLinks = [...salePurchaseLinks.filter((item) => String(item.purchase_id) !== tag.purchase_id), nextTag];
+
+    // When a Purchase Bill is tagged, carry its Farmer Name and Purchase Rate
+    // into the Sale voucher automatically. Existing edit values are preserved
+    // until a new tag is selected.
+    const taggedFarmerId = String(
+      tag.farmer_id ||
+      purchase.farmer_id ||
+      ""
+    ).trim();
+    const taggedFarmerName = String(
+      tag.farmer_name ||
+      purchase.farmer_name ||
+      ""
+    ).trim();
+    const taggedPurchaseRate = toNumber(
+      tag.rate ?? purchase.rate ?? 0
+    );
+    setFormData((prev) => ({
+      ...prev,
+      farmer_id: taggedFarmerId || prev.farmer_id || "",
+      direct_purchase_rate:
+        taggedPurchaseRate > 0
+          ? String(taggedPurchaseRate)
+          : prev.direct_purchase_rate || "",
+      farmer_name: taggedFarmerName || prev.farmer_name || "",
+    }));
     setSalePurchaseLinks(nextLinks);
 
     if (saleTagTargetId) {
@@ -2419,16 +2444,14 @@ export default function WarehouseTradingPage() {
           alert("Please select location for direct sale");
           return;
         }
-        if (!formData.farmer_id) {
-          alert("Please select farmer for direct sale purchase entry");
-          return;
-        }
         if (!formData.consignee_id) {
           alert("Please select consignee for direct sale purchase entry");
           return;
         }
-        if (toNumber(formData.direct_purchase_rate) <= 0) {
-          alert("Please enter purchase rate for direct sale");
+        // Farmer and Purchase Rate are optional at initial Direct Loading entry.
+        // They become available automatically when a Purchase Bill is tagged.
+        if (formData.farmer_id && toNumber(formData.direct_purchase_rate) <= 0) {
+          alert("Please enter purchase rate when farmer is selected");
           return;
         }
       }
@@ -4197,394 +4220,6 @@ export default function WarehouseTradingPage() {
     item?.company_name ||
     companies.find((c) => String(c.id || c._id) === String(item?.company_id))?.name ||
     "-";
-
-  const buildSaleFollowupBuyerStatementPdf = async () => {
-    const selectedBuyerId = String(reportFilters.sale_buyer_id || "").trim();
-    if (!selectedBuyerId) throw new Error("Please select a Buyer first");
-
-    const allBuyerRows = (Array.isArray(reportData) ? reportData : [])
-      .filter((row) => row && row.row_type !== "closing")
-      .filter((row) => {
-        const rowBuyerId = String(row.buyer_id || row.company_id || "").trim();
-        return rowBuyerId === selectedBuyerId;
-      })
-      .filter((row) => {
-        // PDF must contain exactly the data currently selected on the Sale Follow-up page.
-        if (saleFollowupFilter === "all") return true;
-        return String(row.followup_status || "pending").toLowerCase() === String(saleFollowupFilter).toLowerCase();
-      });
-
-    if (!allBuyerRows.length) {
-      throw new Error("Selected Buyer has no data in the current Sale Follow-up filter.");
-    }
-
-    const pendingRows = allBuyerRows.filter((row) => {
-      const balance = Number(row.balance ?? row.bill_balance ?? row.outstanding ?? 0) || 0;
-      return balance > 0.0001;
-    });
-
-    // The table follows the selected filter. For Payment Pending/All this is the
-    // outstanding list; for Payment Done/Unloading Pending it is the filtered data itself.
-    const statementRows = allBuyerRows;
-
-    const first = pendingRows[0] || allBuyerRows[0] || {};
-    const buyerName = String(
-      first.party_name ||
-      first.buyer_name ||
-      first.company_name ||
-      saleReportBuyers.find((buyer) => String(buyer.id || buyer._id) === selectedBuyerId)?.name ||
-      "Buyer"
-    ).trim();
-    const accountName = String(first.company_account_name || getAccountName(first) || "").trim();
-    const email = String(
-      first.contact_email ||
-      first.buyer_email ||
-      first.consignee_email ||
-      ""
-    ).trim();
-    const mobile = String(
-      first.contact_mobile ||
-      first.buyer_mobile ||
-      first.consignee_mobile ||
-      ""
-    ).replace(/\D/g, "");
-
-    const totalOutstanding = allBuyerRows.reduce((sum, row) => {
-      const balance = Number(row.balance ?? row.bill_balance ?? row.outstanding ?? 0) || 0;
-      return sum + Math.max(0, balance);
-    }, 0);
-
-    const totalBills = allBuyerRows.length;
-    const today = formatLedgerDate(new Date().toISOString().slice(0, 10));
-
-    // Summary values are based on the selected Buyer's complete follow-up data,
-    // while the detailed table below continues to show only outstanding bills.
-    const totalAmount = statementRows.reduce((sum, row) => {
-      const amount = Number(
-        row?.gross_receivable ??
-        row?.net_receivable_amount ??
-        row?.net_amount_payable ??
-        row?.net_amount ??
-        row?.amount ??
-        row?.total_amount ??
-        0
-      ) || 0;
-      return sum + Math.max(0, amount);
-    }, 0);
-
-    const paymentReceived = statementRows.reduce((sum, row) => {
-      const paid = Number(
-        row?.receipt_adjusted_amount ??
-        row?.paid_amount ??
-        row?.payment_received ??
-        0
-      ) || 0;
-      return sum + Math.max(0, paid);
-    }, 0);
-
-    const paymentDue = statementRows.reduce((sum, row) => {
-      const balance = Number(row.balance ?? row.bill_balance ?? row.outstanding ?? 0) || 0;
-      return sum + Math.max(0, balance);
-    }, 0);
-
-    const unloadingPendingRows = statementRows.filter((row) =>
-      String(row?.followup_status || "").toLowerCase() === "unloading_pending"
-    );
-    const unloadingPendingAmount = unloadingPendingRows.reduce((sum, row) => {
-      const amount = Number(
-        row?.gross_receivable ??
-        row?.net_receivable_amount ??
-        row?.net_amount_payable ??
-        row?.net_amount ??
-        row?.amount ??
-        row?.total_amount ??
-        0
-      ) || 0;
-      return sum + Math.max(0, amount);
-    }, 0);
-
-    const doc = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
-    const pageWidth = doc.internal.pageSize.getWidth();
-    const pageHeight = doc.internal.pageSize.getHeight();
-    const margin = 8;
-    const contentWidth = pageWidth - margin * 2;
-
-    // Full-width professional header. Date is kept on its own line immediately
-    // below the header so it is always aligned and easy to read.
-    doc.setFillColor(8, 75, 70);
-    doc.rect(0, 0, pageWidth, 18, "F");
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(16);
-    doc.setTextColor(255, 255, 255);
-    doc.text("PAYMENT FOLLOW-UP STATEMENT", margin, 11);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8);
-    doc.text("WAREHOUSE TRADING", pageWidth - margin, 8, { align: "right" });
-    doc.text(`Date: ${today}`, pageWidth - margin, 13, { align: "right" });
-    doc.setDrawColor(15, 118, 110);
-    doc.setLineWidth(0.7);
-    doc.line(margin, 20, pageWidth - margin, 20);
-
-    let y = 25;
-    doc.setFillColor(248, 250, 252);
-    doc.setDrawColor(203, 213, 225);
-    doc.roundedRect(margin, y, contentWidth, 28, 3, 3, "FD");
-
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(8);
-    doc.setTextColor(71, 85, 105);
-    doc.text("BUYER", margin + 6, y + 7);
-    doc.setFontSize(12);
-    doc.setTextColor(15, 23, 42);
-    doc.text(buyerName.slice(0, 70), margin + 6, y + 13);
-
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(8);
-    doc.setTextColor(71, 85, 105);
-    doc.text("COMPANY ACCOUNT", pageWidth / 2 - 25, y + 7);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
-    doc.setTextColor(15, 23, 42);
-    doc.text((accountName || "-").slice(0, 55), pageWidth / 2 - 25, y + 13);
-
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(8);
-    doc.setTextColor(71, 85, 105);
-    doc.text("TOTAL OUTSTANDING", pageWidth - margin - 6, y + 7, { align: "right" });
-    doc.setFontSize(15);
-    doc.setTextColor(185, 28, 28);
-    doc.text(`Rs.${formatMoney(totalOutstanding)}`, pageWidth - margin - 6, y + 15, { align: "right" });
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(7);
-    doc.setTextColor(100, 116, 139);
-    doc.text(`${totalBills} pending bill${totalBills === 1 ? "" : "s"}`, pageWidth - margin - 6, y + 22, { align: "right" });
-
-    y += 32;
-
-    // Clear summary strip: Total Amount, Payment Received, Payment Due,
-    // and Unloading Pending. No "Payment Request Draft" section is included.
-    const summaryGap = 4;
-    const summaryWidth = (contentWidth - summaryGap * 3) / 4;
-    const summaryItems = [
-      ["TOTAL AMOUNT", totalAmount, "#0f172a"],
-      ["PAYMENT RECEIVED", paymentReceived, "#047857"],
-      ["PAYMENT DUE", paymentDue, "#b45309"],
-      ["UNLOADING PENDING", unloadingPendingAmount, "#7c3aed"],
-    ];
-
-    summaryItems.forEach(([label, value, _unused], index) => {
-      const x = margin + index * (summaryWidth + summaryGap);
-      doc.setFillColor(248, 250, 252);
-      doc.setDrawColor(203, 213, 225);
-      doc.roundedRect(x, y, summaryWidth, 17, 2.5, 2.5, "FD");
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(6.8);
-      doc.setTextColor(71, 85, 105);
-      doc.text(label, x + 4, y + 6);
-      doc.setFontSize(11);
-      doc.setTextColor(15, 23, 42);
-      doc.text(`Rs.${formatMoney(value)}`, x + 4, y + 13);
-    });
-
-    y += 23;
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(9.5);
-    doc.setTextColor(8, 75, 70);
-    doc.text(`OUTSTANDING BILLS (${totalBills})`, margin, y);
-    y += 4;
-
-    const bodyRows = statementRows.map((row) => {
-      const balance = Number(row.balance ?? row.bill_balance ?? row.outstanding ?? 0) || 0;
-      const amount = Number(row.amount ?? row.sale_amount ?? row.total_amount ?? 0) || 0;
-      const overdueDays = Number(row.overdue_days ?? row.days_overdue ?? 0) || 0;
-      return [
-        formatLedgerDate(row.date || row.unloading_date || ""),
-        row.voucher_no || row.bill_no || "-",
-        row.product_name || getProductName(row) || "-",
-        formatDecimal4(row.quantity ?? row.unloading_qty ?? 0),
-        formatMoney(row.rate || 0),
-        `Rs.${formatMoney(amount)}`,
-        formatLedgerDate(row.due_date || ""),
-        overdueDays > 0 ? String(Math.floor(overdueDays)) : "0",
-        `Rs.${formatMoney(balance)}`,
-      ];
-    });
-
-    autoTable(doc, {
-      startY: y,
-      margin: { left: margin, right: margin },
-      tableWidth: contentWidth,
-      theme: "grid",
-      head: [["Bill Date", "Voucher No", "Product", "Qty", "Rate", "Bill Amount", "Due Date", "Overdue Days", "Outstanding"]],
-      body: bodyRows,
-      styles: {
-        font: "helvetica",
-        fontSize: 7.0,
-        cellPadding: 1.8,
-        overflow: "linebreak",
-        valign: "middle",
-        textColor: [15, 23, 42],
-        lineColor: [226, 232, 240],
-        lineWidth: 0.2,
-      },
-      headStyles: {
-        fillColor: [8, 75, 70],
-        textColor: [255, 255, 255],
-        fontStyle: "bold",
-        fontSize: 7.0,
-        halign: "center",
-      },
-      alternateRowStyles: { fillColor: [248, 250, 252] },
-      columnStyles: {
-        0: { cellWidth: 24 },
-        1: { cellWidth: 40 },
-        2: { cellWidth: 36 },
-        3: { cellWidth: 18, halign: "right" },
-        4: { cellWidth: 28, halign: "right" },
-        5: { cellWidth: 42, halign: "right" },
-        6: { cellWidth: 25 },
-        7: { cellWidth: 24, halign: "center" },
-        8: { cellWidth: 40, halign: "right", fontStyle: "bold" },
-      },
-      didParseCell: (hook) => {
-        if (hook.section === "body" && hook.column.index === 7) {
-          const days = Number(hook.cell.raw || 0) || 0;
-          if (days > 0) {
-            hook.cell.styles.textColor = [185, 28, 28];
-            hook.cell.styles.fontStyle = "bold";
-          }
-        }
-      },
-    });
-
-    y = (doc.lastAutoTable?.finalY || y) + 8;
-    if (y > pageHeight - 24) {
-      doc.addPage();
-      y = 16;
-    }
-
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(8.5);
-    doc.setTextColor(71, 85, 105);
-    doc.text("CONTACT", margin, y);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(8);
-    doc.setTextColor(30, 41, 59);
-    doc.text(`Email: ${email || "Not available"}`, margin + 24, y);
-    doc.text(`Mobile: ${mobile || "Not available"}`, margin + 96, y);
-
-    // Keep the complete payment follow-up message at the bottom of the statement.
-    // The requested heading is retained; all message lines remain below it.
-    const bottomMessage = saleFollowupFilter === "payment_done"
-      ? "Payment received against the selected Sale Follow-up entries."
-      : saleFollowupFilter === "unloading_pending"
-        ? "Unloading is pending against the selected Sale Follow-up entries."
-        : saleFollowupFilter === "pending"
-          ? "Payment is pending against the selected Sale Follow-up entries."
-          : "Sale Follow-up statement for the selected Buyer.";
-
-    const draftBoxX = margin;
-    const draftBoxW = contentWidth;
-    const draftBoxH = 32;
-    const draftBoxY = pageHeight - 42;
-    doc.setFillColor(240, 253, 250);
-    doc.setDrawColor(153, 246, 228);
-    doc.roundedRect(draftBoxX, draftBoxY, draftBoxW, draftBoxH, 2.5, 2.5, "FD");
-
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(8);
-    doc.setTextColor(8, 75, 70);
-    doc.text("PAYMENT REQUEST DRAFT", draftBoxX + 5, draftBoxY + 7);
-
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(7);
-    doc.setTextColor(30, 41, 59);
-    doc.text(`Dear ${buyerName},`, draftBoxX + 5, draftBoxY + 12);
-    doc.text(
-      `As per our accounts, an amount of Rs.${formatMoney(totalOutstanding)} is outstanding against your pending sale bills.`,
-      draftBoxX + 5,
-      draftBoxY + 17
-    );
-    doc.text(
-      "Kindly arrange the payment at the earliest against the bills mentioned below.",
-      draftBoxX + 5,
-      draftBoxY + 21
-    );
-    doc.text(bottomMessage, draftBoxX + 5, draftBoxY + 25);
-    doc.text(
-      "This is a system-generated payment follow-up statement.",
-      draftBoxX + 5,
-      draftBoxY + 29
-    );
-
-    doc.setFontSize(7);
-    doc.setTextColor(100, 116, 139);
-    doc.text("Computer generated statement", margin, pageHeight - 6);
-    doc.text(`Total Outstanding: Rs.${formatMoney(totalOutstanding)}`, pageWidth - margin, pageHeight - 6, { align: "right" });
-
-    const safeBuyer = buyerName.replace(/[^a-z0-9]+/gi, "-").replace(/^-+|-+$/g, "") || "Buyer";
-    const fileName = `Payment-Followup-${safeBuyer}.pdf`;
-    const message = `Payment follow-up statement for ${buyerName}. Total Outstanding: Rs.${formatMoney(totalOutstanding)}.`;
-    return { doc, fileName, email, mobile, buyerName, totalOutstanding, message };
-  };
-
-  const handleSaleFollowupBuyerPdf = async (shareMode = "download") => {
-    try {
-      setSaleFollowupBuyerPdfLoading(true);
-      const { doc, fileName, email, mobile, buyerName, totalOutstanding, message } = await buildSaleFollowupBuyerStatementPdf();
-      const blob = doc.output("blob");
-      const file = new File([blob], fileName, { type: "application/pdf" });
-      const subject = `Payment Follow-up - ${buyerName}`;
-      const fullMessage = `${message}\n\nTotal Outstanding: Rs.${formatMoney(totalOutstanding)}`;
-
-      if (shareMode === "mail" || shareMode === "whatsapp") {
-        if (typeof navigator !== "undefined" && typeof navigator.share === "function") {
-          const canShareFile = typeof navigator.canShare === "function"
-            ? navigator.canShare({ files: [file] })
-            : false;
-          if (canShareFile) {
-            await navigator.share({
-              title: subject,
-              text: fullMessage,
-              files: [file],
-            });
-            return;
-          }
-        }
-      }
-
-      const url = window.URL.createObjectURL(blob);
-      const link = document.createElement("a");
-      link.href = url;
-      link.download = fileName;
-      document.body.appendChild(link);
-      link.click();
-      link.remove();
-      window.setTimeout(() => window.URL.revokeObjectURL(url), 1500);
-
-      if (shareMode === "mail") {
-        if (!email) {
-          alert("PDF downloaded, but Buyer email is not available.");
-          return;
-        }
-        window.location.href = `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(`${fullMessage}\n\nPDF file: ${fileName}`)}`;
-        alert("PDF downloaded. This browser cannot attach files directly to email; attach the downloaded PDF in the mail window.");
-      } else if (shareMode === "whatsapp") {
-        if (!mobile) {
-          alert("PDF downloaded, but Buyer mobile number is not available.");
-          return;
-        }
-        window.open(`https://wa.me/${mobile.length === 10 ? `91${mobile}` : mobile}?text=${encodeURIComponent(`${fullMessage}\n\nPDF file: ${fileName}`)}`, "_blank", "noopener,noreferrer");
-        alert("PDF downloaded. This browser cannot attach files directly to WhatsApp; attach the downloaded PDF in WhatsApp.");
-      }
-    } catch (err) {
-      if (err?.name === "AbortError") return;
-      console.error("Sale follow-up buyer statement failed:", err);
-      alert(err?.message || "Unable to prepare Buyer payment statement PDF.");
-    } finally {
-      setSaleFollowupBuyerPdfLoading(false);
-    }
-  };
 
   const reportColumns = {
     purchase: [
@@ -7746,61 +7381,18 @@ export default function WarehouseTradingPage() {
                       label: buyer.name,
                     }))}
                     onChange={(value) => setReportFilters((prev) => ({ ...prev, sale_buyer_id: value }))}
-                    placeholder="Click and type Buyer name"
-                    inlineSearch
+                    placeholder="Search Buyer"
                   />
-
-                  {reportFilters.sale_buyer_id && (() => {
-                    const selectedRows = (Array.isArray(reportData) ? reportData : []).filter((row) => {
-                      const rowBuyerId = String(row?.buyer_id || row?.company_id || "").trim();
-                      return rowBuyerId === String(reportFilters.sale_buyer_id).trim();
-                    });
-                    const totalOutstanding = selectedRows.reduce((sum, row) => {
-                      const balance = Number(row?.balance ?? row?.bill_balance ?? row?.outstanding ?? 0) || 0;
-                      return sum + Math.max(0, balance);
-                    }, 0);
-                    return (
-                      <div style={{ display: "flex", gap: 8, alignItems: "end", flexWrap: "wrap" }}>
-                        <div style={{ minWidth: 190, padding: "9px 12px", border: "1px solid #fecaca", borderRadius: 10, background: "#fff7f7" }}>
-                          <div style={{ fontSize: 10, fontWeight: 800, color: "#991b1b", textTransform: "uppercase" }}>Total Outstanding</div>
-                          <div style={{ fontSize: 17, fontWeight: 900, color: "#b91c1c", marginTop: 2 }}>Rs.{formatMoney(totalOutstanding)}</div>
-                        </div>
-                        <button
-                          type="button"
-                          disabled={saleFollowupBuyerPdfLoading}
-                          onClick={() => { void handleSaleFollowupBuyerPdf("download"); }}
-                          style={{ ...btnAction, background: "#0f766e", marginBottom: 1, opacity: saleFollowupBuyerPdfLoading ? 0.65 : 1 }}
-                        >
-                          {saleFollowupBuyerPdfLoading ? "Preparing PDF..." : "Buyer PDF"}
-                        </button>
-                        <button
-                          type="button"
-                          disabled={saleFollowupBuyerPdfLoading}
-                          onClick={() => { void handleSaleFollowupBuyerPdf("mail"); }}
-                          style={{ ...btnAction, background: "#2563eb", marginBottom: 1, opacity: saleFollowupBuyerPdfLoading ? 0.65 : 1 }}
-                        >
-                          Mail PDF
-                        </button>
-                        <button
-                          type="button"
-                          disabled={saleFollowupBuyerPdfLoading}
-                          onClick={() => { void handleSaleFollowupBuyerPdf("whatsapp"); }}
-                          style={{ ...btnAction, background: "#15803d", marginBottom: 1, opacity: saleFollowupBuyerPdfLoading ? 0.65 : 1 }}
-                        >
-                          WhatsApp PDF
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setReportFilters((prev) => ({ ...prev, sale_buyer_id: "" }))}
-                          style={{ ...btnAction, background: "#64748b", marginBottom: 1 }}
-                        >
-                          Clear Buyer
-                        </button>
-                      </div>
-                    );
-                  })()}
+                  {reportFilters.sale_buyer_id && (
+                    <button
+                      type="button"
+                      onClick={() => setReportFilters((prev) => ({ ...prev, sale_buyer_id: "" }))}
+                      style={{ ...btnAction, background: "#64748b", marginBottom: 1 }}
+                    >
+                      Clear Buyer
+                    </button>
+                  )}
                 </div>
-
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 10, marginBottom: 14 }}>
                   {[
                     ["all", saleFollowupCounts.all],
@@ -7831,7 +7423,6 @@ export default function WarehouseTradingPage() {
                     );
                   })}
                 </div>
-
                 <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 14 }}>
                   {["all", "payment_done", "unloading_pending", "pending"].map((key) => {
                     const meta = saleFollowupStatusMeta[key];
@@ -8716,7 +8307,7 @@ export default function WarehouseTradingPage() {
   );
 }
 
-function SearchableSelect({ label, value, options, onChange, placeholder = "Select", disabled = false, inlineSearch = false }) {
+function SearchableSelect({ label, value, options, onChange, placeholder = "Select", disabled = false }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
   const rootRef = useRef(null);
@@ -8735,11 +8326,6 @@ function SearchableSelect({ label, value, options, onChange, placeholder = "Sele
     () => normalizedOptions.find((option) => String(option.value) === String(value)),
     [normalizedOptions, value]
   );
-
-  useEffect(() => {
-    if (!open && selectedOption && inlineSearch) setSearch(selectedOption.label);
-    if (!value && inlineSearch && !open) setSearch("");
-  }, [inlineSearch, open, selectedOption, value]);
 
   const filteredOptions = useMemo(() => {
     const query = String(search || "").trim().toLowerCase();
@@ -8766,55 +8352,25 @@ function SearchableSelect({ label, value, options, onChange, placeholder = "Sele
   return (
     <div ref={rootRef} style={{ position: "relative", minWidth: 260, flex: "1 1 260px" }}>
       <label style={{ marginBottom: 6, display: "block", fontSize: 12, fontWeight: 700, color: "#475569" }}>{label}</label>
-      {inlineSearch ? (
-        <input
-          type="text"
-          value={open ? search : (selectedOption?.label || "")}
-          disabled={disabled}
-          placeholder={placeholder}
-          onFocus={() => {
-            if (!disabled) {
-              setOpen(true);
-              setSearch("");
-            }
-          }}
-          onChange={(event) => {
-            setSearch(event.target.value);
-            if (!open) setOpen(true);
-          }}
-          style={{
-            width: "100%",
-            padding: "10px 12px",
-            borderRadius: 8,
-            border: "1px solid #cbd5e1",
-            background: disabled ? "#f8fafc" : "#fff",
-            color: "#0f172a",
-            fontSize: 14,
-            boxSizing: "border-box",
-            outline: "none",
-          }}
-        />
-      ) : (
-        <button
-          type="button"
-          disabled={disabled}
-          onClick={() => !disabled && setOpen((prev) => !prev)}
-          style={{
-            width: "100%",
-            padding: "10px 12px",
-            borderRadius: 8,
-            border: "1px solid #cbd5e1",
-            background: disabled ? "#f8fafc" : "#fff",
-            textAlign: "left",
-            cursor: disabled ? "not-allowed" : "pointer",
-            color: selectedOption ? "#0f172a" : "#64748b",
-            fontSize: 14,
-            boxSizing: "border-box",
-          }}
-        >
-          {selectedOption ? selectedOption.label : placeholder}
-        </button>
-      )}
+      <button
+        type="button"
+        disabled={disabled}
+        onClick={() => !disabled && setOpen((prev) => !prev)}
+        style={{
+          width: "100%",
+          padding: "10px 12px",
+          borderRadius: 8,
+          border: "1px solid #cbd5e1",
+          background: disabled ? "#f8fafc" : "#fff",
+          textAlign: "left",
+          cursor: disabled ? "not-allowed" : "pointer",
+          color: selectedOption ? "#0f172a" : "#64748b",
+          fontSize: 14,
+          boxSizing: "border-box",
+        }}
+      >
+        {selectedOption ? selectedOption.label : placeholder}
+      </button>
       {open && !disabled ? (
         <div
           style={{
@@ -8830,24 +8386,22 @@ function SearchableSelect({ label, value, options, onChange, placeholder = "Sele
             overflow: "hidden",
           }}
         >
-          {!inlineSearch && (
-            <div style={{ padding: 10, borderBottom: "1px solid #e2e8f0", background: "#f8fafc" }}>
-              <input
-                type="text"
-                value={search}
-                onChange={(event) => setSearch(event.target.value)}
-                placeholder="Type to filter"
-                style={{
-                  width: "100%",
-                  padding: "9px 10px",
-                  border: "1px solid #cbd5e1",
-                  borderRadius: 8,
-                  fontSize: 13,
-                  boxSizing: "border-box",
-                }}
-              />
-            </div>
-          )}
+          <div style={{ padding: 10, borderBottom: "1px solid #e2e8f0", background: "#f8fafc" }}>
+            <input
+              type="text"
+              value={search}
+              onChange={(event) => setSearch(event.target.value)}
+              placeholder="Type to filter"
+              style={{
+                width: "100%",
+                padding: "9px 10px",
+                border: "1px solid #cbd5e1",
+                borderRadius: 8,
+                fontSize: 13,
+                boxSizing: "border-box",
+              }}
+            />
+          </div>
           <div style={{ maxHeight: 240, overflowY: "auto" }}>
             {filteredOptions.length ? (
               filteredOptions.map((option) => (
