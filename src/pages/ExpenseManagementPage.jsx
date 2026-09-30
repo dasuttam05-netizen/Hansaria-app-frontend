@@ -1034,39 +1034,26 @@ export default function ExpenseManagementPage() {
             <form className="expense-entry-form" onSubmit={handleSubmit}>
               <div className="expense-form-grid" style={formGridStyle}>
                 <Field label="Location">
-                  <select
-                    name="location_id"
+                  <SearchableSelect
+                    label=""
                     value={formData.location_id}
-                    onChange={handleFieldChange}
-                    style={inputStyle}
+                    options={locationOptions.map((location) => ({ value: getRecordId(location), label: location.name }))}
+                    onChange={(value) => handleFieldChange({ target: { name: "location_id", value } })}
+                    placeholder="Select location / type to search"
                     required
-                  >
-                    <option value="">Select location</option>
-                    {locationOptions.map((location) => (
-                      <option key={getRecordId(location)} value={getRecordId(location)}>
-                        {location.name}
-                      </option>
-                    ))}
-                  </select>
+                  />
                   {!selectedLocationHasWarehouse && formData.location_id ? (
                     <div style={warningTextStyle}>No warehouse is mapped for the selected location.</div>
                   ) : null}
                 </Field>
 
                 <Field label="Employee">
-                  <select
-                    name="employee_id"
-                    value={formData.employee_id}
-                    onChange={handleFieldChange}
-                    style={inputStyle}
-                  >
-                    <option value="">Select Employee</option>
-                    {employeeOptions.map((employee) => (
-                      <option key={getRecordId(employee)} value={getRecordId(employee)}>
-                        {employee.name}
-                      </option>
-                    ))}
-                  </select>
+                  <SearchableSelect
+                    label="" value={formData.employee_id}
+                    options={employeeOptions.map((employee) => ({ value: getRecordId(employee), label: employee.name }))}
+                    onChange={(value) => handleFieldChange({ target: { name: "employee_id", value } })}
+                    placeholder="Select Employee / type to search"
+                  />
                 </Field>
 
                 <Field label="Date">
@@ -1081,118 +1068,73 @@ export default function ExpenseManagementPage() {
                 </Field>
 
                 <Field label="Product">
-                  <select
-                    name="product_id"
-                    value={formData.product_id}
-                    onChange={handleFieldChange}
-                    style={inputStyle}
-                  >
-                    <option value="">Select Product</option>
-                    {productOptions.map((product) => (
-                      <option key={getRecordId(product)} value={getRecordId(product)}>
-                        {product.name}
-                      </option>
-                    ))}
-                  </select>
+                  <SearchableSelect
+                    label="" value={formData.product_id}
+                    options={productOptions.map((product) => ({ value: getRecordId(product), label: product.name }))}
+                    onChange={(value) => handleFieldChange({ target: { name: "product_id", value } })}
+                    placeholder="Select Product / type to search"
+                  />
                 </Field>
 
                 <Field label="Party (Company)">
-                  <select
-                    name="company_id"
-                    value={formData.company_id}
-                    onChange={handleFieldChange}
-                    style={inputStyle}
-                  >
-                    <option value="">Select company party</option>
-                    {companyOptions.map((company) => (
-                      <option key={getRecordId(company)} value={getRecordId(company)}>
-                        {company.name}
-                      </option>
-                    ))}
-                  </select>
+                  <SearchableSelect
+                    label="" value={formData.company_id}
+                    options={companyOptions.map((company) => ({ value: getRecordId(company), label: company.name }))}
+                    onChange={(value) => handleFieldChange({ target: { name: "company_id", value } })}
+                    placeholder="Select company party / type to search"
+                  />
                 </Field>
 
                 <Field label="Party Company / A/C">
-                  <select
-                    name="company_account_id"
-                    value={formData.company_account_id}
-                    onChange={handleFieldChange}
-                    style={inputStyle}
+                  <SearchableSelect
+                    label="" value={formData.company_account_id}
+                    options={accountOptions.map((account) => ({ value: getRecordId(account), label: account.account_name }))}
+                    onChange={(value) => handleFieldChange({ target: { name: "company_account_id", value } })}
+                    placeholder={formData.company_id ? "Select Account / type to search" : "Select company first"}
                     disabled={!formData.company_id}
-                  >
-                    <option value="">{formData.company_id ? "Select Account" : "Select company first"}</option>
-                    {accountOptions.map((account) => (
-                      <option key={getRecordId(account)} value={getRecordId(account)}>
-                        {account.account_name}
-                      </option>
-                    ))}
-                  </select>
+                  />
                 </Field>
 
                 <Field label="Reg From (Consignee name)">
-                  <select
-                    name="reg_from_consignee_id"
-                    value={formData.reg_from_consignee_id}
-                    onChange={handleFieldChange}
-                    style={inputStyle}
-                  >
-                    <option value="">Select consignee name</option>
-                    {consigneeNames.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.buyer_name ? `${c.name} (${c.buyer_name})` : c.name}
-                      </option>
-                    ))}
-                  </select>
+                  <SearchableSelect
+                    label="" value={formData.reg_from_consignee_id}
+                    options={consigneeNames.map((c) => ({ value: c.id, label: c.buyer_name ? `${c.name} (${c.buyer_name})` : c.name }))}
+                    onChange={(value) => handleFieldChange({ target: { name: "reg_from_consignee_id", value } })}
+                    placeholder="Select consignee / type to search"
+                  />
                 </Field>
 
                 <Field label="Work Description">
-                  <select
-                    name="work_description"
-                    value={formData.work_description}
-                    onChange={handleFieldChange}
-                    style={inputStyle}
+                  <SearchableSelect
+                    label="" value={formData.work_description}
+                    options={WORK_DESCRIPTION_OPTIONS.map((option) => ({ value: option, label: option }))}
+                    onChange={(value) => handleFieldChange({ target: { name: "work_description", value } })}
+                    placeholder="Select Work Description / type to search"
                     required
-                  >
-                    <option value="">Select Work Description</option>
-                    {WORK_DESCRIPTION_OPTIONS.map((option) => (
-                      <option key={option} value={option}>
-                        {option}
-                      </option>
-                    ))}
-                  </select>
+                  />
                 </Field>
 
                 {(["Palti Lorry", "Self Loading", "Local Sale"].includes(formData.work_description)) && (
                   <>
                     {["Self Loading", "Local Sale"].includes(formData.work_description) && (
                       <Field label="Party Name">
-                        <select
-                          name="company_id"
-                          value={formData.company_id}
-                          onChange={handleFieldChange}
-                          style={inputStyle}
-                        >
-                          <option value="">Select Party</option>
-                          {companyOptions.map((company) => (
-                            <option key={getRecordId(company)} value={getRecordId(company)}>
-                              {company.name}
-                            </option>
-                          ))}
-                        </select>
+                        <SearchableSelect
+                          label="" value={formData.company_id}
+                          options={companyOptions.map((company) => ({ value: getRecordId(company), label: company.name }))}
+                          onChange={(value) => handleFieldChange({ target: { name: "company_id", value } })}
+                          placeholder="Select Party / type to search"
+                        />
                       </Field>
                     )}
 
                     {["Palti Lorry", "Self Loading"].includes(formData.work_description) && (
                       <Field label="Palti Lorry">
-                        <select
-                          name="send_to_unified"
-                          value={formData.send_to_unified}
-                          onChange={handleFieldChange}
-                          style={inputStyle}
-                        >
-                          <option value="">Select Palti Lorry</option>
-                          <option value="palti_lorry">Palti Lorry</option>
-                        </select>
+                        <SearchableSelect
+                          label="" value={formData.send_to_unified}
+                          options={[{ value: "palti_lorry", label: "Palti Lorry" }]}
+                          onChange={(value) => handleFieldChange({ target: { name: "send_to_unified", value } })}
+                          placeholder="Select Palti Lorry / type to search"
+                        />
                       </Field>
                     )}
                   </>
@@ -1200,56 +1142,28 @@ export default function ExpenseManagementPage() {
 
                 {(["Warehouse Inward", "Warehouse Outward"].includes(formData.work_description)) && (
                   <Field label="Warehouse">
-                    <select
-                      name="send_to_unified"
-                      value={formData.send_to_unified}
-                      onChange={handleFieldChange}
-                      style={inputStyle}
-                    >
-                      <option value="">Select Warehouse</option>
-                      <optgroup label="Warehouse name">
-                        {warehouseOptions.map((w) => (
-                          <option key={`wh-${getRecordId(w)}`} value={`warehouse:${getRecordId(w)}`}>
-                            {w.name}
-                          </option>
-                        ))}
-                      </optgroup>
-                    </select>
+                    <SearchableSelect
+                      label="" value={formData.send_to_unified}
+                      options={warehouseOptions.map((w) => ({ value: `warehouse:${getRecordId(w)}`, label: w.name }))}
+                      onChange={(value) => handleFieldChange({ target: { name: "send_to_unified", value } })}
+                      placeholder="Select Warehouse / type to search"
+                    />
                   </Field>
                 )}
 
                 {(formData.work_description === "Others") && (
                   <Field label="Send To">
-                    <select
-                      name="send_to_unified"
-                      value={formData.send_to_unified}
-                      onChange={handleFieldChange}
-                      style={inputStyle}
-                    >
-                      <option value="">Select Send To</option>
-                      <option value="palti_lorry">Palti Lorry</option>
-                      <optgroup label="Consignee names">
-                        {consigneeNames.map((c) => (
-                          <option key={`cg-${c.id}`} value={`consignee:${c.id}`}>
-                            {c.buyer_name ? `${c.name} (${c.buyer_name})` : c.name}
-                          </option>
-                        ))}
-                      </optgroup>
-                      <optgroup label="Party (Company)">
-                        {companyOptions.map((co) => (
-                          <option key={`co-${getRecordId(co)}`} value={`company:${getRecordId(co)}`}>
-                            {co.name}
-                          </option>
-                        ))}
-                      </optgroup>
-                      <optgroup label="Warehouse name">
-                        {warehouseOptions.map((w) => (
-                          <option key={`wh-${getRecordId(w)}`} value={`warehouse:${getRecordId(w)}`}>
-                            {w.name}
-                          </option>
-                        ))}
-                      </optgroup>
-                    </select>
+                    <SearchableSelect
+                      label="" value={formData.send_to_unified}
+                      options={[
+                        { value: "palti_lorry", label: "Palti Lorry" },
+                        ...consigneeNames.map((c) => ({ value: `consignee:${c.id}`, label: c.buyer_name ? `${c.name} (${c.buyer_name})` : c.name })),
+                        ...companyOptions.map((co) => ({ value: `company:${getRecordId(co)}`, label: co.name })),
+                        ...warehouseOptions.map((w) => ({ value: `warehouse:${getRecordId(w)}`, label: w.name })),
+                      ]}
+                      onChange={(value) => handleFieldChange({ target: { name: "send_to_unified", value } })}
+                      placeholder="Select Send To / type to search"
+                    />
                   </Field>
                 )}
 
@@ -1379,16 +1293,16 @@ export default function ExpenseManagementPage() {
                 </Field>
 
                 <Field label="Status">
-                  <select
-                    name="status"
-                    value={formData.status}
-                    onChange={handleFieldChange}
-                    style={inputStyle}
-                  >
-                    <option value="PENDING">PENDING</option>
-                    <option value="CONFIRMED_BY_BM">CONFIRMED BY BM</option>
-                    <option value="CONFIRMED_BY_HO">CONFIRMED BY HO</option>
-                  </select>
+                  <SearchableSelect
+                    label="" value={formData.status}
+                    options={[
+                      { value: "PENDING", label: "PENDING" },
+                      { value: "CONFIRMED_BY_BM", label: "CONFIRMED BY BM" },
+                      { value: "CONFIRMED_BY_HO", label: "CONFIRMED BY HO" },
+                    ]}
+                    onChange={(value) => handleFieldChange({ target: { name: "status", value } })}
+                    placeholder="Select Status / type to search"
+                  />
                 </Field>
               </div>
 
@@ -1626,6 +1540,123 @@ export default function ExpenseManagementPage() {
       )}
         </>
       )}
+    </div>
+  );
+}
+
+function SearchableSelect({ label, value, options, onChange, placeholder = "Select", disabled = false, required = false }) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const [highlightedIndex, setHighlightedIndex] = useState(0);
+  const rootRef = useRef(null);
+
+  const normalizedOptions = useMemo(
+    () => (options || []).map((option) => ({
+      value: String(option?.value ?? "").trim(),
+      label: String(option?.label ?? "").trim(),
+    })),
+    [options]
+  );
+
+  const selectedOption = useMemo(
+    () => normalizedOptions.find((option) => String(option.value) === String(value)),
+    [normalizedOptions, value]
+  );
+
+  const filteredOptions = useMemo(() => {
+    const query = String(search || "").trim().toLowerCase();
+    if (!query) return normalizedOptions;
+    return normalizedOptions.filter((option) => option.label.toLowerCase().includes(query));
+  }, [normalizedOptions, search]);
+
+  useEffect(() => {
+    setHighlightedIndex(0);
+  }, [search, open]);
+
+  useEffect(() => {
+    const handleOutside = (event) => {
+      if (!rootRef.current?.contains(event.target)) setOpen(false);
+    };
+    document.addEventListener("mousedown", handleOutside);
+    return () => document.removeEventListener("mousedown", handleOutside);
+  }, []);
+
+  const selectOption = (option) => {
+    if (!option) return;
+    onChange(option.value);
+    setOpen(false);
+    setSearch("");
+  };
+
+  const handleKeyDown = (event) => {
+    if (disabled) return;
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setOpen(true);
+      setHighlightedIndex((index) => Math.min(index + 1, Math.max(filteredOptions.length - 1, 0)));
+      return;
+    }
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setOpen(true);
+      setHighlightedIndex((index) => Math.max(index - 1, 0));
+      return;
+    }
+    if (event.key === "Enter") {
+      if (open && filteredOptions.length) {
+        event.preventDefault();
+        selectOption(filteredOptions[highlightedIndex] || filteredOptions[0]);
+      }
+      return;
+    }
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setOpen(false);
+      setSearch("");
+    }
+  };
+
+  return (
+    <div ref={rootRef} style={{ position: "relative", width: "100%" }}>
+      <input
+        type="text"
+        value={open ? search : (selectedOption?.label || "")}
+        onFocus={() => {
+          if (disabled) return;
+          setOpen(true);
+          setSearch("");
+        }}
+        onChange={(event) => {
+          if (disabled) return;
+          setSearch(event.target.value);
+          setOpen(true);
+        }}
+        onKeyDown={handleKeyDown}
+        disabled={disabled}
+        required={required}
+        placeholder={placeholder}
+        autoComplete="off"
+        style={inputStyle}
+      />
+      {open && !disabled ? (
+        <div style={{ position: "absolute", left: 0, right: 0, top: "calc(100% + 4px)", zIndex: 1000, background: "#fff", border: "1px solid #cbd5e1", borderRadius: 8, boxShadow: "0 8px 20px rgba(15,23,42,.12)", maxHeight: 240, overflowY: "auto" }}>
+          {filteredOptions.length ? filteredOptions.map((option, index) => (
+            <button
+              key={`${option.value}-${index}`}
+              type="button"
+              onMouseDown={(event) => {
+                event.preventDefault();
+                selectOption(option);
+              }}
+              style={{ width: "100%", textAlign: "left", border: 0, padding: "10px 12px", background: index === highlightedIndex ? "#e0f2fe" : "#fff", cursor: "pointer", color: "#0f172a" }}
+            >
+              {option.label}
+            </button>
+          )) : (
+            <div style={{ padding: "10px 12px", color: "#64748b" }}>No items found</div>
+          )}
+        </div>
+      ) : null}
     </div>
   );
 }
