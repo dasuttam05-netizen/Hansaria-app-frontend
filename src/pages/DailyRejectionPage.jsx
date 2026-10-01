@@ -105,8 +105,6 @@ export default function DailyRejectionPage() {
   const [error, setError] = useState("");
   const [assignedEmployee, setAssignedEmployee] = useState({});
   const [assignedAction, setAssignedAction] = useState({});
-  const [factoryConsigneeModal, setFactoryConsigneeModal] = useState(null);
-  const [factoryConsigneeSelection, setFactoryConsigneeSelection] = useState({});
   const [busyId, setBusyId] = useState("");
   const [completionRemarks, setCompletionRemarks] = useState({});
   const [editId, setEditId] = useState("");
@@ -114,6 +112,8 @@ export default function DailyRejectionPage() {
   const [reportTo, setReportTo] = useState("");
   const [reportRows, setReportRows] = useState([]);
   const [toast, setToast] = useState(null);
+  const [factoryModal, setFactoryModal] = useState(null);
+  const [factoryForm, setFactoryForm] = useState({});
 
   const showToast = useCallback((message, type = "success") => {
     setToast({ id: Date.now(), message, type });
@@ -216,38 +216,93 @@ export default function DailyRejectionPage() {
     }
   };
 
+  const getFactoryConsigneeOptions = () => masters.consignees.map((item) => ({
+    value: idOf(item),
+    label: textOf(item),
+  }));
+
+  const openFactoryModal = (rowId) => {
+    const row = rows.find((item) => idOf(item) === String(rowId)) || {};
+    const company = masters.companies.find((item) => idOf(item) === String(row?.company_id || ""));
+    const account = masters.accounts.find((item) => idOf(item) === String(row?.company_account_id || ""));
+    const rejectionQty = Number(row?.rejection_qty || 0);
+    setFactoryForm({
+      date: row?.entry_date || new Date().toISOString().slice(0, 10),
+      invoice_no: row?.invoice_no || row?.rejection_no || "",
+      lorry_no: row?.lorry_no || "",
+      company_id: row?.company_id ? String(row.company_id) : (company ? idOf(company) : ""),
+      company_account_id: row?.company_account_id ? String(row.company_account_id) : (account ? idOf(account) : ""),
+      buyer_id: row?.buyer_id ? String(row.buyer_id) : "",
+      consignee_id: row?.consignee_id ? String(row.consignee_id) : "",
+      rejection_qty: rejectionQty,
+      other_qty: 0,
+      rate: "",
+    });
+    setFactoryModal({ rowId: String(rowId) });
+  };
+
+  const closeFactoryModal = () => {
+    setFactoryModal(null);
+    setFactoryForm({});
+  };
+
+  const updateFactoryForm = (key, value) => {
+    setFactoryForm((prev) => ({ ...prev, [key]: value }));
+  };
+
   const handleAssignedActionChange = (rowId, value) => {
     setAssignedAction((prev) => ({ ...prev, [rowId]: value }));
     if (value === "SEND TO FACTORY") {
-      setFactoryConsigneeModal({ rowId });
-    } else {
-      setFactoryConsigneeModal((prev) => (prev?.rowId === rowId ? null : prev));
-      setFactoryConsigneeSelection((prev) => ({ ...prev, [rowId]: null }));
+      openFactoryModal(rowId);
+    } else if (factoryModal?.rowId === String(rowId)) {
+      closeFactoryModal();
     }
   };
 
   const assignRow = async (rowId) => {
     const employeeId = assignedEmployee[rowId];
     const actionType = assignedAction[rowId];
-    const factoryConsignee = factoryConsigneeSelection[rowId];
     if (!employeeId || !actionType) {
       showToast("Please select a staff member and Work Description first.", "warning");
       return;
     }
-    if (actionType === "SEND TO FACTORY" && !factoryConsignee?.value) {
-      setFactoryConsigneeModal({ rowId });
-      showToast("Please select the factory consignee.", "warning");
+    const isSendToFactory = actionType === "SEND TO FACTORY";
+    if (isSendToFactory && (!factoryModal || factoryModal.rowId !== String(rowId))) {
+      openFactoryModal(rowId);
+      showToast("Please complete the Send To Factory form first.", "warning");
       return;
+    }
+    if (isSendToFactory) {
+      const otherQty = Number(factoryForm.other_qty || 0);
+      const rejectionQty = Number(factoryForm.rejection_qty || 0);
+      if (!factoryForm.date || !factoryForm.invoice_no || !factoryForm.lorry_no || !factoryForm.company_id || !factoryForm.company_account_id || !factoryForm.buyer_id || !factoryForm.consignee_id || rejectionQty < 0 || otherQty < 0 || Number(factoryForm.rate || 0) < 0) {
+        showToast("Please complete all Send To Factory fields. Other Qty can be 0.", "warning");
+        return;
+      }
     }
     setBusyId(rowId);
     try {
-      await axios.patch(`${API}/${rowId}/assign`, {
+      const payload = {
         assigned_to: employeeId,
         action_type: actionType,
-        factory_consignee_id: actionType === "SEND TO FACTORY" ? factoryConsignee.value : "",
-        factory_consignee_name: actionType === "SEND TO FACTORY" ? factoryConsignee.label : "",
-      });
+        ...(isSendToFactory ? {
+          factory_date: factoryForm.date,
+          factory_invoice_no: factoryForm.invoice_no,
+          factory_lorry_no: factoryForm.lorry_no,
+          factory_company_id: factoryForm.company_id,
+          factory_company_account_id: factoryForm.company_account_id,
+          factory_buyer_id: factoryForm.buyer_id,
+          factory_consignee_id: factoryForm.consignee_id,
+          factory_rejection_qty: Number(factoryForm.rejection_qty || 0),
+          factory_other_qty: Number(factoryForm.other_qty || 0),
+          factory_total_qty: Number(factoryForm.rejection_qty || 0) + Number(factoryForm.other_qty || 0),
+          factory_rate: Number(factoryForm.rate || 0),
+          factory_amount: (Number(factoryForm.rejection_qty || 0) + Number(factoryForm.other_qty || 0)) * Number(factoryForm.rate || 0),
+        } : {}),
+      };
+      await axios.patch(`${API}/${rowId}/assign`, payload);
       showToast("Work assigned successfully and moved to Running.", "success");
+      closeFactoryModal();
       await loadData();
     } catch (err) {
       showToast(err?.response?.data?.error || err?.message || "Failed to assign the work.", "error");
@@ -429,9 +484,14 @@ export default function DailyRejectionPage() {
               <div className="dr-mobile-workflow">
                 <div className="dr-mobile-workflow-title">ASSIGN WORK</div>
                 <div className="dr-mobile-workflow-grid">
-                  <SearchableSelect value={actionValue} disabled={isComplete} onChange={(value) => handleAssignedActionChange(rowId, value)} style={styles.workflowSelect} placeholder="Select Work" options={WORK_DESCRIPTIONS.map((item) => ({ value: item, label: item }))} />
-                  <SearchableSelect value={employeeValue} disabled={isComplete} onChange={(value) => setAssignedEmployee((prev) => ({ ...prev, [rowId]: value }))} style={styles.workflowSelect} placeholder="Select Staff" options={masters.employees.map((item) => ({ value: idOf(item), label: textOf(item) }))} />
-                  {actionValue === "SEND TO FACTORY" && factoryConsigneeSelection[rowId]?.label ? <div style={{ gridColumn: "1 / -1", fontSize: 11, color: "#0f766e", fontWeight: 800 }}>Factory Consignee: {factoryConsigneeSelection[rowId].label}</div> : null}
+                  <select value={actionValue} disabled={isComplete} onChange={(e) => handleAssignedActionChange(rowId, e.target.value)} style={styles.workflowSelect}>
+                    <option value="">Select Work</option>
+                    {WORK_DESCRIPTIONS.map((item) => <option key={item} value={item}>{item}</option>)}
+                  </select>
+                  <select value={employeeValue} disabled={isComplete} onChange={(e) => setAssignedEmployee((prev) => ({ ...prev, [rowId]: e.target.value }))} style={styles.workflowSelect}>
+                    <option value="">Select Staff</option>
+                    {masters.employees.map((item) => <option key={idOf(item)} value={idOf(item)}>{textOf(item)}</option>)}
+                  </select>
                   <button type="button" disabled={rowBusy || isComplete || !actionValue || !employeeValue} onClick={() => assignRow(rowId)} style={{ ...styles.assignButtonInline, opacity: rowBusy || isComplete || !actionValue || !employeeValue ? 0.55 : 1 }}>
                     {rowBusy ? "Assigning..." : row?.status === "RUNNING" ? "Reassign & Keep Running" : "Assign & Start Work"}
                   </button>
@@ -522,8 +582,8 @@ export default function DailyRejectionPage() {
                       <td style={styles.td}><span style={{ ...styles.statusChip, ...statusStyle(row?.status) }}>{row?.status || "PENDING"}</span></td>
                       {showManagerWorkflow ? (
                         <>
-                          <td style={{ ...styles.td, ...styles.workflowTd }}><SearchableSelect value={actionValue} disabled={isComplete} onChange={(value) => handleAssignedActionChange(rowId, value)} style={styles.workflowSelect} placeholder="Select Work" options={WORK_DESCRIPTIONS.map((item) => ({ value: item, label: item }))} /></td>
-                          <td style={{ ...styles.td, ...styles.workflowTd }}><SearchableSelect value={employeeValue} disabled={isComplete} onChange={(value) => setAssignedEmployee((prev) => ({ ...prev, [rowId]: value }))} style={styles.workflowSelect} placeholder="Select Staff" options={masters.employees.map((item) => ({ value: idOf(item), label: textOf(item) }))} /></td>
+                          <td style={{ ...styles.td, ...styles.workflowTd }}><select value={actionValue} disabled={isComplete} onChange={(e) => handleAssignedActionChange(rowId, e.target.value)} style={styles.workflowSelect}><option value="">Select Work</option>{WORK_DESCRIPTIONS.map((item) => <option key={item} value={item}>{item}</option>)}</select></td>
+                          <td style={{ ...styles.td, ...styles.workflowTd }}><select value={employeeValue} disabled={isComplete} onChange={(e) => setAssignedEmployee((prev) => ({ ...prev, [rowId]: e.target.value }))} style={styles.workflowSelect}><option value="">Select Staff</option>{masters.employees.map((item) => <option key={idOf(item)} value={idOf(item)}>{textOf(item)}</option>)}</select></td>
                           <td style={{ ...styles.td, ...styles.workflowTd }}><button type="button" disabled={rowBusy || isComplete || !actionValue || !employeeValue} onClick={() => assignRow(rowId)} style={{ ...styles.assignButtonInline, opacity: rowBusy || isComplete || !actionValue || !employeeValue ? 0.55 : 1 }}>{rowBusy ? "Assigning..." : row?.status === "RUNNING" ? "Reassign & Keep Running" : "Assign & Start Work"}</button></td>
                         </>
                       ) : showReportWorkflow ? (
@@ -647,7 +707,7 @@ export default function DailyRejectionPage() {
       <div style={styles.toolbar}>
         <div style={styles.tabs}>{STATUSES.filter((item) => item !== "REPORT" || canReport).map((item) => <button key={item} type="button" onClick={() => setStatus(item)} style={status === item ? styles.tabActive : styles.tab}>{item}</button>)}</div>
         <div style={styles.toolbarRight}>
-          <SearchableSelect value={actionFilter} onChange={setActionFilter} style={styles.compactSelect} placeholder="All Work" options={[{ value: "ALL", label: "All Work" }, ...WORK_DESCRIPTIONS.map((item) => ({ value: item, label: item }))]} />
+          <select value={actionFilter} onChange={(e) => setActionFilter(e.target.value)} style={styles.compactSelect}><option value="ALL">All Work</option>{WORK_DESCRIPTIONS.map((item) => <option key={item} value={item}>{item}</option>)}</select>
           {canCreate && <button type="button" onClick={() => { resetForm(); setShowForm(true); }} style={styles.primary}>+ New Rejection</button>}
           <button type="button" onClick={loadData} style={styles.secondary}>Refresh</button>
         </div>
@@ -659,7 +719,7 @@ export default function DailyRejectionPage() {
           <div style={styles.reportFilters}>
             <Field label="From Date"><input className="daily-rejection-report-input" type="date" value={reportFrom} onChange={(e) => setReportFrom(e.target.value)} style={styles.input} /></Field>
             <Field label="To Date"><input className="daily-rejection-report-input" type="date" value={reportTo} onChange={(e) => setReportTo(e.target.value)} style={styles.input} /></Field>
-            <Field label="Work"><SearchableSelect className="daily-rejection-report-input" value={actionFilter} onChange={setActionFilter} style={styles.input} placeholder="All Work" options={[{ value: "ALL", label: "All Work" }, ...WORK_DESCRIPTIONS.map((item) => ({ value: item, label: item }))]} /></Field>
+            <Field label="Work"><select className="daily-rejection-report-input" value={actionFilter} onChange={(e) => setActionFilter(e.target.value)} style={styles.input}><option value="ALL">All Work</option>{WORK_DESCRIPTIONS.map((item) => <option key={item} value={item}>{item}</option>)}</select></Field>
           </div>
           <div style={styles.reportTableWrap}>{reportRows.length ? renderTable(reportRows, false, true) : <div style={styles.empty}>Select dates and click Generate Report.</div>}</div>
         </div>
@@ -672,12 +732,12 @@ export default function DailyRejectionPage() {
           <form onSubmit={submitEntry}>
             <div style={styles.section}><div style={styles.sectionTitle}>1 · Basic Details</div><div style={styles.grid}>
               <Field label="Date"><input type="date" value={form.entry_date} onChange={(e) => updateForm('entry_date', e.target.value)} style={styles.input} /></Field>
-              <Field label="Location"><SearchableSelect value={form.location_id} onChange={(value) => updateForm('location_id', value)} style={styles.input} placeholder="Select Location" options={masters.locations.map((item) => ({ value: idOf(item), label: textOf(item) }))} /></Field>
-              <Field label="Company"><SearchableSelect value={form.company_id} onChange={(value) => { updateForm('company_id', value); updateForm('company_account_id', ''); }} style={styles.input} placeholder="Select Company" options={masters.companies.map((item) => ({ value: idOf(item), label: textOf(item) }))} /></Field>
-              <Field label="Company Account"><SearchableSelect value={form.company_account_id} onChange={(value) => updateForm('company_account_id', value)} style={styles.input} placeholder="Select Account" options={filteredAccounts.map((item) => ({ value: idOf(item), label: item.account_name || item.name || '-' }))} /></Field>
-              <Field label="Consignee"><SearchableSelect value={form.consignee_id} onChange={(value) => updateForm('consignee_id', value)} style={styles.input} placeholder="Select Consignee" options={masters.consignees.map((item) => ({ value: idOf(item), label: textOf(item) }))} /></Field>
+              <Field label="Location"><select value={form.location_id} onChange={(e) => updateForm('location_id', e.target.value)} style={styles.input}><option value="">Select Location</option>{masters.locations.map((item) => <option key={idOf(item)} value={idOf(item)}>{textOf(item)}</option>)}</select></Field>
+              <Field label="Company"><select value={form.company_id} onChange={(e) => { updateForm('company_id', e.target.value); updateForm('company_account_id', ''); }} style={styles.input}><option value="">Select Company</option>{masters.companies.map((item) => <option key={idOf(item)} value={idOf(item)}>{textOf(item)}</option>)}</select></Field>
+              <Field label="Company Account"><select value={form.company_account_id} onChange={(e) => updateForm('company_account_id', e.target.value)} style={styles.input}><option value="">Select Account</option>{filteredAccounts.map((item) => <option key={idOf(item)} value={idOf(item)}>{item.account_name || item.name || '-'}</option>)}</select></Field>
+              <Field label="Consignee"><select value={form.consignee_id} onChange={(e) => updateForm('consignee_id', e.target.value)} style={styles.input}><option value="">Select Consignee</option>{masters.consignees.map((item) => <option key={idOf(item)} value={idOf(item)}>{textOf(item)}</option>)}</select></Field>
               <Field label="Lorry No."><input value={form.lorry_no} onChange={(e) => updateForm("lorry_no", e.target.value)} placeholder="Enter Lorry No." style={styles.input} /></Field>
-              <Field label="Product"><SearchableSelect value={form.product_id} onChange={(value) => updateForm('product_id', value)} style={styles.input} placeholder="Select Product" options={masters.products.map((item) => ({ value: idOf(item), label: textOf(item) }))} /></Field>
+              <Field label="Product"><select value={form.product_id} onChange={(e) => updateForm('product_id', e.target.value)} style={styles.input}><option value="">Select Product</option>{masters.products.map((item) => <option key={idOf(item)} value={idOf(item)}>{textOf(item)}</option>)}</select></Field>
             </div></div>
 
             <div style={styles.section}><div style={styles.sectionTitle}>2 · Quantity Check</div><div style={styles.quantityGrid}>
@@ -687,7 +747,7 @@ export default function DailyRejectionPage() {
             </div></div>
 
             <div style={styles.section}><div style={styles.sectionTitle}>3 · Rejection Reason</div><div style={styles.grid}>
-              <Field label="Reason"><SearchableSelect value={form.reason} onChange={(value) => updateForm('reason', value)} style={styles.input} placeholder="Select Reason" options={REASONS.map((item) => ({ value: item, label: item }))} /></Field>
+              <Field label="Reason"><select value={form.reason} onChange={(e) => updateForm('reason', e.target.value)} style={styles.input}><option value="">Select Reason</option>{REASONS.map((item) => <option key={item} value={item}>{item}</option>)}</select></Field>
               <Field label="Remark"><input value={form.remarks} onChange={(e) => updateForm('remarks', e.target.value)} placeholder="Optional note" style={styles.input} /></Field>
             </div></div>
 
@@ -696,39 +756,55 @@ export default function DailyRejectionPage() {
         </div>
       )}
 
+      {factoryModal ? (
+        <div style={styles.factoryModalOverlay}>
+          <div style={styles.factoryModalCard}>
+            <div style={styles.factoryModalHead}>
+              <div>
+                <div style={styles.kicker}>SEND TO FACTORY</div>
+                <h2 style={styles.formTitle}>Factory Dispatch Form</h2>
+              </div>
+              <button type="button" onClick={closeFactoryModal} style={styles.close}>×</button>
+            </div>
+
+            <div style={styles.factoryGrid}>
+              <Field label="Date"><input type="date" value={factoryForm.date || ""} onChange={(e) => updateFactoryForm("date", e.target.value)} style={styles.input} /></Field>
+              <Field label="Invoice No"><input value={factoryForm.invoice_no || ""} onChange={(e) => updateFactoryForm("invoice_no", e.target.value)} style={styles.input} placeholder="Invoice No" /></Field>
+              <Field label="Lorry No"><input value={factoryForm.lorry_no || ""} onChange={(e) => updateFactoryForm("lorry_no", e.target.value)} style={styles.input} placeholder="Lorry No" /></Field>
+
+              <Field label="Company Name"><select value={factoryForm.company_id || ""} onChange={(e) => updateFactoryForm("company_id", e.target.value)} style={styles.input}><option value="">Select Company</option>{masters.companies.map((item) => <option key={idOf(item)} value={idOf(item)}>{textOf(item)}</option>)}</select></Field>
+              <Field label="Company Account"><select value={factoryForm.company_account_id || ""} onChange={(e) => updateFactoryForm("company_account_id", e.target.value)} style={styles.input}><option value="">Select Account</option>{masters.accounts.filter((item) => !factoryForm.company_id || String(item.company_id ?? item.companyId ?? item.company?.id ?? item.company?._id ?? "") === String(factoryForm.company_id)).map((item) => <option key={idOf(item)} value={idOf(item)}>{item.account_name || item.name || "-"}</option>)}</select></Field>
+              <Field label="Buyer Name"><select value={factoryForm.buyer_id || ""} onChange={(e) => updateFactoryForm("buyer_id", e.target.value)} style={styles.input}><option value="">Select Buyer</option>{masters.consignees.map((item) => <option key={idOf(item)} value={idOf(item)}>{item.buyer_name || textOf(item)}</option>)}</select></Field>
+              <Field label="Consignee Name"><select value={factoryForm.consignee_id || ""} onChange={(e) => updateFactoryForm("consignee_id", e.target.value)} style={styles.input}><option value="">Select Consignee</option>{getFactoryConsigneeOptions().map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}</select></Field>
+
+              <Field label="Reject Qty"><input type="number" min="0" step="0.01" value={factoryForm.rejection_qty ?? 0} readOnly style={{ ...styles.input, background: "#f0fdfa", fontWeight: 900 }} /></Field>
+              <Field label="Other Qty"><input type="number" min="0" step="0.01" value={factoryForm.other_qty ?? 0} onChange={(e) => updateFactoryForm("other_qty", e.target.value)} style={styles.input} placeholder="0" /></Field>
+              <Field label="Total Qty"><input type="number" value={(Number(factoryForm.rejection_qty || 0) + Number(factoryForm.other_qty || 0)).toFixed(2)} readOnly style={{ ...styles.input, background: "#f8fafc", fontWeight: 900 }} /></Field>
+              <Field label="Rate"><input type="number" min="0" step="0.01" value={factoryForm.rate ?? ""} onChange={(e) => updateFactoryForm("rate", e.target.value)} style={styles.input} placeholder="Rate" /></Field>
+              <Field label="Amount"><input type="number" value={((Number(factoryForm.rejection_qty || 0) + Number(factoryForm.other_qty || 0)) * Number(factoryForm.rate || 0)).toFixed(2)} readOnly style={{ ...styles.input, background: "#ecfdf5", fontWeight: 900 }} /></Field>
+            </div>
+
+            <div style={styles.factorySummary}>
+              <strong>Reject Qty:</strong> {money(factoryForm.rejection_qty)} &nbsp; + &nbsp;
+              <strong>Other Qty:</strong> {money(factoryForm.other_qty)} &nbsp; = &nbsp;
+              <strong>Total Qty:</strong> {money(Number(factoryForm.rejection_qty || 0) + Number(factoryForm.other_qty || 0))} &nbsp; × &nbsp;
+              <strong>Rate:</strong> {money(factoryForm.rate)} &nbsp; = &nbsp;
+              <strong>Amount:</strong> {money((Number(factoryForm.rejection_qty || 0) + Number(factoryForm.other_qty || 0)) * Number(factoryForm.rate || 0))}
+            </div>
+
+            <div style={styles.actionRow}>
+              <button type="button" onClick={closeFactoryModal} style={styles.secondary}>Cancel</button>
+              <button type="button" onClick={() => assignRow(factoryModal.rowId)} style={styles.primary}>Save & Assign To Factory</button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
       {toast ? (
         <div role="status" aria-live="polite" style={{ ...styles.toast, ...styles.toastKinds[toast.type || "success"] }}>
           <span style={styles.toastDot} />
           <div style={styles.toastMessage}>{toast.message}</div>
           <button type="button" onClick={() => setToast(null)} style={styles.toastClose} aria-label="Close notification">×</button>
-        </div>
-      ) : null}
-
-      {factoryConsigneeModal ? (
-        <div style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(15,23,42,.48)", display: "grid", placeItems: "center", padding: 16 }} onMouseDown={(e) => { if (e.target === e.currentTarget) setFactoryConsigneeModal(null); }}>
-          <div style={{ width: "min(520px, 100%)", maxHeight: "80vh", overflow: "visible", background: "#fff", borderRadius: 18, padding: 18, boxShadow: "0 24px 70px rgba(15,23,42,.25)" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 12 }}>
-              <div><div style={{ fontSize: 11, color: "#0f766e", fontWeight: 900 }}>SEND TO FACTORY</div><h3 style={{ margin: "3px 0 0", color: "#0f172a" }}>Select Factory Consignee</h3></div>
-              <button type="button" onClick={() => setFactoryConsigneeModal(null)} style={styles.close}>×</button>
-            </div>
-            <div style={{ color: "#64748b", fontSize: 12, marginBottom: 10 }}>Select the consignee where this Daily Rejection material will be sent.</div>
-            <SearchableSelect
-              value={factoryConsigneeSelection[factoryConsigneeModal.rowId]?.value || ""}
-              onChange={(value) => {
-                const item = masters.consignees.map((x) => ({ value: idOf(x), label: textOf(x) })).find((x) => x.value === String(value));
-                if (!item) return;
-                setFactoryConsigneeSelection((prev) => ({ ...prev, [factoryConsigneeModal.rowId]: item }));
-                setFactoryConsigneeModal(null);
-              }}
-              style={{ ...styles.input, minHeight: 44 }}
-              placeholder="Search Factory Consignee"
-              options={masters.consignees.map((item) => ({ value: idOf(item), label: textOf(item) }))}
-            />
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 14 }}>
-              <button type="button" onClick={() => setFactoryConsigneeModal(null)} style={styles.secondary}>Cancel</button>
-              <button type="button" disabled={!factoryConsigneeSelection[factoryConsigneeModal.rowId]?.value} onClick={() => setFactoryConsigneeModal(null)} style={{ ...styles.primary, opacity: factoryConsigneeSelection[factoryConsigneeModal.rowId]?.value ? 1 : 0.55 }}>Done</button>
-            </div>
-          </div>
         </div>
       ) : null}
 
@@ -739,103 +815,6 @@ export default function DailyRejectionPage() {
       </div>
     </div>
     </>
-  );
-}
-
-function SearchableSelect({ value, options = [], onChange, placeholder = "Select", disabled = false, style, className }) {
-  const rootRef = React.useRef(null);
-  const inputRef = React.useRef(null);
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  const [highlighted, setHighlighted] = useState(0);
-
-  const normalized = options.map((option) => ({
-    value: String(option?.value ?? ""),
-    label: String(option?.label ?? ""),
-  }));
-  const selected = normalized.find((option) => option.value === String(value ?? ""));
-  const filtered = query.trim()
-    ? normalized.filter((option) => option.label.toLowerCase().includes(query.trim().toLowerCase()))
-    : normalized;
-
-  useEffect(() => {
-    if (!open) return undefined;
-    const handleOutside = (event) => {
-      if (!rootRef.current?.contains(event.target)) {
-        setOpen(false);
-        setQuery("");
-      }
-    };
-    document.addEventListener("mousedown", handleOutside);
-    return () => document.removeEventListener("mousedown", handleOutside);
-  }, [open]);
-
-  useEffect(() => {
-    setHighlighted(0);
-  }, [query, open]);
-
-  const selectOption = (option) => {
-    onChange?.(option.value);
-    setOpen(false);
-    setQuery("");
-    window.setTimeout(() => inputRef.current?.blur(), 0);
-  };
-
-  const openSearch = () => {
-    if (disabled) return;
-    setOpen(true);
-    setQuery("");
-  };
-
-  return (
-    <div ref={rootRef} style={{ position: "relative", width: "100%" }}>
-      <input
-        ref={inputRef}
-        type="text"
-        value={open ? query : (selected?.label || "")}
-        placeholder={placeholder}
-        disabled={disabled}
-        className={className}
-        style={style}
-        autoComplete="off"
-        onFocus={openSearch}
-        onClick={openSearch}
-        onChange={(e) => { setOpen(true); setQuery(e.target.value); }}
-        onKeyDown={(e) => {
-          if (disabled) return;
-          if (e.key === "ArrowDown") {
-            e.preventDefault();
-            if (!open) setOpen(true);
-            else if (filtered.length) setHighlighted((prev) => Math.min(prev + 1, filtered.length - 1));
-          } else if (e.key === "ArrowUp") {
-            e.preventDefault();
-            if (!open) setOpen(true);
-            else if (filtered.length) setHighlighted((prev) => Math.max(prev - 1, 0));
-          } else if (e.key === "Enter") {
-            e.preventDefault();
-            if (!open) { setOpen(true); return; }
-            if (filtered[highlighted]) selectOption(filtered[highlighted]);
-          } else if (e.key === "Escape") {
-            e.preventDefault();
-            setOpen(false);
-            setQuery("");
-          }
-        }}
-      />
-      {open && !disabled && (
-        <div style={{ position: "absolute", zIndex: 10050, top: "calc(100% + 3px)", left: 0, right: 0, maxHeight: 230, overflowY: "auto", background: "#fff", border: "1px solid #cbd5e1", borderRadius: 8, boxShadow: "0 10px 25px rgba(15,23,42,.15)" }}>
-          {filtered.length ? filtered.map((option, index) => (
-            <div
-              key={`${option.value}-${index}`}
-              onMouseDown={(e) => { e.preventDefault(); selectOption(option); }}
-              style={{ padding: "9px 11px", cursor: "pointer", background: index === highlighted ? "#e0f2fe" : "#fff", color: "#0f172a" }}
-            >
-              {option.label}
-            </div>
-          )) : <div style={{ padding: "9px 11px", color: "#64748b" }}>No matching options</div>}
-        </div>
-      )}
-    </div>
   );
 }
 
@@ -921,6 +900,11 @@ const styles = {
   reportTableWrap: { marginTop: 10, overflow: 'visible', borderRadius: 12 },
   reportWorkflowValue: { display: 'inline-flex', alignItems: 'center', minHeight: 30, padding: '5px 8px', borderRadius: 8, background: '#f8fafc', border: '1px solid #e2e8f0', fontWeight: 800, color: '#0f172a', whiteSpace: 'nowrap' },
   reportWorkflowChip: { display: 'inline-flex', alignItems: 'center', borderRadius: 999, padding: '5px 8px', fontSize: 10, fontWeight: 900, whiteSpace: 'nowrap', border: '1px solid transparent' },
+  factoryModalOverlay: { position: 'fixed', inset: 0, zIndex: 100000, background: 'rgba(15,23,42,.55)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 14, overflowY: 'auto' },
+  factoryModalCard: { width: 'min(1050px, 100%)', maxHeight: 'calc(100vh - 28px)', overflowY: 'auto', background: '#fff', borderRadius: 18, padding: 18, boxShadow: '0 24px 70px rgba(15,23,42,.3)', border: '1px solid #dbe4ee' },
+  factoryModalHead: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, marginBottom: 12 },
+  factoryGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(210px,1fr))', gap: 11 },
+  factorySummary: { marginTop: 13, padding: 12, borderRadius: 12, background: '#f0fdfa', border: '1px solid #99f6e4', color: '#115e59', fontSize: 13, fontWeight: 800, lineHeight: 1.7 },
   toast: { position: 'fixed', top: 18, right: 18, zIndex: 99999, minWidth: 300, maxWidth: 'min(420px, calc(100vw - 36px))', display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', borderRadius: 12, border: '1px solid', boxShadow: '0 14px 35px rgba(15,23,42,.18)', backdropFilter: 'blur(8px)' },
   toastKinds: { success: { background: '#ecfdf5', color: '#065f46', borderColor: '#a7f3d0' }, error: { background: '#fef2f2', color: '#991b1b', borderColor: '#fecaca' }, warning: { background: '#fffbeb', color: '#92400e', borderColor: '#fde68a' }, info: { background: '#eff6ff', color: '#1e40af', borderColor: '#bfdbfe' } },
   toastDot: { width: 8, height: 8, borderRadius: 999, background: 'currentColor', flex: '0 0 auto' },
