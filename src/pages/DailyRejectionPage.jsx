@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { hasPermission, loadSession } from "../utils/auth";
@@ -406,14 +406,8 @@ export default function DailyRejectionPage() {
               <div className="dr-mobile-workflow">
                 <div className="dr-mobile-workflow-title">ASSIGN WORK</div>
                 <div className="dr-mobile-workflow-grid">
-                  <select value={actionValue} disabled={isComplete} onChange={(e) => setAssignedAction((prev) => ({ ...prev, [rowId]: e.target.value }))} style={styles.workflowSelect}>
-                    <option value="">Select Work</option>
-                    {WORK_DESCRIPTIONS.map((item) => <option key={item} value={item}>{item}</option>)}
-                  </select>
-                  <select value={employeeValue} disabled={isComplete} onChange={(e) => setAssignedEmployee((prev) => ({ ...prev, [rowId]: e.target.value }))} style={styles.workflowSelect}>
-                    <option value="">Select Staff</option>
-                    {masters.employees.map((item) => <option key={idOf(item)} value={idOf(item)}>{textOf(item)}</option>)}
-                  </select>
+                  <SearchableSelect value={actionValue} disabled={isComplete} onChange={(value) => setAssignedAction((prev) => ({ ...prev, [rowId]: value }))} options={WORK_DESCRIPTIONS.map((item) => ({ value: item, label: item }))} placeholder="Select Work" style={styles.workflowSelect} />
+                  <SearchableSelect value={employeeValue} disabled={isComplete} onChange={(value) => setAssignedEmployee((prev) => ({ ...prev, [rowId]: value }))} options={masters.employees.map((item) => ({ value: idOf(item), label: textOf(item) }))} placeholder="Select Staff" style={styles.workflowSelect} />
                   <button type="button" disabled={rowBusy || isComplete || !actionValue || !employeeValue} onClick={() => assignRow(rowId)} style={{ ...styles.assignButtonInline, opacity: rowBusy || isComplete || !actionValue || !employeeValue ? 0.55 : 1 }}>
                     {rowBusy ? "Assigning..." : row?.status === "RUNNING" ? "Reassign & Keep Running" : "Assign & Start Work"}
                   </button>
@@ -504,8 +498,8 @@ export default function DailyRejectionPage() {
                       <td style={styles.td}><span style={{ ...styles.statusChip, ...statusStyle(row?.status) }}>{row?.status || "PENDING"}</span></td>
                       {showManagerWorkflow ? (
                         <>
-                          <td style={{ ...styles.td, ...styles.workflowTd }}><select value={actionValue} disabled={isComplete} onChange={(e) => setAssignedAction((prev) => ({ ...prev, [rowId]: e.target.value }))} style={styles.workflowSelect}><option value="">Select Work</option>{WORK_DESCRIPTIONS.map((item) => <option key={item} value={item}>{item}</option>)}</select></td>
-                          <td style={{ ...styles.td, ...styles.workflowTd }}><select value={employeeValue} disabled={isComplete} onChange={(e) => setAssignedEmployee((prev) => ({ ...prev, [rowId]: e.target.value }))} style={styles.workflowSelect}><option value="">Select Staff</option>{masters.employees.map((item) => <option key={idOf(item)} value={idOf(item)}>{textOf(item)}</option>)}</select></td>
+                          <td style={{ ...styles.td, ...styles.workflowTd }}><SearchableSelect value={actionValue} disabled={isComplete} onChange={(value) => setAssignedAction((prev) => ({ ...prev, [rowId]: value }))} options={WORK_DESCRIPTIONS.map((item) => ({ value: item, label: item }))} placeholder="Select Work" style={styles.workflowSelect} /></td>
+                          <td style={{ ...styles.td, ...styles.workflowTd }}><SearchableSelect value={employeeValue} disabled={isComplete} onChange={(value) => setAssignedEmployee((prev) => ({ ...prev, [rowId]: value }))} options={masters.employees.map((item) => ({ value: idOf(item), label: textOf(item) }))} placeholder="Select Staff" style={styles.workflowSelect} /></td>
                           <td style={{ ...styles.td, ...styles.workflowTd }}><button type="button" disabled={rowBusy || isComplete || !actionValue || !employeeValue} onClick={() => assignRow(rowId)} style={{ ...styles.assignButtonInline, opacity: rowBusy || isComplete || !actionValue || !employeeValue ? 0.55 : 1 }}>{rowBusy ? "Assigning..." : row?.status === "RUNNING" ? "Reassign & Keep Running" : "Assign & Start Work"}</button></td>
                         </>
                       ) : showReportWorkflow ? (
@@ -629,7 +623,7 @@ export default function DailyRejectionPage() {
       <div style={styles.toolbar}>
         <div style={styles.tabs}>{STATUSES.filter((item) => item !== "REPORT" || canReport).map((item) => <button key={item} type="button" onClick={() => setStatus(item)} style={status === item ? styles.tabActive : styles.tab}>{item}</button>)}</div>
         <div style={styles.toolbarRight}>
-          <select value={actionFilter} onChange={(e) => setActionFilter(e.target.value)} style={styles.compactSelect}><option value="ALL">All Work</option>{WORK_DESCRIPTIONS.map((item) => <option key={item} value={item}>{item}</option>)}</select>
+          <SearchableSelect value={actionFilter} onChange={setActionFilter} options={[{ value: "ALL", label: "All Work" }, ...WORK_DESCRIPTIONS.map((item) => ({ value: item, label: item }))]} placeholder="All Work" style={styles.compactSelect} />
           {canCreate && <button type="button" onClick={() => { resetForm(); setShowForm(true); }} style={styles.primary}>+ New Rejection</button>}
           <button type="button" onClick={loadData} style={styles.secondary}>Refresh</button>
         </div>
@@ -641,7 +635,7 @@ export default function DailyRejectionPage() {
           <div style={styles.reportFilters}>
             <Field label="From Date"><input className="daily-rejection-report-input" type="date" value={reportFrom} onChange={(e) => setReportFrom(e.target.value)} style={styles.input} /></Field>
             <Field label="To Date"><input className="daily-rejection-report-input" type="date" value={reportTo} onChange={(e) => setReportTo(e.target.value)} style={styles.input} /></Field>
-            <Field label="Work"><select className="daily-rejection-report-input" value={actionFilter} onChange={(e) => setActionFilter(e.target.value)} style={styles.input}><option value="ALL">All Work</option>{WORK_DESCRIPTIONS.map((item) => <option key={item} value={item}>{item}</option>)}</select></Field>
+            <Field label="Work"><SearchableSelect className="daily-rejection-report-input" value={actionFilter} onChange={setActionFilter} options={[{ value: "ALL", label: "All Work" }, ...WORK_DESCRIPTIONS.map((item) => ({ value: item, label: item }))]} placeholder="All Work" style={styles.input} /></Field>
           </div>
           <div style={styles.reportTableWrap}>{reportRows.length ? renderTable(reportRows, false, true) : <div style={styles.empty}>Select dates and click Generate Report.</div>}</div>
         </div>
@@ -654,12 +648,12 @@ export default function DailyRejectionPage() {
           <form onSubmit={submitEntry}>
             <div style={styles.section}><div style={styles.sectionTitle}>1 · Basic Details</div><div style={styles.grid}>
               <Field label="Date"><input type="date" value={form.entry_date} onChange={(e) => updateForm('entry_date', e.target.value)} style={styles.input} /></Field>
-              <Field label="Location"><select value={form.location_id} onChange={(e) => updateForm('location_id', e.target.value)} style={styles.input}><option value="">Select Location</option>{masters.locations.map((item) => <option key={idOf(item)} value={idOf(item)}>{textOf(item)}</option>)}</select></Field>
-              <Field label="Company"><select value={form.company_id} onChange={(e) => { updateForm('company_id', e.target.value); updateForm('company_account_id', ''); }} style={styles.input}><option value="">Select Company</option>{masters.companies.map((item) => <option key={idOf(item)} value={idOf(item)}>{textOf(item)}</option>)}</select></Field>
-              <Field label="Company Account"><select value={form.company_account_id} onChange={(e) => updateForm('company_account_id', e.target.value)} style={styles.input}><option value="">Select Account</option>{filteredAccounts.map((item) => <option key={idOf(item)} value={idOf(item)}>{item.account_name || item.name || '-'}</option>)}</select></Field>
-              <Field label="Consignee"><select value={form.consignee_id} onChange={(e) => updateForm('consignee_id', e.target.value)} style={styles.input}><option value="">Select Consignee</option>{masters.consignees.map((item) => <option key={idOf(item)} value={idOf(item)}>{textOf(item)}</option>)}</select></Field>
+              <Field label="Location"><SearchableSelect value={form.location_id} onChange={(value) => updateForm('location_id', value)} options={masters.locations.map((item) => ({ value: idOf(item), label: textOf(item) }))} placeholder="Select Location" style={styles.input} /></Field>
+              <Field label="Company"><SearchableSelect value={form.company_id} onChange={(value) => { updateForm('company_id', value); updateForm('company_account_id', ''); }} options={masters.companies.map((item) => ({ value: idOf(item), label: textOf(item) }))} placeholder="Select Company" style={styles.input} /></Field>
+              <Field label="Company Account"><SearchableSelect value={form.company_account_id} onChange={(value) => updateForm('company_account_id', value)} options={filteredAccounts.map((item) => ({ value: idOf(item), label: item.account_name || item.name || '-' }))} placeholder="Select Account" style={styles.input} /></Field>
+              <Field label="Consignee"><SearchableSelect value={form.consignee_id} onChange={(value) => updateForm('consignee_id', value)} options={masters.consignees.map((item) => ({ value: idOf(item), label: textOf(item) }))} placeholder="Select Consignee" style={styles.input} /></Field>
               <Field label="Lorry No."><input value={form.lorry_no} onChange={(e) => updateForm("lorry_no", e.target.value)} placeholder="Enter Lorry No." style={styles.input} /></Field>
-              <Field label="Product"><select value={form.product_id} onChange={(e) => updateForm('product_id', e.target.value)} style={styles.input}><option value="">Select Product</option>{masters.products.map((item) => <option key={idOf(item)} value={idOf(item)}>{textOf(item)}</option>)}</select></Field>
+              <Field label="Product"><SearchableSelect value={form.product_id} onChange={(value) => updateForm('product_id', value)} options={masters.products.map((item) => ({ value: idOf(item), label: textOf(item) }))} placeholder="Select Product" style={styles.input} /></Field>
             </div></div>
 
             <div style={styles.section}><div style={styles.sectionTitle}>2 · Quantity Check</div><div style={styles.quantityGrid}>
@@ -669,7 +663,7 @@ export default function DailyRejectionPage() {
             </div></div>
 
             <div style={styles.section}><div style={styles.sectionTitle}>3 · Rejection Reason</div><div style={styles.grid}>
-              <Field label="Reason"><select value={form.reason} onChange={(e) => updateForm('reason', e.target.value)} style={styles.input}><option value="">Select Reason</option>{REASONS.map((item) => <option key={item} value={item}>{item}</option>)}</select></Field>
+              <Field label="Reason"><SearchableSelect value={form.reason} onChange={(value) => updateForm('reason', value)} options={REASONS.map((item) => ({ value: item, label: item }))} placeholder="Select Reason" style={styles.input} /></Field>
               <Field label="Remark"><input value={form.remarks} onChange={(e) => updateForm('remarks', e.target.value)} placeholder="Optional note" style={styles.input} /></Field>
             </div></div>
 
@@ -693,6 +687,34 @@ export default function DailyRejectionPage() {
       </div>
     </div>
     </>
+  );
+}
+
+function SearchableSelect({ value, onChange, options = [], placeholder = "Select", disabled = false, style, className = "" }) {
+  const [open, setOpen] = useState(false);
+  const [query, setQuery] = useState("");
+  const [highlighted, setHighlighted] = useState(0);
+  const rootRef = useRef(null);
+  const inputRef = useRef(null);
+  const normalizedOptions = useMemo(() => options.map((item) => ({ value: String(item?.value ?? ""), label: String(item?.label ?? "") })), [options]);
+  const selected = normalizedOptions.find((item) => item.value === String(value ?? ""));
+  const filtered = useMemo(() => { const q = String(query || "").trim().toLowerCase(); return q ? normalizedOptions.filter((item) => item.label.toLowerCase().includes(q)) : normalizedOptions; }, [normalizedOptions, query]);
+  useEffect(() => { if (!open) return undefined; const outside = (event) => { if (!rootRef.current?.contains(event.target)) { setOpen(false); setQuery(""); } }; document.addEventListener("mousedown", outside); return () => document.removeEventListener("mousedown", outside); }, [open]);
+  useEffect(() => { if (!open) return; const i = filtered.findIndex((item) => item.value === String(value ?? "")); setHighlighted(i >= 0 ? i : 0); }, [open, value, filtered]);
+  const choose = (option) => { onChange(option?.value ?? ""); setOpen(false); setQuery(""); };
+  const keyDown = (event) => {
+    if (disabled) return;
+    if (event.key === "ArrowDown") { event.preventDefault(); if (!open) setOpen(true); else setHighlighted((i) => filtered.length ? Math.min(i + 1, filtered.length - 1) : 0); return; }
+    if (event.key === "ArrowUp") { event.preventDefault(); if (!open) setOpen(true); else setHighlighted((i) => filtered.length ? Math.max(i - 1, 0) : 0); return; }
+    if (event.key === "Enter") { event.preventDefault(); if (!open) { setOpen(true); return; } if (filtered[highlighted]) choose(filtered[highlighted]); return; }
+    if (event.key === "Escape") { event.preventDefault(); setOpen(false); setQuery(""); }
+  };
+  return (
+    <div ref={rootRef} className={className} style={{ position: "relative", width: "100%" }}>
+      <input ref={inputRef} value={open ? query : (selected?.label || "")} placeholder={selected?.label ? undefined : placeholder} disabled={disabled} onFocus={() => !disabled && setOpen(true)} onClick={() => !disabled && setOpen(true)} onChange={(event) => { setQuery(event.target.value); setOpen(true); setHighlighted(0); }} onKeyDown={keyDown} style={{ ...styles.input, ...style, cursor: disabled ? "not-allowed" : "text", paddingRight: 32 }} autoComplete="off" aria-haspopup="listbox" aria-expanded={open} />
+      {!disabled ? <span style={styles.searchableArrow}>⌄</span> : null}
+      {open && !disabled ? <div style={styles.searchableMenu} role="listbox">{filtered.length ? filtered.map((option, index) => <div key={`${option.value}-${index}`} role="option" aria-selected={option.value === String(value ?? "")} onMouseDown={(event) => { event.preventDefault(); choose(option); }} style={{ ...styles.searchableOption, ...(index === highlighted ? styles.searchableOptionActive : {}) }}>{option.label || placeholder}</div>) : <div style={styles.searchableEmpty}>No matching option</div>}</div> : null}
+    </div>
   );
 }
 
@@ -736,7 +758,13 @@ const styles = {
   assignPanelCompact: { margin: 0, padding: '9px 10px', borderTop: '1px solid #bfdbfe', borderBottom: '1px solid #bfdbfe', background: 'linear-gradient(90deg,#eff6ff,#f8fbff)' },
   workerPanelCompact: { margin: 0, padding: '9px 10px', borderTop: '1px solid #99f6e4', borderBottom: '1px solid #99f6e4', background: 'linear-gradient(90deg,#ecfeff,#f0fdfa)' },
   formCard: { background: '#fff', border: '1px solid #dbe4ee', borderRadius: 20, padding: 17, marginTop: 12, boxShadow: '0 12px 30px rgba(15,23,42,.07)' }, formHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 10, marginBottom: 8 }, formTitle: { margin: '2px 0 0', color: '#0f172a', fontSize: 23 }, close: { border: 0, background: '#f1f5f9', color: '#334155', width: 35, height: 35, borderRadius: 10, fontSize: 22, cursor: 'pointer' }, infoStrip: { background: '#f0fdfa', border: '1px solid #99f6e4', color: '#115e59', borderRadius: 11, padding: 10, fontSize: 12, marginBottom: 8 },
-  section: { marginTop: 10, paddingTop: 12, borderTop: '1px solid #eef2f7' }, sectionTitle: { color: '#0f172a', fontSize: 15, fontWeight: 900, marginBottom: 10 }, grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(190px,1fr))', gap: 11 }, quantityGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(190px,1fr))', gap: 11 }, field: { display: 'grid', gap: 6 }, label: { fontSize: 12, color: '#475569', fontWeight: 800 }, input: { width: '100%', minHeight: 42, boxSizing: 'border-box', border: '1px solid #cbd5e1', borderRadius: 10, padding: '9px 10px', background: '#fff', color: '#0f172a' },
+  section: { marginTop: 10, paddingTop: 12, borderTop: '1px solid #eef2f7' },
+  searchableArrow: { position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', color: '#64748b', fontWeight: 900, pointerEvents: 'none', fontSize: 16 },
+  searchableMenu: { position: 'absolute', left: 0, right: 0, top: 'calc(100% + 4px)', zIndex: 10000, maxHeight: 240, overflowY: 'auto', background: '#fff', border: '1px solid #cbd5e1', borderRadius: 10, boxShadow: '0 12px 26px rgba(15,23,42,.16)' },
+  searchableOption: { padding: '9px 10px', cursor: 'pointer', color: '#0f172a', fontSize: 13, fontWeight: 600, background: '#fff', borderBottom: '1px solid #f1f5f9' },
+  searchableOptionActive: { background: '#e6fffb', color: '#115e59' },
+  searchableEmpty: { padding: '10px', color: '#64748b', fontSize: 12, fontWeight: 700 },
+ sectionTitle: { color: '#0f172a', fontSize: 15, fontWeight: 900, marginBottom: 10 }, grid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(190px,1fr))', gap: 11 }, quantityGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(190px,1fr))', gap: 11 }, field: { display: 'grid', gap: 6 }, label: { fontSize: 12, color: '#475569', fontWeight: 800 }, input: { width: '100%', minHeight: 42, boxSizing: 'border-box', border: '1px solid #cbd5e1', borderRadius: 10, padding: '9px 10px', background: '#fff', color: '#0f172a' },
   rejectBox: { borderRadius: 13, padding: 13, background: 'linear-gradient(135deg,#ecfeff,#f0fdfa)', border: '1px solid #99f6e4', boxShadow: 'inset 0 1px 0 rgba(255,255,255,.7)' }, rejectLabel: { color: '#0f766e', fontSize: 11, fontWeight: 900, textTransform: 'uppercase' }, rejectValue: { fontSize: 28, fontWeight: 900, color: '#115e59', marginTop: 4 }, rejectHint: { color: '#5f6f7f', fontSize: 11, marginTop: 2 }, actionRow: { display: 'flex', gap: 8, marginTop: 14, flexWrap: 'wrap' },
   error: { marginTop: 12, padding: 12, background: '#fef2f2', color: '#b91c1c', border: '1px solid #fecaca', borderRadius: 12, fontWeight: 700 }, list: { display: 'grid', gap: 12, marginTop: 12 }, empty: { background: '#fff', border: '1px dashed #cbd5e1', borderRadius: 16, padding: 30, textAlign: 'center', color: '#64748b' }, emptyLarge: { maxWidth: 560, margin: '12vh auto', background: '#fff', border: '1px solid #dbe4ee', borderRadius: 20, padding: 36, textAlign: 'center', boxShadow: '0 14px 40px rgba(15,23,42,.08)' }, emptyIcon: { width: 48, height: 48, margin: '0 auto 12px', borderRadius: '50%', background: '#fff7ed', color: '#c2410c', display: 'grid', placeItems: 'center', fontWeight: 900, fontSize: 24 }, emptyTitle: { margin: 0, color: '#0f172a' }, emptyText: { marginTop: 8, color: '#64748b' },
   card: { position: 'relative', overflow: 'hidden', background: '#fff', border: '1px solid #dbe4ee', borderRadius: 18, padding: 15, boxShadow: '0 8px 24px rgba(15,23,42,.05)' }, cardAccent: { position: 'absolute', left: 0, top: 0, bottom: 0, width: 4, background: '#0f766e' }, cardTop: { display: 'flex', justifyContent: 'space-between', gap: 12, alignItems: 'flex-start' }, rejNo: { fontWeight: 950, color: '#0f172a', fontSize: 18 }, meta: { color: '#64748b', fontSize: 12, marginTop: 3 }, badge: { borderRadius: 999, padding: '6px 10px', fontSize: 10, fontWeight: 950 }, details: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(145px,1fr))', gap: 8, marginTop: 12 }, detail: { background: '#f8fafc', borderRadius: 11, padding: 9, minWidth: 0 }, detailLabel: { color: '#64748b', fontSize: 10, fontWeight: 800, textTransform: 'uppercase' }, detailValue: { color: '#0f172a', fontWeight: 700, marginTop: 3, wordBreak: 'break-word' },
