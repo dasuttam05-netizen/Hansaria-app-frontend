@@ -816,8 +816,9 @@ export default function DailyRejectionPage() {
     {factoryModal.open ? (() => {
       const totalQty = Number(factoryForm.rejection_qty || 0) + Number(factoryForm.other_qty || 0);
       const amount = totalQty * Number(factoryForm.rate || 0);
-      const buyerOptions = Array.from(new Map(masters.consignees.map((x) => {
-        const name = String(x?.buyer_name || x?.buyer || "").trim();
+      const buyerSource = [...masters.consignees, ...masters.companies];
+      const buyerOptions = Array.from(new Map(buyerSource.map((x) => {
+        const name = String(x?.buyer_name || x?.buyer || x?.party_name || x?.company_name || x?.name || "").trim();
         return [name.toLowerCase(), { value: idOf(x), label: name }];
       }).filter(([, x]) => x.label)).values());
       return (
@@ -829,7 +830,22 @@ export default function DailyRejectionPage() {
               <Field label="Invoice No"><input value={factoryForm.invoice_no} onChange={(e) => setFactoryForm((p) => ({ ...p, invoice_no: e.target.value }))} style={styles.input} placeholder="Invoice No" /></Field>
               <Field label="Lorry No"><input value={factoryForm.lorry_no} onChange={(e) => setFactoryForm((p) => ({ ...p, lorry_no: e.target.value }))} style={styles.input} placeholder="Lorry No" /></Field>
               <Field label="Company Name"><SearchableSelect value={factoryForm.company_id} options={masters.companies.map((x) => ({ value: idOf(x), label: textOf(x) }))} onChange={(value) => setFactoryForm((p) => ({ ...p, company_id: value, company_account_id: "" }))} placeholder="Select Company / type to search" /></Field>
-              <Field label="Company Account"><SearchableSelect value={factoryForm.company_account_id} options={masters.accounts.map((x) => ({ value: idOf(x), label: textOf(x) }))} onChange={(value) => setFactoryForm((p) => ({ ...p, company_account_id: value }))} placeholder="Select Account / type to search" /></Field>
+              <Field label="Company Account"><SearchableSelect value={factoryForm.company_account_id} options={(() => {
+                const selectedCompany = masters.companies.find((x) => idOf(x) === String(factoryForm.company_id));
+                const companyId = String(factoryForm.company_id || "");
+                const companyName = String(selectedCompany?.name || selectedCompany?.company_name || "").trim().toLowerCase();
+                const filtered = masters.accounts.filter((x) => {
+                  if (!companyId) return true;
+                  const xCompanyId = String(x?.company_id ?? x?.companyId ?? x?.company?.id ?? x?.company?._id ?? "");
+                  const xCompanyName = String(x?.company_name || x?.company?.name || x?.buyer_name || x?.buyer || "").trim().toLowerCase();
+                  return xCompanyId === companyId || (!!companyName && xCompanyName === companyName);
+                });
+                const list = filtered.length ? filtered : masters.accounts;
+                return list.map((x) => ({
+                  value: idOf(x),
+                  label: String(x?.account_name || x?.name || x?.buyer_name || x?.buyer || textOf(x)).trim(),
+                }));
+              })()} onChange={(value) => setFactoryForm((p) => ({ ...p, company_account_id: value }))} placeholder={factoryForm.company_id ? "Select Account / type to search" : "Select Company first"} disabled={!factoryForm.company_id} /></Field>
               <Field label="Buyer Name"><SearchableSelect value={factoryForm.buyer_id} options={buyerOptions} onChange={(value) => setFactoryForm((p) => ({ ...p, buyer_id: value }))} placeholder="Select Buyer / type to search" /></Field>
               <Field label="Consignee Name"><SearchableSelect value={factoryForm.consignee_id} options={masters.consignees.map((x) => ({ value: idOf(x), label: textOf(x) }))} onChange={(value) => setFactoryForm((p) => ({ ...p, consignee_id: value }))} placeholder="Select Consignee / type to search" /></Field>
               <Field label="Reject Qty"><input type="number" value={factoryForm.rejection_qty} readOnly style={{ ...styles.input, background: "#f1f5f9" }} /></Field>
