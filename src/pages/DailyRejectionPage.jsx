@@ -105,6 +105,11 @@ export default function DailyRejectionPage() {
   const [error, setError] = useState("");
   const [assignedEmployee, setAssignedEmployee] = useState({});
   const [assignedAction, setAssignedAction] = useState({});
+  const [factoryModal, setFactoryModal] = useState({ open: false, rowId: "" });
+  const [factoryForm, setFactoryForm] = useState({
+    date: new Date().toISOString().slice(0, 10), invoice_no: "", lorry_no: "", company_id: "",
+    company_account_id: "", buyer_id: "", consignee_id: "", rejection_qty: 0, other_qty: 0, rate: 0,
+  });
   const [busyId, setBusyId] = useState("");
   const [completionRemarks, setCompletionRemarks] = useState({});
   const [editId, setEditId] = useState("");
@@ -214,11 +219,73 @@ export default function DailyRejectionPage() {
     }
   };
 
+  const openFactoryModal = (rowId) => {
+    const row = rows.find((item) => idOf(item) === String(rowId));
+    if (!row) return;
+    setFactoryModal({ open: true, rowId: String(rowId) });
+    setFactoryForm({
+      date: row?.entry_date ? String(row.entry_date).slice(0, 10) : new Date().toISOString().slice(0, 10),
+      invoice_no: row?.rejection_no || "",
+      lorry_no: row?.lorry_no || "",
+      company_id: row?.company_id ? String(row.company_id) : "",
+      company_account_id: row?.company_account_id ? String(row.company_account_id) : "",
+      buyer_id: "",
+      consignee_id: row?.consignee_id ? String(row.consignee_id) : "",
+      rejection_qty: Number(row?.rejection_qty || 0),
+      other_qty: 0,
+      rate: 0,
+    });
+  };
+
+  const closeFactoryModal = () => {
+    if (busyId) return;
+    setFactoryModal({ open: false, rowId: "" });
+  };
+
+  const saveFactoryAssignment = async () => {
+    const rowId = factoryModal.rowId;
+    const employeeId = assignedEmployee[rowId];
+    if (!employeeId) {
+      showToast("Please select a staff member first.", "warning");
+      return;
+    }
+    const totalQty = Number(factoryForm.rejection_qty || 0) + Number(factoryForm.other_qty || 0);
+    const amount = totalQty * Number(factoryForm.rate || 0);
+    const company = masters.companies.find((x) => idOf(x) === String(factoryForm.company_id));
+    const account = masters.accounts.find((x) => idOf(x) === String(factoryForm.company_account_id));
+    const buyer = masters.consignees.find((x) => idOf(x) === String(factoryForm.buyer_id));
+    const consignee = masters.consignees.find((x) => idOf(x) === String(factoryForm.consignee_id));
+    setBusyId(rowId);
+    try {
+      await axios.patch(`${API}/${rowId}/assign`, {
+        assigned_to: employeeId, action_type: "SEND TO FACTORY",
+        factory_date: factoryForm.date, factory_invoice_no: factoryForm.invoice_no, factory_lorry_no: factoryForm.lorry_no,
+        factory_company_id: factoryForm.company_id, factory_company_name: textOf(company),
+        factory_company_account_id: factoryForm.company_account_id, factory_company_account_name: textOf(account),
+        factory_buyer_id: factoryForm.buyer_id, factory_buyer_name: textOf(buyer),
+        factory_consignee_id: factoryForm.consignee_id, factory_consignee_name: textOf(consignee),
+        factory_rejection_qty: Number(factoryForm.rejection_qty || 0), factory_other_qty: Number(factoryForm.other_qty || 0),
+        factory_total_qty: totalQty, factory_rate: Number(factoryForm.rate || 0), factory_amount: amount,
+      });
+      setFactoryModal({ open: false, rowId: "" });
+      showToast("Send To Factory saved and work assigned successfully.", "success");
+      await loadData();
+    } catch (err) {
+      showToast(err?.response?.data?.error || err?.message || "Failed to save Send To Factory.", "error");
+    } finally {
+      setBusyId("");
+    }
+  };
+
   const assignRow = async (rowId) => {
     const employeeId = assignedEmployee[rowId];
     const actionType = assignedAction[rowId];
     if (!employeeId || !actionType) {
       showToast("Please select a staff member and Work Description first.", "warning");
+      return;
+    }
+    if (actionType === "SEND TO FACTORY") {
+      openFactoryModal(rowId);
       return;
     }
     setBusyId(rowId);
@@ -412,7 +479,7 @@ export default function DailyRejectionPage() {
                   <SearchableSelect
   value={actionValue}
   options={WORK_DESCRIPTIONS.map((item) => ({ value: item, label: item }))}
-  onChange={(value) => setAssignedAction((prev) => ({ ...prev, [rowId]: value }))}
+  onChange={(value) => { setAssignedAction((prev) => ({ ...prev, [rowId]: value })); if (value === "SEND TO FACTORY") openFactoryModal(rowId); }}
   placeholder="Work Description / type to search"
 />
                   <SearchableSelect
@@ -514,7 +581,7 @@ export default function DailyRejectionPage() {
                           <td style={{ ...styles.td, ...styles.workflowTd }}><SearchableSelect
   value={actionValue}
   options={WORK_DESCRIPTIONS.map((item) => ({ value: item, label: item }))}
-  onChange={(value) => setAssignedAction((prev) => ({ ...prev, [rowId]: value }))}
+  onChange={(value) => { setAssignedAction((prev) => ({ ...prev, [rowId]: value })); if (value === "SEND TO FACTORY") openFactoryModal(rowId); }}
   placeholder="Work Description / type to search"
 /></td>
                           <td style={{ ...styles.td, ...styles.workflowTd }}><SearchableSelect
@@ -745,6 +812,37 @@ export default function DailyRejectionPage() {
         {loading ? <div style={styles.empty}>Loading Daily Rejection...</div> : renderTable(rows)}
       </div>
     </div>
+
+    {factoryModal.open ? (() => {
+      const totalQty = Number(factoryForm.rejection_qty || 0) + Number(factoryForm.other_qty || 0);
+      const amount = totalQty * Number(factoryForm.rate || 0);
+      const buyerOptions = Array.from(new Map(masters.consignees.map((x) => {
+        const name = String(x?.buyer_name || x?.buyer || "").trim();
+        return [name.toLowerCase(), { value: idOf(x), label: name }];
+      }).filter(([, x]) => x.label)).values());
+      return (
+        <div style={styles.factoryOverlay}>
+          <div style={styles.factoryModal}>
+            <div style={styles.factoryHeader}><div><h3 style={{ margin: 0 }}>Send To Factory</h3><div style={{ fontSize: 12, opacity: .8 }}>Complete factory details before assignment is saved.</div></div><button type="button" onClick={closeFactoryModal} style={styles.factoryClose}>×</button></div>
+            <div style={styles.factoryGrid}>
+              <Field label="Date"><input type="date" value={factoryForm.date} onChange={(e) => setFactoryForm((p) => ({ ...p, date: e.target.value }))} style={styles.input} /></Field>
+              <Field label="Invoice No"><input value={factoryForm.invoice_no} onChange={(e) => setFactoryForm((p) => ({ ...p, invoice_no: e.target.value }))} style={styles.input} placeholder="Invoice No" /></Field>
+              <Field label="Lorry No"><input value={factoryForm.lorry_no} onChange={(e) => setFactoryForm((p) => ({ ...p, lorry_no: e.target.value }))} style={styles.input} placeholder="Lorry No" /></Field>
+              <Field label="Company Name"><SearchableSelect value={factoryForm.company_id} options={masters.companies.map((x) => ({ value: idOf(x), label: textOf(x) }))} onChange={(value) => setFactoryForm((p) => ({ ...p, company_id: value, company_account_id: "" }))} placeholder="Select Company / type to search" /></Field>
+              <Field label="Company Account"><SearchableSelect value={factoryForm.company_account_id} options={masters.accounts.map((x) => ({ value: idOf(x), label: textOf(x) }))} onChange={(value) => setFactoryForm((p) => ({ ...p, company_account_id: value }))} placeholder="Select Account / type to search" /></Field>
+              <Field label="Buyer Name"><SearchableSelect value={factoryForm.buyer_id} options={buyerOptions} onChange={(value) => setFactoryForm((p) => ({ ...p, buyer_id: value }))} placeholder="Select Buyer / type to search" /></Field>
+              <Field label="Consignee Name"><SearchableSelect value={factoryForm.consignee_id} options={masters.consignees.map((x) => ({ value: idOf(x), label: textOf(x) }))} onChange={(value) => setFactoryForm((p) => ({ ...p, consignee_id: value }))} placeholder="Select Consignee / type to search" /></Field>
+              <Field label="Reject Qty"><input type="number" value={factoryForm.rejection_qty} readOnly style={{ ...styles.input, background: "#f1f5f9" }} /></Field>
+              <Field label="Other Qty"><input type="number" min="0" value={factoryForm.other_qty} onChange={(e) => setFactoryForm((p) => ({ ...p, other_qty: e.target.value }))} style={styles.input} /></Field>
+              <Field label="Total Qty"><input type="number" value={totalQty} readOnly style={{ ...styles.input, background: "#f1f5f9", fontWeight: 900 }} /></Field>
+              <Field label="Rate"><input type="number" min="0" value={factoryForm.rate} onChange={(e) => setFactoryForm((p) => ({ ...p, rate: e.target.value }))} style={styles.input} /></Field>
+              <Field label="Amount"><input type="number" value={amount.toFixed(2)} readOnly style={{ ...styles.input, background: "#f1f5f9", fontWeight: 900 }} /></Field>
+            </div>
+            <div style={styles.factoryFooter}><button type="button" onClick={closeFactoryModal} style={styles.secondary}>Cancel</button><button type="button" disabled={busyId === factoryModal.rowId} onClick={saveFactoryAssignment} style={styles.primary}>{busyId === factoryModal.rowId ? "Saving..." : "Save & Assign"}</button></div>
+          </div>
+        </div>
+      );
+    })() : null}
     </>
   );
 }
@@ -972,4 +1070,11 @@ const styles = {
   toastClose: { width: 24, height: 24, border: 0, background: 'transparent', color: 'inherit', fontSize: 18, lineHeight: 1, cursor: 'pointer', padding: 0, opacity: .8 },
   assignPanel: { marginTop: 13, border: '1px solid #bfdbfe', background: 'linear-gradient(135deg,#eff6ff,#f8fbff)', borderRadius: 14, padding: 12 }, assignHead: { display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center', marginBottom: 8, color: '#1e3a8a', fontSize: 11, fontWeight: 900 }, assignGrid: { display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr) auto', gap: 8 }, assignButton: { border: 0, background: '#1d4ed8', color: '#fff', borderRadius: 10, padding: '10px 13px', fontWeight: 900, cursor: 'pointer' },
   workerPanel: { marginTop: 13, border: '1px solid #99f6e4', background: 'linear-gradient(135deg,#ecfeff,#f0fdfa)', borderRadius: 14, padding: 12 }, workerTitle: { color: '#115e59', fontWeight: 950 }, workerWork: { color: '#475569', fontSize: 12, marginTop: 3 }, completeRow: { display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', gap: 8, marginTop: 10 }, complete: { border: 0, background: '#047857', color: '#fff', borderRadius: 10, padding: '10px 14px', fontWeight: 900, cursor: 'pointer' }, completedPanel: { marginTop: 12, padding: 10, borderRadius: 11, background: '#ecfdf5', border: '1px solid #a7f3d0', color: '#047857', fontWeight: 800 },
+  factoryOverlay: { position: 'fixed', inset: 0, zIndex: 99999, background: 'rgba(15,23,42,.58)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 14 },
+  factoryModal: { width: 'min(900px, 100%)', maxHeight: '92vh', overflowY: 'auto', background: '#fff', borderRadius: 18, boxShadow: '0 24px 70px rgba(15,23,42,.3)', padding: 18 },
+  factoryHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, paddingBottom: 12, borderBottom: '1px solid #e2e8f0' },
+  factoryClose: { width: 34, height: 34, borderRadius: 9, border: '1px solid #cbd5e1', background: '#fff', fontSize: 24, lineHeight: 1, cursor: 'pointer' },
+  factoryGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(210px,1fr))', gap: 12, padding: '16px 0' },
+  factoryFooter: { display: 'flex', justifyContent: 'flex-end', gap: 10, paddingTop: 12, borderTop: '1px solid #e2e8f0' },
+
 };
