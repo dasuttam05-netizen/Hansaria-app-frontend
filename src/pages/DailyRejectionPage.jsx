@@ -370,6 +370,37 @@ export default function DailyRejectionPage() {
     }
   };
 
+  const renderFactoryAssignmentDetails = (row) => {
+    if (String(row?.action_type || "").toUpperCase() !== "SEND TO FACTORY") return null;
+    const details = [
+      ["Date", row?.factory_date],
+      ["Invoice No", row?.factory_invoice_no],
+      ["Lorry No", row?.factory_lorry_no],
+      ["Company Name", row?.factory_company_name],
+      ["Company Account", row?.factory_company_account_name],
+      ["Buyer Name", row?.factory_buyer_name],
+      ["Consignee Name", row?.factory_consignee_name],
+      ["Reject Qty", row?.factory_rejection_qty],
+      ["Other Qty", row?.factory_other_qty],
+      ["Total Qty", row?.factory_total_qty],
+      ["Rate", row?.factory_rate],
+      ["Amount", row?.factory_amount],
+    ];
+    return (
+      <div className="dr-factory-assigned-details">
+        <div className="dr-factory-assigned-title">SEND TO FACTORY DETAILS</div>
+        <div className="dr-factory-assigned-grid">
+          {details.map(([label, value]) => (
+            <div className="dr-factory-assigned-box" key={label}>
+              <div className="dr-factory-assigned-label">{label}</div>
+              <div className="dr-factory-assigned-value">{value === undefined || value === null || value === "" ? "-" : label.includes("Qty") || label === "Rate" || label === "Amount" ? money(value) : label === "Date" ? formatDate(value) : String(value)}</div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
   const completeRow = async (rowId, qty) => {
     setBusyId(rowId);
     try {
@@ -574,6 +605,7 @@ export default function DailyRejectionPage() {
               <div className="dr-mobile-worker">
                 <div className="dr-mobile-workflow-title">YOUR ASSIGNED WORK</div>
                 <div className="dr-mobile-worker-work">{row?.action_type || "Work assigned"} · {money(row?.rejection_qty)} Qty</div>
+                {renderFactoryAssignmentDetails(row)}
                 <div className="dr-mobile-complete">
                   <input value={completionRemarks[rowId] || ""} onChange={(e) => setCompletionRemarks((prev) => ({ ...prev, [rowId]: e.target.value }))} placeholder="Completion note" style={styles.workflowInput} />
                   <button type="button" disabled={rowBusy} onClick={() => completeRow(rowId, row?.rejection_qty)} style={styles.completeInline}>{rowBusy ? "Completing..." : "✓ Complete Work"}</button>
@@ -674,7 +706,7 @@ export default function DailyRejectionPage() {
                           <td style={{ ...styles.td, ...styles.workflowTd }}><span style={{ ...styles.reportWorkflowChip, ...statusStyle(row?.status) }}>{row?.status === "COMPLETE" ? "Completed" : row?.status === "RUNNING" ? "Running" : row?.status === "ASSIGNED" ? "Assigned" : "Pending"}</span></td>
                         </>
                       ) : withWorkflow ? (
-                        <td style={{ ...styles.td, ...styles.workflowTd }}>{assignedToMe && row?.status === "RUNNING" ? <div style={styles.workerInline}><input value={completionRemarks[rowId] || ""} onChange={(e) => setCompletionRemarks((prev) => ({ ...prev, [rowId]: e.target.value }))} placeholder="Completion note" style={styles.workflowInput} /><button type="button" disabled={rowBusy} onClick={() => completeRow(rowId, row?.rejection_qty)} style={styles.completeInline}>{rowBusy ? "Completing..." : "✓ Complete Work"}</button></div> : <span style={styles.mutedDash}>-</span>}</td>
+                        <td style={{ ...styles.td, ...styles.workflowTd }}>{assignedToMe && row?.status === "RUNNING" ? <div><div style={styles.workerInline}><input value={completionRemarks[rowId] || ""} onChange={(e) => setCompletionRemarks((prev) => ({ ...prev, [rowId]: e.target.value }))} placeholder="Completion note" style={styles.workflowInput} /><button type="button" disabled={rowBusy} onClick={() => completeRow(rowId, row?.rejection_qty)} style={styles.completeInline}>{rowBusy ? "Completing..." : "✓ Complete Work"}</button></div>{renderFactoryAssignmentDetails(row)}</div> : <span style={styles.mutedDash}>-</span>}</td>
                       ) : null}
                       <td style={{ ...styles.td, ...styles.actionTd, position: "sticky", right: 0, background: "#fff", zIndex: 4 }}>{renderActionIcons(row)}</td>
                     </tr>
@@ -761,6 +793,14 @@ export default function DailyRejectionPage() {
         .dr-mobile-worker { background:linear-gradient(135deg,#ecfeff,#f0fdfa); border:1px solid #99f6e4; }
         .dr-mobile-workflow-title { color:#1e3a8a; font-size:10px; font-weight:900; letter-spacing:.3px; }
         .dr-mobile-worker-work { color:#475569; font-size:11px; margin-top:3px; }
+        .dr-factory-assigned-details { margin-top: 9px; padding: 9px; border: 1px solid #dbe4ee; border-radius: 10px; background: #f8fafc; }
+        .dr-factory-assigned-title { font-size: 10px; font-weight: 900; letter-spacing: .45px; color: #0f766e; margin-bottom: 7px; }
+        .dr-factory-assigned-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+        .dr-factory-assigned-box { min-width: 0; padding: 7px; border: 1px solid #e2e8f0; border-radius: 7px; background: #fff; }
+        .dr-factory-assigned-label { font-size: 9px; color: #64748b; font-weight: 800; text-transform: uppercase; }
+        .dr-factory-assigned-value { margin-top: 2px; font-size: 11px; color: #0f172a; font-weight: 700; overflow-wrap: anywhere; }
+        @media (max-width: 720px) { .dr-factory-assigned-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
         .dr-mobile-workflow-grid { display:grid; gap:7px; margin-top:8px; }
         .dr-mobile-complete { display:grid; gap:7px; margin-top:8px; }
         .dr-mobile-actions { display:flex; justify-content:flex-end; margin-top:10px; padding-top:9px; border-top:1px solid #eef2f7; }
