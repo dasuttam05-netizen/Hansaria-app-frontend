@@ -176,17 +176,47 @@ export default function DailyRejectionPage() {
   const resetForm = () => setForm(makeEmptyForm(user));
   const updateForm = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
 
+  const accountLabel = useCallback((account) => String(
+    account?.account_name ||
+    account?.accountName ||
+    account?.ledger_name ||
+    account?.ledgerName ||
+    account?.name ||
+    account?.party_name ||
+    account?.company_account_name ||
+    account?.title ||
+    ""
+  ).trim(), []);
+
+  const accountCompanyIds = useCallback((account) => [
+    account?.company_id,
+    account?.companyId,
+    account?.company?._id,
+    account?.company?.id,
+    account?.parent_company_id,
+    account?.parentCompanyId,
+  ].filter((value) => value !== undefined && value !== null && String(value).trim() !== "").map(String), []);
+
+  const accountCompanyNames = useCallback((account) => [
+    account?.company_name,
+    account?.companyName,
+    account?.company?.name,
+    account?.parent_company_name,
+    account?.parentCompanyName,
+  ].filter(Boolean).map((value) => String(value).trim().toLowerCase()), []);
+
   const filteredAccounts = useMemo(() => {
-    if (!form.company_id) return masters.accounts;
+    const all = Array.isArray(masters.accounts) ? masters.accounts : [];
+    if (!form.company_id) return all;
     const selectedCompany = masters.companies.find((item) => idOf(item) === String(form.company_id));
     const selectedName = String(selectedCompany?.name || selectedCompany?.company_name || "").trim().toLowerCase();
-    const matched = masters.accounts.filter((account) => {
-      const companyId = account?.company_id ?? account?.companyId ?? account?.company?.id ?? account?.company?._id;
-      const companyName = String(account?.company_name || account?.company?.name || "").trim().toLowerCase();
-      return String(companyId || "") === String(form.company_id) || (!!selectedName && companyName === selectedName);
+    const matched = all.filter((account) => {
+      const companyIds = accountCompanyIds(account);
+      const companyNames = accountCompanyNames(account);
+      return companyIds.includes(String(form.company_id)) || (!!selectedName && companyNames.includes(selectedName));
     });
-    return matched.length ? matched : masters.accounts;
-  }, [masters.accounts, masters.companies, form.company_id]);
+    return matched.length ? matched : all;
+  }, [masters.accounts, masters.companies, form.company_id, accountCompanyIds, accountCompanyNames]);
 
   const originalQty = Number(form.original_qty) || 0;
   const unloadingQty = Number(form.actual_unloading_qty) || 0;
@@ -261,7 +291,7 @@ export default function DailyRejectionPage() {
         assigned_to: employeeId, action_type: "SEND TO FACTORY",
         factory_date: factoryForm.date, factory_invoice_no: factoryForm.invoice_no, factory_lorry_no: factoryForm.lorry_no,
         factory_company_id: factoryForm.company_id, factory_company_name: textOf(company),
-        factory_company_account_id: factoryForm.company_account_id, factory_company_account_name: textOf(account),
+        factory_company_account_id: factoryForm.company_account_id, factory_company_account_name: accountLabel(account),
         factory_buyer_id: factoryForm.buyer_id, factory_buyer_name: textOf(buyer),
         factory_consignee_id: factoryForm.consignee_id, factory_consignee_name: textOf(consignee),
         factory_rejection_qty: Number(factoryForm.rejection_qty || 0), factory_other_qty: Number(factoryForm.other_qty || 0),
@@ -766,7 +796,7 @@ export default function DailyRejectionPage() {
 /></Field>
               <Field label="Company Account"><SearchableSelect
   value={form.company_account_id}
-  options={filteredAccounts.map((item) => ({ value: idOf(item), label: item.account_name || item.name || "-" }))}
+  options={filteredAccounts.map((item) => ({ value: idOf(item), label: accountLabel(item) })).filter((item) => item.label)}
   onChange={(value) => updateForm("company_account_id", value)}
   placeholder="Select Account / type to search"
 /></Field>
@@ -837,7 +867,13 @@ export default function DailyRejectionPage() {
               <Field label="Invoice No"><input value={factoryForm.invoice_no} onChange={(e) => setFactoryForm((p) => ({ ...p, invoice_no: e.target.value }))} style={styles.input} placeholder="Invoice No" /></Field>
               <Field label="Lorry No"><input value={factoryForm.lorry_no} onChange={(e) => setFactoryForm((p) => ({ ...p, lorry_no: e.target.value }))} style={styles.input} placeholder="Lorry No" /></Field>
               <Field label="Company Name"><SearchableSelect value={factoryForm.company_id} options={masters.companies.map((x) => ({ value: idOf(x), label: textOf(x) }))} onChange={(value) => setFactoryForm((p) => ({ ...p, company_id: value, company_account_id: "" }))} placeholder="Select Company / type to search" /></Field>
-              <Field label="Company Account"><SearchableSelect value={factoryForm.company_account_id} options={masters.accounts.map((x) => ({ value: idOf(x), label: textOf(x) }))} onChange={(value) => setFactoryForm((p) => ({ ...p, company_account_id: value }))} placeholder="Select Account / type to search" /></Field>
+              <Field label="Company Account"><SearchableSelect value={factoryForm.company_account_id} options={(factoryForm.company_id ? (() => {
+                const company = masters.companies.find((x) => idOf(x) === String(factoryForm.company_id));
+                const companyName = String(company?.name || company?.company_name || "").trim().toLowerCase();
+                const all = Array.isArray(masters.accounts) ? masters.accounts : [];
+                const matched = all.filter((x) => accountCompanyIds(x).includes(String(factoryForm.company_id)) || (!!companyName && accountCompanyNames(x).includes(companyName)));
+                return matched.length ? matched : all;
+              })() : (Array.isArray(masters.accounts) ? masters.accounts : [])).map((x) => ({ value: idOf(x), label: accountLabel(x) })).filter((x) => x.label)} onChange={(value) => setFactoryForm((p) => ({ ...p, company_account_id: value }))} placeholder="Select Account / type to search" /></Field>
               <Field label="Buyer Name"><SearchableSelect value={factoryForm.buyer_id} options={buyerOptions} onChange={(value) => setFactoryForm((p) => ({ ...p, buyer_id: value }))} placeholder="Select Buyer / type to search" /></Field>
               <Field label="Consignee Name"><SearchableSelect value={factoryForm.consignee_id} options={masters.consignees.map((x) => ({ value: idOf(x), label: textOf(x) }))} onChange={(value) => setFactoryForm((p) => ({ ...p, consignee_id: value }))} placeholder="Select Consignee / type to search" /></Field>
               <Field label="Reject Qty"><input type="number" value={factoryForm.rejection_qty} readOnly style={{ ...styles.input, background: "#f1f5f9" }} /></Field>
@@ -937,7 +973,7 @@ function SearchableSelect({
             setQuery("");
           }
         }}
-        style={{ ...styles.input, fontFamily: "inherit", fontSize: 13, fontWeight: 600, lineHeight: 1.35, color: "#0f172a", ...(style || {}), cursor: disabled ? "not-allowed" : "text" }}
+        style={{ ...styles.input, fontFamily: "inherit", fontSize: "inherit", fontWeight: "inherit", lineHeight: "inherit", color: "#0f172a", ...(style || {}), cursor: disabled ? "not-allowed" : "text" }}
       />
       {open && !disabled && (
         <div
@@ -974,9 +1010,9 @@ function SearchableSelect({
                 padding: "9px 10px",
                 cursor: "pointer",
                 fontFamily: "inherit",
-                fontSize: 13,
-                lineHeight: 1.35,
-                fontWeight: 600,
+                fontSize: "inherit",
+                lineHeight: "inherit",
+                fontWeight: "inherit",
               }}
             >
               {item.label}
