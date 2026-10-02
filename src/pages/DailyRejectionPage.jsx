@@ -316,6 +316,10 @@ export default function DailyRejectionPage() {
       showToast("Please select a staff member first.", "warning");
       return;
     }
+    if (!String(assignmentNarration[rowId] || "").trim()) {
+      showToast("Please enter the assignment narration / work instruction.", "warning");
+      return;
+    }
     const totalQty = Number(factoryForm.rejection_qty || 0) + Number(factoryForm.other_qty || 0);
     const amount = totalQty * Number(factoryForm.rate || 0);
     const company = masters.companies.find((x) => idOf(x) === String(factoryForm.company_id));
@@ -326,13 +330,14 @@ export default function DailyRejectionPage() {
     try {
       await axios.patch(`${API}/${rowId}/assign`, {
         assigned_to: employeeId, action_type: "SEND TO FACTORY",
+        assignment_narration: String(assignmentNarration[rowId] || "").trim(),
         factory_date: factoryForm.date, factory_invoice_no: factoryForm.invoice_no, factory_lorry_no: factoryForm.lorry_no,
         factory_company_id: factoryForm.company_id, factory_company_name: textOf(company),
         factory_company_account_id: factoryForm.company_account_id, factory_company_account_name: accountLabel(account),
         factory_buyer_id: factoryForm.buyer_id, factory_buyer_name: textOf(buyer),
         factory_consignee_id: factoryForm.consignee_id, factory_consignee_name: textOf(consignee),
         factory_rejection_qty: Number(factoryForm.rejection_qty || 0), factory_other_qty: Number(factoryForm.other_qty || 0),
-        factory_total_qty: totalQty, factory_rate: Number(factoryForm.rate || 0), factory_amount: amount,
+        factory_total_qty: totalQty, factory_weight: totalQty, factory_rate: Number(factoryForm.rate || 0), factory_amount: amount,
       });
       setFactoryModal({ open: false, rowId: "" });
       showToast("Send To Factory saved and work assigned successfully.", "success");
@@ -347,27 +352,17 @@ export default function DailyRejectionPage() {
   const assignRow = async (rowId) => {
     const employeeId = assignedEmployee[rowId];
     const actionType = assignedAction[rowId];
-    if (!employeeId || !actionType) {
-      showToast("Please select a staff member and Work Description first.", "warning");
-      return;
-    }
-    if (actionType === "SEND TO FACTORY") {
-      openFactoryModal(rowId);
-      return;
-    }
+    const narration = String(assignmentNarration[rowId] || "").trim();
+    if (!employeeId || !actionType) { showToast("Please select a staff member and Work Description first.", "warning"); return; }
+    if (!narration) { showToast("Please enter the assignment narration / work instruction.", "warning"); return; }
+    if (actionType === "SEND TO FACTORY") { openFactoryModal(rowId); return; }
     setBusyId(rowId);
     try {
-      await axios.patch(`${API}/${rowId}/assign`, {
-        assigned_to: employeeId,
-        action_type: actionType,
-      });
+      await axios.patch(`${API}/${rowId}/assign`, { assigned_to: employeeId, action_type: actionType, assignment_narration: narration });
       showToast("Work assigned successfully and moved to Running.", "success");
       await loadData();
-    } catch (err) {
-      showToast(err?.response?.data?.error || err?.message || "Failed to assign the work.", "error");
-    } finally {
-      setBusyId("");
-    }
+    } catch (err) { showToast(err?.response?.data?.error || err?.message || "Failed to assign the work.", "error"); }
+    finally { setBusyId(""); }
   };
 
   const renderFactoryAssignmentDetails = (row) => {
@@ -383,6 +378,7 @@ export default function DailyRejectionPage() {
       ["Reject Qty", row?.factory_rejection_qty],
       ["Other Qty", row?.factory_other_qty],
       ["Total Qty", row?.factory_total_qty],
+      ["Weight", row?.factory_weight ?? row?.factory_total_qty],
       ["Rate", row?.factory_rate],
       ["Amount", row?.factory_amount],
     ];
@@ -402,17 +398,24 @@ export default function DailyRejectionPage() {
   };
 
   const completeRow = async (rowId, qty) => {
+    const row = rows.find((item) => idOf(item) === String(rowId));
+    const targetQty = Number(row?.work_target_qty ?? row?.original_qty ?? qty ?? 0) || 0;
+    const currentQty = Number(row?.work_completed_qty ?? 0) || 0;
+    const enteredQty = Number(progressQty[rowId]);
+    const cumulativeQty = Number.isFinite(enteredQty) && enteredQty > 0 ? enteredQty : targetQty;
+    if (cumulativeQty < currentQty || cumulativeQty > targetQty) { showToast(`Progress Qty must be between ${money(currentQty)} and ${money(targetQty)} MT.`, "warning"); return; }
+    const narration = String(progressNarration[rowId] || completionRemarks[rowId] || "").trim();
     setBusyId(rowId);
     try {
-      await axios.post(`${API}/${rowId}/complete`, { completion_qty: qty, completion_remarks: completionRemarks[rowId] || "" });
+      const response = await axios.post(`${API}/${rowId}/complete`, { completion_qty: cumulativeQty, completion_remarks: narration, progress_qty: cumulativeQty, progress_narration: narration });
+      const completed = Boolean(response?.data?.completed);
+      setProgressQty((prev) => ({ ...prev, [rowId]: "" }));
+      setProgressNarration((prev) => ({ ...prev, [rowId]: "" }));
       setCompletionRemarks((prev) => ({ ...prev, [rowId]: "" }));
-      showToast("Work completed successfully.", "success");
+      showToast(completed ? "All quantity completed successfully." : "Progress saved. Remaining work is Pending and can be assigned again.", "success");
       await loadData();
-    } catch (err) {
-      showToast(err?.response?.data?.error || err?.message || "Failed to complete the work.", "error");
-    } finally {
-      setBusyId("");
-    }
+    } catch (err) { showToast(err?.response?.data?.error || err?.message || "Failed to update the work.", "error"); }
+    finally { setBusyId(""); }
   };
 
 
@@ -576,6 +579,9 @@ export default function DailyRejectionPage() {
               <div><span>Reason</span><b>{row?.reason || "-"}</b></div>
               <div><span>Work</span><b>{row?.action_type || "-"}</b></div>
               <div><span>Assigned To</span><b>{row?.assigned_to_name || "-"}</b></div>
+              <div><span>Target Qty</span><b>{money(row?.work_target_qty ?? row?.original_qty)}</b></div>
+              <div><span>Completed Qty</span><b>{money(row?.work_completed_qty)}</b></div>
+              <div><span>Remaining Qty</span><b>{money(Math.max(Number(row?.work_target_qty ?? row?.original_qty ?? 0) - Number(row?.work_completed_qty || 0), 0))}</b></div>
             </div>
 
             {withWorkflow && canAssign && !isComplete ? (
@@ -594,6 +600,7 @@ export default function DailyRejectionPage() {
   onChange={(value) => setAssignedEmployee((prev) => ({ ...prev, [rowId]: value }))}
   placeholder="Staff / type to search"
 />
+                  <textarea value={assignmentNarration[rowId] || ""} onChange={(e) => setAssignmentNarration((prev) => ({ ...prev, [rowId]: e.target.value }))} placeholder="Assignment narration / work instruction" rows={2} style={{ ...styles.workflowInput, width: "100%", minHeight: 52, resize: "vertical" }} />
                   <button type="button" disabled={rowBusy || isComplete || !actionValue || !employeeValue} onClick={() => assignRow(rowId)} style={{ ...styles.assignButtonInline, opacity: rowBusy || isComplete || !actionValue || !employeeValue ? 0.55 : 1 }}>
                     {rowBusy ? "Assigning..." : row?.status === "RUNNING" ? "Reassign & Keep Running" : "Assign & Start Work"}
                   </button>
@@ -604,11 +611,13 @@ export default function DailyRejectionPage() {
             {withWorkflow && assignedToMe && row?.status === "RUNNING" ? (
               <div className="dr-mobile-worker">
                 <div className="dr-mobile-workflow-title">YOUR ASSIGNED WORK</div>
-                <div className="dr-mobile-worker-work">{row?.action_type || "Work assigned"} · {money(row?.rejection_qty)} Qty</div>
+                <div className="dr-mobile-worker-work">{row?.action_type || "Work assigned"} · Target {money(row?.work_target_qty ?? row?.original_qty ?? row?.rejection_qty)} MT · Done {money(row?.work_completed_qty)}</div>
+                {row?.assignment_narration ? <div className="dr-worker-narration"><b>Assignment:</b> {row.assignment_narration}</div> : null}
                 {renderFactoryAssignmentDetails(row)}
                 <div className="dr-mobile-complete">
-                  <input value={completionRemarks[rowId] || ""} onChange={(e) => setCompletionRemarks((prev) => ({ ...prev, [rowId]: e.target.value }))} placeholder="Completion note" style={styles.workflowInput} />
-                  <button type="button" disabled={rowBusy} onClick={() => completeRow(rowId, row?.rejection_qty)} style={styles.completeInline}>{rowBusy ? "Completing..." : "✓ Complete Work"}</button>
+                  <input type="number" min={Number(row?.work_completed_qty || 0)} max={Number(row?.work_target_qty ?? row?.original_qty ?? row?.rejection_qty || 0)} step="0.01" value={progressQty[rowId] || ""} onChange={(e) => setProgressQty((prev) => ({ ...prev, [rowId]: e.target.value }))} placeholder={`Cumulative Qty (target ${money(row?.work_target_qty ?? row?.original_qty ?? row?.rejection_qty)})`} style={styles.workflowInput} />
+                  <input value={progressNarration[rowId] || ""} onChange={(e) => setProgressNarration((prev) => ({ ...prev, [rowId]: e.target.value }))} placeholder="Progress / remaining work note" style={styles.workflowInput} />
+                  <button type="button" disabled={rowBusy} onClick={() => completeRow(rowId, row?.rejection_qty)} style={styles.completeInline}>{rowBusy ? "Saving..." : "Save Progress / Complete"}</button>
                 </div>
               </div>
             ) : null}
@@ -697,7 +706,7 @@ export default function DailyRejectionPage() {
   onChange={(value) => setAssignedEmployee((prev) => ({ ...prev, [rowId]: value }))}
   placeholder="Staff / type to search"
 /></td>
-                          <td style={{ ...styles.td, ...styles.workflowTd }}><button type="button" disabled={rowBusy || isComplete || !actionValue || !employeeValue} onClick={() => assignRow(rowId)} style={{ ...styles.assignButtonInline, opacity: rowBusy || isComplete || !actionValue || !employeeValue ? 0.55 : 1 }}>{rowBusy ? "Assigning..." : row?.status === "RUNNING" ? "Reassign & Keep Running" : "Assign & Start Work"}</button></td>
+                          <td style={{ ...styles.td, ...styles.workflowTd }}><textarea value={assignmentNarration[rowId] || ""} onChange={(e) => setAssignmentNarration((prev) => ({ ...prev, [rowId]: e.target.value }))} placeholder="Assignment narration" rows={2} style={{ ...styles.workflowInput, width: 190, minHeight: 52, resize: "vertical" }} /><button type="button" disabled={rowBusy || isComplete || !actionValue || !employeeValue} onClick={() => assignRow(rowId)} style={{ ...styles.assignButtonInline, opacity: rowBusy || isComplete || !actionValue || !employeeValue ? 0.55 : 1 }}>{rowBusy ? "Assigning..." : row?.status === "RUNNING" ? "Reassign & Keep Running" : "Assign & Start Work"}</button></td>
                         </>
                       ) : showReportWorkflow ? (
                         <>
@@ -706,7 +715,15 @@ export default function DailyRejectionPage() {
                           <td style={{ ...styles.td, ...styles.workflowTd }}><span style={{ ...styles.reportWorkflowChip, ...statusStyle(row?.status) }}>{row?.status === "COMPLETE" ? "Completed" : row?.status === "RUNNING" ? "Running" : row?.status === "ASSIGNED" ? "Assigned" : "Pending"}</span></td>
                         </>
                       ) : withWorkflow ? (
-                        <td style={{ ...styles.td, ...styles.workflowTd }}>{assignedToMe && row?.status === "RUNNING" ? <div><div style={styles.workerInline}><input value={completionRemarks[rowId] || ""} onChange={(e) => setCompletionRemarks((prev) => ({ ...prev, [rowId]: e.target.value }))} placeholder="Completion note" style={styles.workflowInput} /><button type="button" disabled={rowBusy} onClick={() => completeRow(rowId, row?.rejection_qty)} style={styles.completeInline}>{rowBusy ? "Completing..." : "✓ Complete Work"}</button></div>{renderFactoryAssignmentDetails(row)}</div> : <span style={styles.mutedDash}>-</span>}</td>
+                        <td style={{ ...styles.td, ...styles.workflowTd }}>{assignedToMe && row?.status === "RUNNING" ? <div>
+  <div style={styles.workerInline}>
+    <input type="number" min={Number(row?.work_completed_qty || 0)} max={Number(row?.work_target_qty ?? row?.original_qty ?? row?.rejection_qty || 0)} step="0.01" value={progressQty[rowId] || ""} onChange={(e) => setProgressQty((prev) => ({ ...prev, [rowId]: e.target.value }))} placeholder={`Done Qty / ${money(row?.work_target_qty ?? row?.original_qty ?? row?.rejection_qty)}`} style={styles.workflowInput} />
+    <input value={progressNarration[rowId] || ""} onChange={(e) => setProgressNarration((prev) => ({ ...prev, [rowId]: e.target.value }))} placeholder="Progress narration" style={{ ...styles.workflowInput, width: 190 }} />
+    <button type="button" disabled={rowBusy} onClick={() => completeRow(rowId, row?.rejection_qty)} style={styles.completeInline}>{rowBusy ? "Saving..." : "Save Progress / Complete"}</button>
+  </div>
+  <div className="dr-worker-narration"><b>Assignment:</b> {row?.assignment_narration || "-"}</div>
+  {renderFactoryAssignmentDetails(row)}
+</div> : <span style={styles.mutedDash}>-</span>}</td>
                       ) : null}
                       <td style={{ ...styles.td, ...styles.actionTd, position: "sticky", right: 0, background: "#fff", zIndex: 4 }}>{renderActionIcons(row)}</td>
                     </tr>
@@ -793,6 +810,7 @@ export default function DailyRejectionPage() {
         .dr-mobile-worker { background:linear-gradient(135deg,#ecfeff,#f0fdfa); border:1px solid #99f6e4; }
         .dr-mobile-workflow-title { color:#1e3a8a; font-size:10px; font-weight:900; letter-spacing:.3px; }
         .dr-mobile-worker-work { color:#475569; font-size:11px; margin-top:3px; }
+        .dr-worker-narration { margin-top:6px; padding:7px 8px; border-radius:8px; background:#fff; border:1px dashed #cbd5e1; color:#475569; font-size:11px; line-height:1.35; }
         .dr-factory-assigned-details { margin-top: 9px; padding: 9px; border: 1px solid #dbe4ee; border-radius: 10px; background: #f8fafc; }
         .dr-factory-assigned-title { font-size: 10px; font-weight: 900; letter-spacing: .45px; color: #0f766e; margin-bottom: 7px; }
         .dr-factory-assigned-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
@@ -964,6 +982,7 @@ export default function DailyRejectionPage() {
               <Field label="Reject Qty"><input type="number" value={factoryForm.rejection_qty} readOnly style={{ ...styles.input, background: "#f1f5f9" }} /></Field>
               <Field label="Other Qty"><input type="number" min="0" value={factoryForm.other_qty} onChange={(e) => setFactoryForm((p) => ({ ...p, other_qty: e.target.value }))} style={styles.input} /></Field>
               <Field label="Total Qty"><input type="number" value={totalQty} readOnly style={{ ...styles.input, background: "#f1f5f9", fontWeight: 900 }} /></Field>
+              <Field label="Weight"><input type="number" value={totalQty} readOnly style={{ ...styles.input, background: "#f1f5f9", fontWeight: 900 }} /></Field>
               <Field label="Rate"><input type="number" min="0" value={factoryForm.rate} onChange={(e) => setFactoryForm((p) => ({ ...p, rate: e.target.value }))} style={styles.input} /></Field>
               <Field label="Amount"><input type="number" value={amount.toFixed(2)} readOnly style={{ ...styles.input, background: "#f1f5f9", fontWeight: 900 }} /></Field>
             </div>
