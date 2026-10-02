@@ -105,6 +105,10 @@ export default function DailyRejectionPage() {
   const [error, setError] = useState("");
   const [assignedEmployee, setAssignedEmployee] = useState({});
   const [assignedAction, setAssignedAction] = useState({});
+  const [assignedNarration, setAssignedNarration] = useState({});
+  const [progressQty, setProgressQty] = useState({});
+  const [newRejectionQty, setNewRejectionQty] = useState({});
+  const [progressNarration, setProgressNarration] = useState({});
   const [factoryModal, setFactoryModal] = useState({ open: false, rowId: "" });
   const [factoryForm, setFactoryForm] = useState({
     date: new Date().toISOString().slice(0, 10), invoice_no: "", lorry_no: "", company_id: "",
@@ -344,6 +348,34 @@ export default function DailyRejectionPage() {
     }
   };
 
+  const submitProgress = async (rowId) => {
+    const row = rows.find((item) => idOf(item) === String(rowId));
+    if (!row) return;
+    const qty = Number(progressQty[rowId] || 0);
+    const newQty = Number(newRejectionQty[rowId] || 0);
+    if (qty < 0 || newQty < 0 || (qty <= 0 && newQty <= 0)) {
+      showToast("Enter a progress quantity or a new rejection quantity.", "warning");
+      return;
+    }
+    setBusyId(rowId);
+    try {
+      await axios.patch(`${API}/${rowId}/progress`, {
+        progress_qty: qty,
+        new_rejection_qty: newQty,
+        narration: progressNarration[rowId] || "",
+      });
+      showToast("Progress saved. The work status has been updated.", "success");
+      setProgressQty((prev) => ({ ...prev, [rowId]: "" }));
+      setNewRejectionQty((prev) => ({ ...prev, [rowId]: "" }));
+      setProgressNarration((prev) => ({ ...prev, [rowId]: "" }));
+      await loadData();
+    } catch (err) {
+      showToast(err?.response?.data?.error || err?.message || "Failed to save progress.", "error");
+    } finally {
+      setBusyId("");
+    }
+  };
+
   const assignRow = async (rowId) => {
     const employeeId = assignedEmployee[rowId];
     const actionType = assignedAction[rowId];
@@ -360,6 +392,7 @@ export default function DailyRejectionPage() {
       await axios.patch(`${API}/${rowId}/assign`, {
         assigned_to: employeeId,
         action_type: actionType,
+        assignment_narration: assignedNarration[rowId] || "",
       });
       showToast("Work assigned successfully and moved to Running.", "success");
       await loadData();
@@ -383,7 +416,7 @@ export default function DailyRejectionPage() {
       ["Reject Qty", row?.factory_rejection_qty],
       ["Other Qty", row?.factory_other_qty],
       ["Total Qty", row?.factory_total_qty],
-      ["Weight", row?.factory_weight ?? row?.factory_total_qty],
+      ["Weight", (row?.factory_weight != null ? row.factory_weight : row?.factory_total_qty)],
       ["Rate", row?.factory_rate],
       ["Amount", row?.factory_amount],
     ];
@@ -595,6 +628,7 @@ export default function DailyRejectionPage() {
   onChange={(value) => setAssignedEmployee((prev) => ({ ...prev, [rowId]: value }))}
   placeholder="Staff / type to search"
 />
+                  <input value={assignedNarration[rowId] || ""} onChange={(e) => setAssignedNarration((prev) => ({ ...prev, [rowId]: e.target.value }))} placeholder="Assignment narration / instruction" style={styles.workflowInput} />
                   <button type="button" disabled={rowBusy || isComplete || !actionValue || !employeeValue} onClick={() => assignRow(rowId)} style={{ ...styles.assignButtonInline, opacity: rowBusy || isComplete || !actionValue || !employeeValue ? 0.55 : 1 }}>
                     {rowBusy ? "Assigning..." : row?.status === "RUNNING" ? "Reassign & Keep Running" : "Assign & Start Work"}
                   </button>
@@ -608,8 +642,12 @@ export default function DailyRejectionPage() {
                 <div className="dr-mobile-worker-work">{row?.action_type || "Work assigned"} · {money(row?.rejection_qty)} Qty</div>
                 {renderFactoryAssignmentDetails(row)}
                 <div className="dr-mobile-complete">
-                  <input value={completionRemarks[rowId] || ""} onChange={(e) => setCompletionRemarks((prev) => ({ ...prev, [rowId]: e.target.value }))} placeholder="Completion note" style={styles.workflowInput} />
-                  <button type="button" disabled={rowBusy} onClick={() => completeRow(rowId, row?.rejection_qty)} style={styles.completeInline}>{rowBusy ? "Completing..." : "✓ Complete Work"}</button>
+                  <div className="dr-progress-label">Required: {money(row?.required_qty ?? row?.original_qty)} · Done: {money(row?.progress_completed_qty)} · Remaining: {money(row?.remaining_work_qty)}</div>
+                  {row?.assignment_narration ? <div className="dr-assignment-note"><b>Assignment:</b> {row.assignment_narration}</div> : null}
+                  <input type="number" min="0" step="0.01" value={progressQty[rowId] || ""} onChange={(e) => setProgressQty((prev) => ({ ...prev, [rowId]: e.target.value }))} placeholder="Progress / handled Qty" style={styles.workflowInput} />
+                  <input type="number" min="0" step="0.01" value={newRejectionQty[rowId] || ""} onChange={(e) => setNewRejectionQty((prev) => ({ ...prev, [rowId]: e.target.value }))} placeholder="New rejection Qty (if any)" style={styles.workflowInput} />
+                  <input value={progressNarration[rowId] || ""} onChange={(e) => setProgressNarration((prev) => ({ ...prev, [rowId]: e.target.value }))} placeholder="Progress narration" style={styles.workflowInput} />
+                  <button type="button" disabled={rowBusy} onClick={() => submitProgress(rowId)} style={styles.completeInline}>{rowBusy ? "Saving..." : "Save Progress"}</button>
                 </div>
               </div>
             ) : null}
@@ -626,7 +664,7 @@ export default function DailyRejectionPage() {
   const renderTable = (tableRows, withWorkflow = true, reportMode = false) => {
     const showManagerWorkflow = withWorkflow && canAssign;
     const showReportWorkflow = reportMode;
-    const totalColumns = 15 + (showManagerWorkflow || showReportWorkflow ? 3 : withWorkflow ? 1 : 0);
+    const totalColumns = 15 + (showManagerWorkflow || showReportWorkflow ? 4 : withWorkflow ? 1 : 0);
     const headers = [
       "Date",
       "Rejection No",
@@ -642,7 +680,7 @@ export default function DailyRejectionPage() {
       "Work",
       "Assigned To",
       "Status",
-      ...(showManagerWorkflow || showReportWorkflow ? ["Assign Work", "Select Staff", "Work Action"] : withWorkflow ? ["Work Action"] : []),
+      ...(showManagerWorkflow || showReportWorkflow ? ["Assign Work", "Select Staff", "Assignment Note", "Work Action"] : withWorkflow ? ["Work Action"] : []),
       "Action",
     ];
 
@@ -698,6 +736,7 @@ export default function DailyRejectionPage() {
   onChange={(value) => setAssignedEmployee((prev) => ({ ...prev, [rowId]: value }))}
   placeholder="Staff / type to search"
 /></td>
+                          <td style={{ ...styles.td, ...styles.workflowTd }}><input value={assignedNarration[rowId] || ""} onChange={(e) => setAssignedNarration((prev) => ({ ...prev, [rowId]: e.target.value }))} placeholder="Assignment narration" style={styles.workflowInput} /></td>
                           <td style={{ ...styles.td, ...styles.workflowTd }}><button type="button" disabled={rowBusy || isComplete || !actionValue || !employeeValue} onClick={() => assignRow(rowId)} style={{ ...styles.assignButtonInline, opacity: rowBusy || isComplete || !actionValue || !employeeValue ? 0.55 : 1 }}>{rowBusy ? "Assigning..." : row?.status === "RUNNING" ? "Reassign & Keep Running" : "Assign & Start Work"}</button></td>
                         </>
                       ) : showReportWorkflow ? (
@@ -707,7 +746,17 @@ export default function DailyRejectionPage() {
                           <td style={{ ...styles.td, ...styles.workflowTd }}><span style={{ ...styles.reportWorkflowChip, ...statusStyle(row?.status) }}>{row?.status === "COMPLETE" ? "Completed" : row?.status === "RUNNING" ? "Running" : row?.status === "ASSIGNED" ? "Assigned" : "Pending"}</span></td>
                         </>
                       ) : withWorkflow ? (
-                        <td style={{ ...styles.td, ...styles.workflowTd }}>{assignedToMe && row?.status === "RUNNING" ? <div><div style={styles.workerInline}><input value={completionRemarks[rowId] || ""} onChange={(e) => setCompletionRemarks((prev) => ({ ...prev, [rowId]: e.target.value }))} placeholder="Completion note" style={styles.workflowInput} /><button type="button" disabled={rowBusy} onClick={() => completeRow(rowId, row?.rejection_qty)} style={styles.completeInline}>{rowBusy ? "Completing..." : "✓ Complete Work"}</button></div>{renderFactoryAssignmentDetails(row)}</div> : <span style={styles.mutedDash}>-</span>}</td>
+                        <td style={{ ...styles.td, ...styles.workflowTd }}>{assignedToMe && row?.status === "RUNNING" ? <div>
+                          <div className="dr-progress-label">Required: {money(row?.required_qty ?? row?.original_qty)} · Done: {money(row?.progress_completed_qty)} · Remaining: {money(row?.remaining_work_qty)}</div>
+                          {row?.assignment_narration ? <div className="dr-assignment-note"><b>Assignment:</b> {row.assignment_narration}</div> : null}
+                          <div style={{ display: "grid", gap: 6 }}>
+                            <input type="number" min="0" step="0.01" value={progressQty[rowId] || ""} onChange={(e) => setProgressQty((prev) => ({ ...prev, [rowId]: e.target.value }))} placeholder="Progress Qty" style={styles.workflowInput} />
+                            <input type="number" min="0" step="0.01" value={newRejectionQty[rowId] || ""} onChange={(e) => setNewRejectionQty((prev) => ({ ...prev, [rowId]: e.target.value }))} placeholder="New Rejection Qty" style={styles.workflowInput} />
+                            <input value={progressNarration[rowId] || ""} onChange={(e) => setProgressNarration((prev) => ({ ...prev, [rowId]: e.target.value }))} placeholder="Progress narration" style={styles.workflowInput} />
+                            <button type="button" disabled={rowBusy} onClick={() => submitProgress(rowId)} style={styles.completeInline}>{rowBusy ? "Saving..." : "Save Progress"}</button>
+                          </div>
+                          {renderFactoryAssignmentDetails(row)}
+                        </div> : <span style={styles.mutedDash}>-</span>}</td>
                       ) : null}
                       <td style={{ ...styles.td, ...styles.actionTd, position: "sticky", right: 0, background: "#fff", zIndex: 4 }}>{renderActionIcons(row)}</td>
                     </tr>
@@ -804,6 +853,8 @@ export default function DailyRejectionPage() {
 
         .dr-mobile-workflow-grid { display:grid; gap:7px; margin-top:8px; }
         .dr-mobile-complete { display:grid; gap:7px; margin-top:8px; }
+        .dr-progress-label { font-size:12px; font-weight:800; color:#334155; }
+        .dr-assignment-note { margin-top:6px; padding:7px 9px; border-radius:8px; background:#f8fafc; border:1px solid #e2e8f0; color:#334155; white-space:normal; line-height:1.35; }
         .dr-mobile-actions { display:flex; justify-content:flex-end; margin-top:10px; padding-top:9px; border-top:1px solid #eef2f7; }
         @media (max-width: 720px) {
           .dr-desktop-table { display:none; }
