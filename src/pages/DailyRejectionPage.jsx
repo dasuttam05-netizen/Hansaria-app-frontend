@@ -24,8 +24,8 @@ const makeEmptyForm = (user) => ({
   remarks: "",
 });
 
-const idOf = (row) => String(row?.id ?? row?._id ?? row?.legacy_id ?? "");
-const textOf = (row) => String(row?.name ?? row?.title ?? row?.display_name ?? row?.party_name ?? row?.company_name ?? row?.consignee_name ?? "");
+const idOf = (row) => String(row?.id || row?._id || row?.legacy_id ?? "");
+const textOf = (row) => String(row?.name || row?.title || row?.display_name || row?.party_name || row?.company_name || row?.consignee_name ?? "");
 const money = (value) => Number(value || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 function pickArray(payload, keys) {
@@ -112,6 +112,8 @@ export default function DailyRejectionPage() {
   });
   const [busyId, setBusyId] = useState("");
   const [completionRemarks, setCompletionRemarks] = useState({});
+  const [assignNarration, setAssignNarration] = useState({});
+  const [progressForm, setProgressForm] = useState({});
   const [editId, setEditId] = useState("");
   const [reportFrom, setReportFrom] = useState("");
   const [reportTo, setReportTo] = useState("");
@@ -172,7 +174,7 @@ export default function DailyRejectionPage() {
           ...(Array.isArray(masters.employees)
             ? masters.employees
                 .filter((employee) =>
-                  String(employee?.user_id ?? employee?.userId ?? employee?.account_id ?? employee?.accountId ?? "") === String(user?.id || user?._id || "")
+                  String((employee?.user_id || employee?.userId || employee?.account_id || employee?.accountId || "")) === String(user?.id || user?._id || "")
                 )
                 .map((employee) => idOf(employee))
             : []),
@@ -316,6 +318,10 @@ export default function DailyRejectionPage() {
       showToast("Please select a staff member first.", "warning");
       return;
     }
+    if (!String(assignNarration[rowId] || "").trim()) {
+      showToast("Please enter the assignment narration / work instruction.", "warning");
+      return;
+    }
     const totalQty = Number(factoryForm.rejection_qty || 0) + Number(factoryForm.other_qty || 0);
     const amount = totalQty * Number(factoryForm.rate || 0);
     const company = masters.companies.find((x) => idOf(x) === String(factoryForm.company_id));
@@ -333,6 +339,7 @@ export default function DailyRejectionPage() {
         factory_consignee_id: factoryForm.consignee_id, factory_consignee_name: textOf(consignee),
         factory_rejection_qty: Number(factoryForm.rejection_qty || 0), factory_other_qty: Number(factoryForm.other_qty || 0),
         factory_total_qty: totalQty, factory_weight: totalQty, factory_rate: Number(factoryForm.rate || 0), factory_amount: amount,
+        assignment_narration: String(assignNarration[rowId] || "").trim(),
       });
       setFactoryModal({ open: false, rowId: "" });
       showToast("Send To Factory saved and work assigned successfully.", "success");
@@ -347,8 +354,13 @@ export default function DailyRejectionPage() {
   const assignRow = async (rowId) => {
     const employeeId = assignedEmployee[rowId];
     const actionType = assignedAction[rowId];
+    const narration = String(assignNarration[rowId] || "").trim();
     if (!employeeId || !actionType) {
       showToast("Please select a staff member and Work Description first.", "warning");
+      return;
+    }
+    if (!narration) {
+      showToast("Please enter the assignment narration / work instruction.", "warning");
       return;
     }
     if (actionType === "SEND TO FACTORY") {
@@ -360,11 +372,66 @@ export default function DailyRejectionPage() {
       await axios.patch(`${API}/${rowId}/assign`, {
         assigned_to: employeeId,
         action_type: actionType,
+        assignment_narration: narration,
       });
+      setAssignNarration((prev) => ({ ...prev, [rowId]: "" }));
       showToast("Work assigned successfully and moved to Running.", "success");
       await loadData();
     } catch (err) {
       showToast(err?.response?.data?.error || err?.message || "Failed to assign the work.", "error");
+    } finally {
+      setBusyId("");
+    }
+  };
+
+  const updateProgress = async (rowId) => {
+    const form = progressForm[rowId] || {};
+    const processedQty = Number(form.processed_qty || 0);
+    const newRejectionQty = Number(form.new_rejection_qty || 0);
+    if (processedQty <= 0 && newRejectionQty <= 0) {
+      showToast("Enter Processed Qty or New Rejection Qty first.", "warning");
+      return;
+    }
+    if (!String(form.narration || "").trim()) {
+      showToast("Please enter the progress narration.", "warning");
+      return;
+    }
+    setBusyId(rowId);
+    try {
+      await axios.post(`${API}/${rowId}/progress`, {
+        processed_qty: processedQty,
+        new_rejection_qty: newRejectionQty,
+        new_lorry_no: String(form.new_lorry_no || "").trim(),
+        destination_type: String(form.destination_type || "").trim(),
+        warehouse_id: String(form.warehouse_id || "").trim(),
+        warehouse_name: String(form.warehouse_name || "").trim(),
+        progress_narration: String(form.narration || "").trim(),
+      });
+      setProgressForm((prev) => ({ ...prev, [rowId]: {} }));
+      showToast(newRejectionQty > 0 ? "Progress saved. New rejection added and work returned to Pending." : "Progress saved successfully.", "success");
+      await loadData();
+    } catch (err) {
+      showToast(err?.response?.data?.error || err?.message || "Failed to save progress.", "error");
+    } finally {
+      setBusyId("");
+    }
+  };
+
+  const completeRow = async (rowId) => {
+    const row = rows.find((item) => idOf(item) === String(rowId));
+    const remaining = Number(row?.chain_remaining_qty || row?.original_qty ?? 0);
+    if (remaining > 0.000001) {
+      showToast(`Work is not complete. Remaining Qty: ${money(remaining)} MT`, "warning");
+      return;
+    }
+    setBusyId(rowId);
+    try {
+      await axios.post(`${API}/${rowId}/complete`, { completion_remarks: completionRemarks[rowId] || "" });
+      setCompletionRemarks((prev) => ({ ...prev, [rowId]: "" }));
+      showToast("Work completed successfully.", "success");
+      await loadData();
+    } catch (err) {
+      showToast(err?.response?.data?.error || err?.message || "Failed to complete the work.", "error");
     } finally {
       setBusyId("");
     }
@@ -383,7 +450,7 @@ export default function DailyRejectionPage() {
       ["Reject Qty", row?.factory_rejection_qty],
       ["Other Qty", row?.factory_other_qty],
       ["Total Qty", row?.factory_total_qty],
-      ["Weight", (row?.factory_weight ?? row?.factory_total_qty)],
+      ["Weight", row?.factory_weight || row?.factory_total_qty],
       ["Rate", row?.factory_rate],
       ["Amount", row?.factory_amount],
     ];
@@ -401,21 +468,6 @@ export default function DailyRejectionPage() {
       </div>
     );
   };
-
-  const completeRow = async (rowId, qty) => {
-    setBusyId(rowId);
-    try {
-      await axios.post(`${API}/${rowId}/complete`, { completion_qty: qty, completion_remarks: completionRemarks[rowId] || "" });
-      setCompletionRemarks((prev) => ({ ...prev, [rowId]: "" }));
-      showToast("Work completed successfully.", "success");
-      await loadData();
-    } catch (err) {
-      showToast(err?.response?.data?.error || err?.message || "Failed to complete the work.", "error");
-    } finally {
-      setBusyId("");
-    }
-  };
-
 
   const buildShareText = (row) => [
     `Daily Rejection ${row?.rejection_no || ""}`.trim(),
@@ -541,7 +593,7 @@ export default function DailyRejectionPage() {
     if ([user?.id, user?._id, user?.employee_id, user?.employeeId].some((value) => String(value || "") === assignedId)) return true;
     return Array.isArray(masters.employees) && masters.employees.some((employee) =>
       idOf(employee) === assignedId &&
-      String(employee?.user_id ?? employee?.userId ?? employee?.account_id ?? employee?.accountId ?? "") === String(user?.id || user?._id || "")
+      String((employee?.user_id || employee?.userId || employee?.account_id || employee?.accountId || "")) === String(user?.id || user?._id || "")
     );
   };
 
@@ -577,6 +629,10 @@ export default function DailyRejectionPage() {
               <div><span>Reason</span><b>{row?.reason || "-"}</b></div>
               <div><span>Work</span><b>{row?.action_type || "-"}</b></div>
               <div><span>Assigned To</span><b>{row?.assigned_to_name || "-"}</b></div>
+              <div><span>Chain Target</span><b>{money(row?.chain_target_qty || row?.original_qty)} MT</b></div>
+              <div><span>Chain Processed</span><b>{money(row?.chain_processed_qty)}</b></div>
+              <div><span>Chain Remaining</span><b>{money(row?.chain_remaining_qty == null ? (Number(row?.chain_target_qty || row?.original_qty || 0) - Number(row?.chain_processed_qty || 0)) : row?.chain_remaining_qty)} MT</b></div>
+              {row?.assignment_narration ? <div style={{ gridColumn: "1 / -1" }}><span>Assignment Narration</span><b>{row.assignment_narration}</b></div> : null}
             </div>
 
             {withWorkflow && canAssign && !isComplete ? (
@@ -595,6 +651,7 @@ export default function DailyRejectionPage() {
   onChange={(value) => setAssignedEmployee((prev) => ({ ...prev, [rowId]: value }))}
   placeholder="Staff / type to search"
 />
+                  <input value={assignNarration[rowId] || ""} onChange={(e) => setAssignNarration((prev) => ({ ...prev, [rowId]: e.target.value }))} placeholder="Assignment narration / instruction" style={styles.workflowInput} />
                   <button type="button" disabled={rowBusy || isComplete || !actionValue || !employeeValue} onClick={() => assignRow(rowId)} style={{ ...styles.assignButtonInline, opacity: rowBusy || isComplete || !actionValue || !employeeValue ? 0.55 : 1 }}>
                     {rowBusy ? "Assigning..." : row?.status === "RUNNING" ? "Reassign & Keep Running" : "Assign & Start Work"}
                   </button>
@@ -605,11 +662,26 @@ export default function DailyRejectionPage() {
             {withWorkflow && assignedToMe && row?.status === "RUNNING" ? (
               <div className="dr-mobile-worker">
                 <div className="dr-mobile-workflow-title">YOUR ASSIGNED WORK</div>
-                <div className="dr-mobile-worker-work">{row?.action_type || "Work assigned"} · {money(row?.rejection_qty)} Qty</div>
+                <div className="dr-mobile-worker-work">{row?.action_type || "Work assigned"} · Current Reject {money(row?.rejection_qty)} MT</div>
+                <div className="dr-chain-summary">
+                  <div><b>Original</b><span>{money(row?.chain_target_qty || row?.original_qty)} MT</span></div>
+                  <div><b>Processed</b><span>{money(row?.chain_processed_qty)} MT</span></div>
+                  <div><b>Remaining</b><span>{money(row?.chain_remaining_qty == null ? (Number(row?.chain_target_qty || row?.original_qty || 0) - Number(row?.chain_processed_qty || 0)) : row?.chain_remaining_qty)} MT</span></div>
+                </div>
+                {row?.assignment_narration ? <div className="dr-assignment-note"><b>Assignment:</b> {row.assignment_narration}</div> : null}
                 {renderFactoryAssignmentDetails(row)}
+                <div className="dr-mobile-progress">
+                  <div className="dr-mobile-workflow-title">PROGRESS / CHAIN ENTRY</div>
+                  <input type="number" min="0" value={(progressForm[rowId] || {}).processed_qty || ""} onChange={(e) => setProgressForm((prev) => ({ ...prev, [rowId]: { ...(prev[rowId] || {}), processed_qty: e.target.value } }))} placeholder="Processed Qty (MT)" style={styles.workflowInput} />
+                  <input type="number" min="0" value={(progressForm[rowId] || {}).new_rejection_qty || ""} onChange={(e) => setProgressForm((prev) => ({ ...prev, [rowId]: { ...(prev[rowId] || {}), new_rejection_qty: e.target.value } }))} placeholder="New Rejection Qty (MT)" style={styles.workflowInput} />
+                  <input value={(progressForm[rowId] || {}).new_lorry_no || ""} onChange={(e) => setProgressForm((prev) => ({ ...prev, [rowId]: { ...(prev[rowId] || {}), new_lorry_no: e.target.value } }))} placeholder="New Lorry No" style={styles.workflowInput} />
+                  <input value={(progressForm[rowId] || {}).destination_type || ""} onChange={(e) => setProgressForm((prev) => ({ ...prev, [rowId]: { ...(prev[rowId] || {}), destination_type: e.target.value } }))} placeholder="Destination / Movement" style={styles.workflowInput} />
+                  <input value={(progressForm[rowId] || {}).narration || ""} onChange={(e) => setProgressForm((prev) => ({ ...prev, [rowId]: { ...(prev[rowId] || {}), narration: e.target.value } }))} placeholder="Progress narration" style={styles.workflowInput} />
+                  <button type="button" disabled={rowBusy} onClick={() => updateProgress(rowId)} style={styles.completeInline}>{rowBusy ? "Saving..." : "Save Progress / Send Pending"}</button>
+                </div>
                 <div className="dr-mobile-complete">
-                  <input value={completionRemarks[rowId] || ""} onChange={(e) => setCompletionRemarks((prev) => ({ ...prev, [rowId]: e.target.value }))} placeholder="Completion note" style={styles.workflowInput} />
-                  <button type="button" disabled={rowBusy} onClick={() => completeRow(rowId, row?.rejection_qty)} style={styles.completeInline}>{rowBusy ? "Completing..." : "✓ Complete Work"}</button>
+                  <input value={completionRemarks[rowId] || ""} onChange={(e) => setCompletionRemarks((prev) => ({ ...prev, [rowId]: e.target.value }))} placeholder="Final completion note" style={styles.workflowInput} />
+                  <button type="button" disabled={rowBusy || Number(row?.chain_remaining_qty || 0) > 0.000001} onClick={() => completeRow(rowId)} style={styles.completeInline}>{rowBusy ? "Completing..." : "✓ Complete Work"}</button>
                 </div>
               </div>
             ) : null}
@@ -626,7 +698,7 @@ export default function DailyRejectionPage() {
   const renderTable = (tableRows, withWorkflow = true, reportMode = false) => {
     const showManagerWorkflow = withWorkflow && canAssign;
     const showReportWorkflow = reportMode;
-    const totalColumns = 15 + (showManagerWorkflow || showReportWorkflow ? 3 : withWorkflow ? 1 : 0);
+    const totalColumns = 17 + (showManagerWorkflow || showReportWorkflow ? 4 : withWorkflow ? 1 : 0);
     const headers = [
       "Date",
       "Rejection No",
@@ -638,11 +710,13 @@ export default function DailyRejectionPage() {
       "Original",
       "Unloading",
       "Reject",
+      "Processed",
+      "Remaining",
       "Reason",
       "Work",
       "Assigned To",
       "Status",
-      ...(showManagerWorkflow || showReportWorkflow ? ["Assign Work", "Select Staff", "Work Action"] : withWorkflow ? ["Work Action"] : []),
+      ...(showManagerWorkflow || showReportWorkflow ? ["Assign Work", "Select Staff", "Narration", "Work Action"] : withWorkflow ? ["Work Action"] : []),
       "Action",
     ];
 
@@ -680,6 +754,8 @@ export default function DailyRejectionPage() {
                       <td style={styles.tdNum}>{money(row?.original_qty)}</td>
                       <td style={styles.tdNum}>{money(row?.actual_unloading_qty)}</td>
                       <td style={{ ...styles.tdNum, fontWeight: 900 }}>{money(row?.rejection_qty)}</td>
+                      <td style={styles.tdNum}>{money(row?.chain_processed_qty)}</td>
+                      <td style={styles.tdNum}>{money(row?.chain_remaining_qty == null ? (Number(row?.chain_target_qty || row?.original_qty || 0) - Number(row?.chain_processed_qty || 0)) : row?.chain_remaining_qty)}</td>
                       <td style={styles.td}>{row?.reason || "-"}</td>
                       <td style={styles.td}>{row?.action_type || "-"}</td>
                       <td style={styles.td}>{row?.assigned_to_name || "-"}</td>
@@ -698,16 +774,31 @@ export default function DailyRejectionPage() {
   onChange={(value) => setAssignedEmployee((prev) => ({ ...prev, [rowId]: value }))}
   placeholder="Staff / type to search"
 /></td>
+                          <td style={{ ...styles.td, ...styles.workflowTd }}><input value={assignNarration[rowId] || ""} onChange={(e) => setAssignNarration((prev) => ({ ...prev, [rowId]: e.target.value }))} placeholder="Assignment narration" style={styles.workflowInput} /></td>
                           <td style={{ ...styles.td, ...styles.workflowTd }}><button type="button" disabled={rowBusy || isComplete || !actionValue || !employeeValue} onClick={() => assignRow(rowId)} style={{ ...styles.assignButtonInline, opacity: rowBusy || isComplete || !actionValue || !employeeValue ? 0.55 : 1 }}>{rowBusy ? "Assigning..." : row?.status === "RUNNING" ? "Reassign & Keep Running" : "Assign & Start Work"}</button></td>
                         </>
                       ) : showReportWorkflow ? (
                         <>
                           <td style={{ ...styles.td, ...styles.workflowTd }}><span style={styles.reportWorkflowValue}>{row?.action_type || "-"}</span></td>
                           <td style={{ ...styles.td, ...styles.workflowTd }}><span style={styles.reportWorkflowValue}>{row?.assigned_to_name || "-"}</span></td>
+                          <td style={{ ...styles.td, ...styles.workflowTd }}><span style={styles.reportWorkflowValue}>{row?.assignment_narration || "-"}</span></td>
                           <td style={{ ...styles.td, ...styles.workflowTd }}><span style={{ ...styles.reportWorkflowChip, ...statusStyle(row?.status) }}>{row?.status === "COMPLETE" ? "Completed" : row?.status === "RUNNING" ? "Running" : row?.status === "ASSIGNED" ? "Assigned" : "Pending"}</span></td>
                         </>
                       ) : withWorkflow ? (
-                        <td style={{ ...styles.td, ...styles.workflowTd }}>{assignedToMe && row?.status === "RUNNING" ? <div><div style={styles.workerInline}><input value={completionRemarks[rowId] || ""} onChange={(e) => setCompletionRemarks((prev) => ({ ...prev, [rowId]: e.target.value }))} placeholder="Completion note" style={styles.workflowInput} /><button type="button" disabled={rowBusy} onClick={() => completeRow(rowId, row?.rejection_qty)} style={styles.completeInline}>{rowBusy ? "Completing..." : "✓ Complete Work"}</button></div>{renderFactoryAssignmentDetails(row)}</div> : <span style={styles.mutedDash}>-</span>}</td>
+                        <td style={{ ...styles.td, ...styles.workflowTd }}>{assignedToMe && row?.status === "RUNNING" ? <div>
+                          <div style={styles.workerInline}><span><b>Target:</b> {money(row?.chain_target_qty || row?.original_qty)} MT &nbsp; <b>Processed:</b> {money(row?.chain_processed_qty)} MT &nbsp; <b>Remaining:</b> {money(row?.chain_remaining_qty == null ? (Number(row?.chain_target_qty || row?.original_qty || 0) - Number(row?.chain_processed_qty || 0)) : row?.chain_remaining_qty)} MT</span></div>
+                          {row?.assignment_narration ? <div className="dr-assignment-note"><b>Assignment:</b> {row.assignment_narration}</div> : null}
+                          {renderFactoryAssignmentDetails(row)}
+                          <div className="dr-chain-entry-inline">
+                            <input type="number" min="0" value={(progressForm[rowId] || {}).processed_qty || ""} onChange={(e) => setProgressForm((prev) => ({ ...prev, [rowId]: { ...(prev[rowId] || {}), processed_qty: e.target.value } }))} placeholder="Processed Qty" style={styles.workflowInput} />
+                            <input type="number" min="0" value={(progressForm[rowId] || {}).new_rejection_qty || ""} onChange={(e) => setProgressForm((prev) => ({ ...prev, [rowId]: { ...(prev[rowId] || {}), new_rejection_qty: e.target.value } }))} placeholder="New Rejection" style={styles.workflowInput} />
+                            <input value={(progressForm[rowId] || {}).new_lorry_no || ""} onChange={(e) => setProgressForm((prev) => ({ ...prev, [rowId]: { ...(prev[rowId] || {}), new_lorry_no: e.target.value } }))} placeholder="New Lorry" style={styles.workflowInput} />
+                            <input value={(progressForm[rowId] || {}).destination_type || ""} onChange={(e) => setProgressForm((prev) => ({ ...prev, [rowId]: { ...(prev[rowId] || {}), destination_type: e.target.value } }))} placeholder="Destination" style={styles.workflowInput} />
+                            <input value={(progressForm[rowId] || {}).narration || ""} onChange={(e) => setProgressForm((prev) => ({ ...prev, [rowId]: { ...(prev[rowId] || {}), narration: e.target.value } }))} placeholder="Progress narration" style={styles.workflowInput} />
+                            <button type="button" disabled={rowBusy} onClick={() => updateProgress(rowId)} style={styles.completeInline}>{rowBusy ? "Saving..." : "Save Progress"}</button>
+                          </div>
+                          <div style={styles.workerInline}><input value={completionRemarks[rowId] || ""} onChange={(e) => setCompletionRemarks((prev) => ({ ...prev, [rowId]: e.target.value }))} placeholder="Final completion note" style={styles.workflowInput} /><button type="button" disabled={rowBusy || Number(row?.chain_remaining_qty || 0) > 0.000001} onClick={() => completeRow(rowId)} style={styles.completeInline}>{rowBusy ? "Completing..." : "✓ Complete Work"}</button></div>
+                        </div> : <span style={styles.mutedDash}>-</span>}</td>
                       ) : null}
                       <td style={{ ...styles.td, ...styles.actionTd, position: "sticky", right: 0, background: "#fff", zIndex: 4 }}>{renderActionIcons(row)}</td>
                     </tr>
@@ -830,7 +921,7 @@ export default function DailyRejectionPage() {
 
       <div style={styles.summaryGrid}>
         {[['Total', summary.total, 'neutral'], ['Pending', summary.pending, 'pending'], ['Running', summary.running, 'running'], ['Complete', summary.complete, 'complete']].map(([label, value, kind]) => (
-          <div key={label} style={{ ...styles.metric, ...(styles.metricKinds[kind] || {}) }}><div style={styles.metricLabel}>{label}</div><div style={styles.metricValue}>{(value ?? 0)}</div></div>
+          <div key={label} style={{ ...styles.metric, ...(styles.metricKinds[kind] || {}) }}><div style={styles.metricLabel}>{label}</div><div style={styles.metricValue}>{value || 0}</div></div>
         ))}
       </div>
 
@@ -1203,6 +1294,9 @@ const styles = {
   toastMessage: { fontSize: 13, fontWeight: 800, lineHeight: 1.35, flex: '1 1 auto' },
   toastClose: { width: 24, height: 24, border: 0, background: 'transparent', color: 'inherit', fontSize: 18, lineHeight: 1, cursor: 'pointer', padding: 0, opacity: .8 },
   assignPanel: { marginTop: 13, border: '1px solid #bfdbfe', background: 'linear-gradient(135deg,#eff6ff,#f8fbff)', borderRadius: 14, padding: 12 }, assignHead: { display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center', marginBottom: 8, color: '#1e3a8a', fontSize: 11, fontWeight: 900 }, assignGrid: { display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr) auto', gap: 8 }, assignButton: { border: 0, background: '#1d4ed8', color: '#fff', borderRadius: 10, padding: '10px 13px', fontWeight: 900, cursor: 'pointer' },
+  chainBox: { marginTop: 8, padding: 8, borderRadius: 10, background: "#f8fafc", border: "1px solid #cbd5e1" },
+  chainEntry: { marginTop: 8, display: "grid", gap: 7 },
+  assignmentNote: { marginTop: 7, padding: 7, borderRadius: 8, background: "#fffbeb", border: "1px solid #fde68a", color: "#92400e", fontSize: 12 },
   workerPanel: { marginTop: 13, border: '1px solid #99f6e4', background: 'linear-gradient(135deg,#ecfeff,#f0fdfa)', borderRadius: 14, padding: 12 }, workerTitle: { color: '#115e59', fontWeight: 950 }, workerWork: { color: '#475569', fontSize: 12, marginTop: 3 }, completeRow: { display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', gap: 8, marginTop: 10 }, complete: { border: 0, background: '#047857', color: '#fff', borderRadius: 10, padding: '10px 14px', fontWeight: 900, cursor: 'pointer' }, completedPanel: { marginTop: 12, padding: 10, borderRadius: 11, background: '#ecfdf5', border: '1px solid #a7f3d0', color: '#047857', fontWeight: 800 },
   factoryOverlay: { position: 'fixed', inset: 0, zIndex: 99999, background: 'rgba(15,23,42,.58)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 14, overflowY: 'auto', WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain' },
   factoryModal: { width: 'min(900px, 100%)', maxHeight: 'calc(100dvh - 28px)', overflowY: 'auto', WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', touchAction: 'pan-y', background: '#fff', borderRadius: 18, boxShadow: '0 24px 70px rgba(15,23,42,.3)', padding: 18, boxSizing: 'border-box' },
