@@ -276,7 +276,23 @@ export default function DailyRejectionPage() {
     const rowId = factoryModal.rowId;
     const employeeId = assignedEmployee[rowId];
     if (!employeeId) {
-      showToast("Please select a staff member first.", "warning");
+      showToast("Save failed: Please select a staff member first.", "error");
+      return;
+    }
+    if (!factoryForm.company_id) {
+      showToast("Save failed: Please select Company Name.", "error");
+      return;
+    }
+    if (!factoryForm.company_account_id) {
+      showToast("Save failed: Please select Company Account.", "error");
+      return;
+    }
+    if (!factoryForm.buyer_id) {
+      showToast("Save failed: Please select Buyer Name.", "error");
+      return;
+    }
+    if (!factoryForm.consignee_id) {
+      showToast("Save failed: Please select Consignee Name.", "error");
       return;
     }
     const totalQty = Number(factoryForm.rejection_qty || 0) + Number(factoryForm.other_qty || 0);
@@ -301,7 +317,9 @@ export default function DailyRejectionPage() {
       showToast("Send To Factory saved and work assigned successfully.", "success");
       await loadData();
     } catch (err) {
-      showToast(err?.response?.data?.error || err?.message || "Failed to save Send To Factory.", "error");
+      const serverMessage = err?.response?.data?.error || err?.response?.data?.message || err?.message || "Unknown error";
+      const statusText = err?.response?.status ? ` (HTTP ${err.response.status})` : "";
+      showToast(`Save & Assign failed${statusText}: ${serverMessage}`, "error");
     } finally {
       setBusyId("");
     }
@@ -1110,7 +1128,7 @@ const styles = {
   reportTableWrap: { marginTop: 10, overflow: 'visible', borderRadius: 12 },
   reportWorkflowValue: { display: 'inline-flex', alignItems: 'center', minHeight: 30, padding: '5px 8px', borderRadius: 8, background: '#f8fafc', border: '1px solid #e2e8f0', fontWeight: 800, color: '#0f172a', whiteSpace: 'nowrap' },
   reportWorkflowChip: { display: 'inline-flex', alignItems: 'center', borderRadius: 999, padding: '5px 8px', fontSize: 10, fontWeight: 900, whiteSpace: 'nowrap', border: '1px solid transparent' },
-  toast: { position: 'fixed', top: 18, right: 18, zIndex: 99999, minWidth: 300, maxWidth: 'min(420px, calc(100vw - 36px))', display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', borderRadius: 12, border: '1px solid', boxShadow: '0 14px 35px rgba(15,23,42,.18)', backdropFilter: 'blur(8px)' },
+  toast: { position: 'fixed', top: 18, right: 18, zIndex: 1000001, minWidth: 300, maxWidth: 'min(420px, calc(100vw - 36px))', display: 'flex', alignItems: 'center', gap: 10, padding: '12px 14px', borderRadius: 12, border: '1px solid', boxShadow: '0 14px 35px rgba(15,23,42,.18)', backdropFilter: 'blur(8px)' },
   toastKinds: { success: { background: '#ecfdf5', color: '#065f46', borderColor: '#a7f3d0' }, error: { background: '#fef2f2', color: '#991b1b', borderColor: '#fecaca' }, warning: { background: '#fffbeb', color: '#92400e', borderColor: '#fde68a' }, info: { background: '#eff6ff', color: '#1e40af', borderColor: '#bfdbfe' } },
   toastDot: { width: 8, height: 8, borderRadius: 999, background: 'currentColor', flex: '0 0 auto' },
   toastMessage: { fontSize: 13, fontWeight: 800, lineHeight: 1.35, flex: '1 1 auto' },
