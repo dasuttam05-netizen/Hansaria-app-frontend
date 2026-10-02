@@ -5,7 +5,7 @@ import { hasPermission, loadSession } from "../utils/auth";
 
 const API = "/api/daily-rejections";
 const STATUSES = ["ALL", "PENDING", "RUNNING", "COMPLETE", "REPORT"];
-const WORK_DESCRIPTIONS = ["PALTI", "WAREHOUSE UNLOAD", "LOCAL SALE", "PARTY ACCOUNT", "OTHERS", "SEND TO FACTORY"];
+const WORK_DESCRIPTIONS = ["PALTI", "WAREHOUSE UNLOAD", "LOCAL SALE", "PARTY ACCOUNT", "OTHERS"];
 const REASONS = ["HIGH FUNGUS", "HIGH MOISTURE", "DISCOLOUR", "DAMAGE", "LIVE INSECT", "WATER DAMAGE", "OTHERS"];
 
 const makeEmptyForm = (user) => ({
@@ -24,7 +24,7 @@ const makeEmptyForm = (user) => ({
   remarks: "",
 });
 
-const idOf = (row) => String(row?.id ?? row?._id ?? row?.legacy_id ?? "");
+const idOf = (row) => String(row && row.id != null ? row.id : row && row._id != null ? row._id : row && row.legacy_id != null ? row.legacy_id : "");
 const textOf = (row) => String(row?.name ?? row?.title ?? row?.display_name ?? row?.party_name ?? row?.company_name ?? row?.consignee_name ?? "");
 const money = (value) => Number(value || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -105,15 +105,6 @@ export default function DailyRejectionPage() {
   const [error, setError] = useState("");
   const [assignedEmployee, setAssignedEmployee] = useState({});
   const [assignedAction, setAssignedAction] = useState({});
-  const [assignedNarration, setAssignedNarration] = useState({});
-  const [progressQty, setProgressQty] = useState({});
-  const [newRejectionQty, setNewRejectionQty] = useState({});
-  const [progressNarration, setProgressNarration] = useState({});
-  const [factoryModal, setFactoryModal] = useState({ open: false, rowId: "" });
-  const [factoryForm, setFactoryForm] = useState({
-    date: new Date().toISOString().slice(0, 10), invoice_no: "", lorry_no: "", company_id: "",
-    company_account_id: "", buyer_id: "", consignee_id: "", rejection_qty: 0, other_qty: 0, rate: 0,
-  });
   const [busyId, setBusyId] = useState("");
   const [completionRemarks, setCompletionRemarks] = useState({});
   const [editId, setEditId] = useState("");
@@ -164,35 +155,7 @@ export default function DailyRejectionPage() {
       const listPayload = listResponse?.data?.data || listResponse?.data || [];
       const summaryPayload = summaryResponse?.data?.data || summaryResponse?.data || {};
       const list = Array.isArray(listPayload) ? listPayload : (listPayload.rows || listPayload.items || []);
-
-      // Manager/Admin can see the complete Daily Rejection table.
-      // A normal staff user sees only work assigned to that user.
-      const userIdCandidates = new Set(
-        [
-          user?.id,
-          user?._id,
-          user?.employee_id,
-          user?.employeeId,
-          ...(Array.isArray(masters.employees)
-            ? masters.employees
-                .filter((employee) =>
-                  String(employee?.user_id ?? employee?.userId ?? employee?.account_id ?? employee?.accountId ?? "") === String(user?.id || user?._id || "")
-                )
-                .map((employee) => idOf(employee))
-            : []),
-        ]
-          .map((value) => String(value || "").trim())
-          .filter(Boolean)
-      );
-
-      const visibleList = canAssign
-        ? list
-        : list.filter((row) => {
-            const assignedId = String(row?.assigned_to ?? row?.assignedTo ?? row?.assigned_employee_id ?? "").trim();
-            return assignedId && userIdCandidates.has(assignedId);
-          });
-
-      setRows(Array.isArray(visibleList) ? visibleList : []);
+      setRows(Array.isArray(list) ? list : []);
       setSummary(summaryPayload && typeof summaryPayload === "object" ? summaryPayload : {});
     } catch (err) {
       setError(err?.response?.data?.error || err?.message || "Unable to load Daily Rejection");
@@ -200,7 +163,7 @@ export default function DailyRejectionPage() {
     } finally {
       setLoading(false);
     }
-  }, [status, actionFilter, canView, canAssign, user?.id, user?._id, user?.employee_id, user?.employeeId, masters.employees]);
+  }, [status, actionFilter, canView]);
 
   useEffect(() => { loadMasters(); }, [loadMasters]);
   useEffect(() => { loadData(); }, [loadData]);
@@ -208,47 +171,17 @@ export default function DailyRejectionPage() {
   const resetForm = () => setForm(makeEmptyForm(user));
   const updateForm = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
 
-  const accountLabel = useCallback((account) => String(
-    account?.account_name ||
-    account?.accountName ||
-    account?.ledger_name ||
-    account?.ledgerName ||
-    account?.name ||
-    account?.party_name ||
-    account?.company_account_name ||
-    account?.title ||
-    ""
-  ).trim(), []);
-
-  const accountCompanyIds = useCallback((account) => [
-    account?.company_id,
-    account?.companyId,
-    account?.company?._id,
-    account?.company?.id,
-    account?.parent_company_id,
-    account?.parentCompanyId,
-  ].filter((value) => value !== undefined && value !== null && String(value).trim() !== "").map(String), []);
-
-  const accountCompanyNames = useCallback((account) => [
-    account?.company_name,
-    account?.companyName,
-    account?.company?.name,
-    account?.parent_company_name,
-    account?.parentCompanyName,
-  ].filter(Boolean).map((value) => String(value).trim().toLowerCase()), []);
-
   const filteredAccounts = useMemo(() => {
-    const all = Array.isArray(masters.accounts) ? masters.accounts : [];
-    if (!form.company_id) return all;
+    if (!form.company_id) return masters.accounts;
     const selectedCompany = masters.companies.find((item) => idOf(item) === String(form.company_id));
     const selectedName = String(selectedCompany?.name || selectedCompany?.company_name || "").trim().toLowerCase();
-    const matched = all.filter((account) => {
-      const companyIds = accountCompanyIds(account);
-      const companyNames = accountCompanyNames(account);
-      return companyIds.includes(String(form.company_id)) || (!!selectedName && companyNames.includes(selectedName));
+    const matched = masters.accounts.filter((account) => {
+      const companyId = account?.company_id ?? account?.companyId ?? account?.company?.id ?? account?.company?._id;
+      const companyName = String(account?.company_name || account?.company?.name || "").trim().toLowerCase();
+      return String(companyId || "") === String(form.company_id) || (!!selectedName && companyName === selectedName);
     });
-    return matched.length ? matched : all;
-  }, [masters.accounts, masters.companies, form.company_id, accountCompanyIds, accountCompanyNames]);
+    return matched.length ? matched : masters.accounts;
+  }, [masters.accounts, masters.companies, form.company_id]);
 
   const originalQty = Number(form.original_qty) || 0;
   const unloadingQty = Number(form.actual_unloading_qty) || 0;
@@ -270,109 +203,14 @@ export default function DailyRejectionPage() {
         await axios.post(API, payload);
         showToast("Daily Rejection saved as Pending.", "success");
       }
-      // The save API has succeeded. Close the form and release Saving immediately.
       resetForm();
       setShowForm(false);
       setEditId("");
-      setSaving(false);
-
-      // Refresh in the background so a slow list request cannot hide the success.
-      try {
-        await loadData();
-      } catch (refreshErr) {
-        console.error("[daily-rejections] refresh after save failed", refreshErr);
-      }
+      await loadData();
     } catch (err) {
       showToast(err?.response?.data?.error || err?.message || "Failed to save Daily Rejection", "error");
-      setSaving(false);
     } finally {
       setSaving(false);
-    }
-  };
-
-  const openFactoryModal = (rowId) => {
-    const row = rows.find((item) => idOf(item) === String(rowId));
-    if (!row) return;
-    setFactoryModal({ open: true, rowId: String(rowId) });
-    setFactoryForm({
-      date: row?.entry_date ? String(row.entry_date).slice(0, 10) : new Date().toISOString().slice(0, 10),
-      invoice_no: row?.rejection_no || "",
-      lorry_no: row?.lorry_no || "",
-      company_id: row?.company_id ? String(row.company_id) : "",
-      company_account_id: row?.company_account_id ? String(row.company_account_id) : "",
-      buyer_id: "",
-      consignee_id: row?.consignee_id ? String(row.consignee_id) : "",
-      rejection_qty: Number(row?.rejection_qty || 0),
-      other_qty: 0,
-      rate: 0,
-    });
-  };
-
-  const closeFactoryModal = () => {
-    if (busyId) return;
-    setFactoryModal({ open: false, rowId: "" });
-  };
-
-  const saveFactoryAssignment = async () => {
-    const rowId = factoryModal.rowId;
-    const employeeId = assignedEmployee[rowId];
-    if (!employeeId) {
-      showToast("Please select a staff member first.", "warning");
-      return;
-    }
-    const totalQty = Number(factoryForm.rejection_qty || 0) + Number(factoryForm.other_qty || 0);
-    const amount = totalQty * Number(factoryForm.rate || 0);
-    const company = masters.companies.find((x) => idOf(x) === String(factoryForm.company_id));
-    const account = masters.accounts.find((x) => idOf(x) === String(factoryForm.company_account_id));
-    const buyer = masters.consignees.find((x) => idOf(x) === String(factoryForm.buyer_id));
-    const consignee = masters.consignees.find((x) => idOf(x) === String(factoryForm.consignee_id));
-    setBusyId(rowId);
-    try {
-      await axios.patch(`${API}/${rowId}/assign`, {
-        assigned_to: employeeId, action_type: "SEND TO FACTORY",
-        factory_date: factoryForm.date, factory_invoice_no: factoryForm.invoice_no, factory_lorry_no: factoryForm.lorry_no,
-        factory_company_id: factoryForm.company_id, factory_company_name: textOf(company),
-        factory_company_account_id: factoryForm.company_account_id, factory_company_account_name: accountLabel(account),
-        factory_buyer_id: factoryForm.buyer_id, factory_buyer_name: textOf(buyer),
-        factory_consignee_id: factoryForm.consignee_id, factory_consignee_name: textOf(consignee),
-        factory_rejection_qty: Number(factoryForm.rejection_qty || 0), factory_other_qty: Number(factoryForm.other_qty || 0),
-        factory_total_qty: totalQty, factory_weight: totalQty, factory_rate: Number(factoryForm.rate || 0), factory_amount: amount,
-      });
-      setFactoryModal({ open: false, rowId: "" });
-      showToast("Send To Factory saved and work assigned successfully.", "success");
-      await loadData();
-    } catch (err) {
-      showToast(err?.response?.data?.error || err?.message || "Failed to save Send To Factory.", "error");
-    } finally {
-      setBusyId("");
-    }
-  };
-
-  const submitProgress = async (rowId) => {
-    const row = rows.find((item) => idOf(item) === String(rowId));
-    if (!row) return;
-    const qty = Number(progressQty[rowId] || 0);
-    const newQty = Number(newRejectionQty[rowId] || 0);
-    if (qty < 0 || newQty < 0 || (qty <= 0 && newQty <= 0)) {
-      showToast("Enter a progress quantity or a new rejection quantity.", "warning");
-      return;
-    }
-    setBusyId(rowId);
-    try {
-      await axios.patch(`${API}/${rowId}/progress`, {
-        progress_qty: qty,
-        new_rejection_qty: newQty,
-        narration: progressNarration[rowId] || "",
-      });
-      showToast("Progress saved. The work status has been updated.", "success");
-      setProgressQty((prev) => ({ ...prev, [rowId]: "" }));
-      setNewRejectionQty((prev) => ({ ...prev, [rowId]: "" }));
-      setProgressNarration((prev) => ({ ...prev, [rowId]: "" }));
-      await loadData();
-    } catch (err) {
-      showToast(err?.response?.data?.error || err?.message || "Failed to save progress.", "error");
-    } finally {
-      setBusyId("");
     }
   };
 
@@ -383,17 +221,9 @@ export default function DailyRejectionPage() {
       showToast("Please select a staff member and Work Description first.", "warning");
       return;
     }
-    if (actionType === "SEND TO FACTORY") {
-      openFactoryModal(rowId);
-      return;
-    }
     setBusyId(rowId);
     try {
-      await axios.patch(`${API}/${rowId}/assign`, {
-        assigned_to: employeeId,
-        action_type: actionType,
-        assignment_narration: assignedNarration[rowId] || "",
-      });
+      await axios.patch(`${API}/${rowId}/assign`, { assigned_to: employeeId, action_type: actionType });
       showToast("Work assigned successfully and moved to Running.", "success");
       await loadData();
     } catch (err) {
@@ -401,38 +231,6 @@ export default function DailyRejectionPage() {
     } finally {
       setBusyId("");
     }
-  };
-
-  const renderFactoryAssignmentDetails = (row) => {
-    if (String(row?.action_type || "").toUpperCase() !== "SEND TO FACTORY") return null;
-    const details = [
-      ["Date", row?.factory_date],
-      ["Invoice No", row?.factory_invoice_no],
-      ["Lorry No", row?.factory_lorry_no],
-      ["Company Name", row?.factory_company_name],
-      ["Company Account", row?.factory_company_account_name],
-      ["Buyer Name", row?.factory_buyer_name],
-      ["Consignee Name", row?.factory_consignee_name],
-      ["Reject Qty", row?.factory_rejection_qty],
-      ["Other Qty", row?.factory_other_qty],
-      ["Total Qty", row?.factory_total_qty],
-      ["Weight", (row?.factory_weight != null ? row.factory_weight : row?.factory_total_qty)],
-      ["Rate", row?.factory_rate],
-      ["Amount", row?.factory_amount],
-    ];
-    return (
-      <div className="dr-factory-assigned-details">
-        <div className="dr-factory-assigned-title">SEND TO FACTORY DETAILS</div>
-        <div className="dr-factory-assigned-grid">
-          {details.map(([label, value]) => (
-            <div className="dr-factory-assigned-box" key={label}>
-              <div className="dr-factory-assigned-label">{label}</div>
-              <div className="dr-factory-assigned-value">{value === undefined || value === null || value === "" ? "-" : label.includes("Qty") || label === "Rate" || label === "Amount" ? money(value) : label === "Date" ? formatDate(value) : String(value)}</div>
-            </div>
-          ))}
-        </div>
-      </div>
-    );
   };
 
   const completeRow = async (rowId, qty) => {
@@ -568,15 +366,7 @@ export default function DailyRejectionPage() {
     );
   };
 
-  const assignedToMeRow = (row) => {
-    const assignedId = String(row?.assigned_to ?? row?.assignedTo ?? row?.assigned_employee_id ?? "");
-    if (!assignedId) return false;
-    if ([user?.id, user?._id, user?.employee_id, user?.employeeId].some((value) => String(value || "") === assignedId)) return true;
-    return Array.isArray(masters.employees) && masters.employees.some((employee) =>
-      idOf(employee) === assignedId &&
-      String(employee?.user_id ?? employee?.userId ?? employee?.account_id ?? employee?.accountId ?? "") === String(user?.id || user?._id || "")
-    );
-  };
+  const assignedToMeRow = (row) => String(row?.assigned_to || "") === String(user?.id || "") || String(row?.assigned_to || "") === String(user?._id || "");
 
   const renderMobileCards = (tableRows, withWorkflow = true) => (
     <div className="dr-mobile-list">
@@ -616,19 +406,14 @@ export default function DailyRejectionPage() {
               <div className="dr-mobile-workflow">
                 <div className="dr-mobile-workflow-title">ASSIGN WORK</div>
                 <div className="dr-mobile-workflow-grid">
-                  <SearchableSelect
-  value={actionValue}
-  options={WORK_DESCRIPTIONS.map((item) => ({ value: item, label: item }))}
-  onChange={(value) => { setAssignedAction((prev) => ({ ...prev, [rowId]: value })); if (value === "SEND TO FACTORY") openFactoryModal(rowId); }}
-  placeholder="Work Description / type to search"
-/>
-                  <SearchableSelect
-  value={employeeValue}
-  options={masters.employees.map((item) => ({ value: idOf(item), label: textOf(item) }))}
-  onChange={(value) => setAssignedEmployee((prev) => ({ ...prev, [rowId]: value }))}
-  placeholder="Staff / type to search"
-/>
-                  <input value={assignedNarration[rowId] || ""} onChange={(e) => setAssignedNarration((prev) => ({ ...prev, [rowId]: e.target.value }))} placeholder="Assignment narration / instruction" style={styles.workflowInput} />
+                  <select value={actionValue} disabled={isComplete} onChange={(e) => setAssignedAction((prev) => ({ ...prev, [rowId]: e.target.value }))} style={styles.workflowSelect}>
+                    <option value="">Select Work</option>
+                    {WORK_DESCRIPTIONS.map((item) => <option key={item} value={item}>{item}</option>)}
+                  </select>
+                  <select value={employeeValue} disabled={isComplete} onChange={(e) => setAssignedEmployee((prev) => ({ ...prev, [rowId]: e.target.value }))} style={styles.workflowSelect}>
+                    <option value="">Select Staff</option>
+                    {masters.employees.map((item) => <option key={idOf(item)} value={idOf(item)}>{textOf(item)}</option>)}
+                  </select>
                   <button type="button" disabled={rowBusy || isComplete || !actionValue || !employeeValue} onClick={() => assignRow(rowId)} style={{ ...styles.assignButtonInline, opacity: rowBusy || isComplete || !actionValue || !employeeValue ? 0.55 : 1 }}>
                     {rowBusy ? "Assigning..." : row?.status === "RUNNING" ? "Reassign & Keep Running" : "Assign & Start Work"}
                   </button>
@@ -640,14 +425,9 @@ export default function DailyRejectionPage() {
               <div className="dr-mobile-worker">
                 <div className="dr-mobile-workflow-title">YOUR ASSIGNED WORK</div>
                 <div className="dr-mobile-worker-work">{row?.action_type || "Work assigned"} · {money(row?.rejection_qty)} Qty</div>
-                {renderFactoryAssignmentDetails(row)}
                 <div className="dr-mobile-complete">
-                  <div className="dr-progress-label">Required: {money(row?.required_qty ?? row?.original_qty)} · Done: {money(row?.progress_completed_qty)} · Remaining: {money(row?.remaining_work_qty)}</div>
-                  {row?.assignment_narration ? <div className="dr-assignment-note"><b>Assignment:</b> {row.assignment_narration}</div> : null}
-                  <input type="number" min="0" step="0.01" value={progressQty[rowId] || ""} onChange={(e) => setProgressQty((prev) => ({ ...prev, [rowId]: e.target.value }))} placeholder="Progress / handled Qty" style={styles.workflowInput} />
-                  <input type="number" min="0" step="0.01" value={newRejectionQty[rowId] || ""} onChange={(e) => setNewRejectionQty((prev) => ({ ...prev, [rowId]: e.target.value }))} placeholder="New rejection Qty (if any)" style={styles.workflowInput} />
-                  <input value={progressNarration[rowId] || ""} onChange={(e) => setProgressNarration((prev) => ({ ...prev, [rowId]: e.target.value }))} placeholder="Progress narration" style={styles.workflowInput} />
-                  <button type="button" disabled={rowBusy} onClick={() => submitProgress(rowId)} style={styles.completeInline}>{rowBusy ? "Saving..." : "Save Progress"}</button>
+                  <input value={completionRemarks[rowId] || ""} onChange={(e) => setCompletionRemarks((prev) => ({ ...prev, [rowId]: e.target.value }))} placeholder="Completion note" style={styles.workflowInput} />
+                  <button type="button" disabled={rowBusy} onClick={() => completeRow(rowId, row?.rejection_qty)} style={styles.completeInline}>{rowBusy ? "Completing..." : "✓ Complete Work"}</button>
                 </div>
               </div>
             ) : null}
@@ -664,7 +444,7 @@ export default function DailyRejectionPage() {
   const renderTable = (tableRows, withWorkflow = true, reportMode = false) => {
     const showManagerWorkflow = withWorkflow && canAssign;
     const showReportWorkflow = reportMode;
-    const totalColumns = 15 + (showManagerWorkflow || showReportWorkflow ? 4 : withWorkflow ? 1 : 0);
+    const totalColumns = 15 + (showManagerWorkflow || showReportWorkflow ? 3 : withWorkflow ? 1 : 0);
     const headers = [
       "Date",
       "Rejection No",
@@ -680,7 +460,7 @@ export default function DailyRejectionPage() {
       "Work",
       "Assigned To",
       "Status",
-      ...(showManagerWorkflow || showReportWorkflow ? ["Assign Work", "Select Staff", "Assignment Note", "Work Action"] : withWorkflow ? ["Work Action"] : []),
+      ...(showManagerWorkflow || showReportWorkflow ? ["Assign Work", "Select Staff", "Work Action"] : withWorkflow ? ["Work Action"] : []),
       "Action",
     ];
 
@@ -724,19 +504,8 @@ export default function DailyRejectionPage() {
                       <td style={styles.td}><span style={{ ...styles.statusChip, ...statusStyle(row?.status) }}>{row?.status || "PENDING"}</span></td>
                       {showManagerWorkflow ? (
                         <>
-                          <td style={{ ...styles.td, ...styles.workflowTd }}><SearchableSelect
-  value={actionValue}
-  options={WORK_DESCRIPTIONS.map((item) => ({ value: item, label: item }))}
-  onChange={(value) => { setAssignedAction((prev) => ({ ...prev, [rowId]: value })); if (value === "SEND TO FACTORY") openFactoryModal(rowId); }}
-  placeholder="Work Description / type to search"
-/></td>
-                          <td style={{ ...styles.td, ...styles.workflowTd }}><SearchableSelect
-  value={employeeValue}
-  options={masters.employees.map((item) => ({ value: idOf(item), label: textOf(item) }))}
-  onChange={(value) => setAssignedEmployee((prev) => ({ ...prev, [rowId]: value }))}
-  placeholder="Staff / type to search"
-/></td>
-                          <td style={{ ...styles.td, ...styles.workflowTd }}><input value={assignedNarration[rowId] || ""} onChange={(e) => setAssignedNarration((prev) => ({ ...prev, [rowId]: e.target.value }))} placeholder="Assignment narration" style={styles.workflowInput} /></td>
+                          <td style={{ ...styles.td, ...styles.workflowTd }}><select value={actionValue} disabled={isComplete} onChange={(e) => setAssignedAction((prev) => ({ ...prev, [rowId]: e.target.value }))} style={styles.workflowSelect}><option value="">Select Work</option>{WORK_DESCRIPTIONS.map((item) => <option key={item} value={item}>{item}</option>)}</select></td>
+                          <td style={{ ...styles.td, ...styles.workflowTd }}><select value={employeeValue} disabled={isComplete} onChange={(e) => setAssignedEmployee((prev) => ({ ...prev, [rowId]: e.target.value }))} style={styles.workflowSelect}><option value="">Select Staff</option>{masters.employees.map((item) => <option key={idOf(item)} value={idOf(item)}>{textOf(item)}</option>)}</select></td>
                           <td style={{ ...styles.td, ...styles.workflowTd }}><button type="button" disabled={rowBusy || isComplete || !actionValue || !employeeValue} onClick={() => assignRow(rowId)} style={{ ...styles.assignButtonInline, opacity: rowBusy || isComplete || !actionValue || !employeeValue ? 0.55 : 1 }}>{rowBusy ? "Assigning..." : row?.status === "RUNNING" ? "Reassign & Keep Running" : "Assign & Start Work"}</button></td>
                         </>
                       ) : showReportWorkflow ? (
@@ -746,17 +515,7 @@ export default function DailyRejectionPage() {
                           <td style={{ ...styles.td, ...styles.workflowTd }}><span style={{ ...styles.reportWorkflowChip, ...statusStyle(row?.status) }}>{row?.status === "COMPLETE" ? "Completed" : row?.status === "RUNNING" ? "Running" : row?.status === "ASSIGNED" ? "Assigned" : "Pending"}</span></td>
                         </>
                       ) : withWorkflow ? (
-                        <td style={{ ...styles.td, ...styles.workflowTd }}>{assignedToMe && row?.status === "RUNNING" ? <div>
-                          <div className="dr-progress-label">Required: {money(row?.required_qty ?? row?.original_qty)} · Done: {money(row?.progress_completed_qty)} · Remaining: {money(row?.remaining_work_qty)}</div>
-                          {row?.assignment_narration ? <div className="dr-assignment-note"><b>Assignment:</b> {row.assignment_narration}</div> : null}
-                          <div style={{ display: "grid", gap: 6 }}>
-                            <input type="number" min="0" step="0.01" value={progressQty[rowId] || ""} onChange={(e) => setProgressQty((prev) => ({ ...prev, [rowId]: e.target.value }))} placeholder="Progress Qty" style={styles.workflowInput} />
-                            <input type="number" min="0" step="0.01" value={newRejectionQty[rowId] || ""} onChange={(e) => setNewRejectionQty((prev) => ({ ...prev, [rowId]: e.target.value }))} placeholder="New Rejection Qty" style={styles.workflowInput} />
-                            <input value={progressNarration[rowId] || ""} onChange={(e) => setProgressNarration((prev) => ({ ...prev, [rowId]: e.target.value }))} placeholder="Progress narration" style={styles.workflowInput} />
-                            <button type="button" disabled={rowBusy} onClick={() => submitProgress(rowId)} style={styles.completeInline}>{rowBusy ? "Saving..." : "Save Progress"}</button>
-                          </div>
-                          {renderFactoryAssignmentDetails(row)}
-                        </div> : <span style={styles.mutedDash}>-</span>}</td>
+                        <td style={{ ...styles.td, ...styles.workflowTd }}>{assignedToMe && row?.status === "RUNNING" ? <div style={styles.workerInline}><input value={completionRemarks[rowId] || ""} onChange={(e) => setCompletionRemarks((prev) => ({ ...prev, [rowId]: e.target.value }))} placeholder="Completion note" style={styles.workflowInput} /><button type="button" disabled={rowBusy} onClick={() => completeRow(rowId, row?.rejection_qty)} style={styles.completeInline}>{rowBusy ? "Completing..." : "✓ Complete Work"}</button></div> : <span style={styles.mutedDash}>-</span>}</td>
                       ) : null}
                       <td style={{ ...styles.td, ...styles.actionTd, position: "sticky", right: 0, background: "#fff", zIndex: 4 }}>{renderActionIcons(row)}</td>
                     </tr>
@@ -813,14 +572,6 @@ export default function DailyRejectionPage() {
   return (
     <>
       <style>{`
-        .dr-factory-modal * { touch-action: auto; }
-        @media (max-width: 640px) {
-          .dr-factory-overlay { align-items: flex-start !important; justify-content: center !important; padding: 8px 8px 24px !important; overflow-y: auto !important; -webkit-overflow-scrolling: touch !important; overscroll-behavior-y: contain !important; touch-action: pan-y !important; }
-          .dr-factory-modal { width: 100% !important; max-width: 100% !important; max-height: none !important; min-height: 0 !important; overflow: visible !important; -webkit-overflow-scrolling: auto !important; overscroll-behavior: auto !important; touch-action: auto !important; }
-          .dr-factory-grid { grid-template-columns: minmax(0, 1fr) !important; }
-          .dr-factory-modal input, .dr-factory-modal button { font-family: inherit !important; }
-        }
-        .dr-page-scroll-fix { touch-action: pan-y; overscroll-behavior-y: auto; }
 
         .dr-mobile-list { display:none; }
         .dr-scroll-shell { width:100%; max-width:100%; }
@@ -843,18 +594,8 @@ export default function DailyRejectionPage() {
         .dr-mobile-worker { background:linear-gradient(135deg,#ecfeff,#f0fdfa); border:1px solid #99f6e4; }
         .dr-mobile-workflow-title { color:#1e3a8a; font-size:10px; font-weight:900; letter-spacing:.3px; }
         .dr-mobile-worker-work { color:#475569; font-size:11px; margin-top:3px; }
-        .dr-factory-assigned-details { margin-top: 9px; padding: 9px; border: 1px solid #dbe4ee; border-radius: 10px; background: #f8fafc; }
-        .dr-factory-assigned-title { font-size: 10px; font-weight: 900; letter-spacing: .45px; color: #0f766e; margin-bottom: 7px; }
-        .dr-factory-assigned-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
-        .dr-factory-assigned-box { min-width: 0; padding: 7px; border: 1px solid #e2e8f0; border-radius: 7px; background: #fff; }
-        .dr-factory-assigned-label { font-size: 9px; color: #64748b; font-weight: 800; text-transform: uppercase; }
-        .dr-factory-assigned-value { margin-top: 2px; font-size: 11px; color: #0f172a; font-weight: 700; overflow-wrap: anywhere; }
-        @media (max-width: 720px) { .dr-factory-assigned-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
-
         .dr-mobile-workflow-grid { display:grid; gap:7px; margin-top:8px; }
         .dr-mobile-complete { display:grid; gap:7px; margin-top:8px; }
-        .dr-progress-label { font-size:12px; font-weight:800; color:#334155; }
-        .dr-assignment-note { margin-top:6px; padding:7px 9px; border-radius:8px; background:#f8fafc; border:1px solid #e2e8f0; color:#334155; white-space:normal; line-height:1.35; }
         .dr-mobile-actions { display:flex; justify-content:flex-end; margin-top:10px; padding-top:9px; border-top:1px solid #eef2f7; }
         @media (max-width: 720px) {
           .dr-desktop-table { display:none; }
@@ -873,7 +614,7 @@ export default function DailyRejectionPage() {
           .daily-rejection-report-input { width: 100%; }
         }
       `}</style>
-      <div style={{ ...styles.page, touchAction: "pan-y", overflowX: "hidden" }} className="dr-page-scroll-fix">
+      <div style={styles.page}>
       <div style={styles.hero}>
         <div><div style={styles.kicker}>WAREHOUSE OPERATIONS</div><h1 style={styles.title}>Daily Rejection</h1><div style={styles.subtitle}>Create rejection entries, assign work to staff, and close completed work from one smart workflow.</div></div>
         <button type="button" onClick={() => navigate(-1)} style={styles.back}>Back</button>
@@ -900,13 +641,7 @@ export default function DailyRejectionPage() {
           <div style={styles.reportFilters}>
             <Field label="From Date"><input className="daily-rejection-report-input" type="date" value={reportFrom} onChange={(e) => setReportFrom(e.target.value)} style={styles.input} /></Field>
             <Field label="To Date"><input className="daily-rejection-report-input" type="date" value={reportTo} onChange={(e) => setReportTo(e.target.value)} style={styles.input} /></Field>
-            <Field label="Work"><SearchableSelect
-  value={actionFilter}
-  options={[{ value: "ALL", label: "All Work" }, ...WORK_DESCRIPTIONS.map((item) => ({ value: item, label: item }))]}
-  onChange={setActionFilter}
-  placeholder="All Work / type to search"
-  style={styles.input}
-/></Field>
+            <Field label="Work"><select className="daily-rejection-report-input" value={actionFilter} onChange={(e) => setActionFilter(e.target.value)} style={styles.input}><option value="ALL">All Work</option>{WORK_DESCRIPTIONS.map((item) => <option key={item} value={item}>{item}</option>)}</select></Field>
           </div>
           <div style={styles.reportTableWrap}>{reportRows.length ? renderTable(reportRows, false, true) : <div style={styles.empty}>Select dates and click Generate Report.</div>}</div>
         </div>
@@ -919,37 +654,12 @@ export default function DailyRejectionPage() {
           <form onSubmit={submitEntry}>
             <div style={styles.section}><div style={styles.sectionTitle}>1 · Basic Details</div><div style={styles.grid}>
               <Field label="Date"><input type="date" value={form.entry_date} onChange={(e) => updateForm('entry_date', e.target.value)} style={styles.input} /></Field>
-              <Field label="Location"><SearchableSelect
-  value={form.location_id}
-  options={masters.locations.map((item) => ({ value: idOf(item), label: textOf(item) }))}
-  onChange={(value) => updateForm("location_id", value)}
-  placeholder="Select Location / type to search"
-/></Field>
-              <Field label="Company"><SearchableSelect
-  value={form.company_id}
-  options={masters.companies.map((item) => ({ value: idOf(item), label: textOf(item) }))}
-  onChange={(value) => { updateForm("company_id", value); updateForm("company_account_id", ""); }}
-  placeholder="Select Company / type to search"
-/></Field>
-              <Field label="Company Account"><SearchableSelect
-  value={form.company_account_id}
-  options={filteredAccounts.map((item) => ({ value: idOf(item), label: accountLabel(item) })).filter((item) => item.label)}
-  onChange={(value) => updateForm("company_account_id", value)}
-  placeholder="Select Account / type to search"
-/></Field>
-              <Field label="Consignee"><SearchableSelect
-  value={form.consignee_id}
-  options={masters.consignees.map((item) => ({ value: idOf(item), label: textOf(item) }))}
-  onChange={(value) => updateForm("consignee_id", value)}
-  placeholder="Select Consignee / type to search"
-/></Field>
+              <Field label="Location"><select value={form.location_id} onChange={(e) => updateForm('location_id', e.target.value)} style={styles.input}><option value="">Select Location</option>{masters.locations.map((item) => <option key={idOf(item)} value={idOf(item)}>{textOf(item)}</option>)}</select></Field>
+              <Field label="Company"><select value={form.company_id} onChange={(e) => { updateForm('company_id', e.target.value); updateForm('company_account_id', ''); }} style={styles.input}><option value="">Select Company</option>{masters.companies.map((item) => <option key={idOf(item)} value={idOf(item)}>{textOf(item)}</option>)}</select></Field>
+              <Field label="Company Account"><select value={form.company_account_id} onChange={(e) => updateForm('company_account_id', e.target.value)} style={styles.input}><option value="">Select Account</option>{filteredAccounts.map((item) => <option key={idOf(item)} value={idOf(item)}>{item.account_name || item.name || '-'}</option>)}</select></Field>
+              <Field label="Consignee"><select value={form.consignee_id} onChange={(e) => updateForm('consignee_id', e.target.value)} style={styles.input}><option value="">Select Consignee</option>{masters.consignees.map((item) => <option key={idOf(item)} value={idOf(item)}>{textOf(item)}</option>)}</select></Field>
               <Field label="Lorry No."><input value={form.lorry_no} onChange={(e) => updateForm("lorry_no", e.target.value)} placeholder="Enter Lorry No." style={styles.input} /></Field>
-              <Field label="Product"><SearchableSelect
-  value={form.product_id}
-  options={masters.products.map((item) => ({ value: idOf(item), label: textOf(item) }))}
-  onChange={(value) => updateForm("product_id", value)}
-  placeholder="Select Product / type to search"
-/></Field>
+              <Field label="Product"><select value={form.product_id} onChange={(e) => updateForm('product_id', e.target.value)} style={styles.input}><option value="">Select Product</option>{masters.products.map((item) => <option key={idOf(item)} value={idOf(item)}>{textOf(item)}</option>)}</select></Field>
             </div></div>
 
             <div style={styles.section}><div style={styles.sectionTitle}>2 · Quantity Check</div><div style={styles.quantityGrid}>
@@ -959,12 +669,7 @@ export default function DailyRejectionPage() {
             </div></div>
 
             <div style={styles.section}><div style={styles.sectionTitle}>3 · Rejection Reason</div><div style={styles.grid}>
-              <Field label="Reason"><SearchableSelect
-  value={form.reason}
-  options={REASONS.map((item) => ({ value: item, label: item }))}
-  onChange={(value) => updateForm("reason", value)}
-  placeholder="Select Reason / type to search"
-/></Field>
+              <Field label="Reason"><select value={form.reason} onChange={(e) => updateForm('reason', e.target.value)} style={styles.input}><option value="">Select Reason</option>{REASONS.map((item) => <option key={item} value={item}>{item}</option>)}</select></Field>
               <Field label="Remark"><input value={form.remarks} onChange={(e) => updateForm('remarks', e.target.value)} placeholder="Optional note" style={styles.input} /></Field>
             </div></div>
 
@@ -987,182 +692,7 @@ export default function DailyRejectionPage() {
         {loading ? <div style={styles.empty}>Loading Daily Rejection...</div> : renderTable(rows)}
       </div>
     </div>
-
-    {factoryModal.open ? (() => {
-      const totalQty = Number(factoryForm.rejection_qty || 0) + Number(factoryForm.other_qty || 0);
-      const amount = totalQty * Number(factoryForm.rate || 0);
-      const buyerOptions = Array.from(new Map(masters.consignees.map((x) => {
-        const name = String(x?.buyer_name || x?.buyer || x?.name || x?.party_name || x?.company_name || x?.consignee_name || "").trim();
-        return [name.toLowerCase(), { value: idOf(x), label: name }];
-      }).filter(([, x]) => x.label)).values());
-      return (
-        <div className="dr-factory-overlay" style={styles.factoryOverlay}>
-          <div className="dr-factory-modal" style={styles.factoryModal}>
-            <div style={styles.factoryHeader}><div><h3 style={{ margin: 0 }}>Send To Factory</h3><div style={{ fontSize: 12, opacity: .8 }}>Complete factory details before assignment is saved.</div></div><button type="button" onClick={closeFactoryModal} style={styles.factoryClose}>×</button></div>
-            <div className="dr-factory-grid" style={styles.factoryGrid}>
-              <Field label="Date"><input type="date" value={factoryForm.date} onChange={(e) => setFactoryForm((p) => ({ ...p, date: e.target.value }))} style={styles.input} /></Field>
-              <Field label="Invoice No"><input value={factoryForm.invoice_no} onChange={(e) => setFactoryForm((p) => ({ ...p, invoice_no: e.target.value }))} style={styles.input} placeholder="Invoice No" /></Field>
-              <Field label="Lorry No"><input value={factoryForm.lorry_no} onChange={(e) => setFactoryForm((p) => ({ ...p, lorry_no: e.target.value }))} style={styles.input} placeholder="Lorry No" /></Field>
-              <Field label="Company Name"><SearchableSelect value={factoryForm.company_id} options={masters.companies.map((x) => ({ value: idOf(x), label: textOf(x) }))} onChange={(value) => setFactoryForm((p) => ({ ...p, company_id: value, company_account_id: "" }))} placeholder="Select Company / type to search" /></Field>
-              <Field label="Company Account"><SearchableSelect value={factoryForm.company_account_id} options={(factoryForm.company_id ? (() => {
-                const company = masters.companies.find((x) => idOf(x) === String(factoryForm.company_id));
-                const companyName = String(company?.name || company?.company_name || "").trim().toLowerCase();
-                const all = Array.isArray(masters.accounts) ? masters.accounts : [];
-                const matched = all.filter((x) => accountCompanyIds(x).includes(String(factoryForm.company_id)) || (!!companyName && accountCompanyNames(x).includes(companyName)));
-                return matched.length ? matched : all;
-              })() : (Array.isArray(masters.accounts) ? masters.accounts : [])).map((x) => ({ value: idOf(x), label: accountLabel(x) })).filter((x) => x.label)} onChange={(value) => setFactoryForm((p) => ({ ...p, company_account_id: value }))} placeholder="Select Account / type to search" /></Field>
-              <Field label="Buyer Name"><SearchableSelect value={factoryForm.buyer_id} options={buyerOptions} onChange={(value) => setFactoryForm((p) => ({ ...p, buyer_id: value }))} placeholder="Select Buyer / type to search" /></Field>
-              <Field label="Consignee Name"><SearchableSelect value={factoryForm.consignee_id} options={masters.consignees.map((x) => ({ value: idOf(x), label: textOf(x) }))} onChange={(value) => setFactoryForm((p) => ({ ...p, consignee_id: value }))} placeholder="Select Consignee / type to search" /></Field>
-              <Field label="Reject Qty"><input type="number" value={factoryForm.rejection_qty} readOnly style={{ ...styles.input, background: "#f1f5f9" }} /></Field>
-              <Field label="Other Qty"><input type="number" min="0" value={factoryForm.other_qty} onChange={(e) => setFactoryForm((p) => ({ ...p, other_qty: e.target.value }))} style={styles.input} /></Field>
-              <Field label="Total Qty"><input type="number" value={totalQty} readOnly style={{ ...styles.input, background: "#f1f5f9", fontWeight: 900 }} /></Field>
-              <Field label="Weight"><input type="number" value={totalQty} readOnly style={{ ...styles.input, background: "#f1f5f9", fontWeight: 900 }} /></Field>
-              <Field label="Rate"><input type="number" min="0" value={factoryForm.rate} onChange={(e) => setFactoryForm((p) => ({ ...p, rate: e.target.value }))} style={styles.input} /></Field>
-              <Field label="Amount"><input type="number" value={amount.toFixed(2)} readOnly style={{ ...styles.input, background: "#f1f5f9", fontWeight: 900 }} /></Field>
-            </div>
-            <div style={styles.factoryFooter}><button type="button" onClick={closeFactoryModal} style={styles.secondary}>Cancel</button><button type="button" disabled={busyId === factoryModal.rowId} onClick={saveFactoryAssignment} style={styles.primary}>{busyId === factoryModal.rowId ? "Saving..." : "Save & Assign"}</button></div>
-          </div>
-        </div>
-      );
-    })() : null}
     </>
-  );
-}
-
-
-function SearchableSelect({
-  value,
-  options = [],
-  onChange,
-  placeholder = "Select / type to search",
-  disabled = false,
-  style,
-}) {
-  const [open, setOpen] = useState(false);
-  const [query, setQuery] = useState("");
-  const [highlighted, setHighlighted] = useState(0);
-
-  const normalized = useMemo(() => {
-    return options
-      .map((option) => ({
-        value: String(option?.value ?? ""),
-        label: String(option?.label ?? option?.value ?? ""),
-      }))
-      .filter((option) => option.value !== "");
-  }, [options]);
-
-  const selected = normalized.find((item) => String(item.value) === String(value));
-  const filtered = useMemo(() => {
-    const q = String(query || "").trim().toLowerCase();
-    if (!q) return normalized;
-    return normalized.filter((item) => item.label.toLowerCase().includes(q));
-  }, [normalized, query]);
-
-  useEffect(() => {
-    if (!open) return;
-    setHighlighted(0);
-  }, [query, open]);
-
-  useEffect(() => {
-    if (!open) return;
-    const close = (event) => {
-      if (!event.target.closest("[data-dr-search-select]")) setOpen(false);
-    };
-    document.addEventListener("mousedown", close);
-    return () => document.removeEventListener("mousedown", close);
-  }, [open]);
-
-  const choose = (item) => {
-    if (!item) return;
-    onChange(item.value);
-    setQuery("");
-    setOpen(false);
-  };
-
-  return (
-    <div data-dr-search-select style={{ position: "relative", width: "100%" }}>
-      <input
-        type="text"
-        value={open ? query : (selected?.label || "")}
-        placeholder={placeholder}
-        disabled={disabled}
-        onFocus={() => {
-          setOpen(true);
-          setQuery("");
-        }}
-        onChange={(e) => {
-          setQuery(e.target.value);
-          setOpen(true);
-        }}
-        onKeyDown={(e) => {
-          if (e.key === "ArrowDown") {
-            e.preventDefault();
-            setOpen(true);
-            setHighlighted((i) => Math.min(i + 1, Math.max(filtered.length - 1, 0)));
-          } else if (e.key === "ArrowUp") {
-            e.preventDefault();
-            setOpen(true);
-            setHighlighted((i) => Math.max(i - 1, 0));
-          } else if (e.key === "Enter") {
-            e.preventDefault();
-            if (open && filtered[highlighted]) choose(filtered[highlighted]);
-          } else if (e.key === "Escape") {
-            setOpen(false);
-            setQuery("");
-          }
-        }}
-        style={{ ...styles.input, fontFamily: "inherit", fontSize: "inherit", fontWeight: "inherit", lineHeight: "inherit", color: "#0f172a", ...(style || {}), cursor: disabled ? "not-allowed" : "text" }}
-      />
-      {open && !disabled && (
-        <div
-          style={{
-            position: "absolute",
-            left: 0,
-            right: 0,
-            top: "calc(100% + 3px)",
-            zIndex: 10000,
-            background: "#fff",
-            border: "1px solid #cbd5e1",
-            borderRadius: 10,
-            boxShadow: "0 14px 30px rgba(15,23,42,.16)",
-            maxHeight: 240,
-            overflowY: "auto",
-          }}
-        >
-          {filtered.length ? filtered.map((item, index) => (
-            <button
-              key={`${item.value}-${index}`}
-              type="button"
-              onMouseDown={(e) => {
-                e.preventDefault();
-                choose(item);
-              }}
-              style={{
-                display: "block",
-                width: "100%",
-                textAlign: "left",
-                border: 0,
-                borderBottom: "1px solid #f1f5f9",
-                background: index === highlighted ? "#ecfeff" : "#fff",
-                color: "#0f172a",
-                padding: "9px 10px",
-                cursor: "pointer",
-                fontFamily: "inherit",
-                fontSize: "inherit",
-                lineHeight: "inherit",
-                fontWeight: "inherit",
-              }}
-            >
-              {item.label}
-            </button>
-          )) : (
-            <div style={{ padding: 10, color: "#64748b", fontSize: 12 }}>
-              No matching name found
-            </div>
-          )}
-        </div>
-      )}
-    </div>
   );
 }
 
@@ -1255,11 +785,4 @@ const styles = {
   toastClose: { width: 24, height: 24, border: 0, background: 'transparent', color: 'inherit', fontSize: 18, lineHeight: 1, cursor: 'pointer', padding: 0, opacity: .8 },
   assignPanel: { marginTop: 13, border: '1px solid #bfdbfe', background: 'linear-gradient(135deg,#eff6ff,#f8fbff)', borderRadius: 14, padding: 12 }, assignHead: { display: 'flex', justifyContent: 'space-between', gap: 8, alignItems: 'center', marginBottom: 8, color: '#1e3a8a', fontSize: 11, fontWeight: 900 }, assignGrid: { display: 'grid', gridTemplateColumns: 'minmax(0,1fr) minmax(0,1fr) auto', gap: 8 }, assignButton: { border: 0, background: '#1d4ed8', color: '#fff', borderRadius: 10, padding: '10px 13px', fontWeight: 900, cursor: 'pointer' },
   workerPanel: { marginTop: 13, border: '1px solid #99f6e4', background: 'linear-gradient(135deg,#ecfeff,#f0fdfa)', borderRadius: 14, padding: 12 }, workerTitle: { color: '#115e59', fontWeight: 950 }, workerWork: { color: '#475569', fontSize: 12, marginTop: 3 }, completeRow: { display: 'grid', gridTemplateColumns: 'minmax(0,1fr) auto', gap: 8, marginTop: 10 }, complete: { border: 0, background: '#047857', color: '#fff', borderRadius: 10, padding: '10px 14px', fontWeight: 900, cursor: 'pointer' }, completedPanel: { marginTop: 12, padding: 10, borderRadius: 11, background: '#ecfdf5', border: '1px solid #a7f3d0', color: '#047857', fontWeight: 800 },
-  factoryOverlay: { position: 'fixed', inset: 0, zIndex: 99999, background: 'rgba(15,23,42,.58)', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 14, overflowY: 'auto', WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain' },
-  factoryModal: { width: 'min(900px, 100%)', maxHeight: 'calc(100dvh - 28px)', overflowY: 'auto', WebkitOverflowScrolling: 'touch', overscrollBehavior: 'contain', touchAction: 'pan-y', background: '#fff', borderRadius: 18, boxShadow: '0 24px 70px rgba(15,23,42,.3)', padding: 18, boxSizing: 'border-box' },
-  factoryHeader: { display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12, paddingBottom: 12, borderBottom: '1px solid #e2e8f0' },
-  factoryClose: { width: 34, height: 34, borderRadius: 9, border: '1px solid #cbd5e1', background: '#fff', fontSize: 24, lineHeight: 1, cursor: 'pointer' },
-  factoryGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit,minmax(210px,1fr))', gap: 12, padding: '16px 0' },
-  factoryFooter: { display: 'flex', justifyContent: 'flex-end', gap: 10, paddingTop: 12, borderTop: '1px solid #e2e8f0' },
-
 };
