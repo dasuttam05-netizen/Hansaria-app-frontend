@@ -658,10 +658,12 @@ export default function DailyRejectionPage() {
       <style>{`
         .dr-factory-modal * { touch-action: auto; }
         @media (max-width: 640px) {
-          .dr-factory-overlay { align-items: flex-start !important; justify-content: center !important; padding: 8px !important; overflow-y: auto !important; -webkit-overflow-scrolling: touch !important; }
-          .dr-factory-modal { width: 100% !important; max-width: 100% !important; max-height: calc(100dvh - 16px) !important; min-height: 0 !important; overflow-y: auto !important; -webkit-overflow-scrolling: touch !important; overscroll-behavior: contain !important; }
+          .dr-factory-overlay { align-items: flex-start !important; justify-content: center !important; padding: 8px 8px 24px !important; overflow-y: auto !important; -webkit-overflow-scrolling: touch !important; overscroll-behavior-y: contain !important; touch-action: pan-y !important; }
+          .dr-factory-modal { width: 100% !important; max-width: 100% !important; max-height: none !important; min-height: 0 !important; overflow: visible !important; -webkit-overflow-scrolling: auto !important; overscroll-behavior: auto !important; touch-action: auto !important; }
           .dr-factory-grid { grid-template-columns: minmax(0, 1fr) !important; }
+          .dr-factory-modal input, .dr-factory-modal button { font-family: inherit !important; }
         }
+        .dr-page-scroll-fix { touch-action: pan-y; overscroll-behavior-y: auto; }
 
         .dr-mobile-list { display:none; }
         .dr-scroll-shell { width:100%; max-width:100%; }
@@ -704,7 +706,7 @@ export default function DailyRejectionPage() {
           .daily-rejection-report-input { width: 100%; }
         }
       `}</style>
-      <div style={styles.page}>
+      <div style={{ ...styles.page, touchAction: "pan-y", overflowX: "hidden" }} className="dr-page-scroll-fix">
       <div style={styles.hero}>
         <div><div style={styles.kicker}>WAREHOUSE OPERATIONS</div><h1 style={styles.title}>Daily Rejection</h1><div style={styles.subtitle}>Create rejection entries, assign work to staff, and close completed work from one smart workflow.</div></div>
         <button type="button" onClick={() => navigate(-1)} style={styles.back}>Back</button>
@@ -823,7 +825,7 @@ export default function DailyRejectionPage() {
       const totalQty = Number(factoryForm.rejection_qty || 0) + Number(factoryForm.other_qty || 0);
       const amount = totalQty * Number(factoryForm.rate || 0);
       const buyerOptions = Array.from(new Map(masters.consignees.map((x) => {
-        const name = String(x?.buyer_name || x?.buyer || "").trim();
+        const name = String(x?.buyer_name || x?.buyer || x?.name || x?.party_name || x?.company_name || x?.consignee_name || "").trim();
         return [name.toLowerCase(), { value: idOf(x), label: name }];
       }).filter(([, x]) => x.label)).values());
       return (
@@ -935,7 +937,7 @@ function SearchableSelect({
             setQuery("");
           }
         }}
-        style={{ ...styles.input, ...(style || {}), cursor: disabled ? "not-allowed" : "text" }}
+        style={{ ...styles.input, fontFamily: "inherit", fontSize: 13, fontWeight: 600, lineHeight: 1.35, color: "#0f172a", ...(style || {}), cursor: disabled ? "not-allowed" : "text" }}
       />
       {open && !disabled && (
         <div
@@ -971,7 +973,10 @@ function SearchableSelect({
                 color: "#0f172a",
                 padding: "9px 10px",
                 cursor: "pointer",
-                fontWeight: 700,
+                fontFamily: "inherit",
+                fontSize: 13,
+                lineHeight: 1.35,
+                fontWeight: 600,
               }}
             >
               {item.label}
