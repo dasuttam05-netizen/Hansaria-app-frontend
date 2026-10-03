@@ -914,12 +914,17 @@ export default function DailyRejectionPage() {
               event.preventDefault();
               const main = event.currentTarget.querySelector(".dr-table-scroll-main");
               if (!main) return;
-              const step = Math.max(220, Math.round(main.clientWidth * 0.65));
+              const step = Math.max(220, Math.round(main.clientWidth * 0.68));
               main.scrollBy({ left: event.key === "ArrowRight" ? step : -step, behavior: "smooth" });
             }}
-            aria-label="Daily Rejection table. Use Left and Right arrow keys to scroll horizontally"
+            onFocus={(event) => {
+              const main = event.currentTarget.querySelector('.dr-table-scroll-main');
+              if (main) main.setAttribute('data-keyboard-scroll-ready', 'true');
+            }}
+            aria-label="Daily Rejection table. Press Tab to focus this area, then use Left and Right arrow keys to scroll horizontally. You can also drag the bottom scrollbar with the mouse."
+            title="Tab to focus, then use ← / →. Drag the bottom scrollbar with the mouse."
           >
-            <div className="dr-scroll-hint" aria-hidden="true">Click the table, then use keyboard ← / → or drag the bottom scrollbar</div>
+            <div className="dr-scroll-hint" aria-hidden="true">Tab → focus table · ← / → move · drag bottom scrollbar with mouse</div>
             <div
               className="dr-table-scroll-main"
               style={styles.tableOuter}
@@ -1029,7 +1034,18 @@ export default function DailyRejectionPage() {
             </div>
             <div
               className="dr-table-scroll-bottom"
-              aria-label="Daily Rejection horizontal scrollbar"
+              role="scrollbar"
+              tabIndex={0}
+              aria-orientation="horizontal"
+              aria-label="Daily Rejection horizontal scrollbar. Use mouse to drag or Left and Right arrows after Tab."
+              onKeyDown={(event) => {
+                if (!["ArrowLeft", "ArrowRight"].includes(event.key)) return;
+                event.preventDefault();
+                const main = event.currentTarget.previousElementSibling;
+                if (!main) return;
+                const step = Math.max(220, Math.round(main.clientWidth * 0.68));
+                main.scrollBy({ left: event.key === "ArrowRight" ? step : -step, behavior: "smooth" });
+              }}
               onScroll={(event) => {
                 const main = event.currentTarget.previousElementSibling;
                 if (main && Math.abs(main.scrollLeft - event.currentTarget.scrollLeft) > 1) main.scrollLeft = event.currentTarget.scrollLeft;
@@ -1038,7 +1054,7 @@ export default function DailyRejectionPage() {
               <div style={{ width: showManagerWorkflow ? 1980 : showReportWorkflow ? 1900 : withWorkflow ? 1740 : 1600, height: 1 }} />
             </div>
             <div className="dr-scroll-actions" aria-hidden="true">
-              <span>← Left</span><span>→ Right</span>
+              <span>Tab → Focus</span><span>← / → Move</span><span>Mouse → Drag bar</span>
             </div>
           </div>
         </div>
@@ -1068,6 +1084,30 @@ export default function DailyRejectionPage() {
     });
     setShowForm(true);
   };
+
+  useEffect(() => {
+    const syncHorizontalScrollbars = () => {
+      document.querySelectorAll('.dr-table-scroll-main').forEach((main) => {
+        const bottom = main.parentElement?.querySelector('.dr-table-scroll-bottom');
+        const spacer = bottom?.firstElementChild;
+        if (!bottom || !spacer) return;
+        const width = Math.max(main.scrollWidth, main.clientWidth + 1);
+        spacer.style.width = `${width}px`;
+        bottom.scrollLeft = main.scrollLeft;
+      });
+    };
+
+    const frame = window.requestAnimationFrame(syncHorizontalScrollbars);
+    window.addEventListener('resize', syncHorizontalScrollbars);
+    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(syncHorizontalScrollbars) : null;
+    document.querySelectorAll('.dr-table-scroll-main').forEach((main) => observer?.observe(main));
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener('resize', syncHorizontalScrollbars);
+      observer?.disconnect();
+    };
+  }, [rows, reportRows, status, actionFilter, canAssign]);
 
   const submitReport = async () => {
     if (!canReport) return;
@@ -1106,7 +1146,9 @@ export default function DailyRejectionPage() {
         .dr-scroll-shell .tableOuter::-webkit-scrollbar-track { background:#eef2f7; border-radius:999px; }
         .dr-scroll-shell .tableOuter::-webkit-scrollbar-thumb { background:#94a3b8; border-radius:999px; border:1px solid #eef2f7; }
         .dr-scroll-shell .tableOuter::-webkit-scrollbar-thumb:hover { background:#64748b; }
-        .dr-table-scroll-bottom { width:100%; max-width:100%; overflow-x:auto; overflow-y:hidden; height:12px; margin-top:2px; scrollbar-color:#64748b #eef2f7; scrollbar-width:auto; }
+        .dr-table-scroll-bottom { width:100%; max-width:100%; overflow-x:auto; overflow-y:hidden; height:14px; margin-top:2px; scrollbar-color:#64748b #eef2f7; scrollbar-width:auto; outline:none; cursor:grab; }
+        .dr-table-scroll-bottom:focus { outline:2px solid rgba(14,116,144,.25); outline-offset:2px; border-radius:999px; }
+        .dr-table-scroll-bottom:active { cursor:grabbing; }
         .dr-table-scroll-bottom::-webkit-scrollbar { height:12px; }
         .dr-table-scroll-bottom::-webkit-scrollbar-track { background:#eef2f7; border-radius:999px; }
         .dr-table-scroll-bottom::-webkit-scrollbar-thumb { background:#64748b; border-radius:999px; border:2px solid #eef2f7; }
