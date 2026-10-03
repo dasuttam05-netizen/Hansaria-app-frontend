@@ -28,6 +28,16 @@ const idOf = (row) => String(row?.id || row?._id || row?.legacy_id ?? "");
 const textOf = (row) => String(row?.name || row?.title || row?.display_name || row?.party_name || row?.company_name || row?.consignee_name ?? "");
 const money = (value) => Number(value || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+// Daily Rejection is a quantity chain. An explicit 0 balance is valid and
+// must never fall back to the original quantity once the chain is finished.
+const chainTargetOf = (row) => Number(row?.chain_target_qty ?? row?.rejection_qty ?? row?.original_qty ?? 0);
+const chainProcessedOf = (row) => Number(row?.chain_processed_qty ?? 0);
+const chainRemainingOf = (row) => {
+  const explicit = row?.chain_remaining_qty;
+  if (explicit !== undefined && explicit !== null && explicit !== "") return Math.max(0, Number(explicit) || 0);
+  return Math.max(0, chainTargetOf(row) - chainProcessedOf(row));
+};
+
 function pickArray(payload, keys) {
   if (Array.isArray(payload)) return payload;
   for (const key of keys) {
@@ -385,30 +395,59 @@ export default function DailyRejectionPage() {
   };
 
   const updateProgress = async (rowId) => {
-    const form = progressForm[rowId] || {};
-    const processedQty = Number(form.processed_qty || 0);
-    const newRejectionQty = Number(form.new_rejection_qty || 0);
-    if (processedQty <= 0 && newRejectionQty <= 0) {
-      showToast("Enter Processed Qty or New Rejection Qty first.", "warning");
+    const row = rows.find((item) => idOf(item) === String(rowId));
+    const progress = progressForm[rowId] || {};
+    const currentBalance = chainRemainingOf(row);
+    const unloadingForRejection = Number(progress.unloading_qty_for_rejection || 0);
+    const otherQty = Number(progress.other_qty || 0);
+    const newRejectionQty = Number(progress.new_rejection_qty || 0);
+    const rejectionAdjustment = Math.max(currentBalance - unloadingForRejection, 0);
+
+    // Only the explicit rejection unloading quantity consumes the rejection
+    // chain. Other material in the same movement is kept separate.
+    if (unloadingForRejection <= 0 && newRejectionQty <= 0) {
+      showToast("Enter Unloading Qty for Rejection first.", "warning");
       return;
     }
-    if (!String(form.narration || "").trim()) {
+    if (unloadingForRejection > currentBalance + 0.000001) {
+      showToast(`Unloading Qty for Rejection cannot exceed current rejection balance ${money(currentBalance)} MT.`, "warning");
+      return;
+    }
+    if (otherQty < 0 || newRejectionQty < 0) {
+      showToast("Other Qty / New Rejection Qty cannot be negative.", "warning");
+      return;
+    }
+    if (!String(progress.narration || "").trim()) {
       showToast("Please enter the progress narration.", "warning");
       return;
     }
+
     setBusyId(rowId);
     try {
       await axios.post(`${API}/${rowId}/progress`, {
-        processed_qty: processedQty,
+        // Existing API compatibility + explicit workflow fields.
+        processed_qty: unloadingForRejection,
+        unloading_qty_for_rejection: unloadingForRejection,
+        rejection_unloading_qty: unloadingForRejection,
+        rejection_adjustment_qty: rejectionAdjustment,
+        adjusted_rejection_qty: rejectionAdjustment,
+        other_qty: otherQty,
         new_rejection_qty: newRejectionQty,
-        new_lorry_no: String(form.new_lorry_no || "").trim(),
-        destination_type: String(form.destination_type || "").trim(),
-        warehouse_id: String(form.warehouse_id || "").trim(),
-        warehouse_name: String(form.warehouse_name || "").trim(),
-        progress_narration: String(form.narration || "").trim(),
+        new_lorry_no: String(progress.new_lorry_no || "").trim(),
+        destination_type: String(progress.destination_type || "").trim(),
+        warehouse_id: String(progress.warehouse_id || "").trim(),
+        warehouse_name: String(progress.warehouse_name || "").trim(),
+        progress_narration: String(progress.narration || "").trim(),
       });
+
       setProgressForm((prev) => ({ ...prev, [rowId]: {} }));
-      showToast(newRejectionQty > 0 ? "Progress saved. New rejection added and work returned to Pending." : "Progress saved successfully.", "success");
+      if (rejectionAdjustment > 0.000001) {
+        showToast(`${money(unloadingForRejection)} MT adjusted. Rejection balance ${money(rejectionAdjustment)} MT is now pending for reassignment.`, "success");
+      } else if (newRejectionQty > 0) {
+        showToast(`Progress saved. ${money(newRejectionQty)} MT new rejection added and sent back to Pending.`, "success");
+      } else {
+        showToast(`${money(unloadingForRejection)} MT fully adjusted. Rejection balance is now 0.00 MT and can be closed.`, "success");
+      }
       await loadData();
     } catch (err) {
       showToast(err?.response?.data?.error || err?.message || "Failed to save progress.", "error");
@@ -419,14 +458,14 @@ export default function DailyRejectionPage() {
 
   const completeRow = async (rowId) => {
     const row = rows.find((item) => idOf(item) === String(rowId));
-    const remaining = Number(row?.chain_remaining_qty || row?.original_qty ?? 0);
+    const remaining = chainRemainingOf(row);
     if (remaining > 0.000001) {
       showToast(`Work is not complete. Remaining Qty: ${money(remaining)} MT`, "warning");
       return;
     }
     setBusyId(rowId);
     try {
-      await axios.post(`${API}/${rowId}/complete`, { completion_remarks: completionRemarks[rowId] || "" });
+      await axios.post(`${API}/${rowId}/complete`, { completion_qty: chainTargetOf(row), completion_remarks: completionRemarks[rowId] || "" });
       setCompletionRemarks((prev) => ({ ...prev, [rowId]: "" }));
       showToast("Work completed successfully.", "success");
       await loadData();
@@ -629,9 +668,9 @@ export default function DailyRejectionPage() {
               <div><span>Reason</span><b>{row?.reason || "-"}</b></div>
               <div><span>Work</span><b>{row?.action_type || "-"}</b></div>
               <div><span>Assigned To</span><b>{row?.assigned_to_name || "-"}</b></div>
-              <div><span>Chain Target</span><b>{money(row?.chain_target_qty || row?.original_qty)} MT</b></div>
-              <div><span>Chain Processed</span><b>{money(row?.chain_processed_qty)}</b></div>
-              <div><span>Chain Remaining</span><b>{money(row?.chain_remaining_qty == null ? (Number(row?.chain_target_qty || row?.original_qty || 0) - Number(row?.chain_processed_qty || 0)) : row?.chain_remaining_qty)} MT</b></div>
+              <div><span>Chain Target</span><b>{money(chainTargetOf(row))} MT</b></div>
+              <div><span>Chain Processed</span><b>{money(chainProcessedOf(row))}</b></div>
+              <div><span>Chain Remaining</span><b>{money(chainRemainingOf(row))} MT</b></div>
               {row?.assignment_narration ? <div style={{ gridColumn: "1 / -1" }}><span>Assignment Narration</span><b>{row.assignment_narration}</b></div> : null}
             </div>
 
@@ -664,24 +703,26 @@ export default function DailyRejectionPage() {
                 <div className="dr-mobile-workflow-title">YOUR ASSIGNED WORK</div>
                 <div className="dr-mobile-worker-work">{row?.action_type || "Work assigned"} · Current Reject {money(row?.rejection_qty)} MT</div>
                 <div className="dr-chain-summary">
-                  <div><b>Original</b><span>{money(row?.chain_target_qty || row?.original_qty)} MT</span></div>
-                  <div><b>Processed</b><span>{money(row?.chain_processed_qty)} MT</span></div>
-                  <div><b>Remaining</b><span>{money(row?.chain_remaining_qty == null ? (Number(row?.chain_target_qty || row?.original_qty || 0) - Number(row?.chain_processed_qty || 0)) : row?.chain_remaining_qty)} MT</span></div>
+                  <div><b>Original</b><span>{money(chainTargetOf(row))} MT</span></div>
+                  <div><b>Processed</b><span>{money(chainProcessedOf(row))} MT</span></div>
+                  <div><b>Remaining</b><span>{money(chainRemainingOf(row))} MT</span></div>
                 </div>
                 {row?.assignment_narration ? <div className="dr-assignment-note"><b>Assignment:</b> {row.assignment_narration}</div> : null}
                 {renderFactoryAssignmentDetails(row)}
                 <div className="dr-mobile-progress">
                   <div className="dr-mobile-workflow-title">PROGRESS / CHAIN ENTRY</div>
-                  <input type="number" min="0" value={(progressForm[rowId] || {}).processed_qty || ""} onChange={(e) => setProgressForm((prev) => ({ ...prev, [rowId]: { ...(prev[rowId] || {}), processed_qty: e.target.value } }))} placeholder="Processed Qty (MT)" style={styles.workflowInput} />
-                  <input type="number" min="0" value={(progressForm[rowId] || {}).new_rejection_qty || ""} onChange={(e) => setProgressForm((prev) => ({ ...prev, [rowId]: { ...(prev[rowId] || {}), new_rejection_qty: e.target.value } }))} placeholder="New Rejection Qty (MT)" style={styles.workflowInput} />
+                  <input type="number" min="0" max={chainRemainingOf(row)} step="0.01" value={(progressForm[rowId] || {}).unloading_qty_for_rejection || ""} onChange={(e) => setProgressForm((prev) => ({ ...prev, [rowId]: { ...(prev[rowId] || {}), unloading_qty_for_rejection: e.target.value } }))} placeholder="Unloading Qty for Rejection (MT)" style={styles.workflowInput} />
+                  <input type="number" min="0" step="0.01" value={(progressForm[rowId] || {}).other_qty || ""} onChange={(e) => setProgressForm((prev) => ({ ...prev, [rowId]: { ...(prev[rowId] || {}), other_qty: e.target.value } }))} placeholder="Other Qty (MT)" style={styles.workflowInput} />
+                  <input type="number" min="0" step="0.01" value={(progressForm[rowId] || {}).new_rejection_qty || ""} onChange={(e) => setProgressForm((prev) => ({ ...prev, [rowId]: { ...(prev[rowId] || {}), new_rejection_qty: e.target.value } }))} placeholder="New Rejection Qty (MT)" style={styles.workflowInput} />
                   <input value={(progressForm[rowId] || {}).new_lorry_no || ""} onChange={(e) => setProgressForm((prev) => ({ ...prev, [rowId]: { ...(prev[rowId] || {}), new_lorry_no: e.target.value } }))} placeholder="New Lorry No" style={styles.workflowInput} />
                   <input value={(progressForm[rowId] || {}).destination_type || ""} onChange={(e) => setProgressForm((prev) => ({ ...prev, [rowId]: { ...(prev[rowId] || {}), destination_type: e.target.value } }))} placeholder="Destination / Movement" style={styles.workflowInput} />
                   <input value={(progressForm[rowId] || {}).narration || ""} onChange={(e) => setProgressForm((prev) => ({ ...prev, [rowId]: { ...(prev[rowId] || {}), narration: e.target.value } }))} placeholder="Progress narration" style={styles.workflowInput} />
+                  <div className="dr-rejection-adjust-preview"><span>Current Reject Balance: <b>{money(chainRemainingOf(row))} MT</b></span><span>Adjustment: <b>{money(Math.max(chainRemainingOf(row) - Number((progressForm[rowId] || {}).unloading_qty_for_rejection || 0), 0))} MT</b></span><span>Balance After: <b>{money(Math.max(chainRemainingOf(row) - Number((progressForm[rowId] || {}).unloading_qty_for_rejection || 0), 0))} MT</b></span></div>
                   <button type="button" disabled={rowBusy} onClick={() => updateProgress(rowId)} style={styles.completeInline}>{rowBusy ? "Saving..." : "Save Progress / Send Pending"}</button>
                 </div>
                 <div className="dr-mobile-complete">
                   <input value={completionRemarks[rowId] || ""} onChange={(e) => setCompletionRemarks((prev) => ({ ...prev, [rowId]: e.target.value }))} placeholder="Final completion note" style={styles.workflowInput} />
-                  <button type="button" disabled={rowBusy || Number(row?.chain_remaining_qty || 0) > 0.000001} onClick={() => completeRow(rowId)} style={styles.completeInline}>{rowBusy ? "Completing..." : "✓ Complete Work"}</button>
+                  <button type="button" disabled={rowBusy || chainRemainingOf(row) > 0.000001} onClick={() => completeRow(rowId)} style={styles.completeInline}>{rowBusy ? "Completing..." : "✓ Complete Work"}</button>
                 </div>
               </div>
             ) : null}
@@ -754,8 +795,8 @@ export default function DailyRejectionPage() {
                       <td style={styles.tdNum}>{money(row?.original_qty)}</td>
                       <td style={styles.tdNum}>{money(row?.actual_unloading_qty)}</td>
                       <td style={{ ...styles.tdNum, fontWeight: 900 }}>{money(row?.rejection_qty)}</td>
-                      <td style={styles.tdNum}>{money(row?.chain_processed_qty)}</td>
-                      <td style={styles.tdNum}>{money(row?.chain_remaining_qty == null ? (Number(row?.chain_target_qty || row?.original_qty || 0) - Number(row?.chain_processed_qty || 0)) : row?.chain_remaining_qty)}</td>
+                      <td style={styles.tdNum}>{money(chainProcessedOf(row))}</td>
+                      <td style={styles.tdNum}>{money(chainRemainingOf(row))}</td>
                       <td style={styles.td}>{row?.reason || "-"}</td>
                       <td style={styles.td}>{row?.action_type || "-"}</td>
                       <td style={styles.td}>{row?.assigned_to_name || "-"}</td>
@@ -786,18 +827,20 @@ export default function DailyRejectionPage() {
                         </>
                       ) : withWorkflow ? (
                         <td style={{ ...styles.td, ...styles.workflowTd }}>{assignedToMe && row?.status === "RUNNING" ? <div>
-                          <div style={styles.workerInline}><span><b>Target:</b> {money(row?.chain_target_qty || row?.original_qty)} MT &nbsp; <b>Processed:</b> {money(row?.chain_processed_qty)} MT &nbsp; <b>Remaining:</b> {money(row?.chain_remaining_qty == null ? (Number(row?.chain_target_qty || row?.original_qty || 0) - Number(row?.chain_processed_qty || 0)) : row?.chain_remaining_qty)} MT</span></div>
+                          <div style={styles.workerInline}><span><b>Target:</b> {money(chainTargetOf(row))} MT &nbsp; <b>Processed:</b> {money(chainProcessedOf(row))} MT &nbsp; <b>Remaining:</b> {money(chainRemainingOf(row))} MT</span></div>
                           {row?.assignment_narration ? <div className="dr-assignment-note"><b>Assignment:</b> {row.assignment_narration}</div> : null}
                           {renderFactoryAssignmentDetails(row)}
                           <div className="dr-chain-entry-inline">
-                            <input type="number" min="0" value={(progressForm[rowId] || {}).processed_qty || ""} onChange={(e) => setProgressForm((prev) => ({ ...prev, [rowId]: { ...(prev[rowId] || {}), processed_qty: e.target.value } }))} placeholder="Processed Qty" style={styles.workflowInput} />
-                            <input type="number" min="0" value={(progressForm[rowId] || {}).new_rejection_qty || ""} onChange={(e) => setProgressForm((prev) => ({ ...prev, [rowId]: { ...(prev[rowId] || {}), new_rejection_qty: e.target.value } }))} placeholder="New Rejection" style={styles.workflowInput} />
+                            <input type="number" min="0" max={chainRemainingOf(row)} step="0.01" value={(progressForm[rowId] || {}).unloading_qty_for_rejection || ""} onChange={(e) => setProgressForm((prev) => ({ ...prev, [rowId]: { ...(prev[rowId] || {}), unloading_qty_for_rejection: e.target.value } }))} placeholder="Unloading Qty for Rejection" style={styles.workflowInput} />
+                            <input type="number" min="0" step="0.01" value={(progressForm[rowId] || {}).other_qty || ""} onChange={(e) => setProgressForm((prev) => ({ ...prev, [rowId]: { ...(prev[rowId] || {}), other_qty: e.target.value } }))} placeholder="Other Qty" style={styles.workflowInput} />
+                            <input type="number" min="0" step="0.01" value={(progressForm[rowId] || {}).new_rejection_qty || ""} onChange={(e) => setProgressForm((prev) => ({ ...prev, [rowId]: { ...(prev[rowId] || {}), new_rejection_qty: e.target.value } }))} placeholder="New Rejection" style={styles.workflowInput} />
                             <input value={(progressForm[rowId] || {}).new_lorry_no || ""} onChange={(e) => setProgressForm((prev) => ({ ...prev, [rowId]: { ...(prev[rowId] || {}), new_lorry_no: e.target.value } }))} placeholder="New Lorry" style={styles.workflowInput} />
                             <input value={(progressForm[rowId] || {}).destination_type || ""} onChange={(e) => setProgressForm((prev) => ({ ...prev, [rowId]: { ...(prev[rowId] || {}), destination_type: e.target.value } }))} placeholder="Destination" style={styles.workflowInput} />
                             <input value={(progressForm[rowId] || {}).narration || ""} onChange={(e) => setProgressForm((prev) => ({ ...prev, [rowId]: { ...(prev[rowId] || {}), narration: e.target.value } }))} placeholder="Progress narration" style={styles.workflowInput} />
+                            <div className="dr-rejection-adjust-preview"><span>Reject Balance: <b>{money(chainRemainingOf(row))} MT</b></span><span>Adjustment: <b>{money(Math.max(chainRemainingOf(row) - Number((progressForm[rowId] || {}).unloading_qty_for_rejection || 0), 0))} MT</b></span><span>After: <b>{money(Math.max(chainRemainingOf(row) - Number((progressForm[rowId] || {}).unloading_qty_for_rejection || 0), 0))} MT</b></span></div>
                             <button type="button" disabled={rowBusy} onClick={() => updateProgress(rowId)} style={styles.completeInline}>{rowBusy ? "Saving..." : "Save Progress"}</button>
                           </div>
-                          <div style={styles.workerInline}><input value={completionRemarks[rowId] || ""} onChange={(e) => setCompletionRemarks((prev) => ({ ...prev, [rowId]: e.target.value }))} placeholder="Final completion note" style={styles.workflowInput} /><button type="button" disabled={rowBusy || Number(row?.chain_remaining_qty || 0) > 0.000001} onClick={() => completeRow(rowId)} style={styles.completeInline}>{rowBusy ? "Completing..." : "✓ Complete Work"}</button></div>
+                          <div style={styles.workerInline}><input value={completionRemarks[rowId] || ""} onChange={(e) => setCompletionRemarks((prev) => ({ ...prev, [rowId]: e.target.value }))} placeholder="Final completion note" style={styles.workflowInput} /><button type="button" disabled={rowBusy || chainRemainingOf(row) > 0.000001} onClick={() => completeRow(rowId)} style={styles.completeInline}>{rowBusy ? "Completing..." : "✓ Complete Work"}</button></div>
                         </div> : <span style={styles.mutedDash}>-</span>}</td>
                       ) : null}
                       <td style={{ ...styles.td, ...styles.actionTd, position: "sticky", right: 0, background: "#fff", zIndex: 4 }}>{renderActionIcons(row)}</td>
@@ -885,6 +928,8 @@ export default function DailyRejectionPage() {
         .dr-mobile-worker { background:linear-gradient(135deg,#ecfeff,#f0fdfa); border:1px solid #99f6e4; }
         .dr-mobile-workflow-title { color:#1e3a8a; font-size:10px; font-weight:900; letter-spacing:.3px; }
         .dr-mobile-worker-work { color:#475569; font-size:11px; margin-top:3px; }
+        .dr-rejection-adjust-preview { display:flex; gap:8px; flex-wrap:wrap; align-items:center; padding:7px 9px; border:1px dashed #99f6e4; border-radius:9px; background:#f0fdfa; color:#115e59; font-size:11px; }
+        .dr-rejection-adjust-preview span { white-space:nowrap; }
         .dr-factory-assigned-details { margin-top: 9px; padding: 9px; border: 1px solid #dbe4ee; border-radius: 10px; background: #f8fafc; }
         .dr-factory-assigned-title { font-size: 10px; font-weight: 900; letter-spacing: .45px; color: #0f766e; margin-bottom: 7px; }
         .dr-factory-assigned-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
