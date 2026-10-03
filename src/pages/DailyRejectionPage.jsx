@@ -157,6 +157,7 @@ export default function DailyRejectionPage() {
   });
   const [busyId, setBusyId] = useState("");
   const [completionRemarks, setCompletionRemarks] = useState({});
+  const [selectedRowId, setSelectedRowId] = useState("");
   const [assignNarration, setAssignNarration] = useState({});
   const [progressForm, setProgressForm] = useState({});
   const [editId, setEditId] = useState("");
@@ -903,19 +904,35 @@ export default function DailyRejectionPage() {
     ];
 
     const handleTableKeyDown = (event) => {
-      if (!["ArrowLeft", "ArrowRight"].includes(event.key)) return;
-      const tag = String(document.activeElement?.tagName || "").toUpperCase();
-      if (["INPUT", "TEXTAREA", "SELECT", "BUTTON"].includes(tag)) return;
+      const key = event.key;
       const scroller = event.currentTarget;
-      const step = Math.max(220, Math.round(scroller.clientWidth * 0.68));
-      const maxScroll = Math.max(scroller.scrollWidth - scroller.clientWidth, 0);
-      if (maxScroll <= 0) return;
-      event.preventDefault();
-      event.stopPropagation();
-      const nextLeft = event.key === "ArrowRight"
-        ? Math.min(scroller.scrollLeft + step, maxScroll)
-        : Math.max(scroller.scrollLeft - step, 0);
-      scroller.scrollTo({ left: nextLeft, behavior: "smooth" });
+      const activeTag = String(document.activeElement?.tagName || "").toUpperCase();
+
+      // Keep the native form-control keyboard behaviour untouched.
+      if (["INPUT", "TEXTAREA", "SELECT", "BUTTON"].includes(activeTag)) return;
+
+      if (key === "ArrowLeft" || key === "ArrowRight") {
+        const step = Math.max(220, Math.round(scroller.clientWidth * 0.68));
+        const maxScroll = Math.max(scroller.scrollWidth - scroller.clientWidth, 0);
+        if (maxScroll <= 0) return;
+        event.preventDefault();
+        event.stopPropagation();
+        const nextLeft = key === "ArrowRight"
+          ? Math.min(scroller.scrollLeft + step, maxScroll)
+          : Math.max(scroller.scrollLeft - step, 0);
+        scroller.scrollTo({ left: nextLeft, behavior: "smooth" });
+        return;
+      }
+
+      if (key === "Spacebar" || key === " ") {
+        // Space on the focused table area selects the first visible row.
+        const firstRow = tableRows?.[0];
+        if (firstRow) {
+          event.preventDefault();
+          event.stopPropagation();
+          setSelectedRowId(idOf(firstRow));
+        }
+      }
     };
 
     return (
@@ -940,7 +957,19 @@ export default function DailyRejectionPage() {
               tabIndex={0}
               role="region"
               onKeyDown={handleTableKeyDown}
-              aria-label="Daily Rejection table. Press Tab to focus this table, then use Left and Right arrows to scroll horizontally. Drag the bottom scrollbar with the mouse."
+              onWheel={(event) => {
+                // Mouse wheel over the Daily Rejection grid moves horizontally.
+                // This keeps the table from moving up/down while the user is trying to
+                // inspect the right-side columns. Use the normal page scrollbar outside
+                // the grid for vertical page movement.
+                const el = event.currentTarget;
+                if (el.scrollWidth <= el.clientWidth) return;
+                const amount = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
+                if (!amount) return;
+                event.preventDefault();
+                el.scrollLeft += amount;
+              }}
+              aria-label="Daily Rejection table. Press Tab to focus. Press Space on an entry to select it, then use Left and Right arrows to scroll horizontally. Drag the bottom scrollbar with the mouse."
               title="Tab to focus, then use ← / →. Drag the bottom scrollbar with the mouse."
             >
               <table style={{ ...styles.dataTable, width: "100%", minWidth: `${tableMinWidth}px` }}>
@@ -970,7 +999,39 @@ export default function DailyRejectionPage() {
                     const employeeValue = assignedEmployee[rowId] || row?.assigned_to || "";
                     const rowBusy = busyId === rowId;
                     return (
-                      <tr key={rowId}>
+                      <tr
+                        key={rowId}
+                        className={selectedRowId === rowId ? "dr-selected-row" : ""}
+                        tabIndex={0}
+                        onClick={() => setSelectedRowId(rowId)}
+                        onKeyDown={(event) => {
+                          const activeTag = String(document.activeElement?.tagName || "").toUpperCase();
+                          if (["INPUT", "TEXTAREA", "SELECT", "BUTTON"].includes(activeTag)) return;
+                          if (event.key === " " || event.key === "Spacebar") {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            setSelectedRowId(rowId);
+                          } else if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+                            const scroller = event.currentTarget.closest(".dr-table-scroll-main");
+                            if (!scroller) return;
+                            const step = Math.max(220, Math.round(scroller.clientWidth * 0.68));
+                            const maxScroll = Math.max(scroller.scrollWidth - scroller.clientWidth, 0);
+                            if (maxScroll <= 0) return;
+                            event.preventDefault();
+                            event.stopPropagation();
+                            const nextLeft = event.key === "ArrowRight"
+                              ? Math.min(scroller.scrollLeft + step, maxScroll)
+                              : Math.max(scroller.scrollLeft - step, 0);
+                            scroller.scrollTo({ left: nextLeft, behavior: "smooth" });
+                          }
+                        }}
+                        style={{
+                          outline: "none",
+                          background: selectedRowId === rowId ? "#ecfeff" : undefined,
+                          boxShadow: selectedRowId === rowId ? "inset 0 0 0 2px #14b8a6" : undefined,
+                        }}
+                        title="Press Space to select this entry; then use ← / → to scroll horizontally"
+                      >
                         <td style={{ ...styles.td, ...styles.slTd }}>
                           <button type="button" onClick={() => openHistory(row)} title="View S.L. wise details and history" style={styles.slButton}>{rowIndex + 1}</button>
                         </td>
@@ -1103,7 +1164,10 @@ export default function DailyRejectionPage() {
         .dr-scroll-shell { width:100%; max-width:100%; outline:none; }
         .dr-scroll-shell:focus { outline:2px solid rgba(14,116,144,.28); outline-offset:2px; border-radius:14px; }
         .dr-scroll-hint { display:flex; justify-content:space-between; align-items:center; gap:10px; min-height:24px; padding:0 8px 5px; color:#64748b; font-size:10px; font-weight:800; letter-spacing:.2px; white-space:nowrap; }
-        .dr-table-scroll-main { width:100%; max-width:100%; overflow-x:auto; overflow-y:auto; max-height:78vh; -webkit-overflow-scrolling:touch; overscroll-behavior-x:contain; background:#fff; border:1px solid #dbe4ee; border-radius:16px; }
+        .dr-table-scroll-main { width:100%; max-width:100%; overflow-x:auto; overflow-y:auto; max-height:78vh; -webkit-overflow-scrolling:touch; overscroll-behavior-x:contain; overscroll-behavior-y:contain; background:#fff; border:1px solid #dbe4ee; border-radius:16px; }
+        .dr-table-scroll-main tbody tr:focus-visible { outline:2px solid #0ea5a8; outline-offset:-2px; }
+        .dr-table-scroll-main tbody tr.dr-selected-row td { background:#ecfeff !important; }
+        .dr-table-scroll-main tbody tr.dr-selected-row { outline:2px solid #14b8a6; outline-offset:-2px; }
         .dr-table-scroll-main::-webkit-scrollbar { width:12px; height:12px; }
         .dr-table-scroll-main::-webkit-scrollbar-track { background:#eef2f7; border-radius:999px; }
         .dr-table-scroll-main::-webkit-scrollbar-thumb { background:#64748b; border-radius:999px; border:2px solid #eef2f7; }
