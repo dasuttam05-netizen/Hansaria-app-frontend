@@ -823,6 +823,21 @@ export default function DailyRejectionPage() {
     </div>
   );
 
+  const scrollDailyRejectionTable = (event) => {
+    const shell = event.currentTarget;
+    const key = event.key;
+    if (!["ArrowLeft", "ArrowRight"].includes(key)) return;
+    const active = document.activeElement;
+    const tag = String(active?.tagName || "").toUpperCase();
+    // Do not steal arrow keys while the user is typing/selecting inside a control.
+    if (["INPUT", "TEXTAREA", "SELECT", "BUTTON"].includes(tag)) return;
+    event.preventDefault();
+    const step = Math.max(180, Math.round(shell.clientWidth * 0.72));
+    shell.scrollBy({ left: key === "ArrowRight" ? step : -step, behavior: "smooth" });
+  };
+
+  const QTY_HEADER_INDEXES = new Set([7, 8, 9, 10, 11, 12, 13, 14, 15]);
+
   const renderTable = (tableRows, withWorkflow = true, reportMode = false) => {
     const showManagerWorkflow = withWorkflow && canAssign;
     const showReportWorkflow = reportMode;
@@ -857,13 +872,13 @@ export default function DailyRejectionPage() {
       <>
         <div className="dr-desktop-table">
           <div className="dr-scroll-shell">
-            <div className="dr-scroll-hint" aria-hidden="true">← Scroll horizontally to see all details and actions →</div>
-            <div style={styles.tableOuter}>
+            <div className="dr-scroll-hint" aria-hidden="true">← Click the table, then use keyboard ← / → arrows to move →</div>
+            <div style={styles.tableOuter} tabIndex={0} onKeyDown={scrollDailyRejectionTable} aria-label="Daily Rejection table. Use Left and Right arrow keys to scroll horizontally">
               <table style={{ ...styles.dataTable, minWidth: showManagerWorkflow ? 2350 : showReportWorkflow ? 2250 : withWorkflow ? 1850 : 1650 }}>
               <thead>
                 <tr>
-                  {headers.map((head) => (
-                    <th key={head} style={{ ...styles.th, ...(head === "Action" ? styles.actionTh : {}), ...(head === "Assign Work" || head === "Select Staff" || head === "Work Action" ? styles.workflowTh : {}) }}>{head}</th>
+                  {headers.map((head, headIndex) => (
+                    <th key={`${head}-${headIndex}`} style={{ ...styles.th, ...(QTY_HEADER_INDEXES.has(headIndex) ? styles.qtyTh : {}), ...(head === "Action" ? styles.actionTh : {}), ...(head === "Assign Work" || head === "Select Staff" || head === "Work Action" ? styles.workflowTh : {}) }}>{head}</th>
                   ))}
                 </tr>
               </thead>
@@ -884,15 +899,15 @@ export default function DailyRejectionPage() {
                       <td style={styles.td}>{row?.company_account_name || "-"}</td>
                       <td style={styles.td}>{row?.consignee_name || row?.consignee || "-"}</td>
                       <td style={styles.td}>{row?.product_name || "-"}</td>
-                      <td style={styles.tdNum}>{money(row?.original_qty)}</td>
-                      <td style={styles.tdNum}>{money(row?.actual_unloading_qty)}</td>
-                      <td style={{ ...styles.tdNum, fontWeight: 900 }}>{money(row?.rejection_qty)}</td>
-                      <td style={styles.tdNum}>{money(chainProcessedOf(row))}</td>
-                      <td style={styles.tdNum}>{money(chainRemainingOf(row))}</td>
-                      <td style={styles.tdNum}>{money(chainOtherTargetOf(row))}</td>
-                      <td style={styles.tdNum}>{money(chainOtherProcessedOf(row))}</td>
-                      <td style={styles.tdNum}>{money(chainOtherRemainingOf(row))}</td>
-                      <td style={{ ...styles.tdNum, fontWeight: 900 }}>{money(chainTotalRemainingOf(row))}</td>
+                      <td style={{ ...styles.tdNum, ...styles.qtyTd }}>{money(row?.original_qty)}</td>
+                      <td style={{ ...styles.tdNum, ...styles.qtyTd }}>{money(row?.actual_unloading_qty)}</td>
+                      <td style={{ ...styles.tdNum, ...styles.qtyTd, fontWeight: 900 }}>{money(row?.rejection_qty)}</td>
+                      <td style={{ ...styles.tdNum, ...styles.qtyTd }}>{money(chainProcessedOf(row))}</td>
+                      <td style={{ ...styles.tdNum, ...styles.qtyTd }}>{money(chainRemainingOf(row))}</td>
+                      <td style={{ ...styles.tdNum, ...styles.qtyTd }}>{money(chainOtherTargetOf(row))}</td>
+                      <td style={{ ...styles.tdNum, ...styles.qtyTd }}>{money(chainOtherProcessedOf(row))}</td>
+                      <td style={{ ...styles.tdNum, ...styles.qtyTd }}>{money(chainOtherRemainingOf(row))}</td>
+                      <td style={{ ...styles.tdNum, ...styles.qtyTd, fontWeight: 900 }}>{money(chainTotalRemainingOf(row))}</td>
                       <td style={styles.td}>{row?.reason || "-"}</td>
                       <td style={styles.td}>{row?.action_type || "-"}</td>
                       <td style={styles.td}>{row?.assigned_to_name || "-"}</td>
@@ -1006,7 +1021,8 @@ export default function DailyRejectionPage() {
         .dr-mobile-list { display:none; }
         .dr-scroll-shell { width:100%; max-width:100%; }
         .dr-scroll-hint { display:flex; justify-content:flex-end; align-items:center; min-height:24px; padding:0 8px 5px; color:#64748b; font-size:10px; font-weight:800; letter-spacing:.2px; white-space:nowrap; }
-        .dr-scroll-shell .tableOuter { scrollbar-color:#94a3b8 #eef2f7; scrollbar-width:auto; }
+        .dr-scroll-shell .tableOuter { scrollbar-color:#94a3b8 #eef2f7; scrollbar-width:auto; outline:none; }
+        .dr-scroll-shell .tableOuter:focus { outline:2px solid #0f766e; outline-offset:-2px; }
         .dr-scroll-shell .tableOuter::-webkit-scrollbar { height:12px; }
         .dr-scroll-shell .tableOuter::-webkit-scrollbar-track { background:#eef2f7; border-radius:999px; }
         .dr-scroll-shell .tableOuter::-webkit-scrollbar-thumb { background:#94a3b8; border-radius:999px; border:2px solid #eef2f7; }
@@ -1360,16 +1376,18 @@ const styles = {
   tab: { border: '1px solid #cbd5e1', background: '#fff', color: '#334155', borderRadius: 999, padding: '8px 12px', fontWeight: 800, cursor: 'pointer' }, tabActive: { border: '1px solid #0f766e', background: '#0f766e', color: '#fff', borderRadius: 999, padding: '8px 12px', fontWeight: 800, cursor: 'pointer' }, compactSelect: { minHeight: 40, border: '1px solid #cbd5e1', borderRadius: 10, padding: '8px 10px', background: '#fff' },
   primary: { border: 0, background: '#0f766e', color: '#fff', borderRadius: 11, padding: '10px 15px', fontWeight: 900, cursor: 'pointer', boxShadow: '0 5px 12px rgba(15,118,110,.16)' }, secondary: { border: '1px solid #cbd5e1', background: '#fff', color: '#334155', borderRadius: 11, padding: '10px 14px', fontWeight: 900, cursor: 'pointer' },
   tableOuter: { width: '100%', maxWidth: '100%', overflowX: 'auto', overflowY: 'hidden', WebkitOverflowScrolling: 'touch', overscrollBehaviorX: 'contain', scrollbarWidth: 'auto', background: '#fff', border: '1px solid #dbe4ee', borderRadius: 16, boxShadow: '0 10px 28px rgba(15,23,42,.05)' },
-  dataTable: { width: 'max-content', minWidth: 1500, borderCollapse: 'separate', borderSpacing: 0, fontSize: 12 },
-  th: { position: 'sticky', top: 0, zIndex: 3, background: '#0f766e', color: '#fff', padding: '11px 10px', textAlign: 'left', fontWeight: 900, whiteSpace: 'nowrap', borderRight: '1px solid rgba(255,255,255,.14)' },
-  td: { padding: '10px', color: '#0f172a', background: '#fff', whiteSpace: 'nowrap', borderTop: '1px solid #eef2f7', verticalAlign: 'middle' },
-  tdNum: { padding: '10px', color: '#0f172a', background: '#fff', whiteSpace: 'nowrap', borderTop: '1px solid #eef2f7', textAlign: 'right', fontVariantNumeric: 'tabular-nums', verticalAlign: 'middle' },
+  dataTable: { width: 'max-content', minWidth: 1320, borderCollapse: 'separate', borderSpacing: 0, fontSize: 11 },
+  th: { position: 'sticky', top: 0, zIndex: 3, background: '#0f766e', color: '#fff', padding: '7px 7px', textAlign: 'left', fontWeight: 900, whiteSpace: 'normal', lineHeight: 1.08, overflowWrap: 'anywhere', borderRight: '1px solid rgba(255,255,255,.14)' },
+  td: { padding: '7px 7px', color: '#0f172a', background: '#fff', whiteSpace: 'normal', borderTop: '1px solid #eef2f7', verticalAlign: 'middle', maxWidth: 125, overflowWrap: 'anywhere', wordBreak: 'break-word' },
+  tdNum: { padding: '7px 5px', color: '#0f172a', background: '#fff', whiteSpace: 'nowrap', borderTop: '1px solid #eef2f7', textAlign: 'right', fontVariantNumeric: 'tabular-nums', verticalAlign: 'middle' },
+  qtyTh: { width: 68, minWidth: 62, maxWidth: 72, padding: '7px 4px', whiteSpace: 'normal', lineHeight: 1.05, textAlign: 'center', overflowWrap: 'anywhere' },
+  qtyTd: { width: 68, minWidth: 62, maxWidth: 72, padding: '7px 4px', whiteSpace: 'nowrap' },
   statusChip: { display: 'inline-flex', alignItems: 'center', borderRadius: 999, padding: '5px 8px', fontSize: 10, fontWeight: 900, whiteSpace: 'nowrap' },
   emptyCell: { padding: 28, textAlign: 'center', color: '#64748b', background: '#fff' },
-  workflowTh: { background: '#155e75', color: '#fff', minWidth: 170 },
+  workflowTh: { background: '#155e75', color: '#fff', minWidth: 125, width: 125, maxWidth: 140 },
   workflowTd: { background: '#fbfdff', borderLeft: '1px solid #e2e8f0' },
-  workflowSelect: { minWidth: 165, height: 34, border: '1px solid #cbd5e1', borderRadius: 8, padding: '6px 8px', background: '#fff', color: '#0f172a', fontWeight: 700, whiteSpace: 'nowrap' },
-  workflowInput: { width: 155, height: 34, border: '1px solid #cbd5e1', borderRadius: 8, padding: '6px 8px', background: '#fff', color: '#0f172a', boxSizing: 'border-box' },
+  workflowSelect: { minWidth: 125, height: 34, border: '1px solid #cbd5e1', borderRadius: 8, padding: '6px 8px', background: '#fff', color: '#0f172a', fontWeight: 700, whiteSpace: 'nowrap' },
+  workflowInput: { width: 125, height: 34, border: '1px solid #cbd5e1', borderRadius: 8, padding: '6px 8px', background: '#fff', color: '#0f172a', boxSizing: 'border-box' },
   assignButtonInline: { border: 0, background: '#1d4ed8', color: '#fff', borderRadius: 8, padding: '8px 11px', fontWeight: 900, whiteSpace: 'nowrap' },
   workerInline: { display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' },
   completeInline: { border: 0, background: '#047857', color: '#fff', borderRadius: 8, padding: '8px 10px', fontWeight: 900, whiteSpace: 'nowrap', cursor: 'pointer' },
