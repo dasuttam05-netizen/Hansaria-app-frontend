@@ -1,4 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { hasPermission, loadSession } from "../utils/auth";
@@ -1229,7 +1230,7 @@ export default function DailyRejectionPage() {
 
 function SearchableSelect({
   value,
-  options = [],
+  options,
   onChange,
   placeholder = "Select / type to search",
   disabled = false,
@@ -1238,6 +1239,8 @@ function SearchableSelect({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [highlighted, setHighlighted] = useState(0);
+  const [menuRect, setMenuRect] = useState(null);
+  const inputRef = useRef(null);
 
   const normalized = useMemo(() => {
     return options
@@ -1255,19 +1258,39 @@ function SearchableSelect({
     return normalized.filter((item) => item.label.toLowerCase().includes(q));
   }, [normalized, query]);
 
-  useEffect(() => {
-    if (!open) return;
-    setHighlighted(0);
-  }, [query, open]);
+  const updateMenuPosition = useCallback(() => {
+    if (!inputRef.current || !open) return;
+    const rect = inputRef.current.getBoundingClientRect();
+    setMenuRect({
+      left: rect.left,
+      top: rect.bottom + 4,
+      width: rect.width,
+    });
+  }, [open]);
 
   useEffect(() => {
     if (!open) return;
+    setHighlighted(0);
+    updateMenuPosition();
+  }, [query, open, updateMenuPosition]);
+
+  useEffect(() => {
+    if (!open) return undefined;
     const close = (event) => {
       if (!event.target.closest("[data-dr-search-select]")) setOpen(false);
     };
+    const reposition = () => updateMenuPosition();
     document.addEventListener("mousedown", close);
-    return () => document.removeEventListener("mousedown", close);
-  }, [open]);
+    document.addEventListener("scroll", reposition, true);
+    window.addEventListener("resize", reposition);
+    window.addEventListener("orientationchange", reposition);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      document.removeEventListener("scroll", reposition, true);
+      window.removeEventListener("resize", reposition);
+      window.removeEventListener("orientationchange", reposition);
+    };
+  }, [open, updateMenuPosition]);
 
   const choose = (item) => {
     if (!item) return;
@@ -1276,93 +1299,114 @@ function SearchableSelect({
     setOpen(false);
   };
 
+  const menu = open && !disabled && menuRect && typeof document !== "undefined"
+    ? createPortal(
+      <div
+        data-dr-search-select
+        style={{
+          position: "fixed",
+          left: menuRect.left,
+          top: menuRect.top,
+          width: menuRect.width,
+          zIndex: 2147483647,
+          background: "#fff",
+          border: "1px solid #94a3b8",
+          borderRadius: 8,
+          boxShadow: "0 16px 36px rgba(15,23,42,.22)",
+          maxHeight: 260,
+          overflowY: "auto",
+          overflowX: "hidden",
+        }}
+      >
+        {filtered.length ? filtered.map((item, index) => (
+          <button
+            key={`${item.value}-${index}`}
+            type="button"
+            onMouseDown={(e) => {
+              e.preventDefault();
+              choose(item);
+            }}
+            style={{
+              display: "block",
+              width: "100%",
+              textAlign: "left",
+              border: 0,
+              borderBottom: "1px solid #f1f5f9",
+              background: index === highlighted ? "#ecfeff" : "#fff",
+              color: "#0f172a",
+              padding: "9px 10px",
+              cursor: "pointer",
+              fontFamily: "inherit",
+              fontSize: 12,
+              lineHeight: 1.25,
+              fontWeight: 700,
+              whiteSpace: "normal",
+              overflowWrap: "anywhere",
+            }}
+          >
+            {item.label}
+          </button>
+        )) : (
+          <div style={{ padding: 10, color: "#64748b", fontSize: 12 }}>
+            No matching name found
+          </div>
+        )}
+      </div>,
+      document.body
+    )
+    : null;
+
   return (
-    <div data-dr-search-select style={{ position: "relative", width: "100%" }}>
-      <input
-        type="text"
-        value={open ? query : (selected?.label || "")}
-        placeholder={placeholder}
-        disabled={disabled}
-        onFocus={() => {
-          setOpen(true);
-          setQuery("");
-        }}
-        onChange={(e) => {
-          setQuery(e.target.value);
-          setOpen(true);
-        }}
-        onKeyDown={(e) => {
-          if (e.key === "ArrowDown") {
-            e.preventDefault();
+    <>
+      <div data-dr-search-select style={{ position: "relative", width: "100%" }}>
+        <input
+          ref={inputRef}
+          type="text"
+          value={open ? query : (selected?.label || "")}
+          placeholder={placeholder}
+          disabled={disabled}
+          onFocus={() => {
             setOpen(true);
-            setHighlighted((i) => Math.min(i + 1, Math.max(filtered.length - 1, 0)));
-          } else if (e.key === "ArrowUp") {
-            e.preventDefault();
-            setOpen(true);
-            setHighlighted((i) => Math.max(i - 1, 0));
-          } else if (e.key === "Enter") {
-            e.preventDefault();
-            if (open && filtered[highlighted]) choose(filtered[highlighted]);
-          } else if (e.key === "Escape") {
-            setOpen(false);
             setQuery("");
-          }
-        }}
-        style={{ ...styles.input, fontFamily: "inherit", fontSize: "inherit", fontWeight: "inherit", lineHeight: "inherit", color: "#0f172a", ...(style || {}), cursor: disabled ? "not-allowed" : "text" }}
-      />
-      {open && !disabled && (
-        <div
-          style={{
-            position: "absolute",
-            left: 0,
-            right: 0,
-            top: "calc(100% + 3px)",
-            zIndex: 10000,
-            background: "#fff",
-            border: "1px solid #cbd5e1",
-            borderRadius: 10,
-            boxShadow: "0 14px 30px rgba(15,23,42,.16)",
-            maxHeight: 240,
-            overflowY: "auto",
+            window.setTimeout(updateMenuPosition, 0);
           }}
-        >
-          {filtered.length ? filtered.map((item, index) => (
-            <button
-              key={`${item.value}-${index}`}
-              type="button"
-              onMouseDown={(e) => {
-                e.preventDefault();
-                choose(item);
-              }}
-              style={{
-                display: "block",
-                width: "100%",
-                textAlign: "left",
-                border: 0,
-                borderBottom: "1px solid #f1f5f9",
-                background: index === highlighted ? "#ecfeff" : "#fff",
-                color: "#0f172a",
-                padding: "9px 10px",
-                cursor: "pointer",
-                fontFamily: "inherit",
-                fontSize: "inherit",
-                lineHeight: "inherit",
-                fontWeight: "inherit",
-              }}
-            >
-              {item.label}
-            </button>
-          )) : (
-            <div style={{ padding: 10, color: "#64748b", fontSize: 12 }}>
-              No matching name found
-            </div>
-          )}
-        </div>
-      )}
-    </div>
+          onChange={(e) => {
+            setQuery(e.target.value);
+            setOpen(true);
+          }}
+          onKeyDown={(e) => {
+            if (e.key === "ArrowDown") {
+              e.preventDefault();
+              setOpen(true);
+              setHighlighted((i) => Math.min(i + 1, Math.max(filtered.length - 1, 0)));
+            } else if (e.key === "ArrowUp") {
+              e.preventDefault();
+              setOpen(true);
+              setHighlighted((i) => Math.max(i - 1, 0));
+            } else if (e.key === "Enter") {
+              e.preventDefault();
+              if (open && filtered[highlighted]) choose(filtered[highlighted]);
+            } else if (e.key === "Escape") {
+              setOpen(false);
+              setQuery("");
+            }
+          }}
+          style={{
+            ...styles.input,
+            fontFamily: "inherit",
+            fontSize: 12,
+            fontWeight: 700,
+            lineHeight: 1.2,
+            color: "#0f172a",
+            ...(style || {}),
+            cursor: disabled ? "not-allowed" : "text",
+          }}
+        />
+      </div>
+      {menu}
+    </>
   );
 }
-
 function Field({ label, children }) { return <label style={styles.field}><span style={styles.label}>{label}</span>{children}</label>; }
 const styles = {
   page: { minHeight: '100vh', background: 'linear-gradient(180deg,#f8fafc 0%,#eef6f5 100%)', padding: 14, fontFamily: 'Segoe UI,Arial,sans-serif', boxSizing: 'border-box' },
