@@ -1,4 +1,5 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { hasPermission, loadSession } from "../utils/auth";
@@ -903,10 +904,40 @@ export default function DailyRejectionPage() {
     return (
       <>
         <div className="dr-desktop-table">
-          <div className="dr-scroll-shell">
-            <div className="dr-scroll-hint" aria-hidden="true">← Scroll horizontally to see all details and actions →</div>
-            <div style={styles.tableOuter}>
-              <table style={{ ...styles.dataTable, minWidth: showManagerWorkflow ? 2350 : showReportWorkflow ? 2250 : withWorkflow ? 1850 : 1650 }}>
+          <div
+            className="dr-scroll-shell"
+            tabIndex={0}
+            onKeyDown={(event) => {
+              if (!["ArrowLeft", "ArrowRight"].includes(event.key)) return;
+              const tag = String(document.activeElement?.tagName || "").toUpperCase();
+              if (["INPUT", "TEXTAREA", "SELECT", "BUTTON"].includes(tag)) return;
+              event.preventDefault();
+              const main = event.currentTarget.querySelector(".dr-table-scroll-main");
+              if (!main) return;
+              const step = Math.max(220, Math.round(main.clientWidth * 0.65));
+              main.scrollBy({ left: event.key === "ArrowRight" ? step : -step, behavior: "smooth" });
+            }}
+            aria-label="Daily Rejection table. Use Left and Right arrow keys to scroll horizontally"
+          >
+            <div className="dr-scroll-hint" aria-hidden="true">Click the table, then use keyboard ← / → or drag the bottom scrollbar</div>
+            <div
+              className="dr-table-scroll-main"
+              style={styles.tableOuter}
+              onScroll={(event) => {
+                const bottom = event.currentTarget.nextElementSibling;
+                if (bottom && Math.abs(bottom.scrollLeft - event.currentTarget.scrollLeft) > 1) bottom.scrollLeft = event.currentTarget.scrollLeft;
+              }}
+              onWheel={(event) => {
+                if (Math.abs(event.deltaY) > Math.abs(event.deltaX)) {
+                  const el = event.currentTarget;
+                  if (el.scrollWidth > el.clientWidth) {
+                    el.scrollLeft += event.deltaY;
+                    event.preventDefault();
+                  }
+                }
+              }}
+            >
+              <table style={{ ...styles.dataTable, minWidth: showManagerWorkflow ? 1980 : showReportWorkflow ? 1900 : withWorkflow ? 1740 : 1600 }}>
               <thead>
                 <tr>
                   {headers.map((head, headIndex) => (
@@ -930,9 +961,9 @@ export default function DailyRejectionPage() {
                       <td style={styles.td}>{formatDate(row?.entry_date)}</td>
                       <td style={{ ...styles.td, fontWeight: 900 }}>{row?.rejection_no || rowId}</td>
                       <td style={styles.td}>{row?.lorry_no || "-"}</td>
-                      <td style={styles.td}>{row?.company_name || "-"}</td>
-                      <td style={styles.td}>{row?.company_account_name || "-"}</td>
-                      <td style={styles.td}>{row?.consignee_name || row?.consignee || "-"}</td>
+                      <td style={{ ...styles.td, ...styles.wrapTd }}>{row?.company_name || "-"}</td>
+                      <td style={{ ...styles.td, ...styles.wrapTd }}>{row?.company_account_name || "-"}</td>
+                      <td style={{ ...styles.td, ...styles.wrapTd }}>{row?.consignee_name || row?.consignee || "-"}</td>
                       <td style={styles.td}>{row?.product_name || "-"}</td>
                       <td style={styles.tdNum}>{money(row?.original_qty)}</td>
                       <td style={styles.tdNum}>{money(row?.actual_unloading_qty)}</td>
@@ -943,9 +974,9 @@ export default function DailyRejectionPage() {
                       <td style={styles.tdNum}>{money(chainOtherProcessedOf(row))}</td>
                       <td style={styles.tdNum}>{money(chainOtherRemainingOf(row))}</td>
                       <td style={{ ...styles.tdNum, fontWeight: 900 }}>{money(chainTotalRemainingOf(row))}</td>
-                      <td style={styles.td}>{row?.reason || "-"}</td>
-                      <td style={styles.td}>{row?.action_type || "-"}</td>
-                      <td style={styles.td}>{row?.assigned_to_name || "-"}</td>
+                      <td style={{ ...styles.td, ...styles.wrapTd }}>{row?.reason || "-"}</td>
+                      <td style={{ ...styles.td, ...styles.wrapTd }}>{row?.action_type || "-"}</td>
+                      <td style={{ ...styles.td, ...styles.wrapTd }}>{row?.assigned_to_name || "-"}</td>
                       <td style={styles.td}><span style={{ ...styles.statusChip, ...statusStyle(row?.status) }}>{row?.status || "PENDING"}</span></td>
                       {showManagerWorkflow ? (
                         <>
@@ -995,6 +1026,19 @@ export default function DailyRejectionPage() {
                 }) : <tr><td colSpan={totalColumns} style={styles.emptyCell}>No Daily Rejection records found.</td></tr>}
               </tbody>
               </table>
+            </div>
+            <div
+              className="dr-table-scroll-bottom"
+              aria-label="Daily Rejection horizontal scrollbar"
+              onScroll={(event) => {
+                const main = event.currentTarget.previousElementSibling;
+                if (main && Math.abs(main.scrollLeft - event.currentTarget.scrollLeft) > 1) main.scrollLeft = event.currentTarget.scrollLeft;
+              }}
+            >
+              <div style={{ width: showManagerWorkflow ? 1980 : showReportWorkflow ? 1900 : withWorkflow ? 1740 : 1600, height: 1 }} />
+            </div>
+            <div className="dr-scroll-actions" aria-hidden="true">
+              <span>← Left</span><span>→ Right</span>
             </div>
           </div>
         </div>
@@ -1054,13 +1098,20 @@ export default function DailyRejectionPage() {
         .dr-page-scroll-fix { touch-action: pan-y; overscroll-behavior-y: auto; }
 
         .dr-mobile-list { display:none; }
-        .dr-scroll-shell { width:100%; max-width:100%; }
-        .dr-scroll-hint { display:flex; justify-content:flex-end; align-items:center; min-height:24px; padding:0 8px 5px; color:#64748b; font-size:10px; font-weight:800; letter-spacing:.2px; white-space:nowrap; }
-        .dr-scroll-shell .tableOuter { scrollbar-color:#94a3b8 #eef2f7; scrollbar-width:auto; }
-        .dr-scroll-shell .tableOuter::-webkit-scrollbar { height:12px; }
+        .dr-scroll-shell { width:100%; max-width:100%; outline:none; }
+        .dr-scroll-shell:focus { outline:2px solid rgba(14,116,144,.28); outline-offset:2px; border-radius:14px; }
+        .dr-scroll-hint { display:flex; justify-content:space-between; align-items:center; min-height:24px; padding:0 8px 5px; color:#64748b; font-size:10px; font-weight:800; letter-spacing:.2px; white-space:nowrap; }
+        .dr-scroll-shell .tableOuter { scrollbar-color:#94a3b8 #eef2f7; scrollbar-width:thin; }
+        .dr-scroll-shell .tableOuter::-webkit-scrollbar { height:8px; }
         .dr-scroll-shell .tableOuter::-webkit-scrollbar-track { background:#eef2f7; border-radius:999px; }
-        .dr-scroll-shell .tableOuter::-webkit-scrollbar-thumb { background:#94a3b8; border-radius:999px; border:2px solid #eef2f7; }
+        .dr-scroll-shell .tableOuter::-webkit-scrollbar-thumb { background:#94a3b8; border-radius:999px; border:1px solid #eef2f7; }
         .dr-scroll-shell .tableOuter::-webkit-scrollbar-thumb:hover { background:#64748b; }
+        .dr-table-scroll-bottom { width:100%; max-width:100%; overflow-x:auto; overflow-y:hidden; height:12px; margin-top:2px; scrollbar-color:#64748b #eef2f7; scrollbar-width:auto; }
+        .dr-table-scroll-bottom::-webkit-scrollbar { height:12px; }
+        .dr-table-scroll-bottom::-webkit-scrollbar-track { background:#eef2f7; border-radius:999px; }
+        .dr-table-scroll-bottom::-webkit-scrollbar-thumb { background:#64748b; border-radius:999px; border:2px solid #eef2f7; }
+        .dr-scroll-actions { display:flex; justify-content:center; gap:10px; margin-top:3px; color:#64748b; font-size:9px; font-weight:800; }
+        .dr-scroll-actions span { padding:2px 7px; border:1px solid #dbe4ee; border-radius:999px; background:#f8fafc; }
         .dr-mobile-card { background:#fff; border:1px solid #dbe4ee; border-radius:16px; padding:12px; box-shadow:0 8px 24px rgba(15,23,42,.05); }
         .dr-mobile-card-head { display:flex; justify-content:space-between; align-items:flex-start; gap:10px; padding-bottom:10px; border-bottom:1px solid #eef2f7; }
         .dr-mobile-rej { font-weight:900; color:#0f172a; font-size:15px; }
@@ -1094,6 +1145,13 @@ export default function DailyRejectionPage() {
         }
         .dr-history-overlay { position:fixed; inset:0; z-index:100000; background:rgba(15,23,42,.52); display:flex; align-items:center; justify-content:center; padding:18px; }
         .dr-history-modal { width:min(1120px,96vw); max-height:90vh; overflow:auto; background:#fff; border-radius:18px; border:1px solid #dbe4ee; box-shadow:0 24px 70px rgba(15,23,42,.25); }
+        .dr-history-factory-details { margin-top:7px; border:1px solid #bfdbfe; border-radius:9px; background:#f8fbff; padding:6px 8px; }
+        .dr-history-factory-details summary { cursor:pointer; color:#1d4ed8; font-size:10px; font-weight:900; }
+        .dr-history-factory-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:5px; margin-top:6px; }
+        .dr-history-factory-box { min-width:0; padding:5px 6px; background:#fff; border:1px solid #e2e8f0; border-radius:7px; }
+        .dr-history-factory-box span { display:block; color:#64748b; font-size:8px; font-weight:800; text-transform:uppercase; }
+        .dr-history-factory-box b { display:block; margin-top:2px; color:#0f172a; font-size:10px; overflow-wrap:anywhere; }
+        @media (max-width:720px) { .dr-history-factory-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } }
         .dr-history-head { position:sticky; top:0; z-index:2; display:flex; justify-content:space-between; gap:12px; align-items:flex-start; padding:14px 16px; background:#fff; border-bottom:1px solid #e2e8f0; }
         .dr-history-title { margin:0; font-size:18px; font-weight:950; color:#0f172a; }
         .dr-history-sub { margin-top:3px; color:#64748b; font-size:11px; }
@@ -1277,7 +1335,19 @@ export default function DailyRejectionPage() {
                         <td>{rejectProcessed !== undefined ? money(rejectProcessed) : "-"}</td>
                         <td>{otherProcessed !== undefined ? money(otherProcessed) : "-"}</td>
                         <td>{remaining !== undefined ? money(remaining) : "-"}</td>
-                        <td className="dr-history-note">{note}</td>
+                        <td className="dr-history-note">
+                          <div>{note}</div>
+                          {(item?.action_type || "").toUpperCase() === "SEND TO FACTORY" || item?.factory_invoice_no || item?.factory_lorry_no ? (
+                            <details className="dr-history-factory-details">
+                              <summary>Send To Factory Details</summary>
+                              <div className="dr-history-factory-grid">
+                                {[["Date", item?.factory_date], ["Invoice No", item?.factory_invoice_no], ["Lorry No", item?.factory_lorry_no], ["Company", item?.factory_company_name], ["Company Account", item?.factory_company_account_name], ["Buyer", item?.factory_buyer_name], ["Consignee", item?.factory_consignee_name], ["Reject Qty", item?.factory_rejection_qty], ["Other Qty", item?.factory_other_qty], ["Total Qty", item?.factory_total_qty], ["Weight", item?.factory_weight ?? item?.factory_total_qty], ["Rate", item?.factory_rate], ["Amount", item?.factory_amount]].map(([label, value]) => (
+                                  <div className="dr-history-factory-box" key={label}><span>{label}</span><b>{value === undefined || value === null || value === "" ? "-" : ["Reject Qty","Other Qty","Total Qty","Weight","Rate","Amount"].includes(label) ? money(value) : label === "Date" ? formatDate(value) : String(value)}</b></div>
+                                ))}
+                              </div>
+                            </details>
+                          ) : null}
+                        </td>
                       </tr>
                     );
                   })}
@@ -1342,16 +1412,10 @@ function SearchableSelect({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [highlighted, setHighlighted] = useState(0);
+  const [menuStyle, setMenuStyle] = useState(null);
+  const inputRef = useRef(null);
 
-  const normalized = useMemo(() => {
-    return options
-      .map((option) => ({
-        value: String(option?.value ?? ""),
-        label: String(option?.label ?? option?.value ?? ""),
-      }))
-      .filter((option) => option.value !== "");
-  }, [options]);
-
+  const normalized = useMemo(() => options.map((option) => ({ value: String(option?.value ?? ""), label: String(option?.label ?? option?.value ?? "") })).filter((option) => option.value !== ""), [options]);
   const selected = normalized.find((item) => String(item.value) === String(value));
   const filtered = useMemo(() => {
     const q = String(query || "").trim().toLowerCase();
@@ -1359,15 +1423,50 @@ function SearchableSelect({
     return normalized.filter((item) => item.label.toLowerCase().includes(q));
   }, [normalized, query]);
 
-  useEffect(() => {
-    if (!open) return;
-    setHighlighted(0);
-  }, [query, open]);
+  const updateMenuPosition = useCallback(() => {
+    const el = inputRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const menuWidth = Math.max(r.width, 180);
+    const maxWidth = Math.min(420, window.innerWidth - 16);
+    const width = Math.min(menuWidth, maxWidth);
+    const left = Math.min(Math.max(8, r.left), Math.max(8, window.innerWidth - width - 8));
+    const spaceBelow = window.innerHeight - r.bottom - 8;
+    const openUp = spaceBelow < 220 && r.top > 240;
+    const maxHeight = Math.max(140, Math.min(260, openUp ? r.top - 16 : spaceBelow));
+    setMenuStyle({
+      position: "fixed",
+      left,
+      width,
+      top: openUp ? undefined : r.bottom + 4,
+      bottom: openUp ? window.innerHeight - r.top + 4 : undefined,
+      zIndex: 200000,
+      background: "#fff",
+      border: "1px solid #cbd5e1",
+      borderRadius: 10,
+      boxShadow: "0 18px 38px rgba(15,23,42,.2)",
+      maxHeight,
+      overflowY: "auto",
+    });
+  }, []);
 
   useEffect(() => {
-    if (!open) return;
+    if (!open) return undefined;
+    setHighlighted(0);
+    updateMenuPosition();
+    const onMove = () => updateMenuPosition();
+    window.addEventListener("resize", onMove);
+    window.addEventListener("scroll", onMove, true);
+    return () => { window.removeEventListener("resize", onMove); window.removeEventListener("scroll", onMove, true); };
+  }, [open, query, updateMenuPosition]);
+
+  useEffect(() => {
+    if (!open) return undefined;
     const close = (event) => {
-      if (!event.target.closest("[data-dr-search-select]")) setOpen(false);
+      if (inputRef.current && (event.target === inputRef.current || inputRef.current.parentElement?.contains(event.target))) return;
+      if (event.target?.closest?.("[data-dr-search-select-menu]")) return;
+      setOpen(false);
+      setQuery("");
     };
     document.addEventListener("mousedown", close);
     return () => document.removeEventListener("mousedown", close);
@@ -1380,90 +1479,39 @@ function SearchableSelect({
     setOpen(false);
   };
 
+  const menu = open && !disabled && menuStyle ? createPortal(
+    <div data-dr-search-select-menu style={menuStyle}>
+      {filtered.length ? filtered.map((item, index) => (
+        <button key={`${item.value}-${index}`} type="button" onMouseDown={(e) => { e.preventDefault(); choose(item); }} style={{ display:"block", width:"100%", textAlign:"left", border:0, borderBottom:"1px solid #f1f5f9", background:index === highlighted ? "#ecfeff" : "#fff", color:"#0f172a", padding:"9px 10px", cursor:"pointer", fontFamily:"inherit", fontSize:12, lineHeight:1.25, fontWeight:700 }}>
+          {item.label}
+        </button>
+      )) : <div style={{ padding:10, color:"#64748b", fontSize:12 }}>No matching name found</div>}
+    </div>,
+    document.body
+  ) : null;
+
   return (
-    <div data-dr-search-select style={{ position: "relative", width: "100%" }}>
-      <input
-        type="text"
-        value={open ? query : (selected?.label || "")}
-        placeholder={placeholder}
-        disabled={disabled}
-        onFocus={() => {
-          setOpen(true);
-          setQuery("");
-        }}
-        onChange={(e) => {
-          setQuery(e.target.value);
-          setOpen(true);
-        }}
-        onKeyDown={(e) => {
-          if (e.key === "ArrowDown") {
-            e.preventDefault();
-            setOpen(true);
-            setHighlighted((i) => Math.min(i + 1, Math.max(filtered.length - 1, 0)));
-          } else if (e.key === "ArrowUp") {
-            e.preventDefault();
-            setOpen(true);
-            setHighlighted((i) => Math.max(i - 1, 0));
-          } else if (e.key === "Enter") {
-            e.preventDefault();
-            if (open && filtered[highlighted]) choose(filtered[highlighted]);
-          } else if (e.key === "Escape") {
-            setOpen(false);
-            setQuery("");
-          }
-        }}
-        style={{ ...styles.input, fontFamily: "inherit", fontSize: "inherit", fontWeight: "inherit", lineHeight: "inherit", color: "#0f172a", ...(style || {}), cursor: disabled ? "not-allowed" : "text" }}
-      />
-      {open && !disabled && (
-        <div
-          style={{
-            position: "absolute",
-            left: 0,
-            right: 0,
-            top: "calc(100% + 3px)",
-            zIndex: 10000,
-            background: "#fff",
-            border: "1px solid #cbd5e1",
-            borderRadius: 10,
-            boxShadow: "0 14px 30px rgba(15,23,42,.16)",
-            maxHeight: 240,
-            overflowY: "auto",
+    <>
+      <div data-dr-search-select style={{ position: "relative", width: "100%" }}>
+        <input
+          ref={inputRef}
+          type="text"
+          value={open ? query : (selected?.label || "")}
+          placeholder={placeholder}
+          disabled={disabled}
+          onFocus={() => { setOpen(true); setQuery(""); }}
+          onChange={(e) => { setQuery(e.target.value); setOpen(true); }}
+          onKeyDown={(e) => {
+            if (e.key === "ArrowDown") { e.preventDefault(); setOpen(true); setHighlighted((i) => Math.min(i + 1, Math.max(filtered.length - 1, 0))); }
+            else if (e.key === "ArrowUp") { e.preventDefault(); setOpen(true); setHighlighted((i) => Math.max(i - 1, 0)); }
+            else if (e.key === "Enter") { e.preventDefault(); if (open && filtered[highlighted]) choose(filtered[highlighted]); }
+            else if (e.key === "Escape") { setOpen(false); setQuery(""); }
           }}
-        >
-          {filtered.length ? filtered.map((item, index) => (
-            <button
-              key={`${item.value}-${index}`}
-              type="button"
-              onMouseDown={(e) => {
-                e.preventDefault();
-                choose(item);
-              }}
-              style={{
-                display: "block",
-                width: "100%",
-                textAlign: "left",
-                border: 0,
-                borderBottom: "1px solid #f1f5f9",
-                background: index === highlighted ? "#ecfeff" : "#fff",
-                color: "#0f172a",
-                padding: "9px 10px",
-                cursor: "pointer",
-                fontFamily: "inherit",
-                fontSize: "inherit",
-                lineHeight: "inherit",
-                fontWeight: "inherit",
-              }}
-            >
-              {item.label}
-            </button>
-          )) : (
-            <div style={{ padding: 10, color: "#64748b", fontSize: 12 }}>
-              No matching name found
-            </div>
-          )}
-        </div>
-      )}
-    </div>
+          style={{ ...styles.input, fontFamily:"inherit", fontSize:"inherit", fontWeight:"inherit", lineHeight:"inherit", color:"#0f172a", ...(style || {}), cursor: disabled ? "not-allowed" : "text", minWidth:0, width:"100%", boxSizing:"border-box" }}
+        />
+      </div>
+      {menu}
+    </>
   );
 }
 
@@ -1482,15 +1530,16 @@ const styles = {
   tableOuter: { width: '100%', maxWidth: '100%', overflowX: 'auto', overflowY: 'hidden', WebkitOverflowScrolling: 'touch', overscrollBehaviorX: 'contain', scrollbarWidth: 'auto', background: '#fff', border: '1px solid #dbe4ee', borderRadius: 16, boxShadow: '0 10px 28px rgba(15,23,42,.05)' },
   dataTable: { width: 'max-content', minWidth: 1500, borderCollapse: 'separate', borderSpacing: 0, fontSize: 12 },
   th: { position: 'sticky', top: 0, zIndex: 3, background: '#0f766e', color: '#fff', padding: '8px 7px', textAlign: 'left', fontWeight: 900, whiteSpace: 'nowrap', borderRight: '1px solid rgba(255,255,255,.14)' },
-  qtyTh: { whiteSpace: 'normal', width: 68, minWidth: 58, maxWidth: 82, lineHeight: 1.05, textAlign: 'center', wordBreak: 'break-word' },
+  qtyTh: { whiteSpace: 'normal', width: 56, minWidth: 50, maxWidth: 66, lineHeight: 1.02, textAlign: 'center', wordBreak: 'break-word' },
   td: { padding: '8px 7px', color: '#0f172a', background: '#fff', whiteSpace: 'nowrap', borderTop: '1px solid #eef2f7', verticalAlign: 'middle' },
-  tdNum: { padding: '8px 7px', color: '#0f172a', background: '#fff', whiteSpace: 'nowrap', borderTop: '1px solid #eef2f7', textAlign: 'right', fontVariantNumeric: 'tabular-nums', verticalAlign: 'middle' },
+  wrapTd: { whiteSpace: 'normal', width: 105, minWidth: 82, maxWidth: 125, lineHeight: 1.15, overflowWrap: 'anywhere' },
+  tdNum: { padding: '8px 5px', color: '#0f172a', background: '#fff', whiteSpace: 'nowrap', borderTop: '1px solid #eef2f7', textAlign: 'right', fontVariantNumeric: 'tabular-nums', verticalAlign: 'middle' },
   statusChip: { display: 'inline-flex', alignItems: 'center', borderRadius: 999, padding: '5px 8px', fontSize: 10, fontWeight: 900, whiteSpace: 'nowrap' },
   emptyCell: { padding: 28, textAlign: 'center', color: '#64748b', background: '#fff' },
-  workflowTh: { background: '#155e75', color: '#fff', minWidth: 170 },
+  workflowTh: { background: '#155e75', color: '#fff', minWidth: 145 },
   workflowTd: { background: '#fbfdff', borderLeft: '1px solid #e2e8f0' },
-  workflowSelect: { minWidth: 165, height: 34, border: '1px solid #cbd5e1', borderRadius: 8, padding: '6px 8px', background: '#fff', color: '#0f172a', fontWeight: 700, whiteSpace: 'nowrap' },
-  workflowInput: { width: 155, height: 34, border: '1px solid #cbd5e1', borderRadius: 8, padding: '6px 8px', background: '#fff', color: '#0f172a', boxSizing: 'border-box' },
+  workflowSelect: { minWidth: 132, height: 34, border: '1px solid #cbd5e1', borderRadius: 8, padding: '6px 8px', background: '#fff', color: '#0f172a', fontWeight: 700, whiteSpace: 'nowrap' },
+  workflowInput: { width: 132, height: 34, border: '1px solid #cbd5e1', borderRadius: 8, padding: '6px 8px', background: '#fff', color: '#0f172a', boxSizing: 'border-box' },
   assignButtonInline: { border: 0, background: '#1d4ed8', color: '#fff', borderRadius: 8, padding: '8px 11px', fontWeight: 900, whiteSpace: 'nowrap' },
   workerInline: { display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' },
   completeInline: { border: 0, background: '#047857', color: '#fff', borderRadius: 8, padding: '8px 10px', fontWeight: 900, whiteSpace: 'nowrap', cursor: 'pointer' },
