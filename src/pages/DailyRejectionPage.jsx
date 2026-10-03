@@ -1,5 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { hasPermission, loadSession } from "../utils/auth";
@@ -120,6 +119,9 @@ function Icon({ type, size = 18 }) {
   if (type === "copy") {
     return <svg {...common}><rect x="8" y="8" width="11" height="12" rx="2"/><path d="M16 8V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v11a2 2 0 0 0 2 2h3"/></svg>;
   }
+  if (type === "history") {
+    return <svg {...common}><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/><path d="M12 7v5l3 2"/></svg>;
+  }
   return null;
 }
 
@@ -161,6 +163,7 @@ export default function DailyRejectionPage() {
   const [reportTo, setReportTo] = useState("");
   const [reportRows, setReportRows] = useState([]);
   const [toast, setToast] = useState(null);
+  const [historyModal, setHistoryModal] = useState({ open: false, loading: false, row: null, history: [], error: "" });
 
   const showToast = useCallback((message, type = "success") => {
     setToast({ id: Date.now(), message, type });
@@ -244,6 +247,43 @@ export default function DailyRejectionPage() {
 
   useEffect(() => { loadMasters(); }, [loadMasters]);
   useEffect(() => { loadData(); }, [loadData]);
+
+  const openHistory = useCallback(async (row) => {
+    const rowId = idOf(row);
+    if (!rowId) return;
+    const assignedId = String(row?.assigned_to ?? row?.assignedTo ?? row?.assigned_employee_id ?? "");
+    const assignedToMe = [user?.id, user?._id, user?.employee_id, user?.employeeId].some((value) => String(value || "") === assignedId) ||
+      (Array.isArray(masters.employees) && masters.employees.some((employee) =>
+        idOf(employee) === assignedId &&
+        String((employee?.user_id || employee?.userId || employee?.account_id || employee?.accountId || "")) === String(user?.id || user?._id || "")
+      ));
+    if (!canAssign && !assignedToMe) {
+      showToast("History is available to the assigned staff or authorised user.", "warning");
+      return;
+    }
+    setHistoryModal({ open: true, loading: true, row, history: [], error: "" });
+    try {
+      const response = await axios.get(`${API}/${rowId}/history`);
+      const payload = response?.data?.data || response?.data || {};
+      setHistoryModal({
+        open: true,
+        loading: false,
+        row: payload?.row || row,
+        history: Array.isArray(payload?.history) ? payload.history : [],
+        error: "",
+      });
+    } catch (err) {
+      setHistoryModal({
+        open: true,
+        loading: false,
+        row,
+        history: Array.isArray(row?.history) ? row.history : [],
+        error: err?.response?.data?.error || err?.message || "Unable to load history",
+      });
+    }
+  }, [canAssign, masters.employees, showToast, user?.id, user?._id, user?.employee_id, user?.employeeId]);
+
+  const closeHistory = () => setHistoryModal({ open: false, loading: false, row: null, history: [], error: "" });
 
   const resetForm = () => setForm(makeEmptyForm(user));
   const updateForm = (key, value) => setForm((prev) => ({ ...prev, [key]: value }));
@@ -686,6 +726,11 @@ export default function DailyRejectionPage() {
             <Icon type="edit" />
           </button>
         ) : <span style={styles.iconSpacer} />}
+        {(canAssign || assignedToMeRow(row)) ? (
+          <button type="button" title="View Rejection History" aria-label="View Rejection History" onClick={() => openHistory(row)} style={{ ...styles.iconButton, ...styles.iconHistory }}>
+            <Icon type="history" />
+          </button>
+        ) : null}
         <button type="button" title="Copy Text" aria-label="Copy Text" onClick={() => copyRowText(row)} style={{ ...styles.iconButton, ...styles.copyButton }}>
           <Icon type="copy" size={16} />
           <span>Copy</span>
@@ -824,27 +869,13 @@ export default function DailyRejectionPage() {
     </div>
   );
 
-  const scrollDailyRejectionTable = (event) => {
-    const shell = event.currentTarget;
-    const key = event.key;
-    if (!["ArrowLeft", "ArrowRight"].includes(key)) return;
-    const active = document.activeElement;
-    const tag = String(active?.tagName || "").toUpperCase();
-    // Do not steal arrow keys while the user is typing/selecting inside a control.
-    if (["INPUT", "TEXTAREA", "SELECT", "BUTTON"].includes(tag)) return;
-    event.preventDefault();
-    const step = Math.max(180, Math.round(shell.clientWidth * 0.72));
-    shell.scrollBy({ left: key === "ArrowRight" ? step : -step, behavior: "smooth" });
-  };
-
-  const QTY_HEADER_INDEXES = new Set([7, 8, 9, 10, 11, 12, 13, 14, 15]);
-
   const renderTable = (tableRows, withWorkflow = true, reportMode = false) => {
     const showManagerWorkflow = withWorkflow && canAssign;
     const showReportWorkflow = reportMode;
     const baseColumns = 20;
-    const totalColumns = baseColumns + (showManagerWorkflow || showReportWorkflow ? 4 : withWorkflow ? 1 : 0) + 1;
+    const totalColumns = baseColumns + 1 + (showManagerWorkflow || showReportWorkflow ? 4 : withWorkflow ? 1 : 0) + 1;
     const headers = [
+      "S.L",
       "Date",
       "Rejection No",
       "Lorry No",
@@ -873,18 +904,18 @@ export default function DailyRejectionPage() {
       <>
         <div className="dr-desktop-table">
           <div className="dr-scroll-shell">
-            <div className="dr-scroll-hint" aria-hidden="true">← Click the table, then use keyboard ← / → arrows to move →</div>
-            <div style={styles.tableOuter} tabIndex={0} onKeyDown={scrollDailyRejectionTable} aria-label="Daily Rejection table. Use Left and Right arrow keys to scroll horizontally">
+            <div className="dr-scroll-hint" aria-hidden="true">← Scroll horizontally to see all details and actions →</div>
+            <div style={styles.tableOuter}>
               <table style={{ ...styles.dataTable, minWidth: showManagerWorkflow ? 2350 : showReportWorkflow ? 2250 : withWorkflow ? 1850 : 1650 }}>
               <thead>
                 <tr>
                   {headers.map((head, headIndex) => (
-                    <th key={`${head}-${headIndex}`} style={{ ...styles.th, ...(QTY_HEADER_INDEXES.has(headIndex) ? styles.qtyTh : {}), ...(head === "Action" ? styles.actionTh : {}), ...(head === "Assign Work" || head === "Select Staff" || head === "Work Action" ? styles.workflowTh : {}) }}>{head}</th>
+                    <th key={`${head}-${headIndex}`} style={{ ...styles.th, ...(head === "Action" ? styles.actionTh : {}), ...(head === "Assign Work" || head === "Select Staff" || head === "Work Action" ? styles.workflowTh : {}), ...(head.includes("Qty") || head.includes("Reject") || head.includes("Other") || head.includes("Total") ? styles.qtyTh : {}) }}>{head}</th>
                   ))}
                 </tr>
               </thead>
               <tbody>
-                {tableRows.length ? tableRows.map((row) => {
+                {tableRows.length ? tableRows.map((row, rowIndex) => {
                   const rowId = idOf(row);
                   const assignedToMe = assignedToMeRow(row);
                   const isComplete = row?.status === "COMPLETE";
@@ -893,6 +924,9 @@ export default function DailyRejectionPage() {
                   const rowBusy = busyId === rowId;
                   return (
                     <tr key={rowId}>
+                      <td style={{ ...styles.td, ...styles.slTd }}>
+                        <button type="button" onClick={() => openHistory(row)} title="View S.L. wise details and history" style={styles.slButton}>{rowIndex + 1}</button>
+                      </td>
                       <td style={styles.td}>{formatDate(row?.entry_date)}</td>
                       <td style={{ ...styles.td, fontWeight: 900 }}>{row?.rejection_no || rowId}</td>
                       <td style={styles.td}>{row?.lorry_no || "-"}</td>
@@ -900,15 +934,15 @@ export default function DailyRejectionPage() {
                       <td style={styles.td}>{row?.company_account_name || "-"}</td>
                       <td style={styles.td}>{row?.consignee_name || row?.consignee || "-"}</td>
                       <td style={styles.td}>{row?.product_name || "-"}</td>
-                      <td style={{ ...styles.tdNum, ...styles.qtyTd }}>{money(row?.original_qty)}</td>
-                      <td style={{ ...styles.tdNum, ...styles.qtyTd }}>{money(row?.actual_unloading_qty)}</td>
-                      <td style={{ ...styles.tdNum, ...styles.qtyTd, fontWeight: 900 }}>{money(row?.rejection_qty)}</td>
-                      <td style={{ ...styles.tdNum, ...styles.qtyTd }}>{money(chainProcessedOf(row))}</td>
-                      <td style={{ ...styles.tdNum, ...styles.qtyTd }}>{money(chainRemainingOf(row))}</td>
-                      <td style={{ ...styles.tdNum, ...styles.qtyTd }}>{money(chainOtherTargetOf(row))}</td>
-                      <td style={{ ...styles.tdNum, ...styles.qtyTd }}>{money(chainOtherProcessedOf(row))}</td>
-                      <td style={{ ...styles.tdNum, ...styles.qtyTd }}>{money(chainOtherRemainingOf(row))}</td>
-                      <td style={{ ...styles.tdNum, ...styles.qtyTd, fontWeight: 900 }}>{money(chainTotalRemainingOf(row))}</td>
+                      <td style={styles.tdNum}>{money(row?.original_qty)}</td>
+                      <td style={styles.tdNum}>{money(row?.actual_unloading_qty)}</td>
+                      <td style={{ ...styles.tdNum, fontWeight: 900 }}>{money(row?.rejection_qty)}</td>
+                      <td style={styles.tdNum}>{money(chainProcessedOf(row))}</td>
+                      <td style={styles.tdNum}>{money(chainRemainingOf(row))}</td>
+                      <td style={styles.tdNum}>{money(chainOtherTargetOf(row))}</td>
+                      <td style={styles.tdNum}>{money(chainOtherProcessedOf(row))}</td>
+                      <td style={styles.tdNum}>{money(chainOtherRemainingOf(row))}</td>
+                      <td style={{ ...styles.tdNum, fontWeight: 900 }}>{money(chainTotalRemainingOf(row))}</td>
                       <td style={styles.td}>{row?.reason || "-"}</td>
                       <td style={styles.td}>{row?.action_type || "-"}</td>
                       <td style={styles.td}>{row?.assigned_to_name || "-"}</td>
@@ -1022,8 +1056,7 @@ export default function DailyRejectionPage() {
         .dr-mobile-list { display:none; }
         .dr-scroll-shell { width:100%; max-width:100%; }
         .dr-scroll-hint { display:flex; justify-content:flex-end; align-items:center; min-height:24px; padding:0 8px 5px; color:#64748b; font-size:10px; font-weight:800; letter-spacing:.2px; white-space:nowrap; }
-        .dr-scroll-shell .tableOuter { scrollbar-color:#94a3b8 #eef2f7; scrollbar-width:auto; outline:none; }
-        .dr-scroll-shell .tableOuter:focus { outline:2px solid #0f766e; outline-offset:-2px; }
+        .dr-scroll-shell .tableOuter { scrollbar-color:#94a3b8 #eef2f7; scrollbar-width:auto; }
         .dr-scroll-shell .tableOuter::-webkit-scrollbar { height:12px; }
         .dr-scroll-shell .tableOuter::-webkit-scrollbar-track { background:#eef2f7; border-radius:999px; }
         .dr-scroll-shell .tableOuter::-webkit-scrollbar-thumb { background:#94a3b8; border-radius:999px; border:2px solid #eef2f7; }
@@ -1059,6 +1092,22 @@ export default function DailyRejectionPage() {
           .dr-mobile-list { display:grid; gap:10px; }
           .dr-scroll-hint { display:none; }
         }
+        .dr-history-overlay { position:fixed; inset:0; z-index:100000; background:rgba(15,23,42,.52); display:flex; align-items:center; justify-content:center; padding:18px; }
+        .dr-history-modal { width:min(1120px,96vw); max-height:90vh; overflow:auto; background:#fff; border-radius:18px; border:1px solid #dbe4ee; box-shadow:0 24px 70px rgba(15,23,42,.25); }
+        .dr-history-head { position:sticky; top:0; z-index:2; display:flex; justify-content:space-between; gap:12px; align-items:flex-start; padding:14px 16px; background:#fff; border-bottom:1px solid #e2e8f0; }
+        .dr-history-title { margin:0; font-size:18px; font-weight:950; color:#0f172a; }
+        .dr-history-sub { margin-top:3px; color:#64748b; font-size:11px; }
+        .dr-history-summary { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:8px; padding:12px 16px; background:#f8fafc; }
+        .dr-history-box { border:1px solid #e2e8f0; border-radius:10px; background:#fff; padding:8px; min-width:0; }
+        .dr-history-label { font-size:9px; font-weight:850; color:#64748b; text-transform:uppercase; }
+        .dr-history-value { margin-top:3px; font-size:12px; font-weight:850; color:#0f172a; overflow-wrap:anywhere; }
+        .dr-history-table-wrap { padding:12px 16px 16px; overflow:auto; }
+        .dr-history-table { width:100%; min-width:900px; border-collapse:separate; border-spacing:0; font-size:11px; }
+        .dr-history-table th { position:sticky; top:0; background:#0f766e; color:#fff; padding:8px; text-align:left; white-space:nowrap; font-weight:900; }
+        .dr-history-table td { padding:8px; border-top:1px solid #eef2f7; vertical-align:top; color:#0f172a; }
+        .dr-history-note { max-width:280px; white-space:normal; overflow-wrap:anywhere; line-height:1.35; }
+        @media (max-width:840px) { .dr-history-summary { grid-template-columns:repeat(2,minmax(0,1fr)); } }
+        @media (max-width:640px) { .dr-history-overlay { align-items:flex-start; padding:8px; } .dr-history-modal { width:100%; max-height:94vh; } .dr-history-summary { grid-template-columns:repeat(2,minmax(0,1fr)); } }
         .daily-rejection-report-input {
           min-height: 38px !important;
           height: 38px;
@@ -1186,6 +1235,60 @@ export default function DailyRejectionPage() {
       </div>
     </div>
 
+    {historyModal.open ? (
+      <div className="dr-history-overlay" role="dialog" aria-modal="true" onMouseDown={(e) => { if (e.target === e.currentTarget) closeHistory(); }}>
+        <div className="dr-history-modal">
+          <div className="dr-history-head">
+            <div>
+              <h3 className="dr-history-title">Rejection Wise Details & History</h3>
+              <div className="dr-history-sub">S.L. {Math.max(0, rows.findIndex((r) => idOf(r) === idOf(historyModal.row)) + 1)} • {historyModal.row?.rejection_no || "-"}</div>
+            </div>
+            <button type="button" onClick={closeHistory} style={styles.close} aria-label="Close history">×</button>
+          </div>
+          {historyModal.row ? (
+            <div className="dr-history-summary">
+              {[["Date", formatDate(historyModal.row?.entry_date)], ["Rejection No", historyModal.row?.rejection_no], ["Lorry No", historyModal.row?.lorry_no], ["Company", historyModal.row?.company_name], ["Account", historyModal.row?.company_account_name], ["Consignee", historyModal.row?.consignee_name || historyModal.row?.consignee], ["Product", historyModal.row?.product_name], ["Reject Target", `${money(chainTargetOf(historyModal.row))} MT`], ["Reject Processed", `${money(chainProcessedOf(historyModal.row))} MT`], ["Reject Balance", `${money(chainRemainingOf(historyModal.row))} MT`], ["Other Target", `${money(chainOtherTargetOf(historyModal.row))} MT`], ["Other Processed", `${money(chainOtherProcessedOf(historyModal.row))} MT`], ["Other Balance", `${money(chainOtherRemainingOf(historyModal.row))} MT`], ["Total Balance", `${money(chainTotalRemainingOf(historyModal.row))} MT`], ["Assigned To", historyModal.row?.assigned_to_name || "-"], ["Status", historyModal.row?.status || "-"]].map(([label, value]) => (
+                <div className="dr-history-box" key={label}><div className="dr-history-label">{label}</div><div className="dr-history-value">{value || "-"}</div></div>
+              ))}
+            </div>
+          ) : null}
+          <div className="dr-history-table-wrap">
+            {historyModal.loading ? <div style={styles.empty}>Loading rejection history...</div> : historyModal.history.length ? (
+              <table className="dr-history-table">
+                <thead><tr><th>#</th><th>Date / Time</th><th>Action</th><th>By</th><th>Assigned To</th><th>Work</th><th>Status</th><th>Reject</th><th>Other</th><th>Remaining</th><th>Note / Details</th></tr></thead>
+                <tbody>
+                  {historyModal.history.map((item, index) => {
+                    const assignedName = item?.assigned_to_name || (masters.employees || []).find((employee) => idOf(employee) === String(item?.assigned_to || ""))?.name || item?.assigned_to || "-";
+                    const rejectProcessed = item?.unloading_qty_for_rejection ?? item?.rejection_unloading_qty ?? item?.processed_qty;
+                    const otherProcessed = item?.other_processed_qty ?? item?.processed_other_qty ?? item?.other_qty;
+                    const rejectRemaining = item?.chain_remaining_qty ?? item?.rejection_remaining_qty;
+                    const otherRemaining = item?.chain_other_remaining_qty ?? item?.other_remaining_qty;
+                    const remaining = item?.chain_total_remaining_qty ?? ((rejectRemaining !== undefined || otherRemaining !== undefined) ? toQty(rejectRemaining) + toQty(otherRemaining) : undefined);
+                    const note = item?.progress_narration || item?.assignment_narration || item?.completion_remarks || item?.remarks || "-";
+                    return (
+                      <tr key={`${item?.at || index}-${index}`}>
+                        <td>{index + 1}</td>
+                        <td>{item?.at ? new Date(item.at).toLocaleString("en-IN") : "-"}</td>
+                        <td><b>{item?.action || "-"}</b></td>
+                        <td>{item?.by_name || item?.by || "-"}</td>
+                        <td>{assignedName}</td>
+                        <td>{item?.action_type || "-"}</td>
+                        <td><span style={{ ...styles.statusChip, ...statusStyle(item?.status) }}>{item?.status || "-"}</span></td>
+                        <td>{rejectProcessed !== undefined ? money(rejectProcessed) : "-"}</td>
+                        <td>{otherProcessed !== undefined ? money(otherProcessed) : "-"}</td>
+                        <td>{remaining !== undefined ? money(remaining) : "-"}</td>
+                        <td className="dr-history-note">{note}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            ) : <div style={styles.empty}>{historyModal.error || "No history found for this Rejection No."}</div>}
+          </div>
+        </div>
+      </div>
+    ) : null}
+
     {factoryModal.open ? (() => {
       const totalQty = Number(factoryForm.rejection_qty || 0) + Number(factoryForm.other_qty || 0);
       const amount = totalQty * Number(factoryForm.rate || 0);
@@ -1230,7 +1333,7 @@ export default function DailyRejectionPage() {
 
 function SearchableSelect({
   value,
-  options,
+  options = [],
   onChange,
   placeholder = "Select / type to search",
   disabled = false,
@@ -1239,8 +1342,6 @@ function SearchableSelect({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [highlighted, setHighlighted] = useState(0);
-  const [menuRect, setMenuRect] = useState(null);
-  const inputRef = useRef(null);
 
   const normalized = useMemo(() => {
     return options
@@ -1258,39 +1359,19 @@ function SearchableSelect({
     return normalized.filter((item) => item.label.toLowerCase().includes(q));
   }, [normalized, query]);
 
-  const updateMenuPosition = useCallback(() => {
-    if (!inputRef.current || !open) return;
-    const rect = inputRef.current.getBoundingClientRect();
-    setMenuRect({
-      left: rect.left,
-      top: rect.bottom + 4,
-      width: rect.width,
-    });
-  }, [open]);
-
   useEffect(() => {
     if (!open) return;
     setHighlighted(0);
-    updateMenuPosition();
-  }, [query, open, updateMenuPosition]);
+  }, [query, open]);
 
   useEffect(() => {
-    if (!open) return undefined;
+    if (!open) return;
     const close = (event) => {
       if (!event.target.closest("[data-dr-search-select]")) setOpen(false);
     };
-    const reposition = () => updateMenuPosition();
     document.addEventListener("mousedown", close);
-    document.addEventListener("scroll", reposition, true);
-    window.addEventListener("resize", reposition);
-    window.addEventListener("orientationchange", reposition);
-    return () => {
-      document.removeEventListener("mousedown", close);
-      document.removeEventListener("scroll", reposition, true);
-      window.removeEventListener("resize", reposition);
-      window.removeEventListener("orientationchange", reposition);
-    };
-  }, [open, updateMenuPosition]);
+    return () => document.removeEventListener("mousedown", close);
+  }, [open]);
 
   const choose = (item) => {
     if (!item) return;
@@ -1299,114 +1380,93 @@ function SearchableSelect({
     setOpen(false);
   };
 
-  const menu = open && !disabled && menuRect && typeof document !== "undefined"
-    ? createPortal(
-      <div
-        data-dr-search-select
-        style={{
-          position: "fixed",
-          left: menuRect.left,
-          top: menuRect.top,
-          width: menuRect.width,
-          zIndex: 2147483647,
-          background: "#fff",
-          border: "1px solid #94a3b8",
-          borderRadius: 8,
-          boxShadow: "0 16px 36px rgba(15,23,42,.22)",
-          maxHeight: 260,
-          overflowY: "auto",
-          overflowX: "hidden",
-        }}
-      >
-        {filtered.length ? filtered.map((item, index) => (
-          <button
-            key={`${item.value}-${index}`}
-            type="button"
-            onMouseDown={(e) => {
-              e.preventDefault();
-              choose(item);
-            }}
-            style={{
-              display: "block",
-              width: "100%",
-              textAlign: "left",
-              border: 0,
-              borderBottom: "1px solid #f1f5f9",
-              background: index === highlighted ? "#ecfeff" : "#fff",
-              color: "#0f172a",
-              padding: "9px 10px",
-              cursor: "pointer",
-              fontFamily: "inherit",
-              fontSize: 12,
-              lineHeight: 1.25,
-              fontWeight: 700,
-              whiteSpace: "normal",
-              overflowWrap: "anywhere",
-            }}
-          >
-            {item.label}
-          </button>
-        )) : (
-          <div style={{ padding: 10, color: "#64748b", fontSize: 12 }}>
-            No matching name found
-          </div>
-        )}
-      </div>,
-      document.body
-    )
-    : null;
-
   return (
-    <>
-      <div data-dr-search-select style={{ position: "relative", width: "100%" }}>
-        <input
-          ref={inputRef}
-          type="text"
-          value={open ? query : (selected?.label || "")}
-          placeholder={placeholder}
-          disabled={disabled}
-          onFocus={() => {
+    <div data-dr-search-select style={{ position: "relative", width: "100%" }}>
+      <input
+        type="text"
+        value={open ? query : (selected?.label || "")}
+        placeholder={placeholder}
+        disabled={disabled}
+        onFocus={() => {
+          setOpen(true);
+          setQuery("");
+        }}
+        onChange={(e) => {
+          setQuery(e.target.value);
+          setOpen(true);
+        }}
+        onKeyDown={(e) => {
+          if (e.key === "ArrowDown") {
+            e.preventDefault();
             setOpen(true);
+            setHighlighted((i) => Math.min(i + 1, Math.max(filtered.length - 1, 0)));
+          } else if (e.key === "ArrowUp") {
+            e.preventDefault();
+            setOpen(true);
+            setHighlighted((i) => Math.max(i - 1, 0));
+          } else if (e.key === "Enter") {
+            e.preventDefault();
+            if (open && filtered[highlighted]) choose(filtered[highlighted]);
+          } else if (e.key === "Escape") {
+            setOpen(false);
             setQuery("");
-            window.setTimeout(updateMenuPosition, 0);
-          }}
-          onChange={(e) => {
-            setQuery(e.target.value);
-            setOpen(true);
-          }}
-          onKeyDown={(e) => {
-            if (e.key === "ArrowDown") {
-              e.preventDefault();
-              setOpen(true);
-              setHighlighted((i) => Math.min(i + 1, Math.max(filtered.length - 1, 0)));
-            } else if (e.key === "ArrowUp") {
-              e.preventDefault();
-              setOpen(true);
-              setHighlighted((i) => Math.max(i - 1, 0));
-            } else if (e.key === "Enter") {
-              e.preventDefault();
-              if (open && filtered[highlighted]) choose(filtered[highlighted]);
-            } else if (e.key === "Escape") {
-              setOpen(false);
-              setQuery("");
-            }
-          }}
+          }
+        }}
+        style={{ ...styles.input, fontFamily: "inherit", fontSize: "inherit", fontWeight: "inherit", lineHeight: "inherit", color: "#0f172a", ...(style || {}), cursor: disabled ? "not-allowed" : "text" }}
+      />
+      {open && !disabled && (
+        <div
           style={{
-            ...styles.input,
-            fontFamily: "inherit",
-            fontSize: 12,
-            fontWeight: 700,
-            lineHeight: 1.2,
-            color: "#0f172a",
-            ...(style || {}),
-            cursor: disabled ? "not-allowed" : "text",
+            position: "absolute",
+            left: 0,
+            right: 0,
+            top: "calc(100% + 3px)",
+            zIndex: 10000,
+            background: "#fff",
+            border: "1px solid #cbd5e1",
+            borderRadius: 10,
+            boxShadow: "0 14px 30px rgba(15,23,42,.16)",
+            maxHeight: 240,
+            overflowY: "auto",
           }}
-        />
-      </div>
-      {menu}
-    </>
+        >
+          {filtered.length ? filtered.map((item, index) => (
+            <button
+              key={`${item.value}-${index}`}
+              type="button"
+              onMouseDown={(e) => {
+                e.preventDefault();
+                choose(item);
+              }}
+              style={{
+                display: "block",
+                width: "100%",
+                textAlign: "left",
+                border: 0,
+                borderBottom: "1px solid #f1f5f9",
+                background: index === highlighted ? "#ecfeff" : "#fff",
+                color: "#0f172a",
+                padding: "9px 10px",
+                cursor: "pointer",
+                fontFamily: "inherit",
+                fontSize: "inherit",
+                lineHeight: "inherit",
+                fontWeight: "inherit",
+              }}
+            >
+              {item.label}
+            </button>
+          )) : (
+            <div style={{ padding: 10, color: "#64748b", fontSize: 12 }}>
+              No matching name found
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
+
 function Field({ label, children }) { return <label style={styles.field}><span style={styles.label}>{label}</span>{children}</label>; }
 const styles = {
   page: { minHeight: '100vh', background: 'linear-gradient(180deg,#f8fafc 0%,#eef6f5 100%)', padding: 14, fontFamily: 'Segoe UI,Arial,sans-serif', boxSizing: 'border-box' },
@@ -1420,18 +1480,17 @@ const styles = {
   tab: { border: '1px solid #cbd5e1', background: '#fff', color: '#334155', borderRadius: 999, padding: '8px 12px', fontWeight: 800, cursor: 'pointer' }, tabActive: { border: '1px solid #0f766e', background: '#0f766e', color: '#fff', borderRadius: 999, padding: '8px 12px', fontWeight: 800, cursor: 'pointer' }, compactSelect: { minHeight: 40, border: '1px solid #cbd5e1', borderRadius: 10, padding: '8px 10px', background: '#fff' },
   primary: { border: 0, background: '#0f766e', color: '#fff', borderRadius: 11, padding: '10px 15px', fontWeight: 900, cursor: 'pointer', boxShadow: '0 5px 12px rgba(15,118,110,.16)' }, secondary: { border: '1px solid #cbd5e1', background: '#fff', color: '#334155', borderRadius: 11, padding: '10px 14px', fontWeight: 900, cursor: 'pointer' },
   tableOuter: { width: '100%', maxWidth: '100%', overflowX: 'auto', overflowY: 'hidden', WebkitOverflowScrolling: 'touch', overscrollBehaviorX: 'contain', scrollbarWidth: 'auto', background: '#fff', border: '1px solid #dbe4ee', borderRadius: 16, boxShadow: '0 10px 28px rgba(15,23,42,.05)' },
-  dataTable: { width: 'max-content', minWidth: 1320, borderCollapse: 'separate', borderSpacing: 0, fontSize: 11 },
-  th: { position: 'sticky', top: 0, zIndex: 3, background: '#0f766e', color: '#fff', padding: '7px 7px', textAlign: 'left', fontWeight: 900, whiteSpace: 'normal', lineHeight: 1.08, overflowWrap: 'anywhere', borderRight: '1px solid rgba(255,255,255,.14)' },
-  td: { padding: '7px 7px', color: '#0f172a', background: '#fff', whiteSpace: 'normal', borderTop: '1px solid #eef2f7', verticalAlign: 'middle', maxWidth: 125, overflowWrap: 'anywhere', wordBreak: 'break-word' },
-  tdNum: { padding: '7px 5px', color: '#0f172a', background: '#fff', whiteSpace: 'nowrap', borderTop: '1px solid #eef2f7', textAlign: 'right', fontVariantNumeric: 'tabular-nums', verticalAlign: 'middle' },
-  qtyTh: { width: 68, minWidth: 62, maxWidth: 72, padding: '7px 4px', whiteSpace: 'normal', lineHeight: 1.05, textAlign: 'center', overflowWrap: 'anywhere' },
-  qtyTd: { width: 68, minWidth: 62, maxWidth: 72, padding: '7px 4px', whiteSpace: 'nowrap' },
+  dataTable: { width: 'max-content', minWidth: 1500, borderCollapse: 'separate', borderSpacing: 0, fontSize: 12 },
+  th: { position: 'sticky', top: 0, zIndex: 3, background: '#0f766e', color: '#fff', padding: '8px 7px', textAlign: 'left', fontWeight: 900, whiteSpace: 'nowrap', borderRight: '1px solid rgba(255,255,255,.14)' },
+  qtyTh: { whiteSpace: 'normal', width: 68, minWidth: 58, maxWidth: 82, lineHeight: 1.05, textAlign: 'center', wordBreak: 'break-word' },
+  td: { padding: '8px 7px', color: '#0f172a', background: '#fff', whiteSpace: 'nowrap', borderTop: '1px solid #eef2f7', verticalAlign: 'middle' },
+  tdNum: { padding: '8px 7px', color: '#0f172a', background: '#fff', whiteSpace: 'nowrap', borderTop: '1px solid #eef2f7', textAlign: 'right', fontVariantNumeric: 'tabular-nums', verticalAlign: 'middle' },
   statusChip: { display: 'inline-flex', alignItems: 'center', borderRadius: 999, padding: '5px 8px', fontSize: 10, fontWeight: 900, whiteSpace: 'nowrap' },
   emptyCell: { padding: 28, textAlign: 'center', color: '#64748b', background: '#fff' },
-  workflowTh: { background: '#155e75', color: '#fff', minWidth: 125, width: 125, maxWidth: 140 },
+  workflowTh: { background: '#155e75', color: '#fff', minWidth: 170 },
   workflowTd: { background: '#fbfdff', borderLeft: '1px solid #e2e8f0' },
-  workflowSelect: { minWidth: 125, height: 34, border: '1px solid #cbd5e1', borderRadius: 8, padding: '6px 8px', background: '#fff', color: '#0f172a', fontWeight: 700, whiteSpace: 'nowrap' },
-  workflowInput: { width: 125, height: 34, border: '1px solid #cbd5e1', borderRadius: 8, padding: '6px 8px', background: '#fff', color: '#0f172a', boxSizing: 'border-box' },
+  workflowSelect: { minWidth: 165, height: 34, border: '1px solid #cbd5e1', borderRadius: 8, padding: '6px 8px', background: '#fff', color: '#0f172a', fontWeight: 700, whiteSpace: 'nowrap' },
+  workflowInput: { width: 155, height: 34, border: '1px solid #cbd5e1', borderRadius: 8, padding: '6px 8px', background: '#fff', color: '#0f172a', boxSizing: 'border-box' },
   assignButtonInline: { border: 0, background: '#1d4ed8', color: '#fff', borderRadius: 8, padding: '8px 11px', fontWeight: 900, whiteSpace: 'nowrap' },
   workerInline: { display: 'inline-flex', alignItems: 'center', gap: 6, whiteSpace: 'nowrap' },
   completeInline: { border: 0, background: '#047857', color: '#fff', borderRadius: 8, padding: '8px 10px', fontWeight: 900, whiteSpace: 'nowrap', cursor: 'pointer' },
@@ -1439,7 +1498,10 @@ const styles = {
   actionTd: { boxShadow: '-6px 0 10px rgba(15,23,42,.06)' },
   actionIcons: { display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 6, whiteSpace: 'nowrap' },
   iconButton: { width: 32, height: 32, borderRadius: 9, border: '1px solid', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', background: '#fff' },
+  slTd: { width: 44, minWidth: 44, textAlign: 'center', position: 'sticky', left: 0, zIndex: 4, boxShadow: '6px 0 10px rgba(15,23,42,.04)' },
+  slButton: { border: '1px solid #99f6e4', background: '#ecfeff', color: '#0f766e', borderRadius: 8, minWidth: 30, height: 28, padding: '0 7px', fontWeight: 950, cursor: 'pointer' },
   iconEdit: { color: '#2563eb', borderColor: '#bfdbfe', background: '#eff6ff' },
+  iconHistory: { color: '#0f766e', borderColor: '#99f6e4', background: '#ecfeff' },
   iconCopy: { color: '#7c3aed', borderColor: '#ddd6fe', background: '#f5f3ff' },
   copyButton: { color: '#7c3aed', borderColor: '#ddd6fe', background: '#f5f3ff', minWidth: 66, padding: '7px 10px', display: 'inline-flex', alignItems: 'center', justifyContent: 'center', gap: 5, fontWeight: 800 },
   iconWhatsapp: { color: '#15803d', borderColor: '#bbf7d0', background: '#f0fdf4' },
