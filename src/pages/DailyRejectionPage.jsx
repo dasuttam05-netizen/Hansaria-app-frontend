@@ -24,19 +24,50 @@ const makeEmptyForm = (user) => ({
   remarks: "",
 });
 
-const idOf = (row) => String(row?.id || row?._id || row?.legacy_id ?? "");
-const textOf = (row) => String(row?.name || row?.title || row?.display_name || row?.party_name || row?.company_name || row?.consignee_name ?? "");
-const money = (value) => Number(value || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const idOf = (row) => String(row?.id ?? row?._id ?? row?.legacy_id ?? "");
+const textOf = (row) => String(
+  row?.name ??
+  row?.title ??
+  row?.display_name ??
+  row?.party_name ??
+  row?.company_name ??
+  row?.consignee_name ??
+  ""
+);
+const toQty = (value) => {
+  const n = Number(value);
+  return Number.isFinite(n) ? Math.max(0, n) : 0;
+};
+const money = (value) => toQty(value).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-// Daily Rejection is a quantity chain. An explicit 0 balance is valid and
-// must never fall back to the original quantity once the chain is finished.
-const chainTargetOf = (row) => Number(row?.chain_target_qty ?? row?.rejection_qty ?? row?.original_qty ?? 0);
-const chainProcessedOf = (row) => Number(row?.chain_processed_qty ?? 0);
+// Daily Rejection is a two-part quantity chain: rejection + other qty.
+// Both balances travel with the SAME Rejection No. Partial processing must
+// return only the unprocessed balance to PENDING so it can be reassigned.
+const chainTargetOf = (row) => toQty(row?.chain_target_qty ?? row?.rejection_qty ?? row?.original_qty ?? 0);
+const chainOtherTargetOf = (row) => toQty(
+  row?.chain_target_other_qty ??
+  row?.other_target_qty ??
+  row?.other_qty ??
+  row?.factory_other_qty ??
+  0
+);
+const chainProcessedOf = (row) => toQty(row?.chain_processed_qty ?? row?.processed_rejection_qty ?? 0);
+const chainOtherProcessedOf = (row) => toQty(
+  row?.chain_processed_other_qty ??
+  row?.processed_other_qty ??
+  0
+);
 const chainRemainingOf = (row) => {
   const explicit = row?.chain_remaining_qty;
-  if (explicit !== undefined && explicit !== null && explicit !== "") return Math.max(0, Number(explicit) || 0);
+  if (explicit !== undefined && explicit !== null && explicit !== "") return toQty(explicit);
   return Math.max(0, chainTargetOf(row) - chainProcessedOf(row));
 };
+const chainOtherRemainingOf = (row) => {
+  const explicit = row?.chain_remaining_other_qty;
+  if (explicit !== undefined && explicit !== null && explicit !== "") return toQty(explicit);
+  return Math.max(0, chainOtherTargetOf(row) - chainOtherProcessedOf(row));
+};
+const chainTotalRemainingOf = (row) => chainRemainingOf(row) + chainOtherRemainingOf(row);
 
 function pickArray(payload, keys) {
   if (Array.isArray(payload)) return payload;
@@ -310,8 +341,8 @@ export default function DailyRejectionPage() {
       company_account_id: row?.company_account_id ? String(row.company_account_id) : "",
       buyer_id: "",
       consignee_id: row?.consignee_id ? String(row.consignee_id) : "",
-      rejection_qty: Number(row?.rejection_qty || 0),
-      other_qty: 0,
+      rejection_qty: Number(chainRemainingOf(row).toFixed(4)),
+      other_qty: Number(chainOtherRemainingOf(row).toFixed(4)),
       rate: 0,
     });
   };
@@ -332,7 +363,24 @@ export default function DailyRejectionPage() {
       showToast("Please enter the assignment narration / work instruction.", "warning");
       return;
     }
-    const totalQty = Number(factoryForm.rejection_qty || 0) + Number(factoryForm.other_qty || 0);
+    const row = rows.find((item) => idOf(item) === String(rowId));
+    const rejectionBalance = chainRemainingOf(row);
+    const otherBalance = chainOtherRemainingOf(row);
+    const rejectionQty = toQty(factoryForm.rejection_qty);
+    const otherQty = toQty(factoryForm.other_qty);
+    if (rejectionQty > rejectionBalance + 0.000001) {
+      showToast(`Factory rejection qty cannot exceed current rejection balance ${money(rejectionBalance)} MT.`, "warning");
+      return;
+    }
+    if (otherQty > otherBalance + 0.000001) {
+      showToast(`Factory other qty cannot exceed current other balance ${money(otherBalance)} MT.`, "warning");
+      return;
+    }
+    if (rejectionQty <= 0 && otherQty <= 0) {
+      showToast("Enter a pending rejection or other quantity first.", "warning");
+      return;
+    }
+    const totalQty = rejectionQty + otherQty;
     const amount = totalQty * Number(factoryForm.rate || 0);
     const company = masters.companies.find((x) => idOf(x) === String(factoryForm.company_id));
     const account = masters.accounts.find((x) => idOf(x) === String(factoryForm.company_account_id));
@@ -347,7 +395,7 @@ export default function DailyRejectionPage() {
         factory_company_account_id: factoryForm.company_account_id, factory_company_account_name: accountLabel(account),
         factory_buyer_id: factoryForm.buyer_id, factory_buyer_name: textOf(buyer),
         factory_consignee_id: factoryForm.consignee_id, factory_consignee_name: textOf(consignee),
-        factory_rejection_qty: Number(factoryForm.rejection_qty || 0), factory_other_qty: Number(factoryForm.other_qty || 0),
+        factory_rejection_qty: rejectionQty, factory_other_qty: otherQty,
         factory_total_qty: totalQty, factory_weight: totalQty, factory_rate: Number(factoryForm.rate || 0), factory_amount: amount,
         assignment_narration: String(assignNarration[rowId] || "").trim(),
       });
@@ -396,25 +444,29 @@ export default function DailyRejectionPage() {
 
   const updateProgress = async (rowId) => {
     const row = rows.find((item) => idOf(item) === String(rowId));
+    if (!row) return;
     const progress = progressForm[rowId] || {};
-    const currentBalance = chainRemainingOf(row);
-    const unloadingForRejection = Number(progress.unloading_qty_for_rejection || 0);
-    const otherQty = Number(progress.other_qty || 0);
-    const newRejectionQty = Number(progress.new_rejection_qty || 0);
-    const rejectionAdjustment = Math.max(currentBalance - unloadingForRejection, 0);
+    const currentRejectionBalance = chainRemainingOf(row);
+    const currentOtherBalance = chainOtherRemainingOf(row);
+    const unloadingForRejection = toQty(progress.unloading_qty_for_rejection);
+    const otherQty = toQty(progress.other_qty);
+    const newRejectionQty = toQty(progress.new_rejection_qty);
+    const rejectionBalanceAfter = Math.max(currentRejectionBalance - unloadingForRejection, 0);
+    const otherBalanceAfter = Math.max(currentOtherBalance - otherQty, 0);
+    const rejectionAdjustment = rejectionBalanceAfter;
+    const otherAdjustment = otherBalanceAfter;
+    const totalBalanceAfter = rejectionBalanceAfter + otherBalanceAfter;
 
-    // Only the explicit rejection unloading quantity consumes the rejection
-    // chain. Other material in the same movement is kept separate.
-    if (unloadingForRejection <= 0 && newRejectionQty <= 0) {
-      showToast("Enter Unloading Qty for Rejection first.", "warning");
+    if (unloadingForRejection <= 0 && otherQty <= 0 && newRejectionQty <= 0) {
+      showToast("Enter Unloading Qty for Rejection or Other Qty first.", "warning");
       return;
     }
-    if (unloadingForRejection > currentBalance + 0.000001) {
-      showToast(`Unloading Qty for Rejection cannot exceed current rejection balance ${money(currentBalance)} MT.`, "warning");
+    if (unloadingForRejection > currentRejectionBalance + 0.000001) {
+      showToast(`Unloading Qty for Rejection cannot exceed current rejection balance ${money(currentRejectionBalance)} MT.`, "warning");
       return;
     }
-    if (otherQty < 0 || newRejectionQty < 0) {
-      showToast("Other Qty / New Rejection Qty cannot be negative.", "warning");
+    if (otherQty > currentOtherBalance + 0.000001) {
+      showToast(`Other Qty cannot exceed current other balance ${money(currentOtherBalance)} MT.`, "warning");
       return;
     }
     if (!String(progress.narration || "").trim()) {
@@ -425,13 +477,22 @@ export default function DailyRejectionPage() {
     setBusyId(rowId);
     try {
       await axios.post(`${API}/${rowId}/progress`, {
-        // Existing API compatibility + explicit workflow fields.
+        // Existing API compatibility.
         processed_qty: unloadingForRejection,
         unloading_qty_for_rejection: unloadingForRejection,
         rejection_unloading_qty: unloadingForRejection,
         rejection_adjustment_qty: rejectionAdjustment,
         adjusted_rejection_qty: rejectionAdjustment,
+        // Separate other-quantity chain.
         other_qty: otherQty,
+        processed_other_qty: otherQty,
+        other_adjustment_qty: otherAdjustment,
+        adjusted_other_qty: otherAdjustment,
+        processed_rejection_qty: unloadingForRejection,
+        processed_total_qty: unloadingForRejection + otherQty,
+        remaining_rejection_qty: rejectionBalanceAfter,
+        remaining_other_qty: otherBalanceAfter,
+        remaining_total_qty: totalBalanceAfter,
         new_rejection_qty: newRejectionQty,
         new_lorry_no: String(progress.new_lorry_no || "").trim(),
         destination_type: String(progress.destination_type || "").trim(),
@@ -441,12 +502,16 @@ export default function DailyRejectionPage() {
       });
 
       setProgressForm((prev) => ({ ...prev, [rowId]: {} }));
-      if (rejectionAdjustment > 0.000001) {
-        showToast(`${money(unloadingForRejection)} MT adjusted. Rejection balance ${money(rejectionAdjustment)} MT is now pending for reassignment.`, "success");
-      } else if (newRejectionQty > 0) {
-        showToast(`Progress saved. ${money(newRejectionQty)} MT new rejection added and sent back to Pending.`, "success");
+      if (totalBalanceAfter > 0.000001) {
+        const pendingParts = [];
+        if (rejectionBalanceAfter > 0.000001) pendingParts.push(`Reject ${money(rejectionBalanceAfter)} MT`);
+        if (otherBalanceAfter > 0.000001) pendingParts.push(`Other ${money(otherBalanceAfter)} MT`);
+        showToast(
+          `${money(unloadingForRejection)} MT rejection + ${money(otherQty)} MT other adjusted. ${pendingParts.join(" + ")} remains pending and can be reassigned on the SAME Rejection No.`,
+          "success"
+        );
       } else {
-        showToast(`${money(unloadingForRejection)} MT fully adjusted. Rejection balance is now 0.00 MT and can be closed.`, "success");
+        showToast("All rejection and other quantities matched. Balance is 0.00 MT and this Rejection No. can be closed.", "success");
       }
       await loadData();
     } catch (err) {
@@ -458,9 +523,11 @@ export default function DailyRejectionPage() {
 
   const completeRow = async (rowId) => {
     const row = rows.find((item) => idOf(item) === String(rowId));
-    const remaining = chainRemainingOf(row);
+    const rejectionRemaining = chainRemainingOf(row);
+    const otherRemaining = chainOtherRemainingOf(row);
+    const remaining = rejectionRemaining + otherRemaining;
     if (remaining > 0.000001) {
-      showToast(`Work is not complete. Remaining Qty: ${money(remaining)} MT`, "warning");
+      showToast(`Work is not complete. Reject Balance: ${money(rejectionRemaining)} MT, Other Balance: ${money(otherRemaining)} MT`, "warning");
       return;
     }
     setBusyId(rowId);
@@ -519,6 +586,12 @@ export default function DailyRejectionPage() {
     `Original Qty: ${money(row?.original_qty)}`,
     `Unloading Qty: ${money(row?.actual_unloading_qty)}`,
     `Rejection Qty: ${money(row?.rejection_qty)}`,
+    `Reject Processed: ${money(chainProcessedOf(row))}`,
+    `Reject Remaining: ${money(chainRemainingOf(row))}`,
+    `Other Target: ${money(chainOtherTargetOf(row))}`,
+    `Other Processed: ${money(chainOtherProcessedOf(row))}`,
+    `Other Remaining: ${money(chainOtherRemainingOf(row))}`,
+    `Total Remaining: ${money(chainTotalRemainingOf(row))}`,
     `Reason: ${row?.reason || "-"}`,
     `Work: ${row?.action_type || "-"}`,
     `Assigned To: ${row?.assigned_to_name || "-"}`,
@@ -668,9 +741,13 @@ export default function DailyRejectionPage() {
               <div><span>Reason</span><b>{row?.reason || "-"}</b></div>
               <div><span>Work</span><b>{row?.action_type || "-"}</b></div>
               <div><span>Assigned To</span><b>{row?.assigned_to_name || "-"}</b></div>
-              <div><span>Chain Target</span><b>{money(chainTargetOf(row))} MT</b></div>
-              <div><span>Chain Processed</span><b>{money(chainProcessedOf(row))}</b></div>
-              <div><span>Chain Remaining</span><b>{money(chainRemainingOf(row))} MT</b></div>
+              <div><span>Reject Target</span><b>{money(chainTargetOf(row))} MT</b></div>
+              <div><span>Reject Processed</span><b>{money(chainProcessedOf(row))} MT</b></div>
+              <div><span>Reject Remaining</span><b>{money(chainRemainingOf(row))} MT</b></div>
+              <div><span>Other Target</span><b>{money(chainOtherTargetOf(row))} MT</b></div>
+              <div><span>Other Processed</span><b>{money(chainOtherProcessedOf(row))} MT</b></div>
+              <div><span>Other Remaining</span><b>{money(chainOtherRemainingOf(row))} MT</b></div>
+              <div><span>Total Remaining</span><b>{money(chainTotalRemainingOf(row))} MT</b></div>
               {row?.assignment_narration ? <div style={{ gridColumn: "1 / -1" }}><span>Assignment Narration</span><b>{row.assignment_narration}</b></div> : null}
             </div>
 
@@ -701,11 +778,15 @@ export default function DailyRejectionPage() {
             {withWorkflow && assignedToMe && row?.status === "RUNNING" ? (
               <div className="dr-mobile-worker">
                 <div className="dr-mobile-workflow-title">YOUR ASSIGNED WORK</div>
-                <div className="dr-mobile-worker-work">{row?.action_type || "Work assigned"} · Current Reject {money(row?.rejection_qty)} MT</div>
+                <div className="dr-mobile-worker-work">{row?.action_type || "Work assigned"} · Current Reject {money(chainRemainingOf(row))} MT · Other {money(chainOtherRemainingOf(row))} MT</div>
                 <div className="dr-chain-summary">
-                  <div><b>Original</b><span>{money(chainTargetOf(row))} MT</span></div>
-                  <div><b>Processed</b><span>{money(chainProcessedOf(row))} MT</span></div>
-                  <div><b>Remaining</b><span>{money(chainRemainingOf(row))} MT</span></div>
+                  <div><b>Reject Target</b><span>{money(chainTargetOf(row))} MT</span></div>
+                  <div><b>Reject Processed</b><span>{money(chainProcessedOf(row))} MT</span></div>
+                  <div><b>Reject Remaining</b><span>{money(chainRemainingOf(row))} MT</span></div>
+                  <div><b>Other Target</b><span>{money(chainOtherTargetOf(row))} MT</span></div>
+                  <div><b>Other Processed</b><span>{money(chainOtherProcessedOf(row))} MT</span></div>
+                  <div><b>Other Remaining</b><span>{money(chainOtherRemainingOf(row))} MT</span></div>
+                  <div><b>Total Remaining</b><span>{money(chainTotalRemainingOf(row))} MT</span></div>
                 </div>
                 {row?.assignment_narration ? <div className="dr-assignment-note"><b>Assignment:</b> {row.assignment_narration}</div> : null}
                 {renderFactoryAssignmentDetails(row)}
@@ -717,12 +798,18 @@ export default function DailyRejectionPage() {
                   <input value={(progressForm[rowId] || {}).new_lorry_no || ""} onChange={(e) => setProgressForm((prev) => ({ ...prev, [rowId]: { ...(prev[rowId] || {}), new_lorry_no: e.target.value } }))} placeholder="New Lorry No" style={styles.workflowInput} />
                   <input value={(progressForm[rowId] || {}).destination_type || ""} onChange={(e) => setProgressForm((prev) => ({ ...prev, [rowId]: { ...(prev[rowId] || {}), destination_type: e.target.value } }))} placeholder="Destination / Movement" style={styles.workflowInput} />
                   <input value={(progressForm[rowId] || {}).narration || ""} onChange={(e) => setProgressForm((prev) => ({ ...prev, [rowId]: { ...(prev[rowId] || {}), narration: e.target.value } }))} placeholder="Progress narration" style={styles.workflowInput} />
-                  <div className="dr-rejection-adjust-preview"><span>Current Reject Balance: <b>{money(chainRemainingOf(row))} MT</b></span><span>Adjustment: <b>{money(Math.max(chainRemainingOf(row) - Number((progressForm[rowId] || {}).unloading_qty_for_rejection || 0), 0))} MT</b></span><span>Balance After: <b>{money(Math.max(chainRemainingOf(row) - Number((progressForm[rowId] || {}).unloading_qty_for_rejection || 0), 0))} MT</b></span></div>
+                  <div className="dr-rejection-adjust-preview">
+                    <span>Reject Balance: <b>{money(chainRemainingOf(row))} MT</b></span>
+                    <span>Reject After: <b>{money(Math.max(chainRemainingOf(row) - toQty((progressForm[rowId] || {}).unloading_qty_for_rejection), 0))} MT</b></span>
+                    <span>Other Balance: <b>{money(chainOtherRemainingOf(row))} MT</b></span>
+                    <span>Other After: <b>{money(Math.max(chainOtherRemainingOf(row) - toQty((progressForm[rowId] || {}).other_qty), 0))} MT</b></span>
+                    <span>Total After: <b>{money(Math.max(chainRemainingOf(row) - toQty((progressForm[rowId] || {}).unloading_qty_for_rejection), 0) + Math.max(chainOtherRemainingOf(row) - toQty((progressForm[rowId] || {}).other_qty), 0))} MT</b></span>
+                  </div>
                   <button type="button" disabled={rowBusy} onClick={() => updateProgress(rowId)} style={styles.completeInline}>{rowBusy ? "Saving..." : "Save Progress / Send Pending"}</button>
                 </div>
                 <div className="dr-mobile-complete">
                   <input value={completionRemarks[rowId] || ""} onChange={(e) => setCompletionRemarks((prev) => ({ ...prev, [rowId]: e.target.value }))} placeholder="Final completion note" style={styles.workflowInput} />
-                  <button type="button" disabled={rowBusy || chainRemainingOf(row) > 0.000001} onClick={() => completeRow(rowId)} style={styles.completeInline}>{rowBusy ? "Completing..." : "✓ Complete Work"}</button>
+                  <button type="button" disabled={rowBusy || chainTotalRemainingOf(row) > 0.000001} onClick={() => completeRow(rowId)} style={styles.completeInline}>{rowBusy ? "Completing..." : "✓ Complete Work"}</button>
                 </div>
               </div>
             ) : null}
@@ -739,7 +826,8 @@ export default function DailyRejectionPage() {
   const renderTable = (tableRows, withWorkflow = true, reportMode = false) => {
     const showManagerWorkflow = withWorkflow && canAssign;
     const showReportWorkflow = reportMode;
-    const totalColumns = 17 + (showManagerWorkflow || showReportWorkflow ? 4 : withWorkflow ? 1 : 0);
+    const baseColumns = 20;
+    const totalColumns = baseColumns + (showManagerWorkflow || showReportWorkflow ? 4 : withWorkflow ? 1 : 0) + 1;
     const headers = [
       "Date",
       "Rejection No",
@@ -751,8 +839,12 @@ export default function DailyRejectionPage() {
       "Original",
       "Unloading",
       "Reject",
-      "Processed",
-      "Remaining",
+      "Reject Processed",
+      "Reject Remaining",
+      "Other Target",
+      "Other Processed",
+      "Other Remaining",
+      "Total Remaining",
       "Reason",
       "Work",
       "Assigned To",
@@ -797,6 +889,10 @@ export default function DailyRejectionPage() {
                       <td style={{ ...styles.tdNum, fontWeight: 900 }}>{money(row?.rejection_qty)}</td>
                       <td style={styles.tdNum}>{money(chainProcessedOf(row))}</td>
                       <td style={styles.tdNum}>{money(chainRemainingOf(row))}</td>
+                      <td style={styles.tdNum}>{money(chainOtherTargetOf(row))}</td>
+                      <td style={styles.tdNum}>{money(chainOtherProcessedOf(row))}</td>
+                      <td style={styles.tdNum}>{money(chainOtherRemainingOf(row))}</td>
+                      <td style={{ ...styles.tdNum, fontWeight: 900 }}>{money(chainTotalRemainingOf(row))}</td>
                       <td style={styles.td}>{row?.reason || "-"}</td>
                       <td style={styles.td}>{row?.action_type || "-"}</td>
                       <td style={styles.td}>{row?.assigned_to_name || "-"}</td>
@@ -827,7 +923,7 @@ export default function DailyRejectionPage() {
                         </>
                       ) : withWorkflow ? (
                         <td style={{ ...styles.td, ...styles.workflowTd }}>{assignedToMe && row?.status === "RUNNING" ? <div>
-                          <div style={styles.workerInline}><span><b>Target:</b> {money(chainTargetOf(row))} MT &nbsp; <b>Processed:</b> {money(chainProcessedOf(row))} MT &nbsp; <b>Remaining:</b> {money(chainRemainingOf(row))} MT</span></div>
+                          <div style={styles.workerInline}><span><b>Reject Target:</b> {money(chainTargetOf(row))} MT &nbsp; <b>Reject Processed:</b> {money(chainProcessedOf(row))} MT &nbsp; <b>Reject Remaining:</b> {money(chainRemainingOf(row))} MT &nbsp; <b>Other Target:</b> {money(chainOtherTargetOf(row))} MT &nbsp; <b>Other Processed:</b> {money(chainOtherProcessedOf(row))} MT &nbsp; <b>Other Remaining:</b> {money(chainOtherRemainingOf(row))} MT &nbsp; <b>Total Remaining:</b> {money(chainTotalRemainingOf(row))} MT</span></div>
                           {row?.assignment_narration ? <div className="dr-assignment-note"><b>Assignment:</b> {row.assignment_narration}</div> : null}
                           {renderFactoryAssignmentDetails(row)}
                           <div className="dr-chain-entry-inline">
@@ -837,10 +933,10 @@ export default function DailyRejectionPage() {
                             <input value={(progressForm[rowId] || {}).new_lorry_no || ""} onChange={(e) => setProgressForm((prev) => ({ ...prev, [rowId]: { ...(prev[rowId] || {}), new_lorry_no: e.target.value } }))} placeholder="New Lorry" style={styles.workflowInput} />
                             <input value={(progressForm[rowId] || {}).destination_type || ""} onChange={(e) => setProgressForm((prev) => ({ ...prev, [rowId]: { ...(prev[rowId] || {}), destination_type: e.target.value } }))} placeholder="Destination" style={styles.workflowInput} />
                             <input value={(progressForm[rowId] || {}).narration || ""} onChange={(e) => setProgressForm((prev) => ({ ...prev, [rowId]: { ...(prev[rowId] || {}), narration: e.target.value } }))} placeholder="Progress narration" style={styles.workflowInput} />
-                            <div className="dr-rejection-adjust-preview"><span>Reject Balance: <b>{money(chainRemainingOf(row))} MT</b></span><span>Adjustment: <b>{money(Math.max(chainRemainingOf(row) - Number((progressForm[rowId] || {}).unloading_qty_for_rejection || 0), 0))} MT</b></span><span>After: <b>{money(Math.max(chainRemainingOf(row) - Number((progressForm[rowId] || {}).unloading_qty_for_rejection || 0), 0))} MT</b></span></div>
+                            <div className="dr-rejection-adjust-preview"><span>Reject Balance: <b>{money(chainRemainingOf(row))} MT</b></span><span>Reject After: <b>{money(Math.max(chainRemainingOf(row) - toQty((progressForm[rowId] || {}).unloading_qty_for_rejection), 0))} MT</b></span><span>Other Balance: <b>{money(chainOtherRemainingOf(row))} MT</b></span><span>Other After: <b>{money(Math.max(chainOtherRemainingOf(row) - toQty((progressForm[rowId] || {}).other_qty), 0))} MT</b></span><span>Total After: <b>{money(Math.max(chainRemainingOf(row) - toQty((progressForm[rowId] || {}).unloading_qty_for_rejection), 0) + Math.max(chainOtherRemainingOf(row) - toQty((progressForm[rowId] || {}).other_qty), 0))} MT</b></span></div>
                             <button type="button" disabled={rowBusy} onClick={() => updateProgress(rowId)} style={styles.completeInline}>{rowBusy ? "Saving..." : "Save Progress"}</button>
                           </div>
-                          <div style={styles.workerInline}><input value={completionRemarks[rowId] || ""} onChange={(e) => setCompletionRemarks((prev) => ({ ...prev, [rowId]: e.target.value }))} placeholder="Final completion note" style={styles.workflowInput} /><button type="button" disabled={rowBusy || chainRemainingOf(row) > 0.000001} onClick={() => completeRow(rowId)} style={styles.completeInline}>{rowBusy ? "Completing..." : "✓ Complete Work"}</button></div>
+                          <div style={styles.workerInline}><input value={completionRemarks[rowId] || ""} onChange={(e) => setCompletionRemarks((prev) => ({ ...prev, [rowId]: e.target.value }))} placeholder="Final completion note" style={styles.workflowInput} /><button type="button" disabled={rowBusy || chainTotalRemainingOf(row) > 0.000001} onClick={() => completeRow(rowId)} style={styles.completeInline}>{rowBusy ? "Completing..." : "✓ Complete Work"}</button></div>
                         </div> : <span style={styles.mutedDash}>-</span>}</td>
                       ) : null}
                       <td style={{ ...styles.td, ...styles.actionTd, position: "sticky", right: 0, background: "#fff", zIndex: 4 }}>{renderActionIcons(row)}</td>
