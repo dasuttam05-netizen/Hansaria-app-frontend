@@ -875,6 +875,7 @@ export default function DailyRejectionPage() {
     const showReportWorkflow = reportMode;
     const baseColumns = 20;
     const totalColumns = baseColumns + 1 + (showManagerWorkflow || showReportWorkflow ? 4 : withWorkflow ? 1 : 0) + 1;
+    const tableMinWidth = showManagerWorkflow ? 1980 : showReportWorkflow ? 1900 : withWorkflow ? 1740 : 1600;
     const headers = [
       "S.L",
       "Date",
@@ -901,160 +902,146 @@ export default function DailyRejectionPage() {
       "Action",
     ];
 
+    const handleTableKeyDown = (event) => {
+      if (!["ArrowLeft", "ArrowRight"].includes(event.key)) return;
+      const tag = String(document.activeElement?.tagName || "").toUpperCase();
+      if (["INPUT", "TEXTAREA", "SELECT", "BUTTON"].includes(tag)) return;
+      const scroller = event.currentTarget;
+      const step = Math.max(220, Math.round(scroller.clientWidth * 0.68));
+      const maxScroll = Math.max(scroller.scrollWidth - scroller.clientWidth, 0);
+      if (maxScroll <= 0) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const nextLeft = event.key === "ArrowRight"
+        ? Math.min(scroller.scrollLeft + step, maxScroll)
+        : Math.max(scroller.scrollLeft - step, 0);
+      scroller.scrollTo({ left: nextLeft, behavior: "smooth" });
+    };
+
     return (
       <>
         <div className="dr-desktop-table">
-          <div
-            className="dr-scroll-shell"
-            tabIndex={0}
-            onKeyDown={(event) => {
-              if (!["ArrowLeft", "ArrowRight"].includes(event.key)) return;
-              const tag = String(document.activeElement?.tagName || "").toUpperCase();
-              if (["INPUT", "TEXTAREA", "SELECT", "BUTTON"].includes(tag)) return;
-              event.preventDefault();
-              const main = event.currentTarget.querySelector(".dr-table-scroll-main");
-              if (!main) return;
-              const step = Math.max(220, Math.round(main.clientWidth * 0.68));
-              main.scrollBy({ left: event.key === "ArrowRight" ? step : -step, behavior: "smooth" });
-            }}
-            onFocus={(event) => {
-              const main = event.currentTarget.querySelector('.dr-table-scroll-main');
-              if (main) main.setAttribute('data-keyboard-scroll-ready', 'true');
-            }}
-            aria-label="Daily Rejection table. Press Tab to focus this area, then use Left and Right arrow keys to scroll horizontally. You can also drag the bottom scrollbar with the mouse."
-            title="Tab to focus, then use ← / →. Drag the bottom scrollbar with the mouse."
-          >
-            <div className="dr-scroll-hint" aria-hidden="true">Tab → focus table · ← / → move · drag bottom scrollbar with mouse</div>
+          <div className="dr-scroll-shell">
+            <div className="dr-scroll-hint" aria-hidden="true">
+              <span>Tab → focus table</span>
+              <span>← / → scroll</span>
+              <span>Mouse → drag bottom scrollbar</span>
+            </div>
             <div
               className="dr-table-scroll-main"
-              style={styles.tableOuter}
-              onScroll={(event) => {
-                const bottom = event.currentTarget.nextElementSibling;
-                if (bottom && Math.abs(bottom.scrollLeft - event.currentTarget.scrollLeft) > 1) bottom.scrollLeft = event.currentTarget.scrollLeft;
+              style={{
+                ...styles.tableOuter,
+                overflowX: "auto",
+                overflowY: "auto",
+                maxHeight: "78vh",
+                scrollbarGutter: "stable",
+                outline: "none",
               }}
-              onWheel={(event) => {
-                if (Math.abs(event.deltaY) > Math.abs(event.deltaX)) {
-                  const el = event.currentTarget;
-                  if (el.scrollWidth > el.clientWidth) {
-                    el.scrollLeft += event.deltaY;
-                    event.preventDefault();
-                  }
-                }
-              }}
-            >
-              <table style={{ ...styles.dataTable, minWidth: showManagerWorkflow ? 1980 : showReportWorkflow ? 1900 : withWorkflow ? 1740 : 1600 }}>
-              <thead>
-                <tr>
-                  {headers.map((head, headIndex) => (
-                    <th key={`${head}-${headIndex}`} style={{ ...styles.th, ...(head === "Action" ? styles.actionTh : {}), ...(head === "Assign Work" || head === "Select Staff" || head === "Work Action" ? styles.workflowTh : {}), ...(head.includes("Qty") || head.includes("Reject") || head.includes("Other") || head.includes("Total") ? styles.qtyTh : {}) }}>{head}</th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody>
-                {tableRows.length ? tableRows.map((row, rowIndex) => {
-                  const rowId = idOf(row);
-                  const assignedToMe = assignedToMeRow(row);
-                  const isComplete = row?.status === "COMPLETE";
-                  const actionValue = assignedAction[rowId] || row?.action_type || "";
-                  const employeeValue = assignedEmployee[rowId] || row?.assigned_to || "";
-                  const rowBusy = busyId === rowId;
-                  return (
-                    <tr key={rowId}>
-                      <td style={{ ...styles.td, ...styles.slTd }}>
-                        <button type="button" onClick={() => openHistory(row)} title="View S.L. wise details and history" style={styles.slButton}>{rowIndex + 1}</button>
-                      </td>
-                      <td style={styles.td}>{formatDate(row?.entry_date)}</td>
-                      <td style={{ ...styles.td, fontWeight: 900 }}>{row?.rejection_no || rowId}</td>
-                      <td style={styles.td}>{row?.lorry_no || "-"}</td>
-                      <td style={{ ...styles.td, ...styles.wrapTd }}>{row?.company_name || "-"}</td>
-                      <td style={{ ...styles.td, ...styles.wrapTd }}>{row?.company_account_name || "-"}</td>
-                      <td style={{ ...styles.td, ...styles.wrapTd }}>{row?.consignee_name || row?.consignee || "-"}</td>
-                      <td style={styles.td}>{row?.product_name || "-"}</td>
-                      <td style={styles.tdNum}>{money(row?.original_qty)}</td>
-                      <td style={styles.tdNum}>{money(row?.actual_unloading_qty)}</td>
-                      <td style={{ ...styles.tdNum, fontWeight: 900 }}>{money(row?.rejection_qty)}</td>
-                      <td style={styles.tdNum}>{money(chainProcessedOf(row))}</td>
-                      <td style={styles.tdNum}>{money(chainRemainingOf(row))}</td>
-                      <td style={styles.tdNum}>{money(chainOtherTargetOf(row))}</td>
-                      <td style={styles.tdNum}>{money(chainOtherProcessedOf(row))}</td>
-                      <td style={styles.tdNum}>{money(chainOtherRemainingOf(row))}</td>
-                      <td style={{ ...styles.tdNum, fontWeight: 900 }}>{money(chainTotalRemainingOf(row))}</td>
-                      <td style={{ ...styles.td, ...styles.wrapTd }}>{row?.reason || "-"}</td>
-                      <td style={{ ...styles.td, ...styles.wrapTd }}>{row?.action_type || "-"}</td>
-                      <td style={{ ...styles.td, ...styles.wrapTd }}>{row?.assigned_to_name || "-"}</td>
-                      <td style={styles.td}><span style={{ ...styles.statusChip, ...statusStyle(row?.status) }}>{row?.status || "PENDING"}</span></td>
-                      {showManagerWorkflow ? (
-                        <>
-                          <td style={{ ...styles.td, ...styles.workflowTd }}><SearchableSelect
-  value={actionValue}
-  options={WORK_DESCRIPTIONS.map((item) => ({ value: item, label: item }))}
-  onChange={(value) => { setAssignedAction((prev) => ({ ...prev, [rowId]: value })); if (value === "SEND TO FACTORY") openFactoryModal(rowId); }}
-  placeholder="Work Description / type to search"
-/></td>
-                          <td style={{ ...styles.td, ...styles.workflowTd }}><SearchableSelect
-  value={employeeValue}
-  options={masters.employees.map((item) => ({ value: idOf(item), label: textOf(item) }))}
-  onChange={(value) => setAssignedEmployee((prev) => ({ ...prev, [rowId]: value }))}
-  placeholder="Staff / type to search"
-/></td>
-                          <td style={{ ...styles.td, ...styles.workflowTd }}><input value={assignNarration[rowId] || ""} onChange={(e) => setAssignNarration((prev) => ({ ...prev, [rowId]: e.target.value }))} placeholder="Assignment narration" style={styles.workflowInput} /></td>
-                          <td style={{ ...styles.td, ...styles.workflowTd }}><button type="button" disabled={rowBusy || isComplete || !actionValue || !employeeValue} onClick={() => assignRow(rowId)} style={{ ...styles.assignButtonInline, opacity: rowBusy || isComplete || !actionValue || !employeeValue ? 0.55 : 1 }}>{rowBusy ? "Assigning..." : row?.status === "RUNNING" ? "Reassign & Keep Running" : "Assign & Start Work"}</button></td>
-                        </>
-                      ) : showReportWorkflow ? (
-                        <>
-                          <td style={{ ...styles.td, ...styles.workflowTd }}><span style={styles.reportWorkflowValue}>{row?.action_type || "-"}</span></td>
-                          <td style={{ ...styles.td, ...styles.workflowTd }}><span style={styles.reportWorkflowValue}>{row?.assigned_to_name || "-"}</span></td>
-                          <td style={{ ...styles.td, ...styles.workflowTd }}><span style={styles.reportWorkflowValue}>{row?.assignment_narration || "-"}</span></td>
-                          <td style={{ ...styles.td, ...styles.workflowTd }}><span style={{ ...styles.reportWorkflowChip, ...statusStyle(row?.status) }}>{row?.status === "COMPLETE" ? "Completed" : row?.status === "RUNNING" ? "Running" : row?.status === "ASSIGNED" ? "Assigned" : "Pending"}</span></td>
-                        </>
-                      ) : withWorkflow ? (
-                        <td style={{ ...styles.td, ...styles.workflowTd }}>{assignedToMe && row?.status === "RUNNING" ? <div>
-                          <div style={styles.workerInline}><span><b>Reject Target:</b> {money(chainTargetOf(row))} MT &nbsp; <b>Reject Processed:</b> {money(chainProcessedOf(row))} MT &nbsp; <b>Reject Remaining:</b> {money(chainRemainingOf(row))} MT &nbsp; <b>Other Target:</b> {money(chainOtherTargetOf(row))} MT &nbsp; <b>Other Processed:</b> {money(chainOtherProcessedOf(row))} MT &nbsp; <b>Other Remaining:</b> {money(chainOtherRemainingOf(row))} MT &nbsp; <b>Total Remaining:</b> {money(chainTotalRemainingOf(row))} MT</span></div>
-                          {row?.assignment_narration ? <div className="dr-assignment-note"><b>Assignment:</b> {row.assignment_narration}</div> : null}
-                          {renderFactoryAssignmentDetails(row)}
-                          <div className="dr-chain-entry-inline">
-                            <input type="number" min="0" max={chainRemainingOf(row)} step="0.01" value={(progressForm[rowId] || {}).unloading_qty_for_rejection || ""} onChange={(e) => setProgressForm((prev) => ({ ...prev, [rowId]: { ...(prev[rowId] || {}), unloading_qty_for_rejection: e.target.value } }))} placeholder="Unloading Qty for Rejection" style={styles.workflowInput} />
-                            <input type="number" min="0" step="0.01" value={(progressForm[rowId] || {}).other_qty || ""} onChange={(e) => setProgressForm((prev) => ({ ...prev, [rowId]: { ...(prev[rowId] || {}), other_qty: e.target.value } }))} placeholder="Other Qty" style={styles.workflowInput} />
-                            <input type="number" min="0" step="0.01" value={(progressForm[rowId] || {}).new_rejection_qty || ""} onChange={(e) => setProgressForm((prev) => ({ ...prev, [rowId]: { ...(prev[rowId] || {}), new_rejection_qty: e.target.value } }))} placeholder="New Rejection" style={styles.workflowInput} />
-                            <input value={(progressForm[rowId] || {}).new_lorry_no || ""} onChange={(e) => setProgressForm((prev) => ({ ...prev, [rowId]: { ...(prev[rowId] || {}), new_lorry_no: e.target.value } }))} placeholder="New Lorry" style={styles.workflowInput} />
-                            <input value={(progressForm[rowId] || {}).destination_type || ""} onChange={(e) => setProgressForm((prev) => ({ ...prev, [rowId]: { ...(prev[rowId] || {}), destination_type: e.target.value } }))} placeholder="Destination" style={styles.workflowInput} />
-                            <input value={(progressForm[rowId] || {}).narration || ""} onChange={(e) => setProgressForm((prev) => ({ ...prev, [rowId]: { ...(prev[rowId] || {}), narration: e.target.value } }))} placeholder="Progress narration" style={styles.workflowInput} />
-                            <div className="dr-rejection-adjust-preview"><span>Reject Balance: <b>{money(chainRemainingOf(row))} MT</b></span><span>Reject After: <b>{money(Math.max(chainRemainingOf(row) - toQty((progressForm[rowId] || {}).unloading_qty_for_rejection), 0))} MT</b></span><span>Other Balance: <b>{money(chainOtherRemainingOf(row))} MT</b></span><span>Other After: <b>{money(Math.max(chainOtherRemainingOf(row) - toQty((progressForm[rowId] || {}).other_qty), 0))} MT</b></span><span>Total After: <b>{money(Math.max(chainRemainingOf(row) - toQty((progressForm[rowId] || {}).unloading_qty_for_rejection), 0) + Math.max(chainOtherRemainingOf(row) - toQty((progressForm[rowId] || {}).other_qty), 0))} MT</b></span></div>
-                            <button type="button" disabled={rowBusy} onClick={() => updateProgress(rowId)} style={styles.completeInline}>{rowBusy ? "Saving..." : "Save Progress"}</button>
-                          </div>
-                          <div style={styles.workerInline}><input value={completionRemarks[rowId] || ""} onChange={(e) => setCompletionRemarks((prev) => ({ ...prev, [rowId]: e.target.value }))} placeholder="Final completion note" style={styles.workflowInput} /><button type="button" disabled={rowBusy || chainTotalRemainingOf(row) > 0.000001} onClick={() => completeRow(rowId)} style={styles.completeInline}>{rowBusy ? "Completing..." : "✓ Complete Work"}</button></div>
-                        </div> : <span style={styles.mutedDash}>-</span>}</td>
-                      ) : null}
-                      <td style={{ ...styles.td, ...styles.actionTd, position: "sticky", right: 0, background: "#fff", zIndex: 4 }}>{renderActionIcons(row)}</td>
-                    </tr>
-                  );
-                }) : <tr><td colSpan={totalColumns} style={styles.emptyCell}>No Daily Rejection records found.</td></tr>}
-              </tbody>
-              </table>
-            </div>
-            <div
-              className="dr-table-scroll-bottom"
-              role="scrollbar"
               tabIndex={0}
-              aria-orientation="horizontal"
-              aria-label="Daily Rejection horizontal scrollbar. Use mouse to drag or Left and Right arrows after Tab."
-              onKeyDown={(event) => {
-                if (!["ArrowLeft", "ArrowRight"].includes(event.key)) return;
-                event.preventDefault();
-                const main = event.currentTarget.previousElementSibling;
-                if (!main) return;
-                const step = Math.max(220, Math.round(main.clientWidth * 0.68));
-                main.scrollBy({ left: event.key === "ArrowRight" ? step : -step, behavior: "smooth" });
-              }}
-              onScroll={(event) => {
-                const main = event.currentTarget.previousElementSibling;
-                if (main && Math.abs(main.scrollLeft - event.currentTarget.scrollLeft) > 1) main.scrollLeft = event.currentTarget.scrollLeft;
-              }}
+              role="region"
+              onKeyDown={handleTableKeyDown}
+              aria-label="Daily Rejection table. Press Tab to focus this table, then use Left and Right arrows to scroll horizontally. Drag the bottom scrollbar with the mouse."
+              title="Tab to focus, then use ← / →. Drag the bottom scrollbar with the mouse."
             >
-              <div style={{ width: showManagerWorkflow ? 1980 : showReportWorkflow ? 1900 : withWorkflow ? 1740 : 1600, height: 1 }} />
-            </div>
-            <div className="dr-scroll-actions" aria-hidden="true">
-              <span>Tab → Focus</span><span>← / → Move</span><span>Mouse → Drag bar</span>
+              <table style={{ ...styles.dataTable, width: "100%", minWidth: `${tableMinWidth}px` }}>
+                <thead>
+                  <tr>
+                    {headers.map((head, headIndex) => (
+                      <th
+                        key={`${head}-${headIndex}`}
+                        style={{
+                          ...styles.th,
+                          ...(head === "Action" ? styles.actionTh : {}),
+                          ...(head === "Assign Work" || head === "Select Staff" || head === "Work Action" ? styles.workflowTh : {}),
+                          ...(head.includes("Qty") || head.includes("Reject") || head.includes("Other") || head.includes("Total") ? styles.qtyTh : {}),
+                        }}
+                      >
+                        {head}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {tableRows.length ? tableRows.map((row, rowIndex) => {
+                    const rowId = idOf(row);
+                    const assignedToMe = assignedToMeRow(row);
+                    const isComplete = row?.status === "COMPLETE";
+                    const actionValue = assignedAction[rowId] || row?.action_type || "";
+                    const employeeValue = assignedEmployee[rowId] || row?.assigned_to || "";
+                    const rowBusy = busyId === rowId;
+                    return (
+                      <tr key={rowId}>
+                        <td style={{ ...styles.td, ...styles.slTd }}>
+                          <button type="button" onClick={() => openHistory(row)} title="View S.L. wise details and history" style={styles.slButton}>{rowIndex + 1}</button>
+                        </td>
+                        <td style={styles.td}>{formatDate(row?.entry_date)}</td>
+                        <td style={{ ...styles.td, fontWeight: 900 }}>{row?.rejection_no || rowId}</td>
+                        <td style={styles.td}>{row?.lorry_no || "-"}</td>
+                        <td style={{ ...styles.td, ...styles.wrapTd }}>{row?.company_name || "-"}</td>
+                        <td style={{ ...styles.td, ...styles.wrapTd }}>{row?.company_account_name || "-"}</td>
+                        <td style={{ ...styles.td, ...styles.wrapTd }}>{row?.consignee_name || row?.consignee || "-"}</td>
+                        <td style={styles.td}>{row?.product_name || "-"}</td>
+                        <td style={styles.tdNum}>{money(row?.original_qty)}</td>
+                        <td style={styles.tdNum}>{money(row?.actual_unloading_qty)}</td>
+                        <td style={{ ...styles.tdNum, fontWeight: 900 }}>{money(row?.rejection_qty)}</td>
+                        <td style={styles.tdNum}>{money(chainProcessedOf(row))}</td>
+                        <td style={styles.tdNum}>{money(chainRemainingOf(row))}</td>
+                        <td style={styles.tdNum}>{money(chainOtherTargetOf(row))}</td>
+                        <td style={styles.tdNum}>{money(chainOtherProcessedOf(row))}</td>
+                        <td style={styles.tdNum}>{money(chainOtherRemainingOf(row))}</td>
+                        <td style={{ ...styles.tdNum, fontWeight: 900 }}>{money(chainTotalRemainingOf(row))}</td>
+                        <td style={{ ...styles.td, ...styles.wrapTd }}>{row?.reason || "-"}</td>
+                        <td style={{ ...styles.td, ...styles.wrapTd }}>{row?.action_type || "-"}</td>
+                        <td style={{ ...styles.td, ...styles.wrapTd }}>{row?.assigned_to_name || "-"}</td>
+                        <td style={styles.td}><span style={{ ...styles.statusChip, ...statusStyle(row?.status) }}>{row?.status || "PENDING"}</span></td>
+                        {showManagerWorkflow ? (
+                          <>
+                            <td style={{ ...styles.td, ...styles.workflowTd }}><SearchableSelect
+                              value={actionValue}
+                              options={WORK_DESCRIPTIONS.map((item) => ({ value: item, label: item }))}
+                              onChange={(value) => { setAssignedAction((prev) => ({ ...prev, [rowId]: value })); if (value === "SEND TO FACTORY") openFactoryModal(rowId); }}
+                              placeholder="Work Description / type to search"
+                            /></td>
+                            <td style={{ ...styles.td, ...styles.workflowTd }}><SearchableSelect
+                              value={employeeValue}
+                              options={masters.employees.map((item) => ({ value: idOf(item), label: textOf(item) }))}
+                              onChange={(value) => setAssignedEmployee((prev) => ({ ...prev, [rowId]: value }))}
+                              placeholder="Staff / type to search"
+                            /></td>
+                            <td style={{ ...styles.td, ...styles.workflowTd }}><input value={assignNarration[rowId] || ""} onChange={(e) => setAssignNarration((prev) => ({ ...prev, [rowId]: e.target.value }))} placeholder="Assignment narration" style={styles.workflowInput} /></td>
+                            <td style={{ ...styles.td, ...styles.workflowTd }}><button type="button" disabled={rowBusy || isComplete || !actionValue || !employeeValue} onClick={() => assignRow(rowId)} style={{ ...styles.assignButtonInline, opacity: rowBusy || isComplete || !actionValue || !employeeValue ? 0.55 : 1 }}>{rowBusy ? "Assigning..." : row?.status === "RUNNING" ? "Reassign & Keep Running" : "Assign & Start Work"}</button></td>
+                          </>
+                        ) : showReportWorkflow ? (
+                          <>
+                            <td style={{ ...styles.td, ...styles.workflowTd }}><span style={styles.reportWorkflowValue}>{row?.action_type || "-"}</span></td>
+                            <td style={{ ...styles.td, ...styles.workflowTd }}><span style={styles.reportWorkflowValue}>{row?.assigned_to_name || "-"}</span></td>
+                            <td style={{ ...styles.td, ...styles.workflowTd }}><span style={styles.reportWorkflowValue}>{row?.assignment_narration || "-"}</span></td>
+                            <td style={{ ...styles.td, ...styles.workflowTd }}><span style={{ ...styles.reportWorkflowChip, ...statusStyle(row?.status) }}>{row?.status === "COMPLETE" ? "Completed" : row?.status === "RUNNING" ? "Running" : row?.status === "ASSIGNED" ? "Assigned" : "Pending"}</span></td>
+                          </>
+                        ) : withWorkflow ? (
+                          <td style={{ ...styles.td, ...styles.workflowTd }}>{assignedToMe && row?.status === "RUNNING" ? <div>
+                            <div style={styles.workerInline}><span><b>Reject Target:</b> {money(chainTargetOf(row))} MT &nbsp; <b>Reject Processed:</b> {money(chainProcessedOf(row))} MT &nbsp; <b>Reject Remaining:</b> {money(chainRemainingOf(row))} MT &nbsp; <b>Other Target:</b> {money(chainOtherTargetOf(row))} MT &nbsp; <b>Other Processed:</b> {money(chainOtherProcessedOf(row))} MT &nbsp; <b>Other Remaining:</b> {money(chainOtherRemainingOf(row))} MT &nbsp; <b>Total Remaining:</b> {money(chainTotalRemainingOf(row))} MT</span></div>
+                            {row?.assignment_narration ? <div className="dr-assignment-note"><b>Assignment:</b> {row.assignment_narration}</div> : null}
+                            {renderFactoryAssignmentDetails(row)}
+                            <div className="dr-chain-entry-inline">
+                              <input type="number" min="0" max={chainRemainingOf(row)} step="0.01" value={(progressForm[rowId] || {}).unloading_qty_for_rejection || ""} onChange={(e) => setProgressForm((prev) => ({ ...prev, [rowId]: { ...(prev[rowId] || {}), unloading_qty_for_rejection: e.target.value } }))} placeholder="Unloading Qty for Rejection" style={styles.workflowInput} />
+                              <input type="number" min="0" step="0.01" value={(progressForm[rowId] || {}).other_qty || ""} onChange={(e) => setProgressForm((prev) => ({ ...prev, [rowId]: { ...(prev[rowId] || {}), other_qty: e.target.value } }))} placeholder="Other Qty" style={styles.workflowInput} />
+                              <input type="number" min="0" step="0.01" value={(progressForm[rowId] || {}).new_rejection_qty || ""} onChange={(e) => setProgressForm((prev) => ({ ...prev, [rowId]: { ...(prev[rowId] || {}), new_rejection_qty: e.target.value } }))} placeholder="New Rejection" style={styles.workflowInput} />
+                              <input value={(progressForm[rowId] || {}).new_lorry_no || ""} onChange={(e) => setProgressForm((prev) => ({ ...prev, [rowId]: { ...(prev[rowId] || {}), new_lorry_no: e.target.value } }))} placeholder="New Lorry" style={styles.workflowInput} />
+                              <input value={(progressForm[rowId] || {}).destination_type || ""} onChange={(e) => setProgressForm((prev) => ({ ...prev, [rowId]: { ...(prev[rowId] || {}), destination_type: e.target.value } }))} placeholder="Destination" style={styles.workflowInput} />
+                              <input value={(progressForm[rowId] || {}).narration || ""} onChange={(e) => setProgressForm((prev) => ({ ...prev, [rowId]: { ...(prev[rowId] || {}), narration: e.target.value } }))} placeholder="Progress narration" style={styles.workflowInput} />
+                              <div className="dr-rejection-adjust-preview"><span>Reject Balance: <b>{money(chainRemainingOf(row))} MT</b></span><span>Reject After: <b>{money(Math.max(chainRemainingOf(row) - toQty((progressForm[rowId] || {}).unloading_qty_for_rejection), 0))} MT</b></span><span>Other Balance: <b>{money(chainOtherRemainingOf(row))} MT</b></span><span>Other After: <b>{money(Math.max(chainOtherRemainingOf(row) - toQty((progressForm[rowId] || {}).other_qty), 0))} MT</b></span><span>Total After: <b>{money(Math.max(chainRemainingOf(row) - toQty((progressForm[rowId] || {}).unloading_qty_for_rejection), 0) + Math.max(chainOtherRemainingOf(row) - toQty((progressForm[rowId] || {}).other_qty), 0))} MT</b></span></div>
+                              <button type="button" disabled={rowBusy} onClick={() => updateProgress(rowId)} style={styles.completeInline}>{rowBusy ? "Saving..." : "Save Progress"}</button>
+                            </div>
+                            <div style={styles.workerInline}><input value={completionRemarks[rowId] || ""} onChange={(e) => setCompletionRemarks((prev) => ({ ...prev, [rowId]: e.target.value }))} placeholder="Final completion note" style={styles.workflowInput} /><button type="button" disabled={rowBusy || chainTotalRemainingOf(row) > 0.000001} onClick={() => completeRow(rowId)} style={styles.completeInline}>{rowBusy ? "Completing..." : "✓ Complete Work"}</button></div>
+                          </div> : <span style={styles.mutedDash}>-</span>}</td>
+                        ) : null}
+                        <td style={{ ...styles.td, ...styles.actionTd, position: "sticky", right: 0, background: "#fff", zIndex: 4 }}>{renderActionIcons(row)}</td>
+                      </tr>
+                    );
+                  }) : <tr><td colSpan={totalColumns} style={styles.emptyCell}>No Daily Rejection records found.</td></tr>}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
@@ -1062,7 +1049,6 @@ export default function DailyRejectionPage() {
       </>
     );
   };
-
 
   const editRow = async (row) => {
     if (!canEdit) return;
@@ -1084,30 +1070,6 @@ export default function DailyRejectionPage() {
     });
     setShowForm(true);
   };
-
-  useEffect(() => {
-    const syncHorizontalScrollbars = () => {
-      document.querySelectorAll('.dr-table-scroll-main').forEach((main) => {
-        const bottom = main.parentElement?.querySelector('.dr-table-scroll-bottom');
-        const spacer = bottom?.firstElementChild;
-        if (!bottom || !spacer) return;
-        const width = Math.max(main.scrollWidth, main.clientWidth + 1);
-        spacer.style.width = `${width}px`;
-        bottom.scrollLeft = main.scrollLeft;
-      });
-    };
-
-    const frame = window.requestAnimationFrame(syncHorizontalScrollbars);
-    window.addEventListener('resize', syncHorizontalScrollbars);
-    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(syncHorizontalScrollbars) : null;
-    document.querySelectorAll('.dr-table-scroll-main').forEach((main) => observer?.observe(main));
-
-    return () => {
-      window.cancelAnimationFrame(frame);
-      window.removeEventListener('resize', syncHorizontalScrollbars);
-      observer?.disconnect();
-    };
-  }, [rows, reportRows, status, actionFilter, canAssign]);
 
   const submitReport = async () => {
     if (!canReport) return;
@@ -1140,20 +1102,13 @@ export default function DailyRejectionPage() {
         .dr-mobile-list { display:none; }
         .dr-scroll-shell { width:100%; max-width:100%; outline:none; }
         .dr-scroll-shell:focus { outline:2px solid rgba(14,116,144,.28); outline-offset:2px; border-radius:14px; }
-        .dr-scroll-hint { display:flex; justify-content:space-between; align-items:center; min-height:24px; padding:0 8px 5px; color:#64748b; font-size:10px; font-weight:800; letter-spacing:.2px; white-space:nowrap; }
-        .dr-scroll-shell .tableOuter { scrollbar-color:#94a3b8 #eef2f7; scrollbar-width:thin; }
-        .dr-scroll-shell .tableOuter::-webkit-scrollbar { height:8px; }
-        .dr-scroll-shell .tableOuter::-webkit-scrollbar-track { background:#eef2f7; border-radius:999px; }
-        .dr-scroll-shell .tableOuter::-webkit-scrollbar-thumb { background:#94a3b8; border-radius:999px; border:1px solid #eef2f7; }
-        .dr-scroll-shell .tableOuter::-webkit-scrollbar-thumb:hover { background:#64748b; }
-        .dr-table-scroll-bottom { width:100%; max-width:100%; overflow-x:auto; overflow-y:hidden; height:14px; margin-top:2px; scrollbar-color:#64748b #eef2f7; scrollbar-width:auto; outline:none; cursor:grab; }
-        .dr-table-scroll-bottom:focus { outline:2px solid rgba(14,116,144,.25); outline-offset:2px; border-radius:999px; }
-        .dr-table-scroll-bottom:active { cursor:grabbing; }
-        .dr-table-scroll-bottom::-webkit-scrollbar { height:12px; }
-        .dr-table-scroll-bottom::-webkit-scrollbar-track { background:#eef2f7; border-radius:999px; }
-        .dr-table-scroll-bottom::-webkit-scrollbar-thumb { background:#64748b; border-radius:999px; border:2px solid #eef2f7; }
-        .dr-scroll-actions { display:flex; justify-content:center; gap:10px; margin-top:3px; color:#64748b; font-size:9px; font-weight:800; }
-        .dr-scroll-actions span { padding:2px 7px; border:1px solid #dbe4ee; border-radius:999px; background:#f8fafc; }
+        .dr-scroll-hint { display:flex; justify-content:space-between; align-items:center; gap:10px; min-height:24px; padding:0 8px 5px; color:#64748b; font-size:10px; font-weight:800; letter-spacing:.2px; white-space:nowrap; }
+        .dr-table-scroll-main { width:100%; max-width:100%; overflow-x:auto; overflow-y:auto; max-height:78vh; -webkit-overflow-scrolling:touch; overscroll-behavior-x:contain; background:#fff; border:1px solid #dbe4ee; border-radius:16px; }
+        .dr-table-scroll-main::-webkit-scrollbar { width:12px; height:12px; }
+        .dr-table-scroll-main::-webkit-scrollbar-track { background:#eef2f7; border-radius:999px; }
+        .dr-table-scroll-main::-webkit-scrollbar-thumb { background:#64748b; border-radius:999px; border:2px solid #eef2f7; }
+        .dr-table-scroll-main::-webkit-scrollbar-thumb:hover { background:#475569; }
+        .dr-table-scroll-main { scrollbar-color:#64748b #eef2f7; scrollbar-width:auto; }
         .dr-mobile-card { background:#fff; border:1px solid #dbe4ee; border-radius:16px; padding:12px; box-shadow:0 8px 24px rgba(15,23,42,.05); }
         .dr-mobile-card-head { display:flex; justify-content:space-between; align-items:flex-start; gap:10px; padding-bottom:10px; border-bottom:1px solid #eef2f7; }
         .dr-mobile-rej { font-weight:900; color:#0f172a; font-size:15px; }
