@@ -46,6 +46,9 @@ const ExpensesPendingPage = lazy(() => import("./pages/ExpensesPendingPage"));
 const CashActivityLogPage = lazy(() => import("./pages/CashActivityLogPage"));
 const DailyRejectionPage = lazy(() => import("./pages/DailyRejectionPage"));
 
+// ✅ VOUCHER PAGE - ONLY ADDED
+const VoucherEntryPage = lazy(() => import("./pages/VoucherEntryPage"));
+
 import ProtectedRoute from "./components/ProtectedRoute";
 import SessionIdleGuard from "./components/SessionIdleGuard";
 import { loadSession } from "./utils/auth";
@@ -83,7 +86,11 @@ function AppRoutes() {
   }, []);
 
   const routes = [
-    { path: "/", element: <LoginPage /> },
+    {
+      path: "/",
+      element: <LoginPage />,
+    },
+
     {
       path: "/dashboard",
       element: (
@@ -92,6 +99,7 @@ function AppRoutes() {
         </ProtectedRoute>
       ),
     },
+
     {
       path: "/locations",
       element: (
@@ -100,6 +108,7 @@ function AppRoutes() {
         </ProtectedRoute>
       ),
     },
+
     {
       path: "/employees",
       element: (
@@ -108,46 +117,87 @@ function AppRoutes() {
         </ProtectedRoute>
       ),
     },
+
     {
       path: "/companies",
       element: (
-        <ProtectedRoute permission={["companies.view", "companies.create", "companies.edit", "companies.delete"]}>
+        <ProtectedRoute
+          permission={[
+            "companies.view",
+            "companies.create",
+            "companies.edit",
+            "companies.delete",
+          ]}
+        >
           <CompanyManagementPage />
         </ProtectedRoute>
       ),
     },
+
     {
       path: "/company-accounts",
       element: (
-        <ProtectedRoute permission={["companyAccounts.view", "companyAccounts.create", "companyAccounts.edit", "companyAccounts.delete"]}>
+        <ProtectedRoute
+          permission={[
+            "companyAccounts.view",
+            "companyAccounts.create",
+            "companyAccounts.edit",
+            "companyAccounts.delete",
+          ]}
+        >
           <CompanyAccountsPage />
         </ProtectedRoute>
       ),
     },
+
     {
       path: "/buyer-names",
       element: (
-        <ProtectedRoute permission={["buyerNames.view", "buyerNames.create", "buyerNames.edit", "buyerNames.delete"]}>
+        <ProtectedRoute
+          permission={[
+            "buyerNames.view",
+            "buyerNames.create",
+            "buyerNames.edit",
+            "buyerNames.delete",
+          ]}
+        >
           <BuyerNamesManagementPage />
         </ProtectedRoute>
       ),
     },
+
     {
       path: "/consignee-names",
       element: (
-        <ProtectedRoute permission={["consigneeNames.view", "consigneeNames.create", "consigneeNames.edit", "consigneeNames.delete"]}>
+        <ProtectedRoute
+          permission={[
+            "consigneeNames.view",
+            "consigneeNames.create",
+            "consigneeNames.edit",
+            "consigneeNames.delete",
+          ]}
+        >
           <ConsigneeNamesManagementPage />
         </ProtectedRoute>
       ),
     },
+
     {
       path: "/farmers",
       element: (
-        <ProtectedRoute permission={["farmers.view", "farmers.create", "farmers.edit", "farmers.delete"]}>
+        <ProtectedRoute
+          permission={[
+            "farmers.view",
+            "farmers.create",
+            "farmers.edit",
+            "farmers.delete",
+          ]}
+        >
           <FarmerManagementPage />
         </ProtectedRoute>
       ),
     },
+
     {
       path: "/warehouses",
       element: (
@@ -156,6 +206,7 @@ function AppRoutes() {
         </ProtectedRoute>
       ),
     },
+
     {
       path: "/warehouse-rent-booking",
       element: (
@@ -164,56 +215,76 @@ function AppRoutes() {
         </ProtectedRoute>
       ),
     },
+
     {
       path: "/warehouse-trading",
       element: (
-        <ProtectedRoute permission={[
-          "warehouse.trading.view",
-          "warehouse.trading.manage",
-          "warehouse.trading.purchase.view",
-          "warehouse.trading.purchase.create",
-          "warehouse.trading.purchase.edit",
-          "warehouse.trading.purchase.delete",
-          "warehouse.trading.sale.view",
-          "warehouse.trading.sale.create",
-          "warehouse.trading.sale.edit",
-          "warehouse.trading.sale.delete",
-          "warehouse.trading.payment.view",
-          "warehouse.trading.payment.create",
-          "warehouse.trading.payment.edit",
-          "warehouse.trading.payment.delete",
-          "warehouse.trading.receipt.view",
-          "warehouse.trading.receipt.create",
-          "warehouse.trading.receipt.edit",
-          "warehouse.trading.receipt.delete",
-          "warehouse.trading.journal.view",
-          "warehouse.trading.journal.create",
-          "warehouse.trading.journal.edit",
-          "warehouse.trading.journal.delete",
-          "warehouse.trading.report.sale",
-          "warehouse.trading.report.purchase",
-          "warehouse.trading.report.profitLoss",
-        ]}>
+        <ProtectedRoute
+          permission={[
+            "warehouse.trading.view",
+            "warehouse.trading.manage",
+            "warehouse.trading.purchase.view",
+            "warehouse.trading.purchase.create",
+            "warehouse.trading.purchase.edit",
+            "warehouse.trading.purchase.delete",
+            "warehouse.trading.sale.view",
+            "warehouse.trading.sale.create",
+            "warehouse.trading.sale.edit",
+            "warehouse.trading.sale.delete",
+            "warehouse.trading.payment.view",
+            "warehouse.trading.payment.create",
+            "warehouse.trading.payment.edit",
+            "warehouse.trading.payment.delete",
+            "warehouse.trading.receipt.view",
+            "warehouse.trading.receipt.create",
+            "warehouse.trading.receipt.edit",
+            "warehouse.trading.receipt.delete",
+            "warehouse.trading.journal.view",
+            "warehouse.trading.journal.create",
+            "warehouse.trading.journal.edit",
+            "warehouse.trading.journal.delete",
+            "warehouse.trading.report.sale",
+            "warehouse.trading.report.purchase",
+            "warehouse.trading.report.profitLoss",
+          ]}
+        >
           <WarehouseTradingPage />
         </ProtectedRoute>
       ),
     },
+
     {
       path: "/products",
       element: (
-        <ProtectedRoute permission={["products.view", "products.create", "products.edit", "products.delete"]}>
+        <ProtectedRoute
+          permission={[
+            "products.view",
+            "products.create",
+            "products.edit",
+            "products.delete",
+          ]}
+        >
           <ProductsManagementPage />
         </ProtectedRoute>
       ),
     },
+
     {
       path: "/inward",
       element: (
-        <ProtectedRoute permission={["inward.view", "inward.create", "inward.edit", "inward.delete"]}>
+        <ProtectedRoute
+          permission={[
+            "inward.view",
+            "inward.create",
+            "inward.edit",
+            "inward.delete",
+          ]}
+        >
           <InwardPage />
         </ProtectedRoute>
       ),
     },
+
     {
       path: "/inward-report",
       element: (
@@ -222,22 +293,33 @@ function AppRoutes() {
         </ProtectedRoute>
       ),
     },
+
     {
       path: "/daily-rejections",
       element: <DailyRejectionPage />,
     },
+
     {
       path: "/daily-rejection",
       element: <DailyRejectionPage />,
     },
+
     {
       path: "/outward",
       element: (
-        <ProtectedRoute permission={["outward.view", "outward.create", "outward.edit", "outward.delete"]}>
+        <ProtectedRoute
+          permission={[
+            "outward.view",
+            "outward.create",
+            "outward.edit",
+            "outward.delete",
+          ]}
+        >
           <OutwardPage />
         </ProtectedRoute>
       ),
     },
+
     {
       path: "/pending",
       element: (
@@ -246,6 +328,7 @@ function AppRoutes() {
         </ProtectedRoute>
       ),
     },
+
     {
       path: "/erp-report",
       element: (
@@ -254,6 +337,7 @@ function AppRoutes() {
         </ProtectedRoute>
       ),
     },
+
     {
       path: "/party-ledger-report",
       element: (
@@ -262,6 +346,7 @@ function AppRoutes() {
         </ProtectedRoute>
       ),
     },
+
     {
       path: "/party-stock-report",
       element: (
@@ -270,6 +355,7 @@ function AppRoutes() {
         </ProtectedRoute>
       ),
     },
+
     {
       path: "/warehouse-rent-ledger",
       element: (
@@ -278,6 +364,7 @@ function AppRoutes() {
         </ProtectedRoute>
       ),
     },
+
     {
       path: "/warehouse-rent-dashboard",
       element: (
@@ -286,6 +373,7 @@ function AppRoutes() {
         </ProtectedRoute>
       ),
     },
+
     {
       path: "/outward-settlement-report",
       element: (
@@ -294,6 +382,7 @@ function AppRoutes() {
         </ProtectedRoute>
       ),
     },
+
     {
       path: "/outward-entry-details-report",
       element: (
@@ -302,6 +391,7 @@ function AppRoutes() {
         </ProtectedRoute>
       ),
     },
+
     {
       path: "/transport-management",
       element: (
@@ -310,6 +400,7 @@ function AppRoutes() {
         </ProtectedRoute>
       ),
     },
+
     {
       path: "/transport-bilti",
       element: (
@@ -318,6 +409,7 @@ function AppRoutes() {
         </ProtectedRoute>
       ),
     },
+
     {
       path: "/transport-report",
       element: (
@@ -326,14 +418,24 @@ function AppRoutes() {
         </ProtectedRoute>
       ),
     },
+
     {
       path: "/expenses",
       element: (
-        <ProtectedRoute permission={["expense.entry", "expense.view", "expense.create", "expense.edit", "expense.delete"]}>
+        <ProtectedRoute
+          permission={[
+            "expense.entry",
+            "expense.view",
+            "expense.create",
+            "expense.edit",
+            "expense.delete",
+          ]}
+        >
           <ExpenseManagementPage />
         </ProtectedRoute>
       ),
     },
+
     {
       path: "/expense-report",
       element: (
@@ -342,6 +444,7 @@ function AppRoutes() {
         </ProtectedRoute>
       ),
     },
+
     {
       path: "/expense-posted-inward",
       element: (
@@ -350,6 +453,7 @@ function AppRoutes() {
         </ProtectedRoute>
       ),
     },
+
     {
       path: "/palti-lorry",
       element: (
@@ -358,6 +462,7 @@ function AppRoutes() {
         </ProtectedRoute>
       ),
     },
+
     {
       path: "/palti-lorry-adjustment-report",
       element: (
@@ -366,6 +471,7 @@ function AppRoutes() {
         </ProtectedRoute>
       ),
     },
+
     {
       path: "/self-loading",
       element: (
@@ -374,6 +480,7 @@ function AppRoutes() {
         </ProtectedRoute>
       ),
     },
+
     {
       path: "/local-sale",
       element: (
@@ -382,6 +489,7 @@ function AppRoutes() {
         </ProtectedRoute>
       ),
     },
+
     {
       path: "/cash-entries",
       element: (
@@ -390,14 +498,21 @@ function AppRoutes() {
         </ProtectedRoute>
       ),
     },
+
     {
       path: "/expenses-pending",
       element: (
-        <ProtectedRoute permission={["expense.pending", "cash.pending.post"]}>
+        <ProtectedRoute
+          permission={[
+            "expense.pending",
+            "cash.pending.post",
+          ]}
+        >
           <ExpensesPendingPage />
         </ProtectedRoute>
       ),
     },
+
     {
       path: "/cash-book",
       element: (
@@ -406,6 +521,7 @@ function AppRoutes() {
         </ProtectedRoute>
       ),
     },
+
     {
       path: "/parties-cash-book",
       element: (
@@ -414,6 +530,7 @@ function AppRoutes() {
         </ProtectedRoute>
       ),
     },
+
     {
       path: "/employee-cash-book",
       element: (
@@ -422,6 +539,7 @@ function AppRoutes() {
         </ProtectedRoute>
       ),
     },
+
     {
       path: "/cash-activity-logs",
       element: (
@@ -430,13 +548,41 @@ function AppRoutes() {
         </ProtectedRoute>
       ),
     },
+
     {
       path: "/expense-edit/:id",
       element: (
-        <ProtectedRoute permission={["expense.entry", "expense.view", "expense.create", "expense.edit", "expense.delete"]}>
+        <ProtectedRoute
+          permission={[
+            "expense.entry",
+            "expense.view",
+            "expense.create",
+            "expense.edit",
+            "expense.delete",
+          ]}
+        >
           <ExpenseManagementPage />
         </ProtectedRoute>
       ),
+    },
+
+    // =========================================================
+    // ✅ VOUCHER ROUTES - ONLY ADDED
+    // =========================================================
+
+    {
+      path: "/voucher-entry",
+      element: <VoucherEntryPage />,
+    },
+
+    {
+      path: "/voucher",
+      element: <VoucherEntryPage />,
+    },
+
+    {
+      path: "/voucher/:type",
+      element: <VoucherEntryPage />,
     },
   ];
 
@@ -444,7 +590,11 @@ function AppRoutes() {
     <Suspense fallback={<RouteLoadingFallback />}>
       <Routes>
         {routes.map((route) => (
-          <Route key={route.path} path={route.path} element={route.element} />
+          <Route
+            key={route.path}
+            path={route.path}
+            element={route.element}
+          />
         ))}
       </Routes>
     </Suspense>
