@@ -1,4 +1,3 @@
-```jsx
 import React, { useEffect } from "react";
 import axios from "axios";
 
@@ -47,8 +46,7 @@ function App() {
       ] = `Bearer ${token}`;
     }
 
-    // Handle extension messages to prevent
-    // "message channel closed" error
+    // Handle extension messages
     const handleMessage = (request, sender, sendResponse) => {
       sendResponse({ received: true });
       return false;
@@ -192,7 +190,7 @@ function App() {
           element={<DailyRejectionPage />}
         />
 
-        {/* Daily Rejection - alternate route */}
+        {/* Daily Rejection - alternate */}
         <Route
           path="/daily-rejection"
           element={<DailyRejectionPage />}
@@ -235,29 +233,31 @@ function App() {
         />
 
         {/* =====================================================
-            VOUCHER
-            Payment Entry / Receipt Entry /
-            Journal Entry / Transport Payment
+            VOUCHER ENTRY
+            Existing menu opens:
+            /voucher-entry?type=payment
         ====================================================== */}
+
+        <Route
+          path="/voucher-entry"
+          element={<VoucherEntryPage />}
+        />
+
+        {/* Backup/direct voucher route */}
         <Route
           path="/voucher"
-          element={
-            <ProtectedRoute
-              permission={[
-                "expense.entry",
-                "expense.view",
-                "expense.create",
-                "expense.edit",
-              ]}
-            >
-              <VoucherEntryPage />
-            </ProtectedRoute>
-          }
+          element={<VoucherEntryPage />}
         />
+
+        {/* Voucher type route */}
+        <Route
+          path="/voucher/:type"
+          element={<VoucherEntryPage />}
+        />
+
       </Routes>
     </Router>
   );
 }
 
 export default App;
-```
