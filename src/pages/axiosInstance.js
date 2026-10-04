@@ -45,18 +45,14 @@ API.interceptors.response.use(
 
     const config = error?.config;
     const method = String(config?.method || "get").toLowerCase();
-    const retryable = [502, 503, 504].includes(statusCode) || !error?.response;
+    const isReadRequest = method === "get" || method === "head";
+    const isTransient = !error?.response || [502, 503, 504].includes(statusCode);
 
-    // Only retry GET reads. Never retry POST/PUT/PATCH/DELETE because those
-    // requests may create or modify user-entered data.
-    if (
-      config &&
-      method === "get" &&
-      retryable &&
-      !config.__hansariaRetried
-    ) {
-      config.__hansariaRetried = true;
-      await new Promise((resolve) => setTimeout(resolve, 900));
+    // Retry only read requests once. Never retry writes, preventing duplicate
+    // voucher/expense/stock submissions.
+    if (config && isReadRequest && isTransient && !config.__hansariaRetry) {
+      config.__hansariaRetry = true;
+      await new Promise((resolve) => setTimeout(resolve, 1200));
       return API(config);
     }
 
