@@ -28,21 +28,20 @@ axios.interceptors.request.use((config) => {
   return config;
 });
 
-// Recover from a temporary Render cold-start/network failure without ever
-// retrying write requests. This keeps POST/PUT/PATCH/DELETE data entry safe
-// from accidental duplicate submissions.
+// Safe read-only retry: only GET/HEAD requests may retry once after temporary
+// network/5xx failures. Save/update requests are never retried.
 axios.interceptors.response.use(
   (response) => response,
   async (error) => {
     const config = error?.config;
     const status = error?.response?.status;
     const method = String(config?.method || "get").toLowerCase();
-    const isReadRequest = method === "get" || method === "head";
-    const isTransient = !error?.response || [502, 503, 504].includes(status);
+    const retryable = method === "get" || method === "head";
+    const temporaryFailure = !error?.response || [502, 503, 504].includes(status);
 
-    if (config && isReadRequest && isTransient && !config.__hansariaRetry) {
-      config.__hansariaRetry = true;
-      await new Promise((resolve) => setTimeout(resolve, 1200));
+    if (config && retryable && temporaryFailure && !config.__readRetryDone) {
+      config.__readRetryDone = true;
+      await new Promise((resolve) => setTimeout(resolve, 700));
       return axios(config);
     }
 
