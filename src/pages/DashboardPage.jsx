@@ -615,7 +615,7 @@ export default function DashboardPage() {
     },
     {
       title: "Entry",
-      permission: ["inward.view", "inward.create", "inward.edit", "inward.delete", "dailyRejection.view", "dailyRejection.create"],
+      permission: ["inward.view", "inward.create", "inward.edit", "inward.delete", "dailyRejection.view", "dailyRejection.create", "cash.create", "transport.manage"],
       icon: <FaFileAlt />,
       submenu: [
         {
@@ -647,6 +647,11 @@ export default function DashboardPage() {
           label: "Daily Rejection",
           permission: ["dailyRejection.view", "dailyRejection.create", "dailyRejection.assign"],
           action: () => navigate("/daily-rejections"),
+        },
+        {
+          label: "Voucher",
+          permission: ["cash.create", "transport.manage"],
+          action: () => navigate("/voucher-entry?type=payment"),
         },
       ],
     },
