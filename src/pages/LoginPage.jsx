@@ -156,7 +156,7 @@ export default function LoginPage() {
 
               <label style={labelStyle}>
                 Password
-                <div style={passwordFieldWrapStyle}>
+                <div style={passwordFieldWrapStyle} className="login-password-wrap">
                   <input
                     type={showPassword ? "text" : "password"}
                     placeholder="Enter password"
@@ -164,11 +164,11 @@ export default function LoginPage() {
                     onChange={(e) => setPassword(e.target.value)}
                     style={{ ...inputStyle, paddingRight: 90 }}
                     autoComplete="current-password"
-                    inputMode="text"
                     required
                   />
                   <button
                     type="button"
+                    className="login-password-toggle"
                     onClick={() => setShowPassword((prev) => !prev)}
                     style={toggleButtonStyle}
                     aria-label={showPassword ? "Hide password" : "Show password"}
@@ -413,8 +413,6 @@ const passwordFieldWrapStyle = {
   position: "relative",
   display: "flex",
   alignItems: "center",
-  width: "100%",
-  minWidth: 0,
 };
 
 const toggleButtonStyle = {
@@ -427,10 +425,8 @@ const toggleButtonStyle = {
   color: "#0f766e",
   fontWeight: 700,
   cursor: "pointer",
-  padding: "8px 10px",
+  padding: "4px 8px",
   fontSize: 13,
-  zIndex: 2,
-  touchAction: "manipulation",
 };
 
 const errorStyle = {
@@ -495,6 +491,27 @@ const responsiveCss = `
       min-height: 100vh !important;
       justify-content: center !important;
       padding: 22px !important;
+    }
+
+    /* The global mobile.css makes every form button full width.
+       Keep the password eye button small so it cannot cover the input. */
+    .login-password-wrap {
+      display: flex !important;
+      flex-direction: row !important;
+      align-items: center !important;
+      position: relative !important;
+    }
+
+    .login-password-toggle {
+      width: auto !important;
+      min-width: 0 !important;
+      min-height: 0 !important;
+      height: auto !important;
+      flex: 0 0 auto !important;
+      padding: 4px 8px !important;
+      margin: 0 !important;
+      line-height: 1.2 !important;
+      z-index: 3 !important;
     }
   }
 `;
