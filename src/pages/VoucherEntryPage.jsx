@@ -3,11 +3,14 @@ import React, {
   useMemo,
   useState,
 } from "react";
+
 import axios from "axios";
+
 import {
   useNavigate,
   useSearchParams,
 } from "react-router-dom";
+
 import { getApiUrl } from "../utils/api";
 
 const API_BASE = getApiUrl("/api");
@@ -15,6 +18,7 @@ const API_BASE = getApiUrl("/api");
 /* ============================================================
    HELPERS
 ============================================================ */
+
 const today = () => {
   return new Date().toISOString().slice(0, 10);
 };
@@ -56,10 +60,11 @@ const getName = (item) => {
 /* ============================================================
    EMPTY FORM
 ============================================================ */
+
 const emptyForm = () => ({
-  /* System / Auto Fields */
   voucher_no: "",
   auto_voucher: true,
+
   date: today(),
 
   warehouse_id: "",
@@ -71,16 +76,6 @@ const emptyForm = () => ({
   outward_id: "",
   outward_voucher_no: "",
 
-  consignee_id: "",
-  consignee_name: "",
-
-  account_id: "",
-  account_name: "",
-
-  company_account_id: "",
-  company_account_name: "",
-
-  /* Transport Payment */
   transporter_id: "",
   transporter_name: "",
 
@@ -88,12 +83,10 @@ const emptyForm = () => ({
 
   payment_method: "Cash",
 
-  cash_bank_account: "",
-
-  /* Backward compatibility */
   fund_source: "",
 
   advance_amount: 0,
+
   on_account_amount: 0,
 
   narration: "",
@@ -102,6 +95,7 @@ const emptyForm = () => ({
 /* ============================================================
    COMPONENT
 ============================================================ */
+
 function VoucherEntryPage() {
   const navigate = useNavigate();
 
@@ -110,6 +104,7 @@ function VoucherEntryPage() {
   /* ==========================================================
      ACTIVE TAB
   ========================================================== */
+
   const queryType =
     searchParams.get("type") || "payment";
 
@@ -142,25 +137,23 @@ function VoucherEntryPage() {
   /* ==========================================================
      FORM
   ========================================================== */
-  const [form, setForm] = useState(
-    emptyForm()
-  );
+
+  const [form, setForm] = useState(emptyForm());
 
   /* ==========================================================
      DATA
   ========================================================== */
-  const [transporters, setTransporters] =
-    useState([]);
 
-  const [pendingBills, setPendingBills] =
-    useState([]);
+  const [transporters, setTransporters] = useState([]);
 
-  const [adjustments, setAdjustments] =
-    useState({});
+  const [pendingBills, setPendingBills] = useState([]);
+
+  const [adjustments, setAdjustments] = useState({});
 
   /* ==========================================================
      SEARCH / POPUP
   ========================================================== */
+
   const [transportSearch, setTransportSearch] =
     useState("");
 
@@ -170,37 +163,31 @@ function VoucherEntryPage() {
   /* ==========================================================
      STATES
   ========================================================== */
-  const [
-    loadingTransporters,
-    setLoadingTransporters,
-  ] = useState(false);
 
-  const [
-    loadingPending,
-    setLoadingPending,
-  ] = useState(false);
-
-  const [saving, setSaving] =
+  const [loadingTransporters, setLoadingTransporters] =
     useState(false);
 
-  const [message, setMessage] =
-    useState("");
+  const [loadingPending, setLoadingPending] =
+    useState(false);
 
-  const [error, setError] =
-    useState("");
+  const [saving, setSaving] = useState(false);
+
+  const [message, setMessage] = useState("");
+
+  const [error, setError] = useState("");
 
   /* ==========================================================
      QUERY TYPE CHANGE
   ========================================================== */
+
   useEffect(() => {
-    setActiveType(
-      normalizeType(queryType)
-    );
+    setActiveType(normalizeType(queryType));
   }, [queryType]);
 
   /* ==========================================================
      LOAD TRANSPORTERS
   ========================================================== */
+
   useEffect(() => {
     let cancelled = false;
 
@@ -222,9 +209,7 @@ function VoucherEntryPage() {
           [];
 
         setTransporters(
-          Array.isArray(data)
-            ? data
-            : []
+          Array.isArray(data) ? data : []
         );
       } catch (err) {
         if (cancelled) return;
@@ -238,7 +223,7 @@ function VoucherEntryPage() {
 
         setError(
           err?.response?.data?.message ||
-            "Transporter list load failed."
+          "Transporter list load failed."
         );
       } finally {
         if (!cancelled) {
@@ -257,6 +242,7 @@ function VoucherEntryPage() {
   /* ==========================================================
      LOAD PENDING TRANSPORT BILLS
   ========================================================== */
+
   useEffect(() => {
     let cancelled = false;
 
@@ -269,7 +255,6 @@ function VoucherEntryPage() {
 
       try {
         setLoadingPending(true);
-        setError("");
 
         const response = await axios.get(
           `${API_BASE}/transport-payments/pending`,
@@ -290,9 +275,7 @@ function VoucherEntryPage() {
           [];
 
         const bills =
-          Array.isArray(data)
-            ? data
-            : [];
+          Array.isArray(data) ? data : [];
 
         setPendingBills(bills);
 
@@ -328,7 +311,7 @@ function VoucherEntryPage() {
 
         setError(
           err?.response?.data?.message ||
-            "Pending transport bills load failed."
+          "Pending transport bills load failed."
         );
       } finally {
         if (!cancelled) {
@@ -347,6 +330,7 @@ function VoucherEntryPage() {
   /* ==========================================================
      TRANSPORTER FILTER
   ========================================================== */
+
   const filteredTransporters = useMemo(() => {
     const search =
       String(transportSearch || "")
@@ -358,8 +342,7 @@ function VoucherEntryPage() {
     }
 
     return transporters.filter((item) => {
-      const name =
-        getName(item).toLowerCase();
+      const name = getName(item).toLowerCase();
 
       const id = String(
         getId(item)
@@ -378,10 +361,9 @@ function VoucherEntryPage() {
   /* ==========================================================
      TOTAL ADJUSTED
   ========================================================== */
+
   const adjustedTotal = useMemo(() => {
-    return Object.values(
-      adjustments
-    ).reduce(
+    return Object.values(adjustments).reduce(
       (total, value) =>
         total + numberValue(value),
       0
@@ -391,6 +373,7 @@ function VoucherEntryPage() {
   /* ==========================================================
      ADVANCE
   ========================================================== */
+
   const advanceAmount = numberValue(
     form.advance_amount
   );
@@ -398,6 +381,7 @@ function VoucherEntryPage() {
   /* ==========================================================
      ON ACCOUNT
   ========================================================== */
+
   const onAccountAmount = numberValue(
     form.on_account_amount
   );
@@ -405,6 +389,7 @@ function VoucherEntryPage() {
   /* ==========================================================
      TOTAL
   ========================================================== */
+
   const enteredAmount = numberValue(
     form.amount
   );
@@ -412,6 +397,7 @@ function VoucherEntryPage() {
   /* ==========================================================
      BREAKUP
   ========================================================== */
+
   const breakupTotal =
     adjustedTotal +
     advanceAmount +
@@ -423,10 +409,8 @@ function VoucherEntryPage() {
   /* ==========================================================
      FORM UPDATE
   ========================================================== */
-  const updateForm = (
-    field,
-    value
-  ) => {
+
+  const updateForm = (field, value) => {
     setForm((previous) => ({
       ...previous,
       [field]: value,
@@ -439,16 +423,10 @@ function VoucherEntryPage() {
   /* ==========================================================
      SELECT TRANSPORTER
   ========================================================== */
-  const selectTransporter = (
-    transporter
-  ) => {
-    const id = getId(
-      transporter
-    );
 
-    const name = getName(
-      transporter
-    );
+  const selectTransporter = (transporter) => {
+    const id = getId(transporter);
+    const name = getName(transporter);
 
     updateForm(
       "transporter_id",
@@ -467,6 +445,7 @@ function VoucherEntryPage() {
   /* ==========================================================
      ADJUSTMENT
   ========================================================== */
+
   const setAdjustment = (
     bill,
     value
@@ -482,10 +461,10 @@ function VoucherEntryPage() {
     const pending =
       numberValue(
         bill.pending_amount ??
-          bill.pending ??
-          bill.amount ??
-          bill.balance ??
-          0
+        bill.pending ??
+        bill.amount ??
+        bill.balance ??
+        0
       );
 
     let nextValue =
@@ -509,10 +488,7 @@ function VoucherEntryPage() {
       })
     );
 
-    /* ------------------------------------------------------
-       AUTO-FILL RELATED INFORMATION
-    ------------------------------------------------------ */
-
+    /* Auto-fill related voucher information */
     const warehouseId =
       bill.warehouse_id ||
       bill.warehouseId ||
@@ -531,7 +507,6 @@ function VoucherEntryPage() {
     const saleVoucherNo =
       bill.sale_voucher_no ||
       bill.sale_voucher ||
-      bill.sale_no ||
       bill.voucher_no ||
       "";
 
@@ -543,51 +518,6 @@ function VoucherEntryPage() {
     const outwardVoucherNo =
       bill.outward_voucher_no ||
       bill.outward_voucher ||
-      bill.outward_no ||
-      bill.outward_entry_no ||
-      "";
-
-    const consigneeId =
-      bill.consignee_id ||
-      bill.outward_consignee_id ||
-      bill.sale_consignee_id ||
-      "";
-
-    const consigneeName =
-      bill.consignee_name ||
-      bill.outward_consignee_name ||
-      bill.sale_consignee_name ||
-      bill.consignee ||
-      (bill.consignee &&
-        bill.consignee.name) ||
-      "";
-
-    const accountId =
-      bill.company_account_id ||
-      bill.account_id ||
-      bill.outward_account_id ||
-      bill.sale_account_id ||
-      "";
-
-    const accountName =
-      bill.account_name ||
-      bill.company_account_name ||
-      bill.outward_account_name ||
-      bill.sale_account_name ||
-      bill.account ||
-      (bill.company_account &&
-        bill.company_account.name) ||
-      "";
-
-    const companyAccountId =
-      bill.company_account_id ||
-      bill.account_id ||
-      "";
-
-    const companyAccountName =
-      bill.company_account_name ||
-      bill.account_name ||
-      bill.account ||
       "";
 
     setForm((previous) => ({
@@ -616,36 +546,13 @@ function VoucherEntryPage() {
       outward_voucher_no:
         previous.outward_voucher_no ||
         outwardVoucherNo,
-
-      consignee_id:
-        previous.consignee_id ||
-        consigneeId,
-
-      consignee_name:
-        previous.consignee_name ||
-        consigneeName,
-
-      account_id:
-        previous.account_id ||
-        accountId,
-
-      account_name:
-        previous.account_name ||
-        accountName,
-
-      company_account_id:
-        previous.company_account_id ||
-        companyAccountId,
-
-      company_account_name:
-        previous.company_account_name ||
-        companyAccountName,
     }));
   };
 
   /* ==========================================================
      RESET
   ========================================================== */
+
   const resetForm = () => {
     setForm(emptyForm());
     setPendingBills([]);
@@ -658,9 +565,8 @@ function VoucherEntryPage() {
   /* ==========================================================
      TAB CHANGE
   ========================================================== */
-  const changeType = (
-    type
-  ) => {
+
+  const changeType = (type) => {
     setActiveType(type);
 
     setMessage("");
@@ -695,68 +601,60 @@ function VoucherEntryPage() {
   /* ==========================================================
      VALIDATE TRANSPORT PAYMENT
   ========================================================== */
-  const validateTransportPayment =
-    () => {
-      if (!form.date) {
-        return "Date is required.";
-      }
 
-      if (!form.transporter_id) {
-        return "Transport Name is required.";
-      }
+  const validateTransportPayment = () => {
+    if (!form.date) {
+      return "Date is required.";
+    }
 
-      if (enteredAmount <= 0) {
-        return "Amount must be greater than zero.";
-      }
+    if (!form.transporter_id) {
+      return "Transport Name is required.";
+    }
 
-      if (
-        adjustedTotal >
-        enteredAmount
-      ) {
-        return "Bill adjustment cannot be greater than total amount.";
-      }
+    if (enteredAmount <= 0) {
+      return "Amount must be greater than zero.";
+    }
 
-      if (
-        advanceAmount < 0 ||
-        onAccountAmount < 0
-      ) {
-        return "Advance / On Account amount cannot be negative.";
-      }
+    if (
+      adjustedTotal >
+      enteredAmount
+    ) {
+      return "Bill adjustment cannot be greater than total amount.";
+    }
 
-      const expected =
-        adjustedTotal +
-        advanceAmount +
-        onAccountAmount;
+    if (
+      advanceAmount < 0 ||
+      onAccountAmount < 0
+    ) {
+      return "Advance / On Account amount cannot be negative.";
+    }
 
-      if (
-        Math.abs(
-          expected -
-            enteredAmount
-        ) > 0.01
-      ) {
-        return (
-          `Amount breakup does not match total amount. ` +
-          `Total: ${money(
-            enteredAmount
-          )}, ` +
-          `Adjusted: ${money(
-            adjustedTotal
-          )}, ` +
-          `Advance: ${money(
-            advanceAmount
-          )}, ` +
-          `On Account: ${money(
-            onAccountAmount
-          )}.`
-        );
-      }
+    const expected =
+      adjustedTotal +
+      advanceAmount +
+      onAccountAmount;
 
-      return "";
-    };
+    if (
+      Math.abs(
+        expected - enteredAmount
+      ) > 0.01
+    ) {
+      return (
+        `Amount breakup does not match total amount. ` +
+        `Total: ${money(enteredAmount)}, ` +
+        `Adjusted: ${money(adjustedTotal)}, ` +
+        `Advance: ${money(advanceAmount)}, ` +
+        `On Account: ${money(onAccountAmount)}.`
+      );
+    }
+
+    return "";
+  };
 
   /* ==========================================================
      SAVE TRANSPORT PAYMENT
   ========================================================== */
+
   const saveTransportPayment =
     async () => {
       setMessage("");
@@ -787,10 +685,7 @@ function VoucherEntryPage() {
                   adjustments[id]
                 );
 
-              if (
-                !id ||
-                qty <= 0
-              ) {
+              if (!id || qty <= 0) {
                 return null;
               }
 
@@ -803,67 +698,9 @@ function VoucherEntryPage() {
 
                 adjustment_amount: qty,
 
-                date:
-                  bill.date ||
-                  bill.payment_date ||
-                  null,
-
-                voucher_no:
-                  bill.voucher_no ||
-                  bill.transport_voucher_no ||
-                  null,
-
-                consignee_id:
-                  bill.consignee_id ||
-                  bill.outward_consignee_id ||
-                  bill.sale_consignee_id ||
-                  null,
-
-                consignee_name:
-                  bill.consignee_name ||
-                  bill.outward_consignee_name ||
-                  bill.sale_consignee_name ||
-                  bill.consignee ||
-                  (bill.consignee &&
-                    bill.consignee.name) ||
-                  null,
-
-                account_id:
-                  bill.company_account_id ||
-                  bill.account_id ||
-                  bill.outward_account_id ||
-                  bill.sale_account_id ||
-                  null,
-
-                account_name:
-                  bill.account_name ||
-                  bill.company_account_name ||
-                  bill.outward_account_name ||
-                  bill.sale_account_name ||
-                  bill.account ||
-                  (bill.company_account &&
-                    bill.company_account.name) ||
-                  null,
-
-                company_account_id:
-                  bill.company_account_id ||
-                  bill.account_id ||
-                  null,
-
-                company_account_name:
-                  bill.company_account_name ||
-                  bill.account_name ||
-                  bill.account ||
-                  null,
-
-                warehouse_id:
-                  bill.warehouse_id ||
-                  bill.warehouseId ||
-                  null,
-
-                warehouse_name:
-                  bill.warehouse_name ||
-                  bill.warehouse ||
+                outward_id:
+                  bill.outward_id ||
+                  bill.outwardId ||
                   null,
 
                 sale_id:
@@ -871,154 +708,66 @@ function VoucherEntryPage() {
                   bill.saleId ||
                   null,
 
+                warehouse_id:
+                  bill.warehouse_id ||
+                  bill.warehouseId ||
+                  null,
+
                 sale_voucher_no:
                   bill.sale_voucher_no ||
                   bill.sale_voucher ||
-                  bill.sale_no ||
                   bill.voucher_no ||
-                  null,
-
-                outward_id:
-                  bill.outward_id ||
-                  bill.outwardId ||
                   null,
 
                 outward_voucher_no:
                   bill.outward_voucher_no ||
                   bill.outward_voucher ||
-                  bill.outward_no ||
-                  bill.outward_entry_no ||
                   null,
-
-                pending_amount:
-                  numberValue(
-                    bill.pending_amount ??
-                      bill.pending ??
-                      bill.amount ??
-                      bill.balance ??
-                      0
-                  ),
-
-                bill_amount:
-                  numberValue(
-                    bill.amount ||
-                      bill.bill_amount ||
-                      bill.total_amount ||
-                      0
-                  ),
-
-                adjusted_amount:
-                  qty,
               };
             })
             .filter(Boolean);
 
         const payload = {
-          /* ------------------------------------------------
-             SYSTEM FIELDS
-          ------------------------------------------------ */
           voucher_no:
-            form.voucher_no ||
-            null,
+            form.voucher_no || null,
 
           auto_voucher:
-            Boolean(
-              form.auto_voucher
-            ),
+            Boolean(form.auto_voucher),
 
-          date:
-            form.date,
+          date: form.date,
 
-          /* ------------------------------------------------
-             WAREHOUSE
-          ------------------------------------------------ */
           warehouse_id:
-            form.warehouse_id ||
-            null,
+            form.warehouse_id || null,
 
           warehouse_name:
-            form.warehouse_name ||
-            null,
+            form.warehouse_name || null,
 
-          /* ------------------------------------------------
-             SALE
-          ------------------------------------------------ */
           sale_id:
-            form.sale_id ||
-            null,
+            form.sale_id || null,
 
           sale_voucher_no:
-            form.sale_voucher_no ||
-            null,
+            form.sale_voucher_no || null,
 
-          /* ------------------------------------------------
-             OUTWARD
-          ------------------------------------------------ */
           outward_id:
-            form.outward_id ||
-            null,
+            form.outward_id || null,
 
           outward_voucher_no:
-            form.outward_voucher_no ||
-            null,
+            form.outward_voucher_no || null,
 
-          /* ------------------------------------------------
-             CONSIGNEE
-          ------------------------------------------------ */
-          consignee_id:
-            form.consignee_id ||
-            null,
-
-          consignee_name:
-            form.consignee_name ||
-            null,
-
-          /* ------------------------------------------------
-             ACCOUNT
-          ------------------------------------------------ */
-          account_id:
-            form.account_id ||
-            null,
-
-          account_name:
-            form.account_name ||
-            null,
-
-          company_account_id:
-            form.company_account_id ||
-            null,
-
-          company_account_name:
-            form.company_account_name ||
-            null,
-
-          /* ------------------------------------------------
-             TRANSPORT
-          ------------------------------------------------ */
           transporter_id:
             form.transporter_id,
 
           transporter_name:
             form.transporter_name,
 
-          /* ------------------------------------------------
-             AMOUNT
-          ------------------------------------------------ */
           amount:
             enteredAmount,
 
           payment_method:
             form.payment_method,
 
-          cash_bank_account:
-            form.cash_bank_account ||
-            "",
-
-          /* Backward compatibility */
           fund_source:
-            form.fund_source ||
-            form.cash_bank_account ||
-            null,
+            form.fund_source || null,
 
           advance_amount:
             advanceAmount,
@@ -1027,19 +776,12 @@ function VoucherEntryPage() {
             onAccountAmount,
 
           narration:
-            form.narration ||
-            "",
+            form.narration || "",
 
-          /* ------------------------------------------------
-             ADJUSTMENTS
-          ------------------------------------------------ */
           adjustments:
             billAdjustments,
 
           bill_adjustments:
-            billAdjustments,
-
-          selected_adjustments:
             billAdjustments,
         };
 
@@ -1056,7 +798,7 @@ function VoucherEntryPage() {
 
         setMessage(
           response?.data?.message ||
-            "Transport payment saved successfully."
+          "Transport payment saved successfully."
         );
 
         /* Reset after successful save */
@@ -1090,9 +832,7 @@ function VoucherEntryPage() {
           }
         }
 
-        setError(
-          errorMessage
-        );
+        setError(errorMessage);
       } finally {
         setSaving(false);
       }
@@ -1101,6 +841,7 @@ function VoucherEntryPage() {
   /* ==========================================================
      OTHER VOUCHER BUTTONS
   ========================================================== */
+
   const openCashEntry = () => {
     navigate("/cash-entries");
   };
@@ -1108,6 +849,7 @@ function VoucherEntryPage() {
   /* ==========================================================
      RENDER
   ========================================================== */
+
   return (
     <div
       style={{
@@ -1117,9 +859,11 @@ function VoucherEntryPage() {
         boxSizing: "border-box",
       }}
     >
+
       {/* ======================================================
           HEADER
       ====================================================== */}
+
       <div
         style={{
           background: "#ffffff",
@@ -1133,8 +877,7 @@ function VoucherEntryPage() {
         <div
           style={{
             display: "flex",
-            justifyContent:
-              "space-between",
+            justifyContent: "space-between",
             alignItems: "center",
             gap: "12px",
             flexWrap: "wrap",
@@ -1170,8 +913,7 @@ function VoucherEntryPage() {
               navigate("/dashboard")
             }
             style={{
-              border:
-                "1px solid #d7dce5",
+              border: "1px solid #d7dce5",
               background: "#fff",
               borderRadius: "8px",
               padding: "9px 15px",
@@ -1187,6 +929,7 @@ function VoucherEntryPage() {
       {/* ======================================================
           TABS
       ====================================================== */}
+
       <div
         style={{
           display: "flex",
@@ -1300,6 +1043,7 @@ function VoucherEntryPage() {
       {/* ======================================================
           MESSAGE
       ====================================================== */}
+
       {message && (
         <div
           style={{
@@ -1338,6 +1082,7 @@ function VoucherEntryPage() {
       {/* ======================================================
           PAYMENT / RECEIPT / JOURNAL
       ====================================================== */}
+
       {activeType !== "transport" && (
         <div
           style={{
@@ -1379,7 +1124,8 @@ function VoucherEntryPage() {
               color: "#fff",
               border: "none",
               borderRadius: "8px",
-              padding: "11px 18px",
+              padding:
+                "11px 18px",
               cursor: "pointer",
               fontWeight: 700,
             }}
@@ -1392,11 +1138,13 @@ function VoucherEntryPage() {
       {/* ======================================================
           TRANSPORT PAYMENT
       ====================================================== */}
+
       {activeType === "transport" && (
         <>
           {/* --------------------------------------------------
               MAIN FORM
           -------------------------------------------------- */}
+
           <div
             style={{
               background: "#fff",
@@ -1425,6 +1173,86 @@ function VoucherEntryPage() {
                 gap: "14px",
               }}
             >
+
+              {/* Voucher No */}
+              <div>
+                <label
+                  style={{
+                    display: "block",
+                    fontWeight: 600,
+                    marginBottom: "6px",
+                  }}
+                >
+                  Voucher No
+                </label>
+
+                <div
+                  style={{
+                    display: "flex",
+                    gap: "7px",
+                  }}
+                >
+                  <input
+                    value={
+                      form.voucher_no
+                    }
+                    disabled={
+                      form.auto_voucher
+                    }
+                    onChange={(e) =>
+                      updateForm(
+                        "voucher_no",
+                        e.target.value
+                      )
+                    }
+                    placeholder="Manual Voucher No"
+                    style={inputStyle}
+                  />
+
+                  <button
+                    type="button"
+                    onClick={() =>
+                      updateForm(
+                        "auto_voucher",
+                        !form.auto_voucher
+                      )
+                    }
+                    style={{
+                      ...smallButtonStyle,
+                      background:
+                        form.auto_voucher
+                          ? "#16a34a"
+                          : "#64748b",
+                    }}
+                  >
+                    {form.auto_voucher
+                      ? "Auto"
+                      : "Manual"}
+                  </button>
+                </div>
+              </div>
+
+              {/* Date */}
+              <div>
+                <label
+                  style={labelStyle}
+                >
+                  Date
+                </label>
+
+                <input
+                  type="date"
+                  value={form.date}
+                  onChange={(e) =>
+                    updateForm(
+                      "date",
+                      e.target.value
+                    )
+                  }
+                  style={inputStyle}
+                />
+              </div>
+
               {/* Transporter */}
               <div>
                 <label
@@ -1476,6 +1304,75 @@ function VoucherEntryPage() {
                 />
               </div>
 
+              {/* Warehouse */}
+              <div>
+                <label
+                  style={labelStyle}
+                >
+                  Warehouse
+                </label>
+
+                <input
+                  value={
+                    form.warehouse_name
+                  }
+                  onChange={(e) =>
+                    updateForm(
+                      "warehouse_name",
+                      e.target.value
+                    )
+                  }
+                  placeholder="Warehouse"
+                  style={inputStyle}
+                />
+              </div>
+
+              {/* Sale Voucher */}
+              <div>
+                <label
+                  style={labelStyle}
+                >
+                  Sale Voucher
+                </label>
+
+                <input
+                  value={
+                    form.sale_voucher_no
+                  }
+                  onChange={(e) =>
+                    updateForm(
+                      "sale_voucher_no",
+                      e.target.value
+                    )
+                  }
+                  placeholder="Sale Voucher No"
+                  style={inputStyle}
+                />
+              </div>
+
+              {/* Outward Voucher */}
+              <div>
+                <label
+                  style={labelStyle}
+                >
+                  Outward Voucher
+                </label>
+
+                <input
+                  value={
+                    form.outward_voucher_no
+                  }
+                  onChange={(e) =>
+                    updateForm(
+                      "outward_voucher_no",
+                      e.target.value
+                    )
+                  }
+                  placeholder="Outward Voucher No"
+                  style={inputStyle}
+                />
+              </div>
+
               {/* Payment Mode */}
               <div>
                 <label
@@ -1514,107 +1411,36 @@ function VoucherEntryPage() {
                 </select>
               </div>
 
-              {/* Cash / Bank Account */}
+              {/* Fund Source */}
               <div>
                 <label
                   style={labelStyle}
                 >
-                  Cash/Bank Account
+                  Fund Source
                 </label>
 
                 <input
                   value={
-                    form.cash_bank_account
+                    form.fund_source
                   }
                   onChange={(e) =>
                     updateForm(
-                      "cash_bank_account",
+                      "fund_source",
                       e.target.value
                     )
                   }
-                  placeholder="Cash / Bank Account"
+                  placeholder="Fund Source"
                   style={inputStyle}
                 />
               </div>
 
-              {/* Advance */}
-              <div>
-                <label
-                  style={labelStyle}
-                >
-                  Advance
-                </label>
-
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={
-                    form.advance_amount
-                  }
-                  onChange={(e) =>
-                    updateForm(
-                      "advance_amount",
-                      e.target.value
-                    )
-                  }
-                  style={inputStyle}
-                />
-              </div>
-
-              {/* On Account */}
-              <div>
-                <label
-                  style={labelStyle}
-                >
-                  On Account
-                </label>
-
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={
-                    form.on_account_amount
-                  }
-                  onChange={(e) =>
-                    updateForm(
-                      "on_account_amount",
-                      e.target.value
-                    )
-                  }
-                  style={inputStyle}
-                />
-              </div>
-
-              {/* Narration */}
-              <div>
-                <label
-                  style={labelStyle}
-                >
-                  Narration
-                </label>
-
-                <input
-                  value={
-                    form.narration
-                  }
-                  onChange={(e) =>
-                    updateForm(
-                      "narration",
-                      e.target.value
-                    )
-                  }
-                  placeholder="Narration"
-                  style={inputStyle}
-                />
-              </div>
             </div>
           </div>
 
           {/* --------------------------------------------------
               PENDING BILLS
           -------------------------------------------------- */}
+
           <div
             style={{
               background: "#fff",
@@ -1671,9 +1497,7 @@ function VoucherEntryPage() {
                 }}
               >
                 Adjusted: ₹{" "}
-                {money(
-                  adjustedTotal
-                )}
+                {money(adjustedTotal)}
               </div>
             </div>
 
@@ -1698,8 +1522,7 @@ function VoucherEntryPage() {
                 <div
                   style={{
                     padding: "25px",
-                    textAlign:
-                      "center",
+                    textAlign: "center",
                     color: "#64748b",
                   }}
                 >
@@ -1714,8 +1537,7 @@ function VoucherEntryPage() {
                 <div
                   style={{
                     padding: "25px",
-                    textAlign:
-                      "center",
+                    textAlign: "center",
                     color: "#64748b",
                     background:
                       "#f8fafc",
@@ -1739,7 +1561,7 @@ function VoucherEntryPage() {
                     width: "100%",
                     borderCollapse:
                       "collapse",
-                    minWidth: "1100px",
+                    minWidth: "850px",
                   }}
                 >
                   <thead>
@@ -1750,43 +1572,41 @@ function VoucherEntryPage() {
                       }}
                     >
                       <th
-                        style={thStyle}
+                        style={
+                          thStyle
+                        }
                       >
                         Date
                       </th>
 
                       <th
-                        style={thStyle}
+                        style={
+                          thStyle
+                        }
                       >
-                        Voucher No
+                        Voucher
                       </th>
 
                       <th
-                        style={thStyle}
-                      >
-                        Consignee
-                      </th>
-
-                      <th
-                        style={thStyle}
-                      >
-                        Account
-                      </th>
-
-                      <th
-                        style={thStyle}
+                        style={
+                          thStyle
+                        }
                       >
                         Warehouse
                       </th>
 
                       <th
-                        style={thStyle}
+                        style={
+                          thStyle
+                        }
                       >
                         Sale
                       </th>
 
                       <th
-                        style={thStyle}
+                        style={
+                          thStyle
+                        }
                       >
                         Outward
                       </th>
@@ -1814,10 +1634,7 @@ function VoucherEntryPage() {
 
                   <tbody>
                     {pendingBills.map(
-                      (
-                        bill,
-                        index
-                      ) => {
+                      (bill, index) => {
                         const id =
                           bill.id ||
                           bill._id ||
@@ -1828,36 +1645,16 @@ function VoucherEntryPage() {
                         const pending =
                           numberValue(
                             bill.pending_amount ??
-                              bill.pending ??
-                              bill.balance ??
-                              bill.amount ??
-                              0
+                            bill.pending ??
+                            bill.balance ??
+                            bill.amount ??
+                            0
                           );
-
-                        const consigneeName =
-                          bill.consignee_name ||
-                          bill.outward_consignee_name ||
-                          bill.sale_consignee_name ||
-                          bill.consignee ||
-                          (bill.consignee &&
-                            bill.consignee.name) ||
-                          "-";
-
-                        const accountName =
-                          bill.account_name ||
-                          bill.company_account_name ||
-                          bill.outward_account_name ||
-                          bill.sale_account_name ||
-                          bill.account ||
-                          (bill.company_account &&
-                            bill.company_account.name) ||
-                          "-";
 
                         return (
                           <tr
                             key={id}
                           >
-                            {/* Date */}
                             <td
                               style={
                                 tdStyle
@@ -1865,12 +1662,9 @@ function VoucherEntryPage() {
                             >
                               {bill.date ||
                                 bill.payment_date ||
-                                bill.dispatch_date ||
-                                bill.outward_date ||
                                 "-"}
                             </td>
 
-                            {/* Voucher No */}
                             <td
                               style={
                                 tdStyle
@@ -1878,29 +1672,9 @@ function VoucherEntryPage() {
                             >
                               {bill.voucher_no ||
                                 bill.transport_voucher_no ||
-                                bill.bilti_no ||
                                 "-"}
                             </td>
 
-                            {/* Consignee */}
-                            <td
-                              style={
-                                tdStyle
-                              }
-                            >
-                              {consigneeName}
-                            </td>
-
-                            {/* Account */}
-                            <td
-                              style={
-                                tdStyle
-                              }
-                            >
-                              {accountName}
-                            </td>
-
-                            {/* Warehouse */}
                             <td
                               style={
                                 tdStyle
@@ -1911,7 +1685,6 @@ function VoucherEntryPage() {
                                 "-"}
                             </td>
 
-                            {/* Sale */}
                             <td
                               style={
                                 tdStyle
@@ -1919,11 +1692,9 @@ function VoucherEntryPage() {
                             >
                               {bill.sale_voucher_no ||
                                 bill.sale_voucher ||
-                                bill.sale_no ||
                                 "-"}
                             </td>
 
-                            {/* Outward */}
                             <td
                               style={
                                 tdStyle
@@ -1931,12 +1702,9 @@ function VoucherEntryPage() {
                             >
                               {bill.outward_voucher_no ||
                                 bill.outward_voucher ||
-                                bill.outward_no ||
-                                bill.outward_entry_no ||
                                 "-"}
                             </td>
 
-                            {/* Pending */}
                             <td
                               style={{
                                 ...tdStyle,
@@ -1952,7 +1720,6 @@ function VoucherEntryPage() {
                               )}
                             </td>
 
-                            {/* Adjustment */}
                             <td
                               style={
                                 tdStyle
@@ -1969,14 +1736,16 @@ function VoucherEntryPage() {
                                 value={
                                   adjustments[
                                     id
-                                  ] ?? ""
+                                  ] ??
+                                  ""
                                 }
                                 onChange={(
                                   e
                                 ) =>
                                   setAdjustment(
                                     bill,
-                                    e.target
+                                    e
+                                      .target
                                       .value
                                   )
                                 }
@@ -2000,6 +1769,7 @@ function VoucherEntryPage() {
           {/* --------------------------------------------------
               ADVANCE / ON ACCOUNT
           -------------------------------------------------- */}
+
           <div
             style={{
               background: "#fff",
@@ -2110,45 +1880,35 @@ function VoucherEntryPage() {
             >
               <SummaryBox
                 title="Total Amount"
-                value={
-                  enteredAmount
-                }
+                value={enteredAmount}
                 background="#eff6ff"
                 color="#1d4ed8"
               />
 
               <SummaryBox
                 title="Bill Adjustment"
-                value={
-                  adjustedTotal
-                }
+                value={adjustedTotal}
                 background="#fff7ed"
                 color="#c2410c"
               />
 
               <SummaryBox
                 title="Advance"
-                value={
-                  advanceAmount
-                }
+                value={advanceAmount}
                 background="#f0fdf4"
                 color="#15803d"
               />
 
               <SummaryBox
                 title="On Account"
-                value={
-                  onAccountAmount
-                }
+                value={onAccountAmount}
                 background="#faf5ff"
                 color="#7e22ce"
               />
 
               <SummaryBox
                 title="Difference"
-                value={
-                  breakupDifference
-                }
+                value={breakupDifference}
                 background={
                   Math.abs(
                     breakupDifference
@@ -2170,6 +1930,7 @@ function VoucherEntryPage() {
           {/* --------------------------------------------------
               BUTTONS
           -------------------------------------------------- */}
+
           <div
             style={{
               display: "flex",
@@ -2181,9 +1942,7 @@ function VoucherEntryPage() {
           >
             <button
               type="button"
-              onClick={
-                resetForm
-              }
+              onClick={resetForm}
               disabled={saving}
               style={{
                 border:
@@ -2234,6 +1993,7 @@ function VoucherEntryPage() {
       {/* ======================================================
           TRANSPORTER POPUP
       ====================================================== */}
+
       {transportPopup && (
         <div
           style={{
@@ -2243,8 +2003,7 @@ function VoucherEntryPage() {
               "rgba(15,23,42,0.45)",
             display: "flex",
             alignItems: "center",
-            justifyContent:
-              "center",
+            justifyContent: "center",
             padding: "20px",
             zIndex: 9999,
           }}
@@ -2253,16 +2012,13 @@ function VoucherEntryPage() {
               e.target ===
               e.currentTarget
             ) {
-              setTransportPopup(
-                false
-              );
+              setTransportPopup(false);
             }
           }}
         >
           <div
             style={{
-              width:
-                "min(700px, 100%)",
+              width: "min(700px, 100%)",
               maxHeight: "80vh",
               background: "#fff",
               borderRadius: "14px",
@@ -2273,15 +2029,13 @@ function VoucherEntryPage() {
           >
             <div
               style={{
-                padding:
-                  "16px 18px",
+                padding: "16px 18px",
                 borderBottom:
                   "1px solid #e2e8f0",
                 display: "flex",
                 justifyContent:
                   "space-between",
-                alignItems:
-                  "center",
+                alignItems: "center",
               }}
             >
               <h3
@@ -2295,20 +2049,15 @@ function VoucherEntryPage() {
               <button
                 type="button"
                 onClick={() =>
-                  setTransportPopup(
-                    false
-                  )
+                  setTransportPopup(false)
                 }
                 style={{
                   border: "none",
-                  background:
-                    "#f1f5f9",
+                  background: "#f1f5f9",
                   width: "34px",
                   height: "34px",
-                  borderRadius:
-                    "50%",
-                  cursor:
-                    "pointer",
+                  borderRadius: "50%",
+                  cursor: "pointer",
                   fontSize: "18px",
                 }}
               >
@@ -2346,18 +2095,15 @@ function VoucherEntryPage() {
             <div
               style={{
                 maxHeight: "55vh",
-                overflowY:
-                  "auto",
+                overflowY: "auto",
               }}
             >
               {loadingTransporters && (
                 <div
                   style={{
                     padding: "25px",
-                    textAlign:
-                      "center",
-                    color:
-                      "#64748b",
+                    textAlign: "center",
+                    color: "#64748b",
                   }}
                 >
                   Loading transporters...
@@ -2372,8 +2118,7 @@ function VoucherEntryPage() {
                       padding: "25px",
                       textAlign:
                         "center",
-                      color:
-                        "#64748b",
+                      color: "#64748b",
                     }}
                   >
                     No transport name
@@ -2383,10 +2128,7 @@ function VoucherEntryPage() {
 
               {!loadingTransporters &&
                 filteredTransporters.map(
-                  (
-                    item,
-                    index
-                  ) => {
+                  (item, index) => {
                     const id =
                       getId(item) ||
                       index;
@@ -2405,10 +2147,8 @@ function VoucherEntryPage() {
                           )
                         }
                         style={{
-                          width:
-                            "100%",
-                          border:
-                            "none",
+                          width: "100%",
+                          border: "none",
                           borderBottom:
                             "1px solid #f1f5f9",
                           background:
@@ -2478,6 +2218,7 @@ function VoucherEntryPage() {
 /* ============================================================
    SMALL COMPONENTS
 ============================================================ */
+
 function SummaryBox({
   title,
   value,
@@ -2500,16 +2241,16 @@ function SummaryBox({
         }}
       >
         {title}
+      </div>
 
-        <div
-          style={{
-            fontSize: "18px",
-            fontWeight: 800,
-            color,
-          }}
-        >
-          ₹ {money(value)}
-        </div>
+      <div
+        style={{
+          fontSize: "18px",
+          fontWeight: 800,
+          color,
+        }}
+      >
+        ₹ {money(value)}
       </div>
     </div>
   );
@@ -2518,6 +2259,7 @@ function SummaryBox({
 /* ============================================================
    STYLES
 ============================================================ */
+
 const labelStyle = {
   display: "block",
   fontWeight: 600,
@@ -2534,6 +2276,15 @@ const inputStyle = {
   fontSize: "14px",
   outline: "none",
   background: "#fff",
+};
+
+const smallButtonStyle = {
+  border: "none",
+  color: "#fff",
+  borderRadius: "7px",
+  padding: "0 11px",
+  cursor: "pointer",
+  fontWeight: 700,
 };
 
 const thStyle = {
