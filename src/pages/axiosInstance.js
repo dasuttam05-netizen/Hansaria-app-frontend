@@ -19,7 +19,7 @@ API.interceptors.request.use(config => {
 // Response interceptor for security handling
 API.interceptors.response.use(
   response => response,
-  error => {
+  async error => {
     const statusCode = error?.response?.status;
     const errorMessage = error?.response?.data?.error || error?.message;
     
