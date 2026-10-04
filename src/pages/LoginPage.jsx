@@ -156,26 +156,26 @@ export default function LoginPage() {
 
               <label style={labelStyle}>
                 Password
-                <div style={passwordFieldWrapStyle} className="login-password-wrap">
+                <div style={passwordFieldWrapStyle}>
                   <input
                     type={showPassword ? "text" : "password"}
+                    inputMode="text"
+                    enterKeyHint="done"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
                     placeholder="Enter password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     style={{ ...inputStyle, paddingRight: 90 }}
-                    className="login-password-input"
-                    inputMode="text"
-                    autoCapitalize="none"
-                    autoCorrect="off"
-                    spellCheck={false}
                     autoComplete="current-password"
                     required
                   />
                   <button
                     type="button"
+                    tabIndex={-1}
                     onClick={() => setShowPassword((prev) => !prev)}
                     style={toggleButtonStyle}
-                    className="login-password-toggle"
                     aria-label={showPassword ? "Hide password" : "Show password"}
                     title={showPassword ? "Hide password" : "Show password"}
                   >
@@ -418,12 +418,14 @@ const passwordFieldWrapStyle = {
   position: "relative",
   display: "flex",
   alignItems: "center",
+  width: "100%",
 };
 
 const toggleButtonStyle = {
   position: "absolute",
-  right: 10,
+  right: 8,
   top: "50%",
+  zIndex: 2,
   transform: "translateY(-50%)",
   border: "none",
   background: "transparent",
@@ -496,33 +498,6 @@ const responsiveCss = `
       min-height: 100vh !important;
       justify-content: center !important;
       padding: 22px !important;
-    }
-  }
-
-  @media (max-width: 860px) {
-    .login-password-wrap {
-      position: relative !important;
-      z-index: 5 !important;
-      width: 100% !important;
-      touch-action: manipulation !important;
-    }
-
-    .login-password-input {
-      position: relative !important;
-      z-index: 6 !important;
-      -webkit-user-select: text !important;
-      user-select: text !important;
-      -webkit-touch-callout: default !important;
-      touch-action: manipulation !important;
-      cursor: text !important;
-    }
-
-    .login-password-toggle {
-      z-index: 7 !important;
-      min-height: 42px !important;
-      min-width: 52px !important;
-      padding: 6px 10px !important;
-      touch-action: manipulation !important;
     }
   }
 `;
