@@ -46,14 +46,23 @@ function App() {
     const { token } = loadSession();
 
     if (token) {
-      axios.defaults.headers.common.Authorization = `Bearer ${token}`;
+      axios.defaults.headers.common[
+        "Authorization"
+      ] = `Bearer ${token}`;
     }
 
-    const handleMessage = (request, sender, sendResponse) => {
+    // Handle extension messages safely
+    const handleMessage = (
+      request,
+      sender,
+      sendResponse
+    ) => {
       try {
-        sendResponse({ received: true });
+        sendResponse({
+          received: true,
+        });
       } catch (e) {
-        // ignore
+        // Ignore response errors
       }
 
       return false;
@@ -64,13 +73,17 @@ function App() {
       window.chrome.runtime &&
       window.chrome.runtime.onMessage
     ) {
-      window.chrome.runtime.onMessage.addListener(handleMessage);
+      window.chrome.runtime.onMessage.addListener(
+        handleMessage
+      );
 
       return () => {
         try {
-          window.chrome.runtime.removeListener(handleMessage);
+          window.chrome.runtime.removeListener(
+            handleMessage
+          );
         } catch (e) {
-          // ignore cleanup error
+          // Ignore cleanup errors
         }
       };
     }
@@ -83,7 +96,6 @@ function App() {
       <SessionIdleGuard />
 
       <Routes>
-
         {/* =====================================================
             LOGIN
         ====================================================== */}
@@ -292,35 +304,41 @@ function App() {
         {/* =====================================================
             VOUCHER ENTRY
 
-            Dashboard:
-            Entry
-              └── Voucher
+            Dashboard -> Entry -> Voucher
 
-            Existing menu URL:
-            /voucher-entry?type=payment
-
-            IMPORTANT:
-            Query string ?type=payment does NOT need a separate
-            route. React Router matches /voucher-entry.
+            Supported URLs:
+              /voucher
+              /voucher?type=payment
+              /voucher-entry
+              /voucher-entry?type=payment
+              /voucher/:type
         ====================================================== */}
+
+        <Route
+          path="/voucher"
+          element={<VoucherEntryPage />}
+        />
 
         <Route
           path="/voucher-entry"
           element={<VoucherEntryPage />}
         />
 
-        {/* Backup route */}
-        <Route
-          path="/voucher"
-          element={<VoucherEntryPage />}
-        />
-
-        {/* Direct voucher type route */}
         <Route
           path="/voucher/:type"
           element={<VoucherEntryPage />}
         />
 
+        {/* =====================================================
+            OPTIONAL FALLBACK
+
+            Unknown route হলে Dashboard-এ নিয়ে যাবে
+        ====================================================== */}
+
+        <Route
+          path="*"
+          element={<DashboardPageSafe />}
+        />
       </Routes>
     </Router>
   );
