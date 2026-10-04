@@ -13,6 +13,7 @@ import ProtectedRoute from "./components/ProtectedRoute";
 
 import LoginPage from "./pages/LoginPage";
 import { DashboardPageSafe } from "./pages/DashboardPage";
+
 import LocationManagementPage from "./pages/LocationManagementPage";
 import EmployeeManagementPage from "./pages/EmployeeManagementPage";
 import CompanyManagementPage from "./pages/CompanyManagementPage";
@@ -20,20 +21,24 @@ import CompanyAccountsPage from "./pages/CompanyAccountsPage";
 import WarehouseManagementPage from "./pages/WarehouseManagementPage";
 import WarehouseRentBookingPage from "./pages/WarehouseRentBookingPage";
 import ProductsManagementPage from "./pages/ProductsManagementPage";
+
 import InwardPage from "./pages/InwardPage";
 import InwardReportPage from "./pages/InwardReportPage";
 import OutwardPage from "./pages/OutwardPage";
+
 import PendingAdjustment from "./pages/PendingAdjustment";
 import ERPReportPage from "./pages/ERPReportPage";
 import CashReportPage from "./pages/CashReportPage";
 import ExpensesPendingPage from "./pages/ExpensesPendingPage";
+
 import PaltiLorryPage from "./pages/PaltiLorryPage";
 import SelfLoadingPage from "./pages/SelfLoadingPage";
 import LocalSalePage from "./pages/LocalSalePage";
+
 import ExpenseManagementPage from "./pages/ExpenseManagementPage";
 import DailyRejectionPage from "./pages/DailyRejectionPage";
 
-// Voucher page
+// Voucher
 import VoucherEntryPage from "./pages/VoucherEntryPage";
 
 function App() {
@@ -41,28 +46,36 @@ function App() {
     const { token } = loadSession();
 
     if (token) {
-      axios.defaults.headers.common[
-        "Authorization"
-      ] = `Bearer ${token}`;
+      axios.defaults.headers.common.Authorization = `Bearer ${token}`;
     }
 
-    // Handle extension messages
     const handleMessage = (request, sender, sendResponse) => {
-      sendResponse({ received: true });
+      try {
+        sendResponse({ received: true });
+      } catch (e) {
+        // ignore
+      }
+
       return false;
     };
 
-    if (window.chrome && window.chrome.runtime) {
+    if (
+      window.chrome &&
+      window.chrome.runtime &&
+      window.chrome.runtime.onMessage
+    ) {
       window.chrome.runtime.onMessage.addListener(handleMessage);
 
       return () => {
         try {
           window.chrome.runtime.removeListener(handleMessage);
         } catch (e) {
-          // Ignore cleanup errors
+          // ignore cleanup error
         }
       };
     }
+
+    return undefined;
   }, []);
 
   return (
@@ -70,133 +83,175 @@ function App() {
       <SessionIdleGuard />
 
       <Routes>
-        {/* Login */}
+
+        {/* =====================================================
+            LOGIN
+        ====================================================== */}
         <Route
           path="/"
           element={<LoginPage />}
         />
 
-        {/* Dashboard */}
+        {/* =====================================================
+            DASHBOARD
+        ====================================================== */}
         <Route
           path="/dashboard"
           element={<DashboardPageSafe />}
         />
 
-        {/* Location */}
+        {/* =====================================================
+            LOCATION
+        ====================================================== */}
         <Route
           path="/locations"
           element={<LocationManagementPage />}
         />
 
-        {/* Employee */}
+        {/* =====================================================
+            EMPLOYEE
+        ====================================================== */}
         <Route
           path="/employees"
           element={<EmployeeManagementPage />}
         />
 
-        {/* Company */}
+        {/* =====================================================
+            COMPANY
+        ====================================================== */}
         <Route
           path="/companies"
           element={<CompanyManagementPage />}
         />
 
-        {/* Company Accounts */}
+        {/* =====================================================
+            COMPANY ACCOUNTS
+        ====================================================== */}
         <Route
           path="/company-accounts"
           element={<CompanyAccountsPage />}
         />
 
-        {/* Warehouse */}
+        {/* =====================================================
+            WAREHOUSE
+        ====================================================== */}
         <Route
           path="/warehouses"
           element={<WarehouseManagementPage />}
         />
 
-        {/* Warehouse Rent */}
+        {/* =====================================================
+            WAREHOUSE RENT
+        ====================================================== */}
         <Route
           path="/warehouse-rent-booking"
           element={<WarehouseRentBookingPage />}
         />
 
-        {/* Products */}
+        {/* =====================================================
+            PRODUCTS
+        ====================================================== */}
         <Route
           path="/products"
           element={<ProductsManagementPage />}
         />
 
-        {/* Inward */}
+        {/* =====================================================
+            INWARD
+        ====================================================== */}
         <Route
           path="/inward"
           element={<InwardPage />}
         />
 
-        {/* Inward Report */}
+        {/* =====================================================
+            INWARD REPORT
+        ====================================================== */}
         <Route
           path="/inward-report"
           element={<InwardReportPage />}
         />
 
-        {/* Outward */}
+        {/* =====================================================
+            OUTWARD
+        ====================================================== */}
         <Route
           path="/outward"
           element={<OutwardPage />}
         />
 
-        {/* Pending Adjustment */}
+        {/* =====================================================
+            PENDING ADJUSTMENT
+        ====================================================== */}
         <Route
           path="/pending"
           element={<PendingAdjustment />}
         />
 
-        {/* ERP Report */}
+        {/* =====================================================
+            ERP REPORT
+        ====================================================== */}
         <Route
           path="/erp-report"
           element={<ERPReportPage />}
         />
 
-        {/* Cash Report */}
+        {/* =====================================================
+            CASH REPORT
+        ====================================================== */}
         <Route
           path="/cash-report"
           element={<CashReportPage />}
         />
 
-        {/* Expenses Pending */}
+        {/* =====================================================
+            EXPENSES PENDING
+        ====================================================== */}
         <Route
           path="/expenses-pending"
           element={<ExpensesPendingPage />}
         />
 
-        {/* Palti Lorry */}
+        {/* =====================================================
+            PALTI LORRY
+        ====================================================== */}
         <Route
           path="/palti-lorry"
           element={<PaltiLorryPage />}
         />
 
-        {/* Self Loading */}
+        {/* =====================================================
+            SELF LOADING
+        ====================================================== */}
         <Route
           path="/self-loading"
           element={<SelfLoadingPage />}
         />
 
-        {/* Local Sale */}
+        {/* =====================================================
+            LOCAL SALE
+        ====================================================== */}
         <Route
           path="/local-sale"
           element={<LocalSalePage />}
         />
 
-        {/* Daily Rejection */}
+        {/* =====================================================
+            DAILY REJECTION
+        ====================================================== */}
         <Route
           path="/daily-rejections"
           element={<DailyRejectionPage />}
         />
 
-        {/* Daily Rejection - alternate */}
         <Route
           path="/daily-rejection"
           element={<DailyRejectionPage />}
         />
 
-        {/* Expenses */}
+        {/* =====================================================
+            EXPENSES
+        ====================================================== */}
         <Route
           path="/expenses"
           element={
@@ -214,7 +269,9 @@ function App() {
           }
         />
 
-        {/* Expense Edit */}
+        {/* =====================================================
+            EXPENSE EDIT
+        ====================================================== */}
         <Route
           path="/expense-edit/:id"
           element={
@@ -234,8 +291,17 @@ function App() {
 
         {/* =====================================================
             VOUCHER ENTRY
-            Existing menu opens:
+
+            Dashboard:
+            Entry
+              └── Voucher
+
+            Existing menu URL:
             /voucher-entry?type=payment
+
+            IMPORTANT:
+            Query string ?type=payment does NOT need a separate
+            route. React Router matches /voucher-entry.
         ====================================================== */}
 
         <Route
@@ -243,13 +309,13 @@ function App() {
           element={<VoucherEntryPage />}
         />
 
-        {/* Backup/direct voucher route */}
+        {/* Backup route */}
         <Route
           path="/voucher"
           element={<VoucherEntryPage />}
         />
 
-        {/* Voucher type route */}
+        {/* Direct voucher type route */}
         <Route
           path="/voucher/:type"
           element={<VoucherEntryPage />}
