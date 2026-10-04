@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import MultiSelectDropdown from "../components/MultiSelectDropdown";
+import WarehouseRentBookingPage from "./WarehouseRentBookingPage";
 import { ToastContainer, toast, Slide } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
 
@@ -21,6 +22,7 @@ const emptyForm = () => ({
   opening_balance_type: "dr",
   company_id: "",
   monthly_rent: "",
+  rent_flow: "payable",
 });
 
 const emptySaleForm = () => ({
@@ -104,7 +106,7 @@ const collectWarehouseEmployeeIds = (warehouse, employees) => {
 
 export default function WarehouseManagementPage() {
   const navigate = useNavigate();
-  const [activeTab, setActiveTab] = useState("warehouse"); // "warehouse" or "sale"
+  const [activeTab, setActiveTab] = useState("warehouse"); // "warehouse", "sale" or "rent"
   const [warehouses, setWarehouses] = useState([]);
   const [locations, setLocations] = useState([]);
   const [employees, setEmployees] = useState([]);
@@ -195,6 +197,7 @@ export default function WarehouseManagementPage() {
             : "dr",
         company_id: formData.company_id || null,
         monthly_rent: Number.isFinite(Number(formData.monthly_rent)) ? Number(formData.monthly_rent) : 0,
+        rent_flow: String(formData.rent_flow || "payable") === "receivable" ? "receivable" : "payable",
       };
       if (editId) {
         await axios.put(`${API_URL}/${editId}`, payload);
@@ -233,6 +236,7 @@ export default function WarehouseManagementPage() {
       opening_balance_type: String(w.opening_balance_type || "dr"),
       company_id: normalizeId(w.company_id),
       monthly_rent: String(w.monthly_rent ?? ""),
+      rent_flow: String(w.rent_flow || "payable"),
     });
     setEditId(w.id);
     setShowForm(true);
@@ -425,6 +429,18 @@ export default function WarehouseManagementPage() {
         </button>
         <button
           type="button"
+          onClick={() => setActiveTab("rent")}
+          style={{
+            ...tabBtn,
+            background: activeTab === "rent" ? "#7c3aed" : "#e2e8f0",
+            color: activeTab === "rent" ? "#fff" : "#334155",
+            borderBottom: activeTab === "rent" ? "3px solid #7c3aed" : "none",
+          }}
+        >
+          Warehouse Rent
+        </button>
+        <button
+          type="button"
           onClick={() => navigate("/warehouse-trading?tab=reports&report=purchase-party-ledger")}
           style={{
             ...tabBtn,
@@ -515,6 +531,12 @@ export default function WarehouseManagementPage() {
                 <Field label="Monthly Warehouse Rent">
                   <input name="monthly_rent" value={formData.monthly_rent} onChange={handleChange} type="number" min="0" step="0.01" style={inp} placeholder="e.g. 50000" />
                 </Field>
+                <Field label="Rent Flow">
+                  <select name="rent_flow" value={formData.rent_flow} onChange={handleChange} style={inp}>
+                    <option value="payable">We Pay (Payable)</option>
+                    <option value="receivable">We Collect (Company)</option>
+                  </select>
+                </Field>
                 <Field label="Opening Balance">
                   <input
                     name="opening_balance"
@@ -552,7 +574,7 @@ export default function WarehouseManagementPage() {
           <>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "14px", gap: 10, flexWrap: "wrap" }}>
               <h2 style={titleStyle}>Warehouse Management</h2>
-              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}><button type="button" onClick={() => setShowForm(true)} style={{ ...btnPrimary, background: "#0f766e" }}>Add Warehouse</button><button type="button" onClick={() => navigate("/warehouse-rent-booking")} style={{ ...btnPrimary, background: "#7c3aed" }}>Warehouse Rent Booking</button></div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}><button type="button" onClick={() => setShowForm(true)} style={{ ...btnPrimary, background: "#0f766e" }}>Add Warehouse</button><button type="button" onClick={() => setActiveTab("rent")} style={{ ...btnPrimary, background: "#7c3aed" }}>Warehouse Rent Management</button></div>
             </div>
             <div style={tableCard}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
@@ -566,6 +588,7 @@ export default function WarehouseManagementPage() {
                     <th style={th}>Employee</th>
                     <th style={th}>Company / Rent Payee</th>
                     <th style={th}>Monthly Rent</th>
+                    <th style={th}>Rent Flow</th>
                     <th style={th}>Actions</th>
                   </tr>
                 </thead>
@@ -593,6 +616,7 @@ export default function WarehouseManagementPage() {
                         <td style={td}>{employeeName}</td>
                         <td style={td}>{w.company_name || companyNameById.get(String(w.company_id || "")) || "-"}</td>
                         <td style={td}>{Number(w.monthly_rent ?? 0).toFixed(2)}</td>
+                        <td style={td}>{String(w.rent_flow || "payable") === "receivable" ? "We Collect" : "We Pay"}</td>
                         <td style={td}>
                           <button type="button" onClick={() => handleEdit(w)} style={{ ...mini, background: "#2563eb" }}>Edit</button>{" "}
                           <button type="button" onClick={() => handleDelete(w.id)} style={{ ...mini, background: "#dc2626" }}>Delete</button>
@@ -601,14 +625,14 @@ export default function WarehouseManagementPage() {
                     );
                   })}
                   {warehouses.length === 0 ? (
-                    <tr><td colSpan={9} style={{ ...td, textAlign: "center", padding: "20px" }}>No warehouses found.</td></tr>
+                    <tr><td colSpan={10} style={{ ...td, textAlign: "center", padding: "20px" }}>No warehouses found.</td></tr>
                   ) : null}
                 </tbody>
               </table>
             </div>
           </>
         )
-      ) : (
+      ) : activeTab === "sale" ? (
         // Sale Entry Tab
         <SaleEntryForm
           saleFormData={saleFormData}
@@ -626,6 +650,9 @@ export default function WarehouseManagementPage() {
           setShowDeductionModal={setShowDeductionModal}
           inp={inp}
         />
+      ) : (
+        // Warehouse Rent Tab
+        <WarehouseRentBookingPage embedded />
       )}
     </div>
   );
