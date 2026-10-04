@@ -1,3 +1,4 @@
+```jsx
 import React, { useEffect } from "react";
 import axios from "axios";
 
@@ -33,10 +34,11 @@ import LocalSalePage from "./pages/LocalSalePage";
 import ExpenseManagementPage from "./pages/ExpenseManagementPage";
 import DailyRejectionPage from "./pages/DailyRejectionPage";
 
+// Voucher page
+import VoucherEntryPage from "./pages/VoucherEntryPage";
+
 function App() {
-
   useEffect(() => {
-
     const { token } = loadSession();
 
     if (token) {
@@ -45,159 +47,217 @@ function App() {
       ] = `Bearer ${token}`;
     }
 
-    // Handle extension messages to prevent "message channel closed" error
+    // Handle extension messages to prevent
+    // "message channel closed" error
     const handleMessage = (request, sender, sendResponse) => {
-      // Respond immediately to prevent channel timeout
       sendResponse({ received: true });
-      return false; // Indicate we've handled the response
+      return false;
     };
 
     if (window.chrome && window.chrome.runtime) {
       window.chrome.runtime.onMessage.addListener(handleMessage);
-      
+
       return () => {
         try {
-          window.chrome.runtime.onMessage.removeListener(handleMessage);
+          window.chrome.runtime.removeListener(handleMessage);
         } catch (e) {
           // Ignore cleanup errors
         }
       };
     }
-
   }, []);
 
   return (
     <Router>
       <SessionIdleGuard />
-      <Routes>
 
+      <Routes>
+        {/* Login */}
         <Route
           path="/"
           element={<LoginPage />}
         />
 
+        {/* Dashboard */}
         <Route
           path="/dashboard"
           element={<DashboardPageSafe />}
         />
 
+        {/* Location */}
         <Route
           path="/locations"
           element={<LocationManagementPage />}
         />
 
+        {/* Employee */}
         <Route
           path="/employees"
           element={<EmployeeManagementPage />}
         />
 
+        {/* Company */}
         <Route
           path="/companies"
           element={<CompanyManagementPage />}
         />
 
+        {/* Company Accounts */}
         <Route
           path="/company-accounts"
           element={<CompanyAccountsPage />}
         />
 
+        {/* Warehouse */}
         <Route
           path="/warehouses"
           element={<WarehouseManagementPage />}
         />
 
+        {/* Warehouse Rent */}
         <Route
           path="/warehouse-rent-booking"
           element={<WarehouseRentBookingPage />}
         />
 
+        {/* Products */}
         <Route
           path="/products"
           element={<ProductsManagementPage />}
         />
 
+        {/* Inward */}
         <Route
           path="/inward"
           element={<InwardPage />}
         />
 
+        {/* Inward Report */}
         <Route
           path="/inward-report"
           element={<InwardReportPage />}
         />
 
+        {/* Outward */}
         <Route
           path="/outward"
           element={<OutwardPage />}
         />
 
+        {/* Pending Adjustment */}
         <Route
           path="/pending"
           element={<PendingAdjustment />}
         />
 
+        {/* ERP Report */}
         <Route
           path="/erp-report"
           element={<ERPReportPage />}
         />
 
+        {/* Cash Report */}
         <Route
           path="/cash-report"
           element={<CashReportPage />}
         />
 
+        {/* Expenses Pending */}
         <Route
           path="/expenses-pending"
           element={<ExpensesPendingPage />}
         />
 
+        {/* Palti Lorry */}
         <Route
           path="/palti-lorry"
           element={<PaltiLorryPage />}
         />
 
+        {/* Self Loading */}
         <Route
           path="/self-loading"
           element={<SelfLoadingPage />}
         />
 
-      <Route
-        path="/local-sale"
-        element={<LocalSalePage />}
-      />
+        {/* Local Sale */}
+        <Route
+          path="/local-sale"
+          element={<LocalSalePage />}
+        />
 
+        {/* Daily Rejection */}
+        <Route
+          path="/daily-rejections"
+          element={<DailyRejectionPage />}
+        />
 
-      <Route
-        path="/daily-rejections"
-        element={<DailyRejectionPage />}
-      />
+        {/* Daily Rejection - alternate route */}
+        <Route
+          path="/daily-rejection"
+          element={<DailyRejectionPage />}
+        />
 
-      <Route
-        path="/daily-rejection"
-        element={<DailyRejectionPage />}
-      />
+        {/* Expenses */}
+        <Route
+          path="/expenses"
+          element={
+            <ProtectedRoute
+              permission={[
+                "expense.entry",
+                "expense.view",
+                "expense.create",
+                "expense.edit",
+                "expense.delete",
+              ]}
+            >
+              <ExpenseManagementPage />
+            </ProtectedRoute>
+          }
+        />
 
-      <Route
-        path="/expenses"
-        element={
-          <ProtectedRoute permission={["expense.entry", "expense.view", "expense.create", "expense.edit", "expense.delete"]}>
-            <ExpenseManagementPage />
-          </ProtectedRoute>
-        }
-      />
+        {/* Expense Edit */}
+        <Route
+          path="/expense-edit/:id"
+          element={
+            <ProtectedRoute
+              permission={[
+                "expense.entry",
+                "expense.view",
+                "expense.create",
+                "expense.edit",
+                "expense.delete",
+              ]}
+            >
+              <ExpenseManagementPage />
+            </ProtectedRoute>
+          }
+        />
 
-      <Route
-        path="/expense-edit/:id"
-        element={
-          <ProtectedRoute permission={["expense.entry", "expense.view", "expense.create", "expense.edit", "expense.delete"]}>
-            <ExpenseManagementPage />
-          </ProtectedRoute>
-        }
-      />
-
+        {/* =====================================================
+            VOUCHER
+            Payment Entry / Receipt Entry /
+            Journal Entry / Transport Payment
+        ====================================================== */}
+        <Route
+          path="/voucher"
+          element={
+            <ProtectedRoute
+              permission={[
+                "expense.entry",
+                "expense.view",
+                "expense.create",
+                "expense.edit",
+              ]}
+            >
+              <VoucherEntryPage />
+            </ProtectedRoute>
+          }
+        />
       </Routes>
     </Router>
   );
 }
 
 export default App;
+```
