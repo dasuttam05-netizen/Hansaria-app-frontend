@@ -28,25 +28,21 @@ axios.interceptors.request.use((config) => {
   return config;
 });
 
-// Recover from Render cold-start / temporary 502-504-503 responses when
-// loading data. Never retry write requests, so existing data-entry/save
-// operations cannot be duplicated.
+// Recover from a temporary Render cold-start/network failure without ever
+// retrying write requests. This keeps POST/PUT/PATCH/DELETE data entry safe
+// from accidental duplicate submissions.
 axios.interceptors.response.use(
   (response) => response,
   async (error) => {
     const config = error?.config;
-    const method = String(config?.method || "get").toLowerCase();
     const status = error?.response?.status;
-    const retryable = [502, 503, 504].includes(status) || !error?.response;
+    const method = String(config?.method || "get").toLowerCase();
+    const isReadRequest = method === "get" || method === "head";
+    const isTransient = !error?.response || [502, 503, 504].includes(status);
 
-    if (
-      config &&
-      method === "get" &&
-      retryable &&
-      !config.__hansariaRetried
-    ) {
-      config.__hansariaRetried = true;
-      await new Promise((resolve) => setTimeout(resolve, 900));
+    if (config && isReadRequest && isTransient && !config.__hansariaRetry) {
+      config.__hansariaRetry = true;
+      await new Promise((resolve) => setTimeout(resolve, 1200));
       return axios(config);
     }
 
