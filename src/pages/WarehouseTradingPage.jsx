@@ -1516,16 +1516,19 @@ export default function WarehouseTradingPage() {
 
       const token = ++masterLoadTokenRef.current;
       try {
+        // Keep these as functions so requests are created only for the masters
+        // actually required by the current voucher/report. Creating API.get(...)
+        // values directly would fire every request before requiredMasters is checked.
         const masterRequests = {
-          warehouses: API.get("/api/warehouses"),
-          farmers: API.get("/api/farmers"),
-          buyerNames: API.get("/api/buyer-names"),
-          companies: API.get("/api/companies"),
-          companyAccounts: API.get("/api/company-accounts"),
-          consignees: API.get("/api/consignee-names"),
-          products: API.get("/api/products"),
-          employees: API.get("/api/employees"),
-          locations: API.get("/api/locations"),
+          warehouses: () => API.get("/api/warehouses"),
+          farmers: () => API.get("/api/farmers"),
+          buyerNames: () => API.get("/api/buyer-names"),
+          companies: () => API.get("/api/companies"),
+          companyAccounts: () => API.get("/api/company-accounts"),
+          consignees: () => API.get("/api/consignee-names"),
+          products: () => API.get("/api/products"),
+          employees: () => API.get("/api/employees"),
+          locations: () => API.get("/api/locations"),
         };
         const baseRequiredMasters = activeVoucherType === "purchase"
           ? ["warehouses", "farmers", "companyAccounts", "consignees", "products", "employees", "locations"]
@@ -1541,7 +1544,7 @@ export default function WarehouseTradingPage() {
         const requiredMasters = activeTab === "reports" && activeReport === "profit-loss"
           ? [...new Set([...baseRequiredMasters, "buyerNames", "consignees", "farmers"])]
           : baseRequiredMasters;
-        const results = await Promise.allSettled(requiredMasters.map((key) => masterRequests[key]));
+        const results = await Promise.allSettled(requiredMasters.map((key) => masterRequests[key]()));
         const dataOf = (index) => {
           const result = results[index];
           return result?.status === "fulfilled" ? result.value.data : [];
@@ -1570,7 +1573,7 @@ export default function WarehouseTradingPage() {
         setLocations(data.locations);
         masterDataLoadedRef.current = true;
         try {
-          sessionStorage.setItem(`warehouseTradingMasterData:v4:${activeVoucherType}`, JSON.stringify({
+          sessionStorage.setItem(`warehouseTradingMasterData:v5:${activeVoucherType}`, JSON.stringify({
             time: Date.now(),
             data,
           }));
