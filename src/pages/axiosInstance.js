@@ -42,7 +42,24 @@ API.interceptors.response.use(
         { url: error.config?.url, message: errorMessage }
       );
     }
-    
+
+    const config = error?.config;
+    const method = String(config?.method || "get").toLowerCase();
+    const retryable = [502, 503, 504].includes(statusCode) || !error?.response;
+
+    // Only retry GET reads. Never retry POST/PUT/PATCH/DELETE because those
+    // requests may create or modify user-entered data.
+    if (
+      config &&
+      method === "get" &&
+      retryable &&
+      !config.__hansariaRetried
+    ) {
+      config.__hansariaRetried = true;
+      await new Promise((resolve) => setTimeout(resolve, 900));
+      return API(config);
+    }
+
     // Always reject the promise to let callers handle it
     return Promise.reject(error);
   }
