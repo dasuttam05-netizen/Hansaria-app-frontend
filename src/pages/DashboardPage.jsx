@@ -107,26 +107,28 @@ export default function DashboardPage() {
   const API_BASE = "/api";
   const fetchData = async (currentUser, isActive) => {
     try {
-      const payload = await API.get(`${API_BASE}/dashboard`);
+      // Start the dashboard payload and its live report reads together.
+      // The returned data is unchanged; this only removes the old sequential
+      // wait where all five report requests started after /api/dashboard.
+      const currentMonth = new Date().toISOString().slice(0, 7);
+      const [payload, reportResults] = await Promise.all([
+        API.get(`${API_BASE}/dashboard`),
+        Promise.allSettled([
+          API.get(`${API_BASE}/reports/party-stock`),
+          API.get(`${API_BASE}/reports/warehouse-stock`),
+          API.get(`${API_BASE}/reports/total-stock`),
+          API.get(`${API_BASE}/reports/warehouse-rent-month-end`, {
+            params: { month: currentMonth },
+          }),
+          API.get(`${API_BASE}/outward/stock-journal`),
+        ]),
+      ]);
 
       if (!isActive()) {
         return;
       }
 
       const data = payload?.data || {};
-
-      // Use the same live report endpoints as Stock Report and Warehouse Rent
-      // Month End Report so dashboard totals cannot diverge from the reports.
-      const currentMonth = new Date().toISOString().slice(0, 7);
-      const reportResults = await Promise.allSettled([
-        API.get(`${API_BASE}/reports/party-stock`),
-        API.get(`${API_BASE}/reports/warehouse-stock`),
-        API.get(`${API_BASE}/reports/total-stock`),
-        API.get(`${API_BASE}/reports/warehouse-rent-month-end`, {
-          params: { month: currentMonth },
-        }),
-        API.get(`${API_BASE}/outward/stock-journal`),
-      ]);
 
       if (!isActive()) {
         return;

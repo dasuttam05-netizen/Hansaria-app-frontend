@@ -1150,13 +1150,13 @@ export default function WarehouseTradingPage() {
     // This prevents the URL/search-param effect from starting a duplicate bundle.
   }, [searchParams]);
 
-  // Load master data once when Vouchers is actually visible. Delay it slightly
-  // so the first voucher table paint is not competing with nine master requests.
+  // Load master data immediately when Vouchers is actually visible. The loader
+  // already limits requests to the required masters and reuses sessionStorage,
+  // so an extra 900ms timer only makes the screen feel slower.
   useEffect(() => {
     if (activeTab !== "vouchers") return;
     masterDataLoadedRef.current = false;
-    const timer = window.setTimeout(() => { loadData(); }, 900);
-    return () => window.clearTimeout(timer);
+    loadData();
   }, [activeTab, activeVoucherType]);
 
   // Profit/Loss filters need the full Buyer + Consignee + Farmer master lists
