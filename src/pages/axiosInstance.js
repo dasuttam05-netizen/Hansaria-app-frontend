@@ -43,16 +43,15 @@ API.interceptors.response.use(
       );
     }
 
+    // Never retry writes. Retry only one temporary read request.
     const config = error?.config;
     const method = String(config?.method || "get").toLowerCase();
-    const isReadRequest = method === "get" || method === "head";
-    const isTransient = !error?.response || [502, 503, 504].includes(statusCode);
+    const retryable = method === "get" || method === "head";
+    const temporaryFailure = !error?.response || [502, 503, 504].includes(statusCode);
 
-    // Retry only read requests once. Never retry writes, preventing duplicate
-    // voucher/expense/stock submissions.
-    if (config && isReadRequest && isTransient && !config.__hansariaRetry) {
-      config.__hansariaRetry = true;
-      await new Promise((resolve) => setTimeout(resolve, 1200));
+    if (config && retryable && temporaryFailure && !config.__readRetryDone) {
+      config.__readRetryDone = true;
+      await new Promise((resolve) => setTimeout(resolve, 700));
       return API(config);
     }
 
