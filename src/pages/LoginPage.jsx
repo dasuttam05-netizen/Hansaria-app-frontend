@@ -159,21 +159,16 @@ export default function LoginPage() {
                 <div style={passwordFieldWrapStyle}>
                   <input
                     type={showPassword ? "text" : "password"}
-                    inputMode="text"
-                    enterKeyHint="done"
-                    autoCapitalize="none"
-                    autoCorrect="off"
-                    spellCheck={false}
                     placeholder="Enter password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     style={{ ...inputStyle, paddingRight: 90 }}
                     autoComplete="current-password"
+                    inputMode="text"
                     required
                   />
                   <button
                     type="button"
-                    tabIndex={-1}
                     onClick={() => setShowPassword((prev) => !prev)}
                     style={toggleButtonStyle}
                     aria-label={showPassword ? "Hide password" : "Show password"}
@@ -419,21 +414,23 @@ const passwordFieldWrapStyle = {
   display: "flex",
   alignItems: "center",
   width: "100%",
+  minWidth: 0,
 };
 
 const toggleButtonStyle = {
   position: "absolute",
-  right: 8,
+  right: 10,
   top: "50%",
-  zIndex: 2,
   transform: "translateY(-50%)",
   border: "none",
   background: "transparent",
   color: "#0f766e",
   fontWeight: 700,
   cursor: "pointer",
-  padding: "4px 8px",
+  padding: "8px 10px",
   fontSize: 13,
+  zIndex: 2,
+  touchAction: "manipulation",
 };
 
 const errorStyle = {
