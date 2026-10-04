@@ -28,6 +28,32 @@ axios.interceptors.request.use((config) => {
   return config;
 });
 
+// Recover from Render cold-start / temporary 502-504-503 responses when
+// loading data. Never retry write requests, so existing data-entry/save
+// operations cannot be duplicated.
+axios.interceptors.response.use(
+  (response) => response,
+  async (error) => {
+    const config = error?.config;
+    const method = String(config?.method || "get").toLowerCase();
+    const status = error?.response?.status;
+    const retryable = [502, 503, 504].includes(status) || !error?.response;
+
+    if (
+      config &&
+      method === "get" &&
+      retryable &&
+      !config.__hansariaRetried
+    ) {
+      config.__hansariaRetried = true;
+      await new Promise((resolve) => setTimeout(resolve, 900));
+      return axios(config);
+    }
+
+    return Promise.reject(error);
+  }
+);
+
 const root = ReactDOM.createRoot(document.getElementById("root"));
 root.render(<App />);
 
