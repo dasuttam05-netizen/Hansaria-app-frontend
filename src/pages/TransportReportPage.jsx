@@ -465,7 +465,7 @@ Rows: ${visibleRecords.length}`
     doc.setFontSize(7.5);
     doc.setTextColor(71, 85, 105);
     leftRows.forEach((item) => {
-      doc.text(item[0], leftCol1, rowY); doc.text(item[1], leftCol2, rowY); doc.text(item[2], leftCol3, rowY, { align: "right" }); rowY += 7.5;
+      doc.text(String(item[0] ?? ""), leftCol1, rowY); doc.text(String(item[1] ?? ""), leftCol2, rowY); doc.text(String(item[2] ?? ""), leftCol3, rowY, { align: "right" }); rowY += 7.5;
     });
     doc.setDrawColor(226, 232, 240); doc.line(leftX + 5, sectionY + sectionHeight - 20, leftX + sectionWidth - 5, sectionY + sectionHeight - 20);
     doc.setFont("helvetica", "bold"); doc.setFontSize(8); doc.setTextColor(15, 23, 42);
@@ -481,7 +481,7 @@ Rows: ${visibleRecords.length}`
     ];
     rightRows.forEach((item) => {
       doc.setFont("helvetica", "normal"); doc.setFontSize(7.5); doc.setTextColor(15, 23, 42);
-      doc.text(item[0], rightCol1, rowY); doc.text(item[1], rightCol2, rowY, { align: "right" }); rowY += 7.5;
+      doc.text(String(item[0] ?? ""), rightCol1, rowY); doc.text(String(item[1] ?? ""), rightCol2, rowY, { align: "right" }); rowY += 7.5;
     });
     doc.setDrawColor(226, 232, 240); doc.setLineWidth(0.4);
     doc.line(leftX + sectionWidth + 10, sectionY + sectionHeight - 20, leftX + sectionWidth * 2 + 10, sectionY + sectionHeight - 20);
