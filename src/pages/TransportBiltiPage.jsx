@@ -22,6 +22,7 @@ export default function TransportBiltiPage() {
   const [selectedSaleId, setSelectedSaleId] = useState("");
   const [sourceSearch, setSourceSearch] = useState("");
   const [sourceLoaded, setSourceLoaded] = useState({ outward: false, sale: false });
+  const [showCompletedSales, setShowCompletedSales] = useState(false);
   const [meta, setMeta] = useState(null);
 
   const emptyForm = {
@@ -229,7 +230,16 @@ export default function TransportBiltiPage() {
       axios.get(`${API_BASE}/warehouses`),
     ]);
 
-    setTransporters(transportRes.data || []);
+    setTransporters((prev) => {
+      const next = Array.isArray(transportRes.data) ? [...transportRes.data] : [];
+      for (const item of Array.isArray(prev) ? prev : []) {
+        const itemId = getRecordId(item);
+        if (itemId == null || itemId === "") continue;
+        const exists = next.some((candidate) => sameId(getRecordId(candidate), itemId));
+        if (!exists) next.push(item);
+      }
+      return next;
+    });
     setCompanies(companyRes.data || []);
     setCompanyAccounts(accountRes.data || []);
     setBuyers(buyerRes.data || []);
@@ -288,6 +298,17 @@ export default function TransportBiltiPage() {
       if (event.key === "F5") {
         event.preventDefault();
         refreshCurrentSource();
+        return;
+      }
+      if (event.key === "F6") {
+        event.preventDefault();
+        setMode("sale");
+        setShowCompletedSales(true);
+        setSourceSearch("");
+        loadSourceList("sale", true).catch((err) => {
+          console.error(err);
+          alert("Completed Warehouse Sale load failed");
+        });
       }
     };
     window.addEventListener("keydown", handleKeyDown);
@@ -299,6 +320,7 @@ export default function TransportBiltiPage() {
     setSelectedOutwardId("");
     setSelectedSaleId("");
     setSourceSearch("");
+    setShowCompletedSales(false);
     setFormData(emptyForm);
   };
 
@@ -351,15 +373,30 @@ export default function TransportBiltiPage() {
       }
       setMeta(row);
 
-      if (row.transporter_id) {
+      const loadedTransporterId =
+        row.transporter_id ||
+        row.transport_id ||
+        row.transporter?.id ||
+        row.transporter?._id ||
+        "";
+      const loadedTransporterName =
+        row.transporter_name ||
+        row.transport_name ||
+        row.transporter?.name ||
+        "";
+
+      if (loadedTransporterName) {
         setTransporters((prev) => {
-          const exists = prev.some((item) => sameId(getRecordId(item), row.transporter_id));
-          if (exists || !row.transporter_name) return prev;
+          const existing = prev.some((item) =>
+            (loadedTransporterId && sameId(getRecordId(item), loadedTransporterId)) ||
+            (!loadedTransporterId && String(item.name || "").trim().toLowerCase() === String(loadedTransporterName).trim().toLowerCase())
+          );
+          if (existing) return prev;
           return [
             {
-              id: row.transporter_id,
-              _id: row.transporter_id,
-              name: row.transporter_name,
+              id: loadedTransporterId,
+              _id: loadedTransporterId,
+              name: loadedTransporterName,
               address: row.transporter_address || "",
               pan_no: row.transporter_pan_no || "",
               mobile: row.transporter_mobile || "",
@@ -391,7 +428,7 @@ export default function TransportBiltiPage() {
 
       setFormData({
         id: row.id || "",
-        transporter_id: row.transporter_id || "",
+        transporter_id: loadedTransporterId || "",
         company_id: "",
         company_account_id: "",
         warehouse_id: "",
@@ -509,6 +546,7 @@ export default function TransportBiltiPage() {
     const search = sourceSearch.trim().toLowerCase();
     return saleList.filter((row) => {
       if (row.bilti_id) return false;
+      if (showCompletedSales && !row.unloading_date) return false;
       const searchable = [
         row.voucher_no,
         row.warehouse_name,
@@ -520,7 +558,7 @@ export default function TransportBiltiPage() {
       ].join(" ").toLowerCase();
       return !search || searchable.includes(search);
     });
-  }, [saleList, sourceSearch]);
+  }, [saleList, sourceSearch, showCompletedSales]);
 
   const calculation = useMemo(() => {
     const outwardQty = num(formData.outward_qty);
@@ -1101,7 +1139,9 @@ const shareToWhatsApp = async () => {
 
       {mode === "sale" && (
         <div style={{ ...card, marginBottom: 16 }}>
-          <label style={label}>Pending Warehouse Sale</label>
+          <label style={label}>
+            {showCompletedSales ? "Completed Warehouse Sale (F6)" : "Pending Warehouse Sale"}
+          </label>
           <input
             value={sourceSearch}
             onChange={(e) => setSourceSearch(e.target.value)}
@@ -1172,7 +1212,7 @@ const shareToWhatsApp = async () => {
                 {pendingSaleList.length === 0 && (
                   <tr>
                     <td colSpan={11} style={{ ...sourceTd, textAlign: "center", padding: 14 }}>
-                      No pending warehouse sale found.
+                      {showCompletedSales ? "No completed warehouse sale found." : "No pending warehouse sale found."}
                     </td>
                   </tr>
                 )}
