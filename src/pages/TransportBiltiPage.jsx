@@ -455,10 +455,11 @@ export default function TransportBiltiPage() {
         row.sale_entry_date ||
         row.outward_date ||
         row.date;
-      // Warehouse Sale has two different quantities:
-      // quantity = sale/dispatch weight, unloading_qty = actual unloading weight.
-      // Do not use unloading_qty as the sale weight because that makes Bilti
-      // show the wrong weight whenever there is a shortage/difference.
+      // For a NEW Bilti created from Outward / Warehouse Sale, keep the
+      // source/loading/outward quantity only. Dispatch Qty must start at 0
+      // and remain manually editable by the user. Never replace the source
+      // quantity with unloading/delivery quantity here.
+      const isNewSourceBilti = Boolean(seedRow && !seedRow.bilti_id);
       const sourceQty =
         source === "sale"
           ? (row.sale_quantity ?? row.quantity ?? row.sale_unloading_qty ?? row.unloading_qty)
@@ -468,7 +469,15 @@ export default function TransportBiltiPage() {
           ? (row.sale_unloading_qty ?? row.unloading_qty ?? sourceQty)
           : (row.outward_qty ?? row.quantity ?? row.weight ?? sourceQty);
       const sourceRate = row.outward_master_rate || row.sale_master_rate;
-      const dispatchDate = row.dispatch_date || row.sale_unloading_date || sourceDate || "";
+      // Dispatch Date is the unloading date for Warehouse Sale; for Outward
+      // use an unloading date when the source provides one, otherwise keep
+      // the source/entry date.
+      const dispatchDate =
+        row.dispatch_date ||
+        row.unloading_date ||
+        row.sale_unloading_date ||
+        sourceDate ||
+        "";
 
       setFormData({
         id: row.id || "",
@@ -491,8 +500,10 @@ export default function TransportBiltiPage() {
         lorry_no: row.outward_lorry_no || row.sale_lorry_no || row.lorry_no || "",
         buyer_name: row.outward_buyer_name || row.sale_buyer_name || row.buyer_name || "",
         consignee_name: row.outward_consignee_name || row.sale_consignee_name || row.consignee_name || "",
+        // New Bilti: source/loading quantity only; dispatch quantity starts at 0.
+        // Existing Bilti edit: preserve the saved dispatch quantity exactly.
         outward_qty: row.outward_qty ?? num(sourceQty),
-        dispatch_qty: row.dispatch_qty ?? num(sourceDispatchQty),
+        dispatch_qty: isNewSourceBilti ? 0 : (row.dispatch_qty ?? num(sourceDispatchQty)),
         shortage_free_kg: String(row.shortage_free_kg ?? 100),
         outward_rate: row.outward_rate ?? num(sourceRate),
         transport_rate: row.transport_rate ?? "",
@@ -1214,8 +1225,13 @@ const shareToWhatsApp = async () => {
                       <button
                         type="button"
                         onClick={() => {
-                          setSelectedOutwardId(String(row.id));
-                          loadBilti(row.id);
+                          const outwardId = String(row.id);
+                          setSelectedOutwardId(outwardId);
+                          if (row.bilti_id) {
+                            loadBilti(String(row.bilti_id));
+                          } else {
+                            loadBilti(outwardId, "outward", row);
+                          }
                         }}
                         style={{ ...btn, background: "#2563eb", padding: "7px 12px" }}
                       >
