@@ -51,6 +51,7 @@ export default function TransportBiltiPage() {
     transport_rate: "",
     detain_amount: "",
     others_exp: "",
+    advance_date: "",
     advance_amount: "",
     tds_percent: "0",
     round_off: "0",
@@ -462,6 +463,7 @@ export default function TransportBiltiPage() {
         transport_rate: row.transport_rate ?? "",
         detain_amount: row.detain_amount ?? "",
         others_exp: row.others_exp ?? "",
+        advance_date: row.advance_date ?? "",
         advance_amount: row.advance_amount ?? "",
         tds_percent: String(row.tds_percent ?? "0"),
         round_off: String(row.round_off ?? "0"),
@@ -826,6 +828,7 @@ const buildTransportPdf = () => {
     ["Destination", formData.destination || "-"],
     ["Vehicle", formData.lorry_no || "-"],
     ["Product", formData.product_name || "-"],
+    ["ADV Date", formatDate(formData.advance_date) || "-"],
     ["Days", formData.days || "0"],
   ];
 
@@ -977,6 +980,7 @@ const buildTransportPdf = () => {
     ["Net Freight", money(netFreight)],
     ["TDS Amount", money(tds)],
     ["Round Off", money(calculation.roundOff)],
+    ["ADV Date", formatDate(formData.advance_date) || "-"],
     ["Advance Paid", money(advance)],
   ];
 
@@ -1562,6 +1566,10 @@ const shareToWhatsApp = async () => {
               <div>
                 <label style={label}>Others Exp</label>
                 <input type="number" name="others_exp" value={formData.others_exp} onChange={handleChange} style={input} />
+              </div>
+              <div>
+                <label style={label}>ADV Date</label>
+                <input type="date" name="advance_date" value={formData.advance_date} onChange={handleChange} style={input} />
               </div>
               <div>
                 <label style={label}>Advance</label>
