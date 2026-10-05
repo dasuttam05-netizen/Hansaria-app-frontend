@@ -1425,24 +1425,9 @@ export default function WarehouseTradingPage() {
     loadSaleTransportCharge();
   }, [showSaleDeductionModal, selectedSalePassBill?.bilti_id]);
 
-  useEffect(() => {
-    const loadSaleTransportFromSummary = async () => {
-      if (!showSalePreview || !salePreviewRow) return;
-      const saleId = salePreviewRow.id || salePreviewRow._id;
-      if (!saleId) return;
-      try {
-        const response = await API.get(`/api/wh-vouchers/sale/${saleId}/summary`);
-        const transportValue = toNumber(response.data?.transport_charge || response.data?.summary?.transport_charge || 0);
-        if (transportValue > 0) {
-          setSalePreviewSummary(response.data);
-        }
-      } catch (err) {
-        // keep current preview data
-      }
-    };
-    loadSaleTransportFromSummary();
-  }, [showSalePreview, salePreviewRow]);
-
+  // Sale Preview modal already loads the complete /sale/:id/summary response.
+  // Do not issue a second identical summary request here; it caused duplicate
+  // 6-13 second network waits when the preview was opened.
   useEffect(() => {
     if (!showSalePreview) return;
     setSaleTransportMode("auto");
@@ -7553,9 +7538,9 @@ export default function WarehouseTradingPage() {
                     <>
                       <label style={{ display: "flex", flexDirection: "column", gap: 5, minWidth: 145, fontSize: 12, fontWeight: 700, color: "#334155" }}>From Date<input type="date" value={reportFilters.profit_from_date} onChange={(e) => updateReportFilter("profit_from_date", e.target.value)} style={inp} /></label>
                       <label style={{ display: "flex", flexDirection: "column", gap: 5, minWidth: 145, fontSize: 12, fontWeight: 700, color: "#334155" }}>To Date<input type="date" value={reportFilters.profit_to_date} onChange={(e) => updateReportFilter("profit_to_date", e.target.value)} style={inp} /></label>
-                      <SearchableSelect label="Farmer Name" value={reportFilters.profit_farmer_id} options={profitLossFarmerOptions.map((x) => ({ value: x.id, label: x.name }))} onChange={(v) => updateReportFilter("profit_farmer_id", v)} placeholder="All Farmers" />
+                      <SearchableSelect label="Buyer" value={reportFilters.profit_location_id} options={profitLossBuyerOptions.map((x) => ({ value: x.id, label: x.name }))} onChange={(v) => updateReportFilter("profit_location_id", v)} placeholder="All Buyers" />
                       <SearchableSelect label="Consignee" value={reportFilters.profit_employee_id} options={profitLossConsigneeOptions.map((x) => ({ value: x.id, label: x.name }))} onChange={(v) => updateReportFilter("profit_employee_id", v)} placeholder="All Consignees" />
-                      <SearchableSelect label="Buyer Name" value={reportFilters.profit_location_id} options={profitLossBuyerOptions.map((x) => ({ value: x.id, label: x.name }))} onChange={(v) => updateReportFilter("profit_location_id", v)} placeholder="All Buyers" />
+                      <SearchableSelect label="All Farmers" value={reportFilters.profit_farmer_id} options={profitLossFarmerOptions.map((x) => ({ value: x.id, label: x.name }))} onChange={(v) => updateReportFilter("profit_farmer_id", v)} placeholder="All Farmers" />
                     </>
                   )}
                   <button type="button" onClick={() => { setProfitLossMode("direct"); setReportFilters((prev) => ({ ...prev, profit_loss_mode: "direct", profit_from_date: "", profit_to_date: "", profit_location_id: "", profit_employee_id: "", profit_farmer_id: "" })); setReportPage(1); }} style={{ ...btnAction, background: "#64748b" }}>Clear Filters</button>
