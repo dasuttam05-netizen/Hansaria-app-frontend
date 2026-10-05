@@ -171,9 +171,13 @@ export default function InwardPage() {
   };
 
   useEffect(() => {
-    fetchDropdowns();
     fetchInwards();
   }, []);
+
+  useEffect(() => {
+    if (!showForm) return;
+    fetchDropdowns();
+  }, [showForm]);
 
   useEffect(() => {
     if (formData.employee_id) {

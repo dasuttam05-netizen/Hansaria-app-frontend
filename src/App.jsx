@@ -1,4 +1,4 @@
-import React, { useEffect } from "react";
+import React, { lazy, Suspense, useEffect } from "react";
 import axios from "axios";
 
 import {
@@ -12,34 +12,38 @@ import SessionIdleGuard from "./components/SessionIdleGuard";
 import ProtectedRoute from "./components/ProtectedRoute";
 
 import LoginPage from "./pages/LoginPage";
-import { DashboardPageSafe } from "./pages/DashboardPage";
 
-import LocationManagementPage from "./pages/LocationManagementPage";
-import EmployeeManagementPage from "./pages/EmployeeManagementPage";
-import CompanyManagementPage from "./pages/CompanyManagementPage";
-import CompanyAccountsPage from "./pages/CompanyAccountsPage";
-import WarehouseManagementPage from "./pages/WarehouseManagementPage";
-import WarehouseRentBookingPage from "./pages/WarehouseRentBookingPage";
-import ProductsManagementPage from "./pages/ProductsManagementPage";
+const DashboardPageSafe = lazy(() =>
+  import("./pages/DashboardPage").then((module) => ({ default: module.DashboardPageSafe }))
+);
+const LocationManagementPage = lazy(() => import("./pages/LocationManagementPage"));
+const EmployeeManagementPage = lazy(() => import("./pages/EmployeeManagementPage"));
+const CompanyManagementPage = lazy(() => import("./pages/CompanyManagementPage"));
+const CompanyAccountsPage = lazy(() => import("./pages/CompanyAccountsPage"));
+const WarehouseManagementPage = lazy(() => import("./pages/WarehouseManagementPage"));
+const WarehouseRentBookingPage = lazy(() => import("./pages/WarehouseRentBookingPage"));
+const ProductsManagementPage = lazy(() => import("./pages/ProductsManagementPage"));
+const InwardPage = lazy(() => import("./pages/InwardPage"));
+const InwardReportPage = lazy(() => import("./pages/InwardReportPage"));
+const OutwardPage = lazy(() => import("./pages/OutwardPage"));
+const PendingAdjustment = lazy(() => import("./pages/PendingAdjustment"));
+const ERPReportPage = lazy(() => import("./pages/ERPReportPage"));
+const CashReportPage = lazy(() => import("./pages/CashReportPage"));
+const ExpensesPendingPage = lazy(() => import("./pages/ExpensesPendingPage"));
+const PaltiLorryPage = lazy(() => import("./pages/PaltiLorryPage"));
+const SelfLoadingPage = lazy(() => import("./pages/SelfLoadingPage"));
+const LocalSalePage = lazy(() => import("./pages/LocalSalePage"));
+const ExpenseManagementPage = lazy(() => import("./pages/ExpenseManagementPage"));
+const DailyRejectionPage = lazy(() => import("./pages/DailyRejectionPage"));
+const VoucherEntryPage = lazy(() => import("./pages/VoucherEntryPage"));
 
-import InwardPage from "./pages/InwardPage";
-import InwardReportPage from "./pages/InwardReportPage";
-import OutwardPage from "./pages/OutwardPage";
-
-import PendingAdjustment from "./pages/PendingAdjustment";
-import ERPReportPage from "./pages/ERPReportPage";
-import CashReportPage from "./pages/CashReportPage";
-import ExpensesPendingPage from "./pages/ExpensesPendingPage";
-
-import PaltiLorryPage from "./pages/PaltiLorryPage";
-import SelfLoadingPage from "./pages/SelfLoadingPage";
-import LocalSalePage from "./pages/LocalSalePage";
-
-import ExpenseManagementPage from "./pages/ExpenseManagementPage";
-import DailyRejectionPage from "./pages/DailyRejectionPage";
-
-// Voucher
-import VoucherEntryPage from "./pages/VoucherEntryPage";
+function RouteLoadingFallback() {
+  return (
+    <div style={{ minHeight: "40vh", display: "flex", alignItems: "center", justifyContent: "center", color: "#334155", fontWeight: 600 }}>
+      Loading page...
+    </div>
+  );
+}
 
 function App() {
   useEffect(() => {
@@ -95,7 +99,8 @@ function App() {
     <Router>
       <SessionIdleGuard />
 
-      <Routes>
+      <Suspense fallback={<RouteLoadingFallback />}>
+        <Routes>
         {/* =====================================================
             LOGIN
         ====================================================== */}
@@ -339,7 +344,8 @@ function App() {
           path="*"
           element={<DashboardPageSafe />}
         />
-      </Routes>
+        </Routes>
+      </Suspense>
     </Router>
   );
 }

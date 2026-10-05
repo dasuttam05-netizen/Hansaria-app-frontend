@@ -387,8 +387,13 @@ export default function ExpenseManagementPage() {
   }, [filteredWarehouses, formData.send_to_unified, editLabels.send_to_company_name]);
 
   useEffect(() => {
-    initializeData();
+    loadExpensesWithApprovals();
   }, []);
+
+  useEffect(() => {
+    if (!showForm) return;
+    fetchDropdowns();
+  }, [showForm]);
 
   const editParam = searchParams.get("edit");
 
@@ -400,11 +405,6 @@ export default function ExpenseManagementPage() {
 
     openExpenseById(editExpenseId);
   }, [editParam]);
-
-  const initializeData = async () => {
-    await fetchDropdowns();
-    await loadExpensesWithApprovals();
-  };
 
   const loadExpensesWithApprovals = async () => {
     try {
@@ -957,11 +957,6 @@ export default function ExpenseManagementPage() {
         { user: user?.name || user?.username || "unknown", timestamp: new Date().toISOString() }
       );
       toast.error("You do not have permission to create expense entries.", { theme: "colored" });
-      return;
-    }
-    
-    if (!locations || locations.length === 0) {
-      toast.warning("Locations data is still loading. Please try again in a moment.", { theme: "colored" });
       return;
     }
     

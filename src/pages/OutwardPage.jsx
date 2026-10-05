@@ -471,9 +471,13 @@ export default function OutwardPage() {
   };
 
   useEffect(() => {
-    fetchDropdowns();
     fetchOutwards();
   }, []);
+
+  useEffect(() => {
+    if (!showForm) return;
+    fetchDropdowns();
+  }, [showForm]);
 
   useEffect(() => {
     if (formData.employee_id) {
