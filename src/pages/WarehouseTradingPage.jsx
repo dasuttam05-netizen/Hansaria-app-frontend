@@ -103,6 +103,30 @@ const toNumber = (value) => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
+const WT_SESSION_CACHE_PREFIX = "warehouseTradingInstantCache:v1:";
+const WT_SESSION_CACHE_TTL_MS = 15 * 60 * 1000;
+
+const readWarehouseTradingSessionCache = (key) => {
+  try {
+    const raw = sessionStorage.getItem(`${WT_SESSION_CACHE_PREFIX}${key}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || !parsed.time || Date.now() - Number(parsed.time) > WT_SESSION_CACHE_TTL_MS) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+};
+
+const writeWarehouseTradingSessionCache = (key, value) => {
+  try {
+    sessionStorage.setItem(`${WT_SESSION_CACHE_PREFIX}${key}`, JSON.stringify({
+      time: Date.now(),
+      ...value,
+    }));
+  } catch {}
+};
+
 const normalizeGstState = (value) =>
   String(value || "")
     .trim()
@@ -1159,47 +1183,23 @@ export default function WarehouseTradingPage() {
     loadData();
   }, [activeTab, activeVoucherType]);
 
-  // Profit/Loss filters need the full Buyer + Consignee + Farmer master lists
-  // even when Reports is opened directly while the voucher type is Purchase.
-  // Keep the normal master loader, then explicitly ensure these four masters
-  // are populated so the dropdowns never depend on the current voucher tab.
-  useEffect(() => {
-    if (activeTab !== "reports" || activeReport !== "profit-loss") return;
-    let cancelled = false;
-    (async () => {
-      try {
-        await loadData();
-      } catch {}
-      const results = await Promise.allSettled([
-        API.get("/api/buyer-names"),
-        API.get("/api/companies"),
-        API.get("/api/consignee-names"),
-        API.get("/api/farmers"),
-      ]);
-      if (cancelled) return;
-      const valueOf = (result) => result?.status === "fulfilled" && Array.isArray(result.value?.data)
-        ? result.value.data
-        : [];
-      const buyerRows = valueOf(results[0]);
-      const companyRows = valueOf(results[1]);
-      const consigneeRows = valueOf(results[2]);
-      const farmerRows = valueOf(results[3]);
-      if (buyerRows.length) setBuyerNames(buyerRows);
-      if (companyRows.length) setCompanies(companyRows);
-      if (consigneeRows.length) setConsignees(consigneeRows);
-      if (farmerRows.length) setFarmers(farmerRows);
-    })();
-    return () => { cancelled = true; };
-  }, [activeTab, activeReport]);
+  // Profit/Loss master data is loaded by loadData() with the exact required
+  // master set. Do not fire another four API requests after the report click.
 
-  // Load voucher list when type changes
+  // Load voucher data immediately when the user clicks the Vouchers section or changes voucher type.
+  useEffect(() => {
+    if (activeTab !== "vouchers") return;
+    void loadVouchers();
+  }, [activeTab, activeVoucherType]);
+
+  // Search/page/sort changes stay lightly debounced so typing does not fire an API call per keystroke.
   useEffect(() => {
     if (activeTab !== "vouchers") return;
     const timer = window.setTimeout(() => {
-      loadVouchers();
-    }, 250);
+      void loadVouchers();
+    }, 120);
     return () => window.clearTimeout(timer);
-  }, [activeTab, activeVoucherType, voucherSortAsc, voucherPage, globalSearch]);
+  }, [voucherSortAsc, voucherPage, globalSearch]);
 
   useEffect(() => {
     if (activeTab === "vouchers") {
@@ -1239,26 +1239,22 @@ export default function WarehouseTradingPage() {
     editId,
   ]);
 
-  // Report rows: page/filter changes. Server-paged reports (including Sale,
-  // Purchase and Profit/Loss) reload the requested page; party ledgers remain
-  // client-paged for fast navigation.
+  // Report data starts immediately when the user clicks Reports or selects another report.
+  useEffect(() => {
+    if (activeTab !== "reports") return;
+    void loadReport();
+    void loadReportFilterOptions();
+  }, [activeTab, activeReport]);
+
+  // Filter/page/search changes stay lightly debounced so rapid typing does not create a request storm.
   useEffect(() => {
     if (activeTab !== "reports") return;
     const timer = window.setTimeout(() => {
-      loadReport();
+      void loadReport();
+      void loadReportFilterOptions();
     }, 120);
     return () => window.clearTimeout(timer);
-  }, [activeTab, activeReport, reportPage, globalSearch, reportFilters.farmer_id, reportFilters.company_account_id, reportFilters.warehouse_id, reportFilters.sale_buyer_id, reportFilters.sale_company_account_id, reportFilters.sale_journey_token, reportFilters.sale_lorry_no, reportFilters.sale_bill_no, reportFilters.details_of_deduction, reportFilters.profit_loss_mode, reportFilters.profit_from_date, reportFilters.profit_to_date, reportFilters.profit_location_id, reportFilters.profit_employee_id, reportFilters.profit_farmer_id]);
-
-  // Filter options are independent of pagination. Never reload them just
-  // because the user moves from page 1 to page 2.
-  useEffect(() => {
-    if (activeTab !== "reports") return;
-    const timer = window.setTimeout(() => {
-      loadReportFilterOptions();
-    }, 40);
-    return () => window.clearTimeout(timer);
-  }, [activeTab, activeReport, reportFilters.farmer_id, reportFilters.company_account_id, reportFilters.warehouse_id, reportFilters.sale_buyer_id, reportFilters.profit_from_date, reportFilters.profit_to_date, reportFilters.profit_location_id, reportFilters.profit_employee_id, reportFilters.profit_farmer_id]);
+  }, [reportPage, globalSearch, reportFilters.farmer_id, reportFilters.company_account_id, reportFilters.warehouse_id, reportFilters.sale_buyer_id, reportFilters.sale_company_account_id, reportFilters.sale_journey_token, reportFilters.sale_lorry_no, reportFilters.sale_bill_no, reportFilters.details_of_deduction, reportFilters.profit_loss_mode, reportFilters.profit_from_date, reportFilters.profit_to_date, reportFilters.profit_location_id, reportFilters.profit_employee_id, reportFilters.profit_farmer_id]);
 
   useEffect(() => {
     // Keep bill-wise detail panels hidden by default. Press F5 to reveal and
@@ -1542,7 +1538,7 @@ export default function WarehouseTradingPage() {
         // Profit/Loss needs Buyer + Consignee + Farmer lists even when the
         // current voucher type would not normally load all three masters.
         const requiredMasters = activeTab === "reports" && activeReport === "profit-loss"
-          ? [...new Set([...baseRequiredMasters, "buyerNames", "consignees", "farmers"])]
+          ? [...new Set([...baseRequiredMasters, "buyerNames", "consignees", "farmers", "companies"])]
           : baseRequiredMasters;
         const results = await Promise.allSettled(requiredMasters.map((key) => masterRequests[key]()));
         const dataOf = (index) => {
@@ -1750,6 +1746,7 @@ export default function WarehouseTradingPage() {
 
   const loadVouchers = async () => {
     const token = ++voucherLoadTokenRef.current;
+    let hasCachedRows = false;
     try {
       if (!hasPermission(user, voucherPermissionMap[activeVoucherType])) {
         if (token !== voucherLoadTokenRef.current) return;
@@ -1767,6 +1764,15 @@ export default function WarehouseTradingPage() {
       if (search) params.search = search;
 
       const requestKey = JSON.stringify({ type: activeVoucherType, params });
+      const sessionCached = readWarehouseTradingSessionCache(`voucher:${requestKey}`);
+      if (sessionCached?.rows) {
+        hasCachedRows = true;
+        if (token === voucherLoadTokenRef.current) {
+          setList(Array.isArray(sessionCached.rows) ? sessionCached.rows : []);
+          if (sessionCached.pageInfo) setVoucherPageInfo(sessionCached.pageInfo);
+        }
+      }
+
       let request = voucherInFlightRef.current.get(requestKey);
       if (!request) {
         request = API.get(`/api/wh-vouchers/${activeVoucherType}`, { params }).finally(() => {
@@ -1780,19 +1786,24 @@ export default function WarehouseTradingPage() {
       const payload = res.data || {};
       const rows = Array.isArray(payload) ? payload : (Array.isArray(payload.data) ? payload.data : []);
       const pagination = Array.isArray(payload) ? null : payload.pagination;
-      setList(rows);
-      setVoucherPageInfo({
+      const pageInfo = {
         page: pagination?.page || voucherPage,
         pageSize: pagination?.pageSize || PAGE_SIZE,
         total: Number(pagination?.total ?? rows.length),
         totalPages: Math.max(1, Number(pagination?.totalPages || Math.ceil(Number(pagination?.total ?? rows.length) / PAGE_SIZE))),
         hasMore: Boolean(pagination?.hasMore),
-      });
+      };
+      setList(rows);
+      setVoucherPageInfo(pageInfo);
+      writeWarehouseTradingSessionCache(`voucher:${requestKey}`, { rows, pageInfo });
     } catch (err) {
       if (token !== voucherLoadTokenRef.current) return;
       console.error(err);
-      setList([]);
-      setVoucherPageInfo({ page: voucherPage, pageSize: PAGE_SIZE, total: 0, totalPages: 1, hasMore: false });
+      // Keep the last valid rows visible when the refresh request fails.
+      if (!hasCachedRows) {
+        setList([]);
+        setVoucherPageInfo({ page: voucherPage, pageSize: PAGE_SIZE, total: 0, totalPages: 1, hasMore: false });
+      }
     }
   };
 
@@ -2008,7 +2019,30 @@ export default function WarehouseTradingPage() {
         search: normalizedSearch,
       });
       const cachedReport = reportDataCacheRef.current.get(reportCacheKey);
-      if (cachedReport && Date.now() - cachedReport.time < 5 * 60 * 1000) {
+      let hasSessionReport = false;
+      if (!cachedReport) {
+        const sessionCachedReport = readWarehouseTradingSessionCache(`report:${reportCacheKey}`);
+        if (sessionCachedReport?.rows) {
+          hasSessionReport = true;
+          const cachedPageInfo = sessionCachedReport.pageInfo || {
+            page: page || 1,
+            pageSize: PAGE_SIZE,
+            total: sessionCachedReport.rows.length,
+            hasMore: false,
+          };
+          reportDataCacheRef.current.set(reportCacheKey, {
+            time: Date.now(),
+            rows: Array.isArray(sessionCachedReport.rows) ? sessionCachedReport.rows : [],
+            pageInfo: cachedPageInfo,
+          });
+          if (token === reportLoadTokenRef.current) {
+            setReportData(Array.isArray(sessionCachedReport.rows) ? sessionCachedReport.rows : []);
+            if (reportType === "warehouse-stock") setWarehouseStockReport(Array.isArray(sessionCachedReport.rows) ? sessionCachedReport.rows : []);
+            setReportPageInfo(cachedPageInfo);
+          }
+        }
+      }
+      if (cachedReport && Date.now() - cachedReport.time < 5 * 60 * 1000 && !hasSessionReport) {
         if (token === reportLoadTokenRef.current) {
           setReportData(cachedReport.rows);
           if (reportType === "warehouse-stock") setWarehouseStockReport(cachedReport.rows);
@@ -2046,6 +2080,7 @@ export default function WarehouseTradingPage() {
           hasMore: Boolean(pagination?.hasMore),
         };
         reportDataCacheRef.current.set(reportCacheKey, { time: Date.now(), rows, pageInfo: nextPageInfo });
+        writeWarehouseTradingSessionCache(`report:${reportCacheKey}`, { rows, pageInfo: nextPageInfo });
         setWarehouseStockReport(rows);
         setReportData(rows);
         setReportPageInfo(nextPageInfo);
@@ -2072,6 +2107,7 @@ export default function WarehouseTradingPage() {
         };
       }
       reportDataCacheRef.current.set(reportCacheKey, { time: Date.now(), rows, pageInfo: nextPageInfo });
+      writeWarehouseTradingSessionCache(`report:${reportCacheKey}`, { rows, pageInfo: nextPageInfo });
       setReportData(rows);
       setReportPageInfo(nextPageInfo);
     } catch (err) {
