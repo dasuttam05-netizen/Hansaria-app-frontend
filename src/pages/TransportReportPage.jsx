@@ -278,25 +278,53 @@ export default function TransportReportPage() {
     doc.save("Transport_Report.pdf");
   };
 
-  const sharePdf = async (rows, title, filename, whatsappText) => {
-    const { file } = makePdfFile(rows, title, filename);
+  const downloadPdfDocument = (doc, filename) => {
     try {
+      const blob = doc.output("blob");
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = url;
+      anchor.download = filename;
+      anchor.style.display = "none";
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 1500);
+      return true;
+    } catch (err) {
+      console.error("PDF download failed", err);
+      try {
+        doc.save(filename);
+        return true;
+      } catch (fallbackErr) {
+        console.error("PDF save fallback failed", fallbackErr);
+        return false;
+      }
+    }
+  };
+
+  const sharePdf = (rows, title, filename, whatsappText) => {
+    try {
+      const { file } = makePdfFile(rows, title, filename);
       if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
-        await navigator.share({
+        navigator.share({
           title,
           text: whatsappText,
           files: [file],
+        }).catch((err) => {
+          if (err?.name !== "AbortError") console.error("PDF share failed", err);
         });
         return;
       }
-    } catch (err) {
-      console.error("PDF share failed", err);
-    }
 
-    window.open(
-      `https://wa.me/?text=${encodeURIComponent(whatsappText)}`,
-      "_blank"
-    );
+      const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(whatsappText)}`;
+      const popup = window.open(whatsappUrl, "_blank", "noopener,noreferrer");
+      if (!popup) {
+        window.location.href = whatsappUrl;
+      }
+    } catch (err) {
+      console.error("WhatsApp share preparation failed", err);
+    }
   };
 
   const shareReportWhatsApp = () => {
@@ -524,35 +552,38 @@ Rows: ${visibleRecords.length}`
 
   const downloadTransportLedger = (row) => {
     const { doc, name } = buildTransportLedgerPdf(row);
-    doc.save(`Transport_Ledger_${name.replace(/[^a-z0-9]+/gi, "_")}.pdf`);
+    downloadPdfDocument(doc, `Transport_Ledger_${name.replace(/[^a-z0-9]+/gi, "_")}.pdf`);
   };
 
   const shareTransportLedger = (row) => {
-    const { doc, rows, name } = buildTransportLedgerPdf(row);
-    const filename = `Transport_Ledger_${name.replace(/[^a-z0-9]+/gi, "_")}.pdf`;
-    const pdfBlob = doc.output("blob");
-    const pdfFile = new File([pdfBlob], filename, { type: "application/pdf" });
-    const textMessage = `Transport Ledger
+    try {
+      const { doc, rows, name } = buildTransportLedgerPdf(row);
+      const filename = `Transport_Ledger_${name.replace(/[^a-z0-9]+/gi, "_")}.pdf`;
+      const pdfBlob = doc.output("blob");
+      const pdfFile = new File([pdfBlob], filename, { type: "application/pdf" });
+      const textMessage = `Transport Ledger
 Transport: ${name}
 From: ${filters.from_date}
 To: ${filters.to_date}
 Rows: ${rows.length}`;
 
-    (async () => {
-      try {
-        if (navigator.share && navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
-          await navigator.share({
-            title: `Transport Ledger - ${name}`,
-            text: textMessage,
-            files: [pdfFile],
-          });
-          return;
-        }
-      } catch (err) {
-        console.error("Transport ledger share failed", err);
+      if (navigator.share && navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
+        navigator.share({
+          title: `Transport Ledger - ${name}`,
+          text: textMessage,
+          files: [pdfFile],
+        }).catch((err) => {
+          if (err?.name !== "AbortError") console.error("Transport ledger share failed", err);
+        });
+        return;
       }
-      window.open(`https://wa.me/?text=${encodeURIComponent(textMessage)}`, "_blank");
-    })();
+
+      const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(textMessage)}`;
+      const popup = window.open(whatsappUrl, "_blank", "noopener,noreferrer");
+      if (!popup) window.location.href = whatsappUrl;
+    } catch (err) {
+      console.error("Transport ledger share preparation failed", err);
+    }
   };
 
   const handleEdit = (id) => {
@@ -678,34 +709,42 @@ Rows: ${rows.length}`;
                           Edit
                         </button>
                         <button
+                          type="button"
                           onClick={() => {
                             const filename = `Transport_Bilti_${row.bilti_no || row.id}.pdf`;
-                            buildBiltiStylePdf(row, "TRANSPORT PAYMENT ADVICE").save(filename);
+                            const doc = buildBiltiStylePdf(row, "TRANSPORT PAYMENT ADVICE");
+                            downloadPdfDocument(doc, filename);
                           }}
                           style={{ ...button, background: "#475569", padding: "8px 10px", display: "inline-flex", alignItems: "center", gap: 6 }}
                         >
                           <FaFilePdf /> PDF
                         </button>
                         <button
-                          onClick={async () => {
-                            const title = `Transport Bilti - ${row.bilti_no || ""}`;
-                            const filename = `Transport_Bilti_${row.bilti_no || row.id}.pdf`;
-                            const doc = buildBiltiStylePdf(row, "TRANSPORT PAYMENT ADVICE");
-                            const blob = doc.output("blob");
-                            const pdfFile = new File([blob], filename, { type: "application/pdf" });
-                            const whatsappText = `Transport Bilti
+                          type="button"
+                          onClick={() => {
+                            try {
+                              const title = `Transport Bilti - ${row.bilti_no || ""}`;
+                              const filename = `Transport_Bilti_${row.bilti_no || row.id}.pdf`;
+                              const doc = buildBiltiStylePdf(row, "TRANSPORT PAYMENT ADVICE");
+                              const blob = doc.output("blob");
+                              const pdfFile = new File([blob], filename, { type: "application/pdf" });
+                              const whatsappText = `Transport Bilti
 Bilti: ${row.bilti_no || ""}
 Transport: ${row.transporter_name || ""}
 Payable: ${num(row.payable_amount)}`;
-                            try {
                               if (navigator.share && navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
-                                await navigator.share({ title, text: whatsappText, files: [pdfFile] });
+                                navigator.share({ title, text: whatsappText, files: [pdfFile] }).catch((err) => {
+                                  if (err?.name !== "AbortError") console.error("Transport Bilti WhatsApp share failed", err);
+                                });
                                 return;
                               }
+
+                              const whatsappUrl = `https://wa.me/?text=${encodeURIComponent(whatsappText)}`;
+                              const popup = window.open(whatsappUrl, "_blank", "noopener,noreferrer");
+                              if (!popup) window.location.href = whatsappUrl;
                             } catch (err) {
-                              console.error("Transport Bilti WhatsApp share failed", err);
+                              console.error("Transport Bilti WhatsApp share preparation failed", err);
                             }
-                            window.open(`https://wa.me/?text=${encodeURIComponent(whatsappText)}`, "_blank");
                           }}
                           style={{ ...button, background: "#16a34a", padding: "8px 10px", display: "inline-flex", alignItems: "center", gap: 6 }}
                         >
