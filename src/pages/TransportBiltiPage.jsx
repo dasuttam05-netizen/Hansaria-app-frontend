@@ -174,21 +174,21 @@ export default function TransportBiltiPage() {
         const remainder = num % 100;
         return `${units[hundreds]} Hundred${remainder ? ` ${wordsForNumber(remainder)}` : ""}`;
       }
-      const scales = ["Thousand", "Million", "Billion"];
-      let scaleIndex = -1;
-      let remainder = num;
-      let result = "";
+      // Indian numbering system: Thousand, Lakh, Crore.
+      const parts = [];
+      let remainder = Math.floor(num);
+      const crore = Math.floor(remainder / 10000000);
+      remainder %= 10000000;
+      const lakh = Math.floor(remainder / 100000);
+      remainder %= 100000;
+      const thousand = Math.floor(remainder / 1000);
+      remainder %= 1000;
 
-      while (remainder > 0) {
-        const chunk = remainder % 1000;
-        remainder = Math.floor(remainder / 1000);
-        scaleIndex += 1;
-        if (chunk) {
-          const chunkText = wordsForNumber(chunk);
-          result = `${chunkText} ${scales[scaleIndex]}${result ? ` ${result}` : ""}`.trim();
-        }
-      }
-      return result;
+      if (crore) parts.push(`${wordsForNumber(crore)} Crore`);
+      if (lakh) parts.push(`${wordsForNumber(lakh)} Lakh`);
+      if (thousand) parts.push(`${wordsForNumber(thousand)} Thousand`);
+      if (remainder) parts.push(wordsForNumber(remainder));
+      return parts.join(" ").trim();
     };
 
     const integerWords = integerPart === 0 ? "Zero" : wordsForNumber(integerPart);
@@ -815,9 +815,10 @@ const buildTransportPdf = () => {
   const netFreight = Math.max(0, gross - claimAmount + detain + others);
   const shortageQty = Math.max(outwardWeight - dispatchWeight, 0);
   const shortageDetail = `${money(outwardWeight)} - ${money(dispatchWeight)} = ${money(shortageQty)}`;
+  const deductionAmount = advance;
 
   const safeText = (value) => String(value ?? "-");
-  const wrap = (value, width, maxLines = 2) => {
+  const wrap = (value, width, maxLines = 3) => {
     const lines = doc.splitTextToSize(safeText(value), Math.max(width, 10));
     return lines.slice(0, maxLines);
   };
@@ -828,19 +829,19 @@ const buildTransportPdf = () => {
   doc.setLineWidth(0.45);
   doc.roundedRect(4, 4, pageWidth - 8, pageHeight - 8, 3, 3, "S");
 
-  // Header
+  // Compact header
   const headerY = margin;
-  const headerH = 17;
+  const headerH = 13.5;
   doc.setFillColor(15, 118, 110);
   doc.roundedRect(leftX, headerY, contentWidth, headerH, 3, 3, "F");
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(15);
+  doc.setFontSize(12.5);
   doc.setTextColor(255, 255, 255);
-  doc.text("TRANSPORT PAYMENT ADVICE", pageWidth / 2, headerY + 11, { align: "center" });
+  doc.text("TRANSPORT PAYMENT ADVICE", pageWidth / 2, headerY + 8.7, { align: "center" });
 
-  // General details / party details block
-  const summaryY = headerY + headerH + 5;
-  const summaryH = 37;
+  // General / party details
+  const summaryY = headerY + headerH + 4;
+  const summaryH = 42;
   const summaryCols = 4;
   const summaryColW = contentWidth / summaryCols;
   const summaryFields = [
@@ -866,34 +867,34 @@ const buildTransportPdf = () => {
     const col = index % summaryCols;
     const row = Math.floor(index / summaryCols);
     const x = leftX + col * summaryColW;
-    const y = summaryY + 7 + row * 11.5;
+    const y = summaryY + 7 + row * 12.7;
     const innerW = summaryColW - 8;
 
     if (col > 0) {
       doc.setDrawColor(226, 232, 240);
       doc.setLineWidth(0.2);
-      doc.line(x, summaryY + 3, x, summaryY + summaryH - 3);
+      doc.line(x, summaryY + 2, x, summaryY + summaryH - 2);
     }
     if (row > 0) {
       doc.setDrawColor(226, 232, 240);
       doc.setLineWidth(0.2);
-      doc.line(x + 3, y - 8, x + summaryColW - 3, y - 8);
+      doc.line(x + 3, y - 9, x + summaryColW - 3, y - 9);
     }
 
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(6.5);
+    doc.setFontSize(6.2);
     doc.setTextColor(71, 85, 105);
     doc.text(field[0], x + 3, y);
 
     doc.setFont("helvetica", "normal");
-    doc.setFontSize(6.5);
+    doc.setFontSize(6.35);
     doc.setTextColor(15, 23, 42);
-    const lines = wrap(field[1], innerW, 2);
-    lines.forEach((line, lineIndex) => doc.text(line, x + 3, y + 4 + lineIndex * 3.3));
+    const lines = wrap(field[1], innerW, 3);
+    lines.forEach((line, lineIndex) => doc.text(line, x + 3, y + 3.7 + lineIndex * 3.1));
   });
 
   // Main transport table
-  const tableY = summaryY + summaryH + 5;
+  const tableY = summaryY + summaryH + 4;
   autoTable(doc, {
     startY: tableY,
     margin: { left: leftX, right: leftX },
@@ -901,8 +902,8 @@ const buildTransportPdf = () => {
     tableWidth: contentWidth,
     styles: {
       font: "helvetica",
-      fontSize: 6.8,
-      cellPadding: 2.3,
+      fontSize: 6.4,
+      cellPadding: 2.0,
       lineWidth: 0.18,
       lineColor: [203, 213, 225],
       textColor: [15, 23, 42],
@@ -915,24 +916,24 @@ const buildTransportPdf = () => {
       fontStyle: "bold",
       halign: "center",
       valign: "middle",
-      minCellHeight: 10,
+      minCellHeight: 9,
     },
     bodyStyles: {
       fillColor: [255, 255, 255],
-      minCellHeight: 12,
+      minCellHeight: 11,
     },
     alternateRowStyles: { fillColor: [248, 250, 252] },
     columnStyles: {
       0: { cellWidth: 16, halign: "center" },
       1: { cellWidth: 22, halign: "center" },
-      2: { cellWidth: 40, halign: "left" },
-      3: { cellWidth: 42, halign: "left" },
+      2: { cellWidth: 39, halign: "left" },
+      3: { cellWidth: 41, halign: "left" },
       4: { cellWidth: 21, halign: "center" },
-      5: { cellWidth: 19, halign: "center" },
-      6: { cellWidth: 23, halign: "right" },
-      7: { cellWidth: 23, halign: "right" },
-      8: { cellWidth: 20, halign: "right" },
-      9: { cellWidth: 55, halign: "right" },
+      5: { cellWidth: 18, halign: "center" },
+      6: { cellWidth: 22, halign: "right" },
+      7: { cellWidth: 22, halign: "right" },
+      8: { cellWidth: 19, halign: "right" },
+      9: { cellWidth: 52, halign: "right" },
     },
     head: [[
       "Bilti No",
@@ -960,11 +961,11 @@ const buildTransportPdf = () => {
     ]],
   });
 
-  // Financial sections
-  const sectionY = doc.lastAutoTable.finalY + 5;
-  const sectionGap = 7;
+  // Financial sections: deductions left, payment right.
+  const sectionY = doc.lastAutoTable.finalY + 4;
+  const sectionGap = 6;
   const sectionWidth = (contentWidth - sectionGap) / 2;
-  const sectionHeight = 77;
+  const sectionHeight = 69;
   const rightSectionX = leftX + sectionWidth + sectionGap;
 
   const drawSection = (x, title) => {
@@ -973,18 +974,18 @@ const buildTransportPdf = () => {
     doc.setLineWidth(0.3);
     doc.roundedRect(x, sectionY, sectionWidth, sectionHeight, 3, 3, "FD");
     doc.setFillColor(15, 118, 110);
-    doc.roundedRect(x, sectionY, sectionWidth, 10, 3, 3, "F");
+    doc.roundedRect(x, sectionY, sectionWidth, 9, 3, 3, "F");
     doc.setFont("helvetica", "bold");
-    doc.setFontSize(8);
+    doc.setFontSize(7.8);
     doc.setTextColor(255, 255, 255);
-    doc.text(title, x + 5, sectionY + 6.8);
+    doc.text(title, x + 5, sectionY + 6.2);
   };
 
   drawSection(leftX, "DEDUCTION DETAILS");
   drawSection(rightSectionX, "PAYMENT DETAILS");
 
-  const rowStart = sectionY + 17;
-  const rowStep = 6.1;
+  const rowStart = sectionY + 16;
+  const rowStep = 7.0;
   const leftLabelX = leftX + 5;
   const leftValueX = leftX + sectionWidth - 5;
   const leftRows = [
@@ -993,16 +994,17 @@ const buildTransportPdf = () => {
     ["Claim Amount", money(claimAmount)],
     ["Detain Charges", money(detain)],
     ["Other Charges", money(others)],
-    ["Total Claim", money(claimAmount)],
+    ["Deduction Amount", money(deductionAmount)],
   ];
 
   leftRows.forEach((row, index) => {
     const y = rowStart + index * rowStep;
-    doc.setFont("helvetica", index === leftRows.length - 1 ? "bold" : "normal");
+    const bold = row[0] === "Deduction Amount";
+    doc.setFont("helvetica", bold ? "bold" : "normal");
     doc.setFontSize(6.9);
     doc.setTextColor(15, 23, 42);
     doc.text(row[0], leftLabelX, y);
-    doc.text(row[1], leftValueX, y, { align: "right" });
+    doc.text(safeText(row[1]), leftValueX, y, { align: "right" });
   });
 
   const rightLabelX = rightSectionX + 5;
@@ -1015,8 +1017,6 @@ const buildTransportPdf = () => {
     ["Net Freight", money(netFreight)],
     ["TDS Amount", money(tds)],
     ["Round Off", money(calculation.roundOff)],
-    ["ADV Date", advDate || "-"],
-    ["Advance Paid", money(advance)],
   ];
 
   rightRows.forEach((row, index) => {
@@ -1026,16 +1026,16 @@ const buildTransportPdf = () => {
     doc.setFontSize(6.9);
     doc.setTextColor(15, 23, 42);
     doc.text(row[0], rightLabelX, y);
-    doc.text(row[1], rightValueX, y, { align: "right" });
+    doc.text(safeText(row[1]), rightValueX, y, { align: "right" });
   });
 
-  const dividerY = sectionY + sectionHeight - 16;
+  const dividerY = sectionY + sectionHeight - 17;
   doc.setDrawColor(226, 232, 240);
   doc.setLineWidth(0.35);
   doc.line(rightSectionX + 5, dividerY, rightSectionX + sectionWidth - 5, dividerY);
 
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(8.4);
+  doc.setFontSize(8.2);
   doc.setTextColor(15, 23, 42);
   doc.text("Net Payable", rightLabelX, dividerY + 8);
 
@@ -1051,13 +1051,14 @@ const buildTransportPdf = () => {
   doc.setTextColor(22, 101, 52);
   doc.text(money(payable), rightValueX - 3, payableBoxY + 6.2, { align: "right" });
 
-  const footerY = Math.min(sectionY + sectionHeight + 9, pageHeight - 9);
+  // Footer: leave more room for the amount-in-words line and signature.
+  const footerY = sectionY + sectionHeight + 8;
   const amountInWords = `Indian Rupees ${numberToWords(payable)}`;
-  const wordsMaxWidth = contentWidth - 65;
+  const wordsMaxWidth = contentWidth - 70;
   const wordsLines = wrap(amountInWords, wordsMaxWidth, 2);
 
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(7.1);
+  doc.setFontSize(7.0);
   doc.setTextColor(15, 23, 42);
   doc.text("Amount in words:", leftX, footerY);
   doc.setFont("helvetica", "normal");
@@ -1066,7 +1067,7 @@ const buildTransportPdf = () => {
   });
 
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(7.1);
+  doc.setFontSize(7.0);
   doc.text("Authorized By:", rightX, footerY, { align: "right" });
 
   return doc;
