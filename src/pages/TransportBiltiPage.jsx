@@ -1608,6 +1608,16 @@ const shareToWhatsApp = async () => {
                 <input type="number" name="others_exp" value={formData.others_exp} onChange={handleChange} style={input} />
               </div>
               <div>
+                <label style={label}>ADV Date</label>
+                <input
+                  type="date"
+                  name="advance_date"
+                  value={formData.advance_date || ""}
+                  onChange={handleChange}
+                  style={input}
+                />
+              </div>
+              <div>
                 <label style={label}>Advance</label>
                 <input type="number" name="advance_amount" value={formData.advance_amount} onChange={handleChange} style={input} />
               </div>
