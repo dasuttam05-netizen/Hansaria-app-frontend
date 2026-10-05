@@ -39,7 +39,6 @@ function WarehouseSalePreviewModal({
     other: false,
     cd: false,
     adjustment: false,
-    tds: false,
   });
   const [manualValues, setManualValues] = useState({
     shortage: "",
@@ -48,14 +47,12 @@ function WarehouseSalePreviewModal({
     other: "",
     cd: "",
     adjustment: "",
-    tds: "",
   });
   const [purchaseManualMode, setPurchaseManualMode] = useState({
     claim: false,
     labour: false,
     freight: false,
     cashDiscount: false,
-    tds: false,
     other: false,
     adjustment: false,
   });
@@ -65,7 +62,6 @@ function WarehouseSalePreviewModal({
     labour: "",
     freight: "",
     cashDiscount: "",
-    tds: "",
     other: "",
     adjustment: "",
   });
@@ -120,7 +116,6 @@ function WarehouseSalePreviewModal({
     const otherAuto = toNumber(salePreviewRow?.other_deduction);
     const cdAuto = toNumber(salePreviewRow?.cd_amount);
     const adjustmentAuto = toNumber(salePreviewRow?.adjustment_amount);
-    const tdsAuto = toNumber(salePreviewRow?.tds_amount);
     setManualValues({
       shortage: shortageAuto.toFixed(2),
       claim: claimAuto.toFixed(2),
@@ -128,7 +123,6 @@ function WarehouseSalePreviewModal({
       other: otherAuto.toFixed(2),
       cd: cdAuto.toFixed(2),
       adjustment: adjustmentAuto.toFixed(2),
-      tds: tdsAuto.toFixed(2),
     });
     const savedSaleManualModes =
       salePreviewRow?.sale_deduction_manual_modes ||
@@ -141,7 +135,6 @@ function WarehouseSalePreviewModal({
       other: Boolean(savedSaleManualModes.other),
       cd: Boolean(savedSaleManualModes.cd),
       adjustment: Boolean(savedSaleManualModes.adjustment),
-      tds: Boolean(savedSaleManualModes.tds),
     });
 
     const savedPurchaseLinks = Array.isArray(salePreviewSummary?.purchase_links)
@@ -152,10 +145,9 @@ function WarehouseSalePreviewModal({
       labour: acc.labour || Boolean(item?.purchase_deduction_manual_modes?.labour || item?.sale_summary_manual_modes?.labour),
       freight: acc.freight || Boolean(item?.purchase_deduction_manual_modes?.freight || item?.sale_summary_manual_modes?.freight),
       cashDiscount: acc.cashDiscount || Boolean(item?.purchase_deduction_manual_modes?.cashDiscount || item?.sale_summary_manual_modes?.cashDiscount),
-      tds: acc.tds || Boolean(item?.purchase_deduction_manual_modes?.tds || item?.sale_summary_manual_modes?.tds),
       other: acc.other || Boolean(item?.purchase_deduction_manual_modes?.other || item?.sale_summary_manual_modes?.other),
       adjustment: acc.adjustment || Boolean(item?.purchase_deduction_manual_modes?.adjustment || item?.sale_summary_manual_modes?.adjustment),
-    }), { claim: false, labour: false, freight: false, cashDiscount: false, tds: false, other: false, adjustment: false });
+    }), { claim: false, labour: false, freight: false, cashDiscount: false, other: false, adjustment: false });
     const sumSavedPurchase = (key) => savedPurchaseLinks.reduce((sum, item) => {
       const purchase = item?.purchase_details || item || {};
       const map = {
@@ -163,7 +155,6 @@ function WarehouseSalePreviewModal({
         labour: purchase.labour,
         freight: purchase.transport_charge,
         cashDiscount: purchase.cd_amount,
-        tds: purchase.tds_amount,
         other: purchase.other_deduction,
         adjustment: purchase.adjustment_amount,
       };
@@ -174,7 +165,6 @@ function WarehouseSalePreviewModal({
       labour: sumSavedPurchase("labour").toFixed(2),
       freight: sumSavedPurchase("freight").toFixed(2),
       cashDiscount: sumSavedPurchase("cashDiscount").toFixed(2),
-      tds: sumSavedPurchase("tds").toFixed(2),
       other: sumSavedPurchase("other").toFixed(2),
       adjustment: sumSavedPurchase("adjustment").toFixed(2),
     });
@@ -224,7 +214,6 @@ function WarehouseSalePreviewModal({
       acc.labour += toNumber(purchase.labour);
       acc.freight += toNumber(purchase.transport_charge);
       acc.cashDiscount += toNumber(purchase.cd_amount);
-      acc.tds += toNumber(purchase.tds_amount);
       acc.other += toNumber(purchase.other_deduction);
       acc.adjustment += toNumber(purchase.adjustment_amount);
       acc.roundOff += toNumber(purchase.round_off);
@@ -233,21 +222,18 @@ function WarehouseSalePreviewModal({
         toNumber(purchase.labour) +
         toNumber(purchase.transport_charge) +
         toNumber(purchase.cd_amount) +
-        toNumber(purchase.tds_amount) +
         toNumber(purchase.other_deduction) +
         toNumber(purchase.adjustment_amount)
       ));
       return acc;
-    }, { claim: 0, labour: 0, freight: 0, cashDiscount: 0, tds: 0, other: 0, adjustment: 0, roundOff: 0, total: 0 });
+    }, { claim: 0, labour: 0, freight: 0, cashDiscount: 0, other: 0, adjustment: 0, roundOff: 0, total: 0 });
   }, [hydratedPurchaseLinks, toNumber]);
-  const freightAmountForPurchaseAuto = saleFreightAutoAmount > 0 ? saleFreightAutoAmount : purchaseDeductionTotals.freight;
+  const freightAmountForPurchaseAuto = purchaseDeductionTotals.freight;
   const purchaseDeductionAutoRows = useMemo(() => ({
     claim: purchaseDeductionTotals.claim,
     labour: purchaseDeductionTotals.labour,
-    // Sale Freight automatically flows into Purchase Freight. Admin can still override it manually below.
     freight: freightAmountForPurchaseAuto,
     cashDiscount: purchaseDeductionTotals.cashDiscount,
-    tds: purchaseDeductionTotals.tds,
     other: purchaseDeductionTotals.other,
     adjustment: purchaseDeductionTotals.adjustment,
   }), [purchaseDeductionTotals, freightAmountForPurchaseAuto]);
@@ -257,7 +243,6 @@ function WarehouseSalePreviewModal({
     labour: purchaseManualMode.labour ? toNumber(purchaseManualValues.labour) : purchaseDeductionAutoRows.labour,
     freight: purchaseManualMode.freight ? toNumber(purchaseManualValues.freight) : purchaseDeductionAutoRows.freight,
     cashDiscount: purchaseManualMode.cashDiscount ? toNumber(purchaseManualValues.cashDiscount) : purchaseDeductionAutoRows.cashDiscount,
-    tds: purchaseManualMode.tds ? toNumber(purchaseManualValues.tds) : purchaseDeductionAutoRows.tds,
     other: purchaseManualMode.other ? toNumber(purchaseManualValues.other) : purchaseDeductionAutoRows.other,
     adjustment: purchaseManualMode.adjustment ? toNumber(purchaseManualValues.adjustment) : purchaseDeductionAutoRows.adjustment,
   };
@@ -275,13 +260,11 @@ function WarehouseSalePreviewModal({
   const otherAmount = manualMode.other ? toNumber(manualValues.other) : otherAutoAmount;
   const cdAutoAmount = toNumber(salePreviewRow?.cd_amount);
   const adjustmentAutoAmount = toNumber(salePreviewRow?.adjustment_amount);
-  const tdsAutoAmount = toNumber(salePreviewRow?.tds_amount);
   const cdAmount = manualMode.cd ? toNumber(manualValues.cd) : cdAutoAmount;
   const adjustmentAmount = manualMode.adjustment ? toNumber(manualValues.adjustment) : adjustmentAutoAmount;
-  const tdsAmount = manualMode.tds ? toNumber(manualValues.tds) : tdsAutoAmount;
   const roundOff = toNumber(salePreviewRow?.round_off);
 
-  const totalDeduction = shortageAmount + claimAmount + freightAmount + otherAmount + cdAmount + adjustmentAmount + tdsAmount;
+  const totalDeduction = shortageAmount + claimAmount + freightAmount + otherAmount + cdAmount + adjustmentAmount;
   const netSale = saleAmount - totalDeduction + saleAdditionalAmount + roundOff;
   const netPurchase = purchaseNetAfterDeduction;
   const profitLoss = netSale - netPurchase;
@@ -296,7 +279,6 @@ function WarehouseSalePreviewModal({
         other: otherAutoAmount,
         cd: cdAutoAmount,
         adjustment: adjustmentAutoAmount,
-        tds: tdsAutoAmount,
       }[key];
       setManualValues((prev) => ({ ...prev, [key]: Number(autoValue || 0).toFixed(2) }));
     }
@@ -312,7 +294,7 @@ function WarehouseSalePreviewModal({
   };
 
   const handleReset = () => {
-    setManualMode({ shortage: false, claim: false, freight: false, other: false, cd: false, adjustment: false, tds: false });
+    setManualMode({ shortage: false, claim: false, freight: false, other: false, cd: false, adjustment: false });
     setManualValues({
       shortage: shortageAutoAmount.toFixed(2),
       claim: claimAutoAmount.toFixed(2),
@@ -320,15 +302,13 @@ function WarehouseSalePreviewModal({
       other: otherAutoAmount.toFixed(2),
       cd: cdAutoAmount.toFixed(2),
       adjustment: adjustmentAutoAmount.toFixed(2),
-      tds: tdsAutoAmount.toFixed(2),
     });
-    setPurchaseManualMode({ claim: false, labour: false, freight: false, cashDiscount: false, tds: false, other: false, adjustment: false });
+    setPurchaseManualMode({ claim: false, labour: false, freight: false, cashDiscount: false, other: false, adjustment: false });
     setPurchaseManualValues({
       claim: purchaseDeductionAutoRows.claim.toFixed(2),
       labour: purchaseDeductionAutoRows.labour.toFixed(2),
       freight: purchaseDeductionAutoRows.freight.toFixed(2),
       cashDiscount: purchaseDeductionAutoRows.cashDiscount.toFixed(2),
-      tds: purchaseDeductionAutoRows.tds.toFixed(2),
       other: purchaseDeductionAutoRows.other.toFixed(2),
       adjustment: purchaseDeductionAutoRows.adjustment.toFixed(2),
     });
@@ -388,9 +368,8 @@ function WarehouseSalePreviewModal({
           const auto = {
             claim: toNumber(purchase.claim_amount ?? purchase.bags_claim),
             labour: toNumber(purchase.labour),
-            freight: saleFreightAutoAmount > 0 ? saleFreightAutoAmount * ratio : toNumber(purchase.transport_charge),
+            freight: toNumber(purchase.transport_charge),
             cashDiscount: toNumber(purchase.cd_amount),
-            tds: toNumber(purchase.tds_amount),
             other: toNumber(purchase.other_deduction),
             adjustment: toNumber(purchase.adjustment_amount),
           };
@@ -399,14 +378,13 @@ function WarehouseSalePreviewModal({
             labour: purchaseManualMode.labour ? purchaseDeductionFinal.labour * ratio : auto.labour,
             freight: purchaseManualMode.freight ? purchaseDeductionFinal.freight * ratio : auto.freight,
             cashDiscount: purchaseManualMode.cashDiscount ? purchaseDeductionFinal.cashDiscount * ratio : auto.cashDiscount,
-            tds: purchaseManualMode.tds ? purchaseDeductionFinal.tds * ratio : auto.tds,
             other: purchaseManualMode.other ? purchaseDeductionFinal.other * ratio : auto.other,
             adjustment: purchaseManualMode.adjustment ? purchaseDeductionFinal.adjustment * ratio : auto.adjustment,
             roundOff: toNumber(purchase.round_off),
           };
           final.totalDeduction = Number((
             final.claim + final.labour + final.freight + final.cashDiscount +
-            final.tds + final.other + final.adjustment
+            final.other + final.adjustment
           ).toFixed(2));
           return {
             purchase_id: String(item?.purchase_id || item?.id || item?._id || "").trim(),
@@ -418,6 +396,7 @@ function WarehouseSalePreviewModal({
 
       const payload = {
         deduction_only: true,
+        sale_summary_only: true,
         sale_type: saleType,
         warehouse_id: warehouseId,
         location_id: locationId,
@@ -431,7 +410,6 @@ function WarehouseSalePreviewModal({
         cd_percent: toNumber(salePreviewRow?.cd_percent),
         cd_amount: cdAmount,
         adjustment_amount: adjustmentAmount,
-        tds_amount: tdsAmount,
         transport_charge: freightAmount,
         additional_amount: saleAdditionalAmount,
         round_off: roundOff,
@@ -461,9 +439,8 @@ function WarehouseSalePreviewModal({
       { key: "other", label: "Others", auto: otherAutoAmount, value: otherAmount },
       { key: "cd", label: "CD", auto: cdAutoAmount, value: cdAmount },
       { key: "adjustment", label: "Adjustment", auto: adjustmentAutoAmount, value: adjustmentAmount },
-      { key: "tds", label: "TDS", auto: tdsAutoAmount, value: tdsAmount },
     ],
-    [formatDecimal4, shortageQtyAuto, shortageAutoAmount, claimAutoAmount, freightAutoAmount, otherAutoAmount, cdAutoAmount, adjustmentAutoAmount, tdsAutoAmount, shortageAmount, claimAmount, freightAmount, otherAmount, cdAmount, adjustmentAmount, tdsAmount]
+    [formatDecimal4, shortageQtyAuto, shortageAutoAmount, claimAutoAmount, freightAutoAmount, otherAutoAmount, cdAutoAmount, adjustmentAutoAmount, shortageAmount, claimAmount, freightAmount, otherAmount, cdAmount, adjustmentAmount]
   );
 
   return (
@@ -551,7 +528,6 @@ function WarehouseSalePreviewModal({
                     ["labour", "Labour"],
                     ["freight", "Freight / Transport"],
                     ["cashDiscount", "Cash Discount"],
-                    ["tds", "TDS"],
                     ["other", "Other Deduction"],
                     ["adjustment", "Adjustment"],
                   ].map(([key, label]) => {
