@@ -51,6 +51,7 @@ export default function TransportBiltiPage() {
     transport_rate: "",
     detain_amount: "",
     others_exp: "",
+    advance_date: "",
     advance_amount: "",
     tds_percent: "0",
     round_off: "0",
@@ -493,6 +494,7 @@ export default function TransportBiltiPage() {
         transport_rate: row.transport_rate ?? "",
         detain_amount: row.detain_amount ?? "",
         others_exp: row.others_exp ?? "",
+        advance_date: row.advance_date || row.adv_date || "",
         advance_amount: row.advance_amount ?? "",
         tds_percent: String(row.tds_percent ?? "0"),
         round_off: String(row.round_off ?? "0"),
@@ -785,17 +787,18 @@ const buildTransportPdf = () => {
   const doc = new jsPDF("l", "mm", "a4");
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
-  const margin = 12;
+  const margin = 8;
   const leftX = margin;
   const rightX = pageWidth - margin;
   const contentWidth = pageWidth - margin * 2;
 
-  const voucherNo = formData.voucher_no || meta?.outward_voucher_no || meta?.voucher_no || "-";
-  const billNo = meta?.bilti_no || (formData.id ? `BLT-${formData.id}` : "DRAFT");
-  const lrDate = formatDate(formData.dispatch_date || formData.outward_date);
-  const transporterName = selectedTransporter?.name || "Transport Copy";
-  const consigneeName = formData.consignee_name || "-";
-  const consignorName = selectedAccount?.account_name || formData.account_name || "-";
+  const voucherNo = formData.voucher_no || meta?.outward_voucher_no || meta?.sale_voucher_no || meta?.voucher_no || "-";
+  const billNo = meta?.bilti_no || formData.bilti_no || (formData.id ? `BLT-${formData.id}` : "DRAFT");
+  const lrDate = formatDate(formData.dispatch_date || formData.outward_date || meta?.dispatch_date || meta?.outward_date);
+  const advDate = formatDate(formData.advance_date || meta?.advance_date || meta?.adv_date || "");
+  const transporterName = selectedTransporter?.name || formData.transporter_name || meta?.transporter_name || meta?.transport_name || "Transport Copy";
+  const consigneeName = formData.consignee_name || meta?.consignee_name || "-";
+  const consignorName = selectedAccount?.account_name || formData.account_name || meta?.account_name || meta?.company_name || "-";
 
   const dispatchWeight = num(formData.dispatch_qty);
   const outwardWeight = num(formData.outward_qty);
@@ -807,105 +810,129 @@ const buildTransportPdf = () => {
   const tds = calculation.tdsAmount;
   const advance = num(formData.advance_amount);
   const payable = calculation.payableAmount;
-  const netAmount = calculation.netAmount;
   const money = (v) => Number(v || 0).toFixed(2);
   const claimAmount = Math.max(0, shortage);
-  const addOnCharges = Math.max(0, detain + others);
-  const netFreight = Math.max(0, gross - claimAmount + addOnCharges);
-  const shortageDetail = `${money(outwardWeight)} - ${money(dispatchWeight)} = ${money(Math.max(outwardWeight - dispatchWeight, 0))}`;
+  const netFreight = Math.max(0, gross - claimAmount + detain + others);
+  const shortageQty = Math.max(outwardWeight - dispatchWeight, 0);
+  const shortageDetail = `${money(outwardWeight)} - ${money(dispatchWeight)} = ${money(shortageQty)}`;
+
+  const safeText = (value) => String(value ?? "-");
+  const wrap = (value, width, maxLines = 2) => {
+    const lines = doc.splitTextToSize(safeText(value), Math.max(width, 10));
+    return lines.slice(0, maxLines);
+  };
 
   doc.setFillColor(255, 255, 255);
   doc.rect(0, 0, pageWidth, pageHeight, "F");
-
   doc.setDrawColor(203, 213, 225);
-  doc.setLineWidth(0.5);
-  doc.roundedRect(4, 4, pageWidth - 8, pageHeight - 8, 4, 4, "S");
+  doc.setLineWidth(0.45);
+  doc.roundedRect(4, 4, pageWidth - 8, pageHeight - 8, 3, 3, "S");
 
-  const headerHeight = 26;
-  doc.setFillColor(3, 105, 103);
-  doc.roundedRect(leftX, margin, contentWidth, headerHeight, 4, 4, "F");
+  // Header
+  const headerY = margin;
+  const headerH = 17;
+  doc.setFillColor(15, 118, 110);
+  doc.roundedRect(leftX, headerY, contentWidth, headerH, 3, 3, "F");
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(18);
+  doc.setFontSize(15);
   doc.setTextColor(255, 255, 255);
-  doc.text("TRANSPORT PAYMENT ADVICE", leftX + 10, margin + 16);
+  doc.text("TRANSPORT PAYMENT ADVICE", pageWidth / 2, headerY + 11, { align: "center" });
 
-  const topBlockY = margin + headerHeight + 8;
-  const topBlockHeight = 24;
-  doc.setFillColor(255, 255, 255);
-  doc.setDrawColor(203, 213, 225);
-  doc.roundedRect(leftX, topBlockY, contentWidth, topBlockHeight, 4, 4, "FD");
-
+  // General details / party details block
+  const summaryY = headerY + headerH + 5;
+  const summaryH = 37;
+  const summaryCols = 4;
+  const summaryColW = contentWidth / summaryCols;
   const summaryFields = [
     ["LR Date", lrDate || "-"],
     ["Voucher No", voucherNo],
     ["Transport", transporterName],
     ["Consignee", consigneeName],
-    ["Buyer", formData.buyer_name || "-"],
-    ["Warehouse", formData.warehouse_name || "-"],
+    ["Buyer", formData.buyer_name || meta?.buyer_name || meta?.sale_buyer_name || "-"],
+    ["Warehouse", formData.warehouse_name || meta?.warehouse_name || meta?.sale_warehouse_name || "-"],
     ["Destination", formData.destination || "-"],
-    ["Vehicle", formData.lorry_no || "-"],
-    ["Product", formData.product_name || "-"],
+    ["Vehicle", formData.lorry_no || meta?.lorry_no || meta?.sale_lorry_no || "-"],
+    ["Product", formData.product_name || meta?.product_name || meta?.sale_product_name || "-"],
+    ["ADV Date", advDate || "-"],
+    ["Bilti No", billNo],
     ["Days", formData.days || "0"],
   ];
 
-  const cols = 5;
-  const colWidth = contentWidth / cols;
+  doc.setFillColor(255, 255, 255);
+  doc.setDrawColor(203, 213, 225);
+  doc.roundedRect(leftX, summaryY, contentWidth, summaryH, 3, 3, "FD");
+
   summaryFields.forEach((field, index) => {
-    const col = index % cols;
-    const row = Math.floor(index / cols);
-    const x = leftX + col * colWidth;
-    const y = topBlockY + 5 + row * 10;
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(7);
-    doc.setTextColor(15, 23, 42);
-    doc.text(field[0], x + 3, y);
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(7);
-    doc.setTextColor(71, 85, 105);
-    doc.text(String(field[1]), x + 3, y + 4);
-    if (col < cols - 1) {
+    const col = index % summaryCols;
+    const row = Math.floor(index / summaryCols);
+    const x = leftX + col * summaryColW;
+    const y = summaryY + 7 + row * 11.5;
+    const innerW = summaryColW - 8;
+
+    if (col > 0) {
       doc.setDrawColor(226, 232, 240);
       doc.setLineWidth(0.2);
-      doc.line(x + colWidth, topBlockY + 4, x + colWidth, topBlockY + topBlockHeight - 4);
+      doc.line(x, summaryY + 3, x, summaryY + summaryH - 3);
     }
+    if (row > 0) {
+      doc.setDrawColor(226, 232, 240);
+      doc.setLineWidth(0.2);
+      doc.line(x + 3, y - 8, x + summaryColW - 3, y - 8);
+    }
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(6.5);
+    doc.setTextColor(71, 85, 105);
+    doc.text(field[0], x + 3, y);
+
+    doc.setFont("helvetica", "normal");
+    doc.setFontSize(6.5);
+    doc.setTextColor(15, 23, 42);
+    const lines = wrap(field[1], innerW, 2);
+    lines.forEach((line, lineIndex) => doc.text(line, x + 3, y + 4 + lineIndex * 3.3));
   });
 
-  const tableY = topBlockY + topBlockHeight + 10;
+  // Main transport table
+  const tableY = summaryY + summaryH + 5;
   autoTable(doc, {
     startY: tableY,
     margin: { left: leftX, right: leftX },
     theme: "grid",
-    tableLineWidth: 0.22,
-    tableLineColor: [148, 163, 184],
+    tableWidth: contentWidth,
     styles: {
-      fontSize: 7.8,
-      cellPadding: 3.5,
-      lineWidth: 0.22,
+      font: "helvetica",
+      fontSize: 6.8,
+      cellPadding: 2.3,
+      lineWidth: 0.18,
       lineColor: [203, 213, 225],
       textColor: [15, 23, 42],
-      fillColor: [255, 255, 255],
+      valign: "middle",
+      overflow: "linebreak",
     },
     headStyles: {
-      fillColor: [3, 105, 103],
+      fillColor: [15, 118, 110],
       textColor: [255, 255, 255],
       fontStyle: "bold",
       halign: "center",
+      valign: "middle",
+      minCellHeight: 10,
     },
     bodyStyles: {
       fillColor: [255, 255, 255],
-      textColor: [15, 23, 42],
-      minCellHeight: 10,
+      minCellHeight: 12,
     },
-    alternateRowStyles: { fillColor: [249, 250, 251] },
+    alternateRowStyles: { fillColor: [248, 250, 252] },
     columnStyles: {
-      2: { halign: "left" },
-      3: { halign: "left" },
-      4: { halign: "center" },
-      5: { halign: "center" },
-      6: { halign: "right" },
-      7: { halign: "right" },
-      8: { halign: "right" },
-      9: { halign: "right" },
+      0: { cellWidth: 16, halign: "center" },
+      1: { cellWidth: 22, halign: "center" },
+      2: { cellWidth: 40, halign: "left" },
+      3: { cellWidth: 42, halign: "left" },
+      4: { cellWidth: 21, halign: "center" },
+      5: { cellWidth: 19, halign: "center" },
+      6: { cellWidth: 23, halign: "right" },
+      7: { cellWidth: 23, halign: "right" },
+      8: { cellWidth: 20, halign: "right" },
+      9: { cellWidth: 55, halign: "right" },
     },
     head: [[
       "Bilti No",
@@ -920,12 +947,12 @@ const buildTransportPdf = () => {
       "Gross Freight",
     ]],
     body: [[
-      billNo,
-      voucherNo,
-      consignorName,
-      consigneeName,
-      formData.lorry_no || "-",
-      formData.product_name || "-",
+      safeText(billNo),
+      safeText(voucherNo),
+      safeText(consignorName),
+      safeText(consigneeName),
+      safeText(formData.lorry_no || meta?.lorry_no || meta?.sale_lorry_no || "-"),
+      safeText(formData.product_name || meta?.product_name || meta?.sale_product_name || "-"),
       money(outwardWeight),
       money(dispatchWeight),
       money(rate),
@@ -933,61 +960,53 @@ const buildTransportPdf = () => {
     ]],
   });
 
-  const sectionY = doc.lastAutoTable.finalY + 10;
-  const sectionWidth = (contentWidth - 10) / 2;
-  const sectionHeight = 78;
+  // Financial sections
+  const sectionY = doc.lastAutoTable.finalY + 5;
+  const sectionGap = 7;
+  const sectionWidth = (contentWidth - sectionGap) / 2;
+  const sectionHeight = 77;
+  const rightSectionX = leftX + sectionWidth + sectionGap;
 
-  doc.setDrawColor(203, 213, 225);
-  doc.setFillColor(255, 255, 255);
-  doc.roundedRect(leftX, sectionY, sectionWidth, sectionHeight, 4, 4, "FD");
-  doc.roundedRect(leftX + sectionWidth + 10, sectionY, sectionWidth, sectionHeight, 4, 4, "FD");
+  const drawSection = (x, title) => {
+    doc.setFillColor(255, 255, 255);
+    doc.setDrawColor(203, 213, 225);
+    doc.setLineWidth(0.3);
+    doc.roundedRect(x, sectionY, sectionWidth, sectionHeight, 3, 3, "FD");
+    doc.setFillColor(15, 118, 110);
+    doc.roundedRect(x, sectionY, sectionWidth, 10, 3, 3, "F");
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8);
+    doc.setTextColor(255, 255, 255);
+    doc.text(title, x + 5, sectionY + 6.8);
+  };
 
-  doc.setFillColor(3, 105, 103);
-  doc.roundedRect(leftX, sectionY, sectionWidth, 12, 4, 4, "F");
-  doc.roundedRect(leftX + sectionWidth + 10, sectionY, sectionWidth, 12, 4, 4, "F");
+  drawSection(leftX, "DEDUCTION DETAILS");
+  drawSection(rightSectionX, "PAYMENT DETAILS");
 
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(9);
-  doc.setTextColor(255, 255, 255);
-  doc.text("DEDUCTION DETAILS", leftX + 5, sectionY + 8);
-  doc.text("PAYMENT DETAILS", leftX + sectionWidth + 15, sectionY + 8);
-
-  const leftCol1 = leftX + 5;
-  const leftCol2 = leftX + sectionWidth * 0.45;
-  const leftCol3 = leftX + sectionWidth - 4;
-  let rowY = sectionY + 18;
-
+  const rowStart = sectionY + 17;
+  const rowStep = 6.1;
+  const leftLabelX = leftX + 5;
+  const leftValueX = leftX + sectionWidth - 5;
   const leftRows = [
-    ["Shortage Qty", shortageDetail, ""],
-    ["Free KG", formData.shortage_free_kg || "-", ""],
-    ["Claim Amount", "", money(claimAmount)],
-    ["Detain Charges", "", money(detain)],
-    ["Other Charges", "", money(others)],
+    ["Shortage Qty", shortageDetail],
+    ["Free KG", money(formData.shortage_free_kg || 0)],
+    ["Claim Amount", money(claimAmount)],
+    ["Detain Charges", money(detain)],
+    ["Other Charges", money(others)],
+    ["Total Claim", money(claimAmount)],
   ];
 
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(7.5);
-  doc.setTextColor(71, 85, 105);
-  leftRows.forEach((row) => {
-    doc.text(row[0], leftCol1, rowY);
-    doc.text(row[1], leftCol2, rowY);
-    doc.text(row[2], leftCol3, rowY, { align: "right" });
-    rowY += 7.5;
+  leftRows.forEach((row, index) => {
+    const y = rowStart + index * rowStep;
+    doc.setFont("helvetica", index === leftRows.length - 1 ? "bold" : "normal");
+    doc.setFontSize(6.9);
+    doc.setTextColor(15, 23, 42);
+    doc.text(row[0], leftLabelX, y);
+    doc.text(row[1], leftValueX, y, { align: "right" });
   });
 
-  doc.setDrawColor(226, 232, 240);
-  doc.setLineWidth(0.2);
-  doc.line(leftX + 5, sectionY + sectionHeight - 20, leftX + sectionWidth - 5, sectionY + sectionHeight - 20);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(8);
-  doc.setTextColor(15, 23, 42);
-  doc.text("Total Claim", leftCol1, sectionY + sectionHeight - 8);
-  doc.text(money(claimAmount), leftCol3, sectionY + sectionHeight - 8, { align: "right" });
-
-  const rightCol1 = leftX + sectionWidth + 15;
-  const rightCol2 = leftX + sectionWidth * 2 + 6;
-  rowY = sectionY + 18;
-
+  const rightLabelX = rightSectionX + 5;
+  const rightValueX = rightSectionX + sectionWidth - 5;
   const rightRows = [
     ["Gross Freight", money(gross)],
     ["Less: Claim Amount", money(claimAmount)],
@@ -996,53 +1015,59 @@ const buildTransportPdf = () => {
     ["Net Freight", money(netFreight)],
     ["TDS Amount", money(tds)],
     ["Round Off", money(calculation.roundOff)],
+    ["ADV Date", advDate || "-"],
     ["Advance Paid", money(advance)],
   ];
 
-  rightRows.forEach((row) => {
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(7.5);
+  rightRows.forEach((row, index) => {
+    const y = rowStart + index * rowStep;
+    const bold = row[0] === "Net Freight";
+    doc.setFont("helvetica", bold ? "bold" : "normal");
+    doc.setFontSize(6.9);
     doc.setTextColor(15, 23, 42);
-    doc.text(row[0], rightCol1, rowY);
-    doc.text(row[1], rightCol2, rowY, { align: "right" });
-    rowY += 7.5;
+    doc.text(row[0], rightLabelX, y);
+    doc.text(row[1], rightValueX, y, { align: "right" });
   });
 
+  const dividerY = sectionY + sectionHeight - 16;
   doc.setDrawColor(226, 232, 240);
-  doc.setLineWidth(0.4);
-  doc.line(leftX + sectionWidth + 10, sectionY + sectionHeight - 20, leftX + sectionWidth * 2 + 10, sectionY + sectionHeight - 20);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(9);
-  doc.setTextColor(15, 23, 42);
-  doc.text("Net Payable", rightCol1, sectionY + sectionHeight - 10);
+  doc.setLineWidth(0.35);
+  doc.line(rightSectionX + 5, dividerY, rightSectionX + sectionWidth - 5, dividerY);
 
-  const payableBoxWidth = 34;
-  const payableBoxHeight = 10;
-  const payableBoxX = rightCol2 - payableBoxWidth;
-  const payableBoxY = sectionY + sectionHeight - 14.5;
-  doc.setFillColor(188, 239, 188);
-  doc.setDrawColor(188, 239, 188);
-  doc.setLineWidth(0.4);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(8.4);
+  doc.setTextColor(15, 23, 42);
+  doc.text("Net Payable", rightLabelX, dividerY + 8);
+
+  const payableBoxWidth = 42;
+  const payableBoxHeight = 9;
+  const payableBoxX = rightValueX - payableBoxWidth;
+  const payableBoxY = dividerY + 1;
+  doc.setFillColor(220, 252, 231);
+  doc.setDrawColor(134, 239, 172);
   doc.roundedRect(payableBoxX, payableBoxY, payableBoxWidth, payableBoxHeight, 2, 2, "FD");
   doc.setFont("helvetica", "bold");
   doc.setFontSize(9);
-  doc.setTextColor(15, 23, 42);
-  doc.text(money(payable), rightCol2 - 2, sectionY + sectionHeight - 7, { align: "right" });
+  doc.setTextColor(22, 101, 52);
+  doc.text(money(payable), rightValueX - 3, payableBoxY + 6.2, { align: "right" });
 
+  const footerY = Math.min(sectionY + sectionHeight + 9, pageHeight - 9);
   const amountInWords = `Indian Rupees ${numberToWords(payable)}`;
-  const footerY = sectionY + sectionHeight + 8;
+  const wordsMaxWidth = contentWidth - 65;
+  const wordsLines = wrap(amountInWords, wordsMaxWidth, 2);
+
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(8);
+  doc.setFontSize(7.1);
   doc.setTextColor(15, 23, 42);
-  doc.text(`Amount in words: ${amountInWords}`, leftX, footerY);
+  doc.text("Amount in words:", leftX, footerY);
+  doc.setFont("helvetica", "normal");
+  wordsLines.forEach((line, index) => {
+    doc.text(line, leftX + 27, footerY + index * 3.8);
+  });
 
   doc.setFont("helvetica", "bold");
-  doc.setFontSize(8);
-  doc.text("Authorized By:", rightX - 2, footerY, { align: "right" });
-
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(7.5);
-  doc.text("This is a system generated document.", leftX, footerY + 8);
+  doc.setFontSize(7.1);
+  doc.text("Authorized By:", rightX, footerY, { align: "right" });
 
   return doc;
 };
