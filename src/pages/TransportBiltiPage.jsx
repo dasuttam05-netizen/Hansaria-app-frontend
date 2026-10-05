@@ -11,7 +11,6 @@ export default function TransportBiltiPage() {
 
   const [mode, setMode] = useState("outward");
   const [outwardList, setOutwardList] = useState([]);
-  const [saleList, setSaleList] = useState([]);
   const [transporters, setTransporters] = useState([]);
   const [companies, setCompanies] = useState([]);
   const [companyAccounts, setCompanyAccounts] = useState([]);
@@ -22,6 +21,8 @@ export default function TransportBiltiPage() {
   const [selectedSaleId, setSelectedSaleId] = useState("");
   const [sourceSearch, setSourceSearch] = useState("");
   const [sourceLoaded, setSourceLoaded] = useState({ outward: false, sale: false, saleCompleted: false });
+  const [pendingSaleSourceList, setPendingSaleSourceList] = useState([]);
+  const [completedSaleSourceList, setCompletedSaleSourceList] = useState([]);
   const [showCompletedSaleOnly, setShowCompletedSaleOnly] = useState(false);
   const [meta, setMeta] = useState(null);
   const [transportNameDisplay, setTransportNameDisplay] = useState("");
@@ -245,9 +246,7 @@ export default function TransportBiltiPage() {
     if (sourceMode !== "outward" && sourceMode !== "sale") return;
     const completed = completedOverride === null ? showCompletedSaleOnly : Boolean(completedOverride);
     const includeSaved = sourceMode === "sale" && (includeSavedOverride || completed);
-    const loadedKey = sourceMode === "sale" && completed
-      ? (includeSaved ? "saleCompletedSaved" : "saleCompleted")
-      : sourceMode;
+    const loadedKey = sourceMode === "sale" && completed ? "saleCompleted" : sourceMode;
     if (!force && sourceLoaded[loadedKey]) return;
 
     const endpoint = sourceMode === "outward"
@@ -262,8 +261,10 @@ export default function TransportBiltiPage() {
     );
     if (sourceMode === "outward") {
       setOutwardList(res.data || []);
+    } else if (completed) {
+      setCompletedSaleSourceList(res.data || []);
     } else {
-      setSaleList(res.data || []);
+      setPendingSaleSourceList(res.data || []);
     }
     setSourceLoaded((prev) => ({ ...prev, [loadedKey]: true }));
   };
@@ -339,6 +340,17 @@ export default function TransportBiltiPage() {
   };
 
   const returnAfterEditorSave = async () => {
+    const params = new URLSearchParams(window.location.search);
+    const isReportEdit = Boolean(params.get("edit"));
+
+    // Return immediately; refresh the source list in the background so the
+    // editor does not remain open while waiting for master/source requests.
+    if (isReportEdit) {
+      window.history.back();
+    } else {
+      closeEditorPopup();
+    }
+
     try {
       if (mode === "outward" || mode === "sale") {
         await loadSourceList(
@@ -351,14 +363,6 @@ export default function TransportBiltiPage() {
     } catch (err) {
       console.warn("Transport source refresh after save failed", err);
     }
-
-    const params = new URLSearchParams(window.location.search);
-    if (params.get("edit")) {
-      window.history.back();
-      return;
-    }
-
-    closeEditorPopup();
   };
 
   const switchMode = async (nextMode) => {
@@ -524,11 +528,16 @@ export default function TransportBiltiPage() {
     () => {
       const found = transporters.find((t) => String(t.id) === String(formData.transporter_id));
       if (found) return found;
-      if (transportNameDisplay) {
+      if (transportNameDisplay || meta?.transporter_name || meta?.transport_name) {
         return {
           id: formData.transporter_id,
           _id: formData.transporter_id,
-          name: transportNameDisplay,
+          name: transportNameDisplay || meta?.transporter_name || meta?.transport_name || "",
+          address: meta?.transporter_address || "",
+          pan_no: meta?.transporter_pan_no || meta?.pan_no || "",
+          gst_no: meta?.transporter_gst_no || meta?.gst_no || "",
+          aadhar_no: meta?.transporter_aadhar_no || meta?.aadhar_no || "",
+          mobile: meta?.transporter_mobile || meta?.mobile || "",
         };
       }
       return null;
@@ -597,8 +606,14 @@ export default function TransportBiltiPage() {
 
   const pendingSaleList = useMemo(() => {
     const search = sourceSearch.trim().toLowerCase();
-    return saleList.filter((row) => {
-      if (!showCompletedSaleOnly && row.bilti_id) return false;
+    const sourceRows = showCompletedSaleOnly ? completedSaleSourceList : pendingSaleSourceList;
+    return sourceRows.filter((row) => {
+      const completed = Boolean(row.unloading_date && String(row.unloading_date).trim());
+      if (!showCompletedSaleOnly) {
+        // Pending Warehouse Sale must never show a completed unloading row,
+        // even if an older cached response is still in memory.
+        if (completed || row.bilti_id) return false;
+      }
       const searchable = [
         row.voucher_no,
         row.warehouse_name,
@@ -610,7 +625,7 @@ export default function TransportBiltiPage() {
       ].join(" ").toLowerCase();
       return !search || searchable.includes(search);
     });
-  }, [saleList, sourceSearch]);
+  }, [pendingSaleSourceList, completedSaleSourceList, showCompletedSaleOnly, sourceSearch]);
 
   const calculation = useMemo(() => {
     const outwardQty = num(formData.outward_qty);
@@ -705,9 +720,19 @@ export default function TransportBiltiPage() {
 
     try {
       const res = await axios.post(`${API_BASE}/transporters`, transportForm);
-      await loadStaticMasterData();
-      setTransportNameDisplay(res.data?.name || transportForm.name.trim());
-      setFormData((prev) => ({ ...prev, transporter_id: String(res.data.id) }));
+      const saved = res.data?.transporter || {
+        id: res.data?.id,
+        _id: res.data?._id,
+        name: transportForm.name.trim(),
+        address: transportForm.address || "",
+        pan_no: transportForm.pan_no || "",
+        gst_no: transportForm.gst_no || "",
+        aadhar_no: transportForm.aadhar_no || "",
+        mobile: transportForm.mobile || "",
+      };
+      setTransporters((prev) => [saved, ...prev.filter((item) => !sameId(getRecordId(item), saved.id || saved._id))]);
+      setTransportNameDisplay(saved.name || transportForm.name.trim());
+      setFormData((prev) => ({ ...prev, transporter_id: String(saved.id || saved._id || "") }));
       setTransportForm({ name: "", address: "", pan_no: "", gst_no: "", aadhar_no: "", mobile: "" });
       setShowTransportForm(false);
       alert("Transport saved successfully");
@@ -1402,7 +1427,7 @@ const shareToWhatsApp = async () => {
                   <option key={getRecordId(t)} value={getRecordId(t)}>{t.name}</option>
                 ))}
               </select>
-              <input value={selectedTransporter?.pan_no || ""} readOnly placeholder="PAN No" style={{ ...input, background: "#f8fafc" }} />
+              <input value={selectedTransporter?.pan_no || meta?.transporter_pan_no || meta?.pan_no || ""} readOnly placeholder="PAN No" style={{ ...input, background: "#f8fafc" }} />
             </div>
 
             {showTransportForm && (
