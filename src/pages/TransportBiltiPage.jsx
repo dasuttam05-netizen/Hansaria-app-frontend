@@ -21,8 +21,8 @@ export default function TransportBiltiPage() {
   const [selectedOutwardId, setSelectedOutwardId] = useState("");
   const [selectedSaleId, setSelectedSaleId] = useState("");
   const [sourceSearch, setSourceSearch] = useState("");
-  const [sourceLoaded, setSourceLoaded] = useState({ outward: false, sale: false });
-  const [showCompletedSales, setShowCompletedSales] = useState(false);
+  const [sourceLoaded, setSourceLoaded] = useState({ outward: false, sale: false, saleCompleted: false });
+  const [showCompletedSaleOnly, setShowCompletedSaleOnly] = useState(false);
   const [meta, setMeta] = useState(null);
 
   const emptyForm = {
@@ -52,6 +52,7 @@ export default function TransportBiltiPage() {
     others_exp: "",
     advance_amount: "",
     tds_percent: "0",
+    round_off: "0",
     narration: "",
   };
 
@@ -230,16 +231,7 @@ export default function TransportBiltiPage() {
       axios.get(`${API_BASE}/warehouses`),
     ]);
 
-    setTransporters((prev) => {
-      const next = Array.isArray(transportRes.data) ? [...transportRes.data] : [];
-      for (const item of Array.isArray(prev) ? prev : []) {
-        const itemId = getRecordId(item);
-        if (itemId == null || itemId === "") continue;
-        const exists = next.some((candidate) => sameId(getRecordId(candidate), itemId));
-        if (!exists) next.push(item);
-      }
-      return next;
-    });
+    setTransporters(transportRes.data || []);
     setCompanies(companyRes.data || []);
     setCompanyAccounts(accountRes.data || []);
     setBuyers(buyerRes.data || []);
@@ -247,21 +239,23 @@ export default function TransportBiltiPage() {
     setWarehouses(warehouseRes.data || []);
   };
 
-  const loadSourceList = async (sourceMode, force = false) => {
+  const loadSourceList = async (sourceMode, force = false, completedOverride = null) => {
     if (sourceMode !== "outward" && sourceMode !== "sale") return;
-    if (!force && sourceLoaded[sourceMode]) return;
+    const completed = completedOverride === null ? showCompletedSaleOnly : Boolean(completedOverride);
+    const loadedKey = sourceMode === "sale" && completed ? "saleCompleted" : sourceMode;
+    if (!force && sourceLoaded[loadedKey]) return;
 
     const endpoint = sourceMode === "outward"
       ? `${API_BASE}/transport-bilti/outward-list`
       : `${API_BASE}/transport-bilti/sale-list`;
 
-    const res = await axios.get(endpoint);
+    const res = await axios.get(endpoint, sourceMode === "sale" ? { params: { completed: completed ? "1" : "0" } } : undefined);
     if (sourceMode === "outward") {
       setOutwardList(res.data || []);
     } else {
       setSaleList(res.data || []);
     }
-    setSourceLoaded((prev) => ({ ...prev, [sourceMode]: true }));
+    setSourceLoaded((prev) => ({ ...prev, [loadedKey]: true }));
   };
 
   const refreshCurrentSource = async () => {
@@ -298,17 +292,10 @@ export default function TransportBiltiPage() {
       if (event.key === "F5") {
         event.preventDefault();
         refreshCurrentSource();
-        return;
       }
       if (event.key === "F6") {
         event.preventDefault();
-        setMode("sale");
-        setShowCompletedSales(true);
-        setSourceSearch("");
-        loadSourceList("sale", true).catch((err) => {
-          console.error(err);
-          alert("Completed Warehouse Sale load failed");
-        });
+        loadCompletedWarehouseSales(true);
       }
     };
     window.addEventListener("keydown", handleKeyDown);
@@ -320,7 +307,6 @@ export default function TransportBiltiPage() {
     setSelectedOutwardId("");
     setSelectedSaleId("");
     setSourceSearch("");
-    setShowCompletedSales(false);
     setFormData(emptyForm);
   };
 
@@ -334,9 +320,12 @@ export default function TransportBiltiPage() {
   const switchMode = async (nextMode) => {
     setMode(nextMode);
     resetForm();
+    if (nextMode === "sale") {
+      setShowCompletedSaleOnly(false);
+    }
     if (nextMode === "outward" || nextMode === "sale") {
       try {
-        await loadSourceList(nextMode);
+        await loadSourceList(nextMode, false, nextMode === "sale" ? false : null);
       } catch (err) {
         console.error(err);
         alert("Transport source load failed");
@@ -344,13 +333,25 @@ export default function TransportBiltiPage() {
     }
   };
 
-  const loadBilti = async (id, source = "") => {
+  const loadCompletedWarehouseSales = async (force = true) => {
+    setMode("sale");
+    resetForm();
+    setShowCompletedSaleOnly(true);
+    try {
+      await loadSourceList("sale", force, true);
+    } catch (err) {
+      console.error(err);
+      alert("Completed Warehouse Sale load failed");
+    }
+  };
+
+  const loadBilti = async (id, source = "", seedRow = null) => {
     if (!id) return;
 
     try {
-      let row = {};
+      let row = seedRow ? { ...seedRow } : {};
 
-      if (source === "sale") {
+      if (source === "sale" && !seedRow) {
         try {
           const [biltiRes, saleRes] = await Promise.all([
             axios.get(`${API_BASE}/transport-bilti/${id}`, { params: { source } }),
@@ -373,30 +374,15 @@ export default function TransportBiltiPage() {
       }
       setMeta(row);
 
-      const loadedTransporterId =
-        row.transporter_id ||
-        row.transport_id ||
-        row.transporter?.id ||
-        row.transporter?._id ||
-        "";
-      const loadedTransporterName =
-        row.transporter_name ||
-        row.transport_name ||
-        row.transporter?.name ||
-        "";
-
-      if (loadedTransporterName) {
+      if (row.transporter_id) {
         setTransporters((prev) => {
-          const existing = prev.some((item) =>
-            (loadedTransporterId && sameId(getRecordId(item), loadedTransporterId)) ||
-            (!loadedTransporterId && String(item.name || "").trim().toLowerCase() === String(loadedTransporterName).trim().toLowerCase())
-          );
-          if (existing) return prev;
+          const exists = prev.some((item) => sameId(getRecordId(item), row.transporter_id));
+          if (exists || !row.transporter_name) return prev;
           return [
             {
-              id: loadedTransporterId,
-              _id: loadedTransporterId,
-              name: loadedTransporterName,
+              id: row.transporter_id,
+              _id: row.transporter_id,
+              name: row.transporter_name,
               address: row.transporter_address || "",
               pan_no: row.transporter_pan_no || "",
               mobile: row.transporter_mobile || "",
@@ -428,7 +414,7 @@ export default function TransportBiltiPage() {
 
       setFormData({
         id: row.id || "",
-        transporter_id: loadedTransporterId || "",
+        transporter_id: row.transporter_id || "",
         company_id: "",
         company_account_id: "",
         warehouse_id: "",
@@ -456,6 +442,7 @@ export default function TransportBiltiPage() {
         others_exp: row.others_exp ?? "",
         advance_amount: row.advance_amount ?? "",
         tds_percent: String(row.tds_percent ?? "0"),
+        round_off: String(row.round_off ?? "0"),
         narration: row.narration || "",
       });
 
@@ -546,7 +533,6 @@ export default function TransportBiltiPage() {
     const search = sourceSearch.trim().toLowerCase();
     return saleList.filter((row) => {
       if (row.bilti_id) return false;
-      if (showCompletedSales && !row.unloading_date) return false;
       const searchable = [
         row.voucher_no,
         row.warehouse_name,
@@ -558,7 +544,7 @@ export default function TransportBiltiPage() {
       ].join(" ").toLowerCase();
       return !search || searchable.includes(search);
     });
-  }, [saleList, sourceSearch, showCompletedSales]);
+  }, [saleList, sourceSearch]);
 
   const calculation = useMemo(() => {
     const outwardQty = num(formData.outward_qty);
@@ -569,6 +555,7 @@ export default function TransportBiltiPage() {
     const others = num(formData.others_exp);
     const advance = num(formData.advance_amount);
     const tdsPercent = num(formData.tds_percent);
+    const roundOff = num(formData.round_off);
 
     const shortageQty = Math.max(outwardQty - dispatchQty, 0);
     const claimFreeQtyInMt = num(formData.shortage_free_kg) / KG_PER_MT;
@@ -577,7 +564,7 @@ export default function TransportBiltiPage() {
     const grossFreight = outwardQty * transportRate;
     const netAmount = grossFreight - shortageAmount + detain + others;
     const tdsAmount = netAmount * (tdsPercent / 100);
-    const payableAmount = netAmount - advance - tdsAmount;
+    const payableAmount = netAmount - advance - tdsAmount + roundOff;
 
     return {
       shortageQty,
@@ -585,6 +572,7 @@ export default function TransportBiltiPage() {
       grossFreight,
       netAmount,
       tdsAmount,
+      roundOff,
       payableAmount,
     };
   }, [formData]);
@@ -668,13 +656,14 @@ export default function TransportBiltiPage() {
         gross_freight: calculation.grossFreight,
         net_amount: calculation.netAmount,
         tds_amount: calculation.tdsAmount,
+        round_off: calculation.roundOff,
         payable_amount: calculation.payableAmount,
         outward_id: mode === "outward" ? selectedOutwardId : null,
         sale_id: mode === "sale" ? selectedSaleId : null,
       });
       alert(res.data.message || (formData.id ? "Bilti updated successfully" : "Bilti saved successfully"));
       await loadStaticMasterData();
-      if (mode === "outward" || mode === "sale") await loadSourceList(mode, true);
+      if (mode === "outward" || mode === "sale") await loadSourceList(mode, true, mode === "sale" ? showCompletedSaleOnly : null);
       if (res.data.id || res.data._id) {
         await loadBilti(res.data._id || res.data.id);
       }
@@ -699,13 +688,14 @@ export default function TransportBiltiPage() {
         gross_freight: calculation.grossFreight,
         net_amount: calculation.netAmount,
         tds_amount: calculation.tdsAmount,
+        round_off: calculation.roundOff,
         payable_amount: calculation.payableAmount,
         outward_id: mode === "outward" ? selectedOutwardId : null,
         sale_id: mode === "sale" ? selectedSaleId : null,
       });
       alert("Bilti edited successfully");
       await loadStaticMasterData();
-      if (mode === "outward" || mode === "sale") await loadSourceList(mode, true);
+      if (mode === "outward" || mode === "sale") await loadSourceList(mode, true, mode === "sale" ? showCompletedSaleOnly : null);
       if (res.data._id || res.data.id) {
         await loadBilti(res.data._id || res.data.id);
       } else if (mode === "outward" && selectedOutwardId) {
@@ -947,6 +937,7 @@ const buildTransportPdf = () => {
     ["Add: Other Charges", money(others)],
     ["Net Freight", money(netFreight)],
     ["TDS Amount", money(tds)],
+    ["Round Off", money(calculation.roundOff)],
     ["Advance Paid", money(advance)],
   ];
 
@@ -1053,6 +1044,9 @@ const shareToWhatsApp = async () => {
           <button onClick={() => switchMode("manual")} style={{ ...btn, background: mode === "manual" ? "#0f766e" : "#64748b" }}>
             Manual Bilti
           </button>
+          <button type="button" onClick={() => loadCompletedWarehouseSales(true)} style={{ ...btn, background: showCompletedSaleOnly ? "#7c3aed" : "#64748b" }}>
+            F6 Completed Sale
+          </button>
         </div>
       </div>
 
@@ -1139,9 +1133,7 @@ const shareToWhatsApp = async () => {
 
       {mode === "sale" && (
         <div style={{ ...card, marginBottom: 16 }}>
-          <label style={label}>
-            {showCompletedSales ? "Completed Warehouse Sale (F6)" : "Pending Warehouse Sale"}
-          </label>
+          <label style={label}>{showCompletedSaleOnly ? "Completed Warehouse Sale (F6)" : "Pending Warehouse Sale"}</label>
           <input
             value={sourceSearch}
             onChange={(e) => setSourceSearch(e.target.value)}
@@ -1200,7 +1192,8 @@ const shareToWhatsApp = async () => {
                         type="button"
                         onClick={() => {
                           setSelectedSaleId(String(row.id));
-                          loadBilti(row.id, "sale");
+                          loadBilti(row.id, "sale", row);
+                          setShowCompletedSaleOnly(Boolean(showCompletedSaleOnly));
                         }}
                         style={{ ...btn, background: "#2563eb", padding: "7px 12px" }}
                       >
@@ -1212,7 +1205,7 @@ const shareToWhatsApp = async () => {
                 {pendingSaleList.length === 0 && (
                   <tr>
                     <td colSpan={11} style={{ ...sourceTd, textAlign: "center", padding: 14 }}>
-                      {showCompletedSales ? "No completed warehouse sale found." : "No pending warehouse sale found."}
+                      No pending warehouse sale found.
                     </td>
                   </tr>
                 )}
@@ -1223,7 +1216,8 @@ const shareToWhatsApp = async () => {
       )}
 
       {(mode === "manual" || meta) && (
-        <>
+        <div style={{ position: "fixed", inset: 0, zIndex: 9999, background: "rgba(15, 23, 42, 0.55)", padding: 20, overflowY: "auto" }}>
+          <div style={{ maxWidth: 1280, margin: "0 auto" }}>
           <div style={{ ...card, marginBottom: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
               <label style={{ ...label, marginBottom: 0 }}>Transport Name</label>
@@ -1457,6 +1451,10 @@ const shareToWhatsApp = async () => {
                   <option value="2">2%</option>
                 </select>
               </div>
+              <div>
+                <label style={label}>Round Off</label>
+                <input type="number" step="0.01" name="round_off" value={formData.round_off} onChange={handleChange} style={input} />
+              </div>
               <div style={{ gridColumn: "1 / -1" }}>
                 <label style={label}>Narration</label>
                 <input name="narration" value={formData.narration} onChange={handleChange} style={input} />
@@ -1490,7 +1488,8 @@ const shareToWhatsApp = async () => {
               <FaWhatsapp /> WhatsApp
             </button>
           </div>
-        </>
+          </div>
+        </div>
       )}
     </div>
   );
