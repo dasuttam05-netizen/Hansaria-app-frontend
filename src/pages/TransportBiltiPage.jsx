@@ -24,6 +24,7 @@ export default function TransportBiltiPage() {
   const [sourceLoaded, setSourceLoaded] = useState({ outward: false, sale: false, saleCompleted: false });
   const [showCompletedSaleOnly, setShowCompletedSaleOnly] = useState(false);
   const [meta, setMeta] = useState(null);
+  const [transportNameDisplay, setTransportNameDisplay] = useState("");
 
   const emptyForm = {
     id: "",
@@ -304,6 +305,7 @@ export default function TransportBiltiPage() {
 
   const resetForm = () => {
     setMeta(null);
+    setTransportNameDisplay("");
     setSelectedOutwardId("");
     setSelectedSaleId("");
     setSourceSearch("");
@@ -312,9 +314,19 @@ export default function TransportBiltiPage() {
 
   const clearSelection = () => {
     setMeta(null);
+    setTransportNameDisplay("");
     setSelectedOutwardId("");
     setSelectedSaleId("");
     setFormData(emptyForm);
+  };
+
+  const closeEditorPopup = () => {
+    setMeta(null);
+    setShowTransportForm(false);
+    setTransportNameDisplay("");
+    setFormData(emptyForm);
+    setSelectedOutwardId("");
+    setSelectedSaleId("");
   };
 
   const switchMode = async (nextMode) => {
@@ -373,6 +385,16 @@ export default function TransportBiltiPage() {
         row = res.data || {};
       }
       setMeta(row);
+
+      const loadedTransporter = row.transporter_id
+        ? transporters.find((item) => sameId(getRecordId(item), row.transporter_id))
+        : null;
+      setTransportNameDisplay(
+        row.transporter_name ||
+          row.transport_name ||
+          loadedTransporter?.name ||
+          ""
+      );
 
       if (row.transporter_id) {
         setTransporters((prev) => {
@@ -466,8 +488,19 @@ export default function TransportBiltiPage() {
   };
 
   const selectedTransporter = useMemo(
-    () => transporters.find((t) => String(t.id) === String(formData.transporter_id)),
-    [transporters, formData.transporter_id]
+    () => {
+      const found = transporters.find((t) => String(t.id) === String(formData.transporter_id));
+      if (found) return found;
+      if (transportNameDisplay) {
+        return {
+          id: formData.transporter_id,
+          _id: formData.transporter_id,
+          name: transportNameDisplay,
+        };
+      }
+      return null;
+    },
+    [transporters, formData.transporter_id, transportNameDisplay]
   );
 
   const selectedAccount = useMemo(() => {
@@ -580,6 +613,11 @@ export default function TransportBiltiPage() {
   const handleChange = (e) => {
     const { name, value } = e.target;
 
+    if (name === "transporter_id") {
+      const transporter = transporters.find((item) => sameId(getRecordId(item), value));
+      setTransportNameDisplay(transporter?.name || "");
+    }
+
     setFormData((prev) => {
       const next = { ...prev, [name]: value };
 
@@ -635,6 +673,7 @@ export default function TransportBiltiPage() {
     try {
       const res = await axios.post(`${API_BASE}/transporters`, transportForm);
       await loadStaticMasterData();
+      setTransportNameDisplay(res.data?.name || transportForm.name.trim());
       setFormData((prev) => ({ ...prev, transporter_id: String(res.data.id) }));
       setTransportForm({ name: "", address: "", pan_no: "", gst_no: "", aadhar_no: "", mobile: "" });
       setShowTransportForm(false);
@@ -1216,11 +1255,93 @@ const shareToWhatsApp = async () => {
       )}
 
       {(mode === "manual" || meta) && (
-        <div style={{ position: "fixed", inset: 0, zIndex: 9999, background: "rgba(15, 23, 42, 0.55)", padding: 20, overflowY: "auto" }}>
-          <div style={{ maxWidth: 1280, margin: "0 auto" }}>
-          <div style={{ ...card, marginBottom: 16 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-              <label style={{ ...label, marginBottom: 0 }}>Transport Name</label>
+        <div
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 9999,
+            background: "linear-gradient(135deg, rgba(15,23,42,.72), rgba(2,132,199,.28))",
+            backdropFilter: "blur(5px)",
+            WebkitBackdropFilter: "blur(5px)",
+            padding: 16,
+            overflowY: "auto",
+          }}
+          role="dialog"
+          aria-modal="true"
+        >
+          <div
+            style={{
+              maxWidth: 1320,
+              margin: "0 auto",
+              background: "#fff",
+              borderRadius: 20,
+              boxShadow: "0 25px 80px rgba(15,23,42,.30)",
+              overflow: "hidden",
+              border: "1px solid rgba(255,255,255,.7)",
+            }}
+          >
+            <div
+              style={{
+                position: "sticky",
+                top: 0,
+                zIndex: 3,
+                padding: "14px 18px",
+                background: "linear-gradient(135deg,#0f766e,#0e7490)",
+                color: "#fff",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: 12,
+                flexWrap: "wrap",
+              }}
+            >
+              <div style={{ minWidth: 0 }}>
+                <div style={{ fontSize: 19, fontWeight: 800 }}>Transport Bilti</div>
+                <div style={{ marginTop: 3, fontSize: 12, opacity: 0.9 }}>
+                  {mode === "sale" ? "Warehouse Sale" : mode === "outward" ? "Outward" : "Manual Bilti"}
+                  {transportNameDisplay ? ` • ${transportNameDisplay}` : ""}
+                </div>
+              </div>
+              <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                <button
+                  type="button"
+                  onClick={closeEditorPopup}
+                  style={{
+                    ...btn,
+                    background: "rgba(255,255,255,.18)",
+                    border: "1px solid rgba(255,255,255,.35)",
+                    padding: "9px 14px",
+                  }}
+                >
+                  ← Back to {mode === "sale" ? "Warehouse Sale" : mode === "outward" ? "Outward" : "List"}
+                </button>
+                <button
+                  type="button"
+                  onClick={closeEditorPopup}
+                  aria-label="Close transport bilti"
+                  style={{
+                    ...btn,
+                    background: "rgba(255,255,255,.18)",
+                    border: "1px solid rgba(255,255,255,.35)",
+                    padding: "9px 12px",
+                    fontSize: 18,
+                    lineHeight: 1,
+                  }}
+                >
+                  ×
+                </button>
+              </div>
+            </div>
+
+            <div style={{ padding: 18 }}>
+          <div style={{ ...card, marginBottom: 16, borderRadius: 16, boxShadow: "0 8px 26px rgba(15,23,42,.07)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 12, flexWrap: "wrap" }}>
+              <div>
+                <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: .5 }}>Transport Name</div>
+                <div style={{ marginTop: 4, fontSize: 18, fontWeight: 800, color: "#0f172a" }}>
+                  {transportNameDisplay || selectedTransporter?.name || "Select Transport"}
+                </div>
+              </div>
               <button onClick={() => setShowTransportForm((p) => !p)} style={{ ...btn, background: "#2563eb", padding: "8px 14px" }}>
                 New Transport
               </button>
@@ -1229,8 +1350,11 @@ const shareToWhatsApp = async () => {
             <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 12, marginBottom: 14 }}>
               <select name="transporter_id" value={formData.transporter_id} onChange={handleChange} style={input}>
                 <option value="">Select Transport</option>
+                {formData.transporter_id && transportNameDisplay && !transporters.some((t) => sameId(getRecordId(t), formData.transporter_id)) && (
+                  <option value={formData.transporter_id}>{transportNameDisplay}</option>
+                )}
                 {transporters.map((t) => (
-                  <option key={t.id} value={t.id}>{t.name}</option>
+                  <option key={getRecordId(t)} value={getRecordId(t)}>{t.name}</option>
                 ))}
               </select>
               <input value={selectedTransporter?.pan_no || ""} readOnly placeholder="PAN No" style={{ ...input, background: "#f8fafc" }} />
@@ -1488,6 +1612,7 @@ const shareToWhatsApp = async () => {
               <FaWhatsapp /> WhatsApp
             </button>
           </div>
+            </div>
           </div>
         </div>
       )}
