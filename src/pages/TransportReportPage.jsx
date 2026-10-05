@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
+import { FaFilePdf, FaWhatsapp, FaSyncAlt, FaBook } from "react-icons/fa";
 import { formatDisplayDate } from "../utils/date";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
@@ -9,6 +10,7 @@ export default function TransportReportPage() {
   const navigate = useNavigate();
   const API_BASE = "/api";
   const [records, setRecords] = useState([]);
+  const [searchTerm, setSearchTerm] = useState("");
   const [filters, setFilters] = useState({
     from_date: new Date(new Date().setDate(new Date().getDate() - 30))
       .toISOString()
@@ -59,7 +61,7 @@ export default function TransportReportPage() {
 
   const num = (v) => Number(v || 0).toFixed(2);
 
-  const fetchReport = async () => {
+  const fetchReport = useCallback(async () => {
     try {
       const res = await axios.get(`${API_BASE}/transport-bilti/report/list`, {
         params: { ...filters, _t: Date.now() },
@@ -73,15 +75,54 @@ export default function TransportReportPage() {
       console.error(err);
       setRecords([]);
     }
-  };
+  }, [filters.from_date, filters.to_date]);
 
   useEffect(() => {
     fetchReport();
-  }, []);
+  }, [fetchReport]);
+
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.key === "F5") {
+        event.preventDefault();
+        fetchReport();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [fetchReport]);
+
+  const visibleRecords = useMemo(() => {
+    const search = searchTerm.trim().toLowerCase();
+    if (!search) return records;
+
+    return records.filter((row) => {
+      const haystack = [
+        row.transporter_name,
+        row.bilti_no,
+        row.voucher_no,
+        row.outward_voucher_no,
+        row.sale_voucher_no,
+        row.lorry_no,
+        row.outward_lorry_no,
+        row.sale_lorry_no,
+        row.company_name,
+        row.outward_company_name,
+        row.sale_buyer_name,
+        row.warehouse_name,
+        row.destination,
+      ]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      return haystack.includes(search);
+    });
+  }, [records, searchTerm]);
 
   const totals = useMemo(
     () =>
-      records.reduce(
+      visibleRecords.reduce(
         (acc, row) => {
           acc.gross += Number(row.gross_freight) || 0;
           acc.net += Number(row.net_amount) || 0;
@@ -95,15 +136,30 @@ export default function TransportReportPage() {
         },
         { gross: 0, net: 0, shortage: 0, detain: 0, others: 0, advance: 0, tds: 0, payable: 0 }
       ),
-    [records]
+    [visibleRecords]
   );
 
-  const downloadPDF = () => {
+  const buildReportPdf = (rows, title = "Transport Report") => {
     const doc = new jsPDF("l", "mm", "a4");
     doc.setFontSize(16);
-    doc.text("Transport Report", 14, 14);
+    doc.text(title, 14, 14);
     doc.setFontSize(10);
     doc.text(`From: ${filters.from_date}   To: ${filters.to_date}`, 14, 21);
+
+    const rowTotals = rows.reduce(
+      (acc, row) => {
+        acc.gross += Number(row.gross_freight) || 0;
+        acc.net += Number(row.net_amount) || 0;
+        acc.shortage += Number(row.shortage_amount) || 0;
+        acc.detain += Number(row.detain_amount) || 0;
+        acc.others += Number(row.others_exp) || 0;
+        acc.advance += Number(row.advance_amount) || 0;
+        acc.tds += Number(row.tds_amount) || 0;
+        acc.payable += Number(row.payable_amount) || 0;
+        return acc;
+      },
+      { gross: 0, net: 0, shortage: 0, detain: 0, others: 0, advance: 0, tds: 0, payable: 0 }
+    );
 
     autoTable(doc, {
       startY: 26,
@@ -127,14 +183,14 @@ export default function TransportReportPage() {
         "TDS",
         "Payable",
       ]],
-      body: records.map((row) => [
+      body: rows.map((row) => [
         row.bilti_no,
         row.transporter_name || "",
         formatDisplayDate(row.dispatch_date),
         row.voucher_no || row.outward_voucher_no || row.sale_voucher_no || "",
         row.company_name || row.outward_company_name || row.sale_buyer_name || "",
         row.lorry_no || row.outward_lorry_no || row.sale_lorry_no || "",
-        row.destination,
+        row.destination || "",
         num(row.gross_freight),
         num(row.net_amount),
         num(row.shortage_amount),
@@ -145,25 +201,138 @@ export default function TransportReportPage() {
         num(row.payable_amount),
       ]),
       foot: [[
-        "",
-        "",
-        "",
-        "",
-        "",
-        "",
-        "Totals",
-        num(totals.gross),
-        num(totals.net),
-        num(totals.shortage),
-        num(totals.detain),
-        num(totals.others),
-        num(totals.advance),
-        num(totals.tds),
-        num(totals.payable),
+        "", "", "", "", "", "", "Totals",
+        num(rowTotals.gross),
+        num(rowTotals.net),
+        num(rowTotals.shortage),
+        num(rowTotals.detain),
+        num(rowTotals.others),
+        num(rowTotals.advance),
+        num(rowTotals.tds),
+        num(rowTotals.payable),
       ]],
     });
 
+    return doc;
+  };
+
+  const makePdfFile = (rows, title, filename) => {
+    const doc = buildReportPdf(rows, title);
+    const blob = doc.output("blob");
+    return {
+      doc,
+      file: new File([blob], filename, { type: "application/pdf" }),
+    };
+  };
+
+  const downloadPDF = () => {
+    const { doc } = makePdfFile(
+      visibleRecords,
+      "Transport Report",
+      "Transport_Report.pdf"
+    );
     doc.save("Transport_Report.pdf");
+  };
+
+  const sharePdf = async (rows, title, filename, whatsappText) => {
+    const { file } = makePdfFile(rows, title, filename);
+    try {
+      if (navigator.share && navigator.canShare && navigator.canShare({ files: [file] })) {
+        await navigator.share({
+          title,
+          text: whatsappText,
+          files: [file],
+        });
+        return;
+      }
+    } catch (err) {
+      console.error("PDF share failed", err);
+    }
+
+    window.open(
+      `https://wa.me/?text=${encodeURIComponent(whatsappText)}`,
+      "_blank"
+    );
+  };
+
+  const shareReportWhatsApp = () => {
+    sharePdf(
+      visibleRecords,
+      "Transport Report",
+      "Transport_Report.pdf",
+      `Transport Report\nFrom: ${filters.from_date}\nTo: ${filters.to_date}\nRows: ${visibleRecords.length}`
+    );
+  };
+
+  const transportRows = (transportName) =>
+    visibleRecords.filter(
+      (row) =>
+        String(row.transporter_name || "").trim().toLowerCase() ===
+        String(transportName || "").trim().toLowerCase()
+    );
+
+  const buildTransportLedgerPdf = (row) => {
+    const name = row?.transporter_name || "Transport";
+    const rows = transportRows(name);
+    const doc = new jsPDF("l", "mm", "a4");
+    doc.setFontSize(16);
+    doc.text(`Transport Ledger - ${name}`, 14, 14);
+    doc.setFontSize(10);
+    doc.text(`From: ${filters.from_date}   To: ${filters.to_date}`, 14, 21);
+
+    autoTable(doc, {
+      startY: 26,
+      theme: "grid",
+      headStyles: { fillColor: [15, 118, 110] },
+      styles: { fontSize: 7 },
+      head: [["Date", "Bilti", "Voucher", "Lorry", "Destination", "Gross", "Net", "Shortage", "Detain", "Others", "Advance", "TDS", "Payable"]],
+      body: rows.map((item) => [
+        formatDisplayDate(item.dispatch_date),
+        item.bilti_no || "",
+        item.voucher_no || item.outward_voucher_no || item.sale_voucher_no || "",
+        item.lorry_no || item.outward_lorry_no || item.sale_lorry_no || "",
+        item.destination || "",
+        num(item.gross_freight),
+        num(item.net_amount),
+        num(item.shortage_amount),
+        num(item.detain_amount),
+        num(item.others_exp),
+        num(item.advance_amount),
+        num(item.tds_amount),
+        num(item.payable_amount),
+      ]),
+    });
+
+    return { doc, rows, name };
+  };
+
+  const downloadTransportLedger = (row) => {
+    const { doc, name } = buildTransportLedgerPdf(row);
+    doc.save(`Transport_Ledger_${name.replace(/[^a-z0-9]+/gi, "_")}.pdf`);
+  };
+
+  const shareTransportLedger = (row) => {
+    const { doc, rows, name } = buildTransportLedgerPdf(row);
+    const filename = `Transport_Ledger_${name.replace(/[^a-z0-9]+/gi, "_")}.pdf`;
+    const pdfBlob = doc.output("blob");
+    const pdfFile = new File([pdfBlob], filename, { type: "application/pdf" });
+    const textMessage = `Transport Ledger\nTransport: ${name}\nFrom: ${filters.from_date}\nTo: ${filters.to_date}\nRows: ${rows.length}`;
+
+    (async () => {
+      try {
+        if (navigator.share && navigator.canShare && navigator.canShare({ files: [pdfFile] })) {
+          await navigator.share({
+            title: `Transport Ledger - ${name}`,
+            text: textMessage,
+            files: [pdfFile],
+          });
+          return;
+        }
+      } catch (err) {
+        console.error("Transport ledger share failed", err);
+      }
+      window.open(`https://wa.me/?text=${encodeURIComponent(textMessage)}`, "_blank");
+    })();
   };
 
   const handleEdit = (id) => {
@@ -207,8 +376,15 @@ export default function TransportReportPage() {
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
           <input type="date" name="from_date" value={filters.from_date} onChange={(e) => setFilters((p) => ({ ...p, from_date: e.target.value }))} style={input} />
           <input type="date" name="to_date" value={filters.to_date} onChange={(e) => setFilters((p) => ({ ...p, to_date: e.target.value }))} style={input} />
-          <button onClick={fetchReport} style={{ ...button, background: "#0f766e" }}>Apply</button>
-          <button onClick={downloadPDF} style={{ ...button, background: "#2563eb" }}>Download PDF</button>
+          <input
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Search transport / bilti / voucher / lorry"
+            style={{ ...input, minWidth: 300 }}
+          />
+          <button onClick={fetchReport} style={{ ...button, background: "#0f766e", display: "inline-flex", alignItems: "center", gap: 8 }}><FaSyncAlt /> F5 / Refresh</button>
+          <button onClick={downloadPDF} style={{ ...button, background: "#2563eb", display: "inline-flex", alignItems: "center", gap: 8 }}><FaFilePdf /> Report PDF</button>
+          <button onClick={shareReportWhatsApp} style={{ ...button, background: "#16a34a", display: "inline-flex", alignItems: "center", gap: 8 }}><FaWhatsapp /> WhatsApp Report</button>
         </div>
       </div>
 
@@ -243,8 +419,8 @@ export default function TransportReportPage() {
               </tr>
             </thead>
             <tbody>
-              {records.length > 0 ? (
-                records.map((row) => (
+              {visibleRecords.length > 0 ? (
+                visibleRecords.map((row) => (
                   <tr key={row.id}>
                     <td style={td}>{row.bilti_no}</td>
                     <td style={td}>{row.transporter_name}</td>
@@ -272,6 +448,27 @@ export default function TransportReportPage() {
                       <div style={{ display: "flex", gap: 6 }}>
                         <button onClick={() => handleEdit(row.id)} style={{ ...button, background: "#2563eb", padding: "8px 10px" }}>
                           Edit
+                        </button>
+                        <button
+                          onClick={() => {
+                            const { doc } = makePdfFile([row], `Transport Bilti - ${row.bilti_no || ""}`, `Transport_Bilti_${row.bilti_no || row.id}.pdf`);
+                            doc.save(`Transport_Bilti_${row.bilti_no || row.id}.pdf`);
+                          }}
+                          style={{ ...button, background: "#475569", padding: "8px 10px", display: "inline-flex", alignItems: "center", gap: 6 }}
+                        >
+                          <FaFilePdf /> PDF
+                        </button>
+                        <button
+                          onClick={() => sharePdf([row], `Transport Bilti - ${row.bilti_no || ""}`, `Transport_Bilti_${row.bilti_no || row.id}.pdf`, `Transport Bilti\nBilti: ${row.bilti_no || ""}\nTransport: ${row.transporter_name || ""}\nPayable: ${num(row.payable_amount)}`)}
+                          style={{ ...button, background: "#16a34a", padding: "8px 10px", display: "inline-flex", alignItems: "center", gap: 6 }}
+                        >
+                          <FaWhatsapp /> WhatsApp
+                        </button>
+                        <button onClick={() => downloadTransportLedger(row)} style={{ ...button, background: "#7c3aed", padding: "8px 10px", display: "inline-flex", alignItems: "center", gap: 6 }}>
+                          <FaBook /> Ledger PDF
+                        </button>
+                        <button onClick={() => shareTransportLedger(row)} style={{ ...button, background: "#059669", padding: "8px 10px", display: "inline-flex", alignItems: "center", gap: 6 }}>
+                          <FaWhatsapp /> Ledger WhatsApp
                         </button>
                         <button onClick={() => handleDelete(row.id)} style={{ ...button, background: "#dc2626", padding: "8px 10px" }}>
                           Delete

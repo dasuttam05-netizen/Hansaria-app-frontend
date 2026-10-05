@@ -21,6 +21,7 @@ export default function TransportBiltiPage() {
   const [selectedOutwardId, setSelectedOutwardId] = useState("");
   const [selectedSaleId, setSelectedSaleId] = useState("");
   const [sourceSearch, setSourceSearch] = useState("");
+  const [sourceLoaded, setSourceLoaded] = useState({ outward: false, sale: false });
   const [meta, setMeta] = useState(null);
 
   const emptyForm = {
@@ -211,10 +212,8 @@ export default function TransportBiltiPage() {
     return finalDays < 0 ? 0 : finalDays;
   };
 
-  const loadMasterData = async () => {
+  const loadStaticMasterData = async () => {
     const [
-      outwardRes,
-      saleRes,
       transportRes,
       companyRes,
       accountRes,
@@ -222,8 +221,6 @@ export default function TransportBiltiPage() {
       consigneeRes,
       warehouseRes,
     ] = await Promise.all([
-      axios.get(`${API_BASE}/transport-bilti/outward-list`),
-      axios.get(`${API_BASE}/transport-bilti/sale-list`),
       axios.get(`${API_BASE}/transporters`),
       axios.get(`${API_BASE}/companies`),
       axios.get(`${API_BASE}/company-accounts`),
@@ -232,8 +229,6 @@ export default function TransportBiltiPage() {
       axios.get(`${API_BASE}/warehouses`),
     ]);
 
-    setOutwardList(outwardRes.data || []);
-    setSaleList(saleRes.data || []);
     setTransporters(transportRes.data || []);
     setCompanies(companyRes.data || []);
     setCompanyAccounts(accountRes.data || []);
@@ -242,8 +237,39 @@ export default function TransportBiltiPage() {
     setWarehouses(warehouseRes.data || []);
   };
 
+  const loadSourceList = async (sourceMode, force = false) => {
+    if (sourceMode !== "outward" && sourceMode !== "sale") return;
+    if (!force && sourceLoaded[sourceMode]) return;
+
+    const endpoint = sourceMode === "outward"
+      ? `${API_BASE}/transport-bilti/outward-list`
+      : `${API_BASE}/transport-bilti/sale-list`;
+
+    const res = await axios.get(endpoint);
+    if (sourceMode === "outward") {
+      setOutwardList(res.data || []);
+    } else {
+      setSaleList(res.data || []);
+    }
+    setSourceLoaded((prev) => ({ ...prev, [sourceMode]: true }));
+  };
+
+  const refreshCurrentSource = async () => {
+    if (mode === "outward" || mode === "sale") {
+      try {
+        await loadSourceList(mode, true);
+      } catch (err) {
+        console.error(err);
+        alert("Transport source refresh failed");
+      }
+    }
+  };
+
   useEffect(() => {
-    loadMasterData().catch((err) => {
+    Promise.all([
+      loadStaticMasterData(),
+      loadSourceList("outward"),
+    ]).catch((err) => {
       console.error(err);
       alert("Initial data load failed");
     });
@@ -256,6 +282,17 @@ export default function TransportBiltiPage() {
 
     loadBilti(editId);
   }, []);
+
+  useEffect(() => {
+    const handleKeyDown = (event) => {
+      if (event.key === "F5") {
+        event.preventDefault();
+        refreshCurrentSource();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [mode]);
 
   const resetForm = () => {
     setMeta(null);
@@ -272,34 +309,65 @@ export default function TransportBiltiPage() {
     setFormData(emptyForm);
   };
 
-  const switchMode = (nextMode) => {
+  const switchMode = async (nextMode) => {
     setMode(nextMode);
     resetForm();
+    if (nextMode === "outward" || nextMode === "sale") {
+      try {
+        await loadSourceList(nextMode);
+      } catch (err) {
+        console.error(err);
+        alert("Transport source load failed");
+      }
+    }
   };
 
   const loadBilti = async (id, source = "") => {
     if (!id) return;
 
     try {
-      const res = await axios.get(`${API_BASE}/transport-bilti/${id}`, {
-        params: source ? { source } : undefined,
-      });
-      let row = res.data || {};
+      let row = {};
 
-      // Warehouse Trading Sale details are stored on the Sale voucher.
-      // Keep the existing Bilti response untouched, but fill any missing
-      // Sale fields from the existing Sale Summary endpoint when a Sale is
-      // selected. This does not change any save/calculation logic.
       if (source === "sale") {
         try {
-          const saleRes = await axios.get(`${API_BASE.replace(/\/$/, "")}/wh-vouchers/sale/${id}/summary`);
-          const saleData = saleRes.data?.sale || saleRes.data || {};
-          row = { ...saleData, ...row };
+          const [biltiRes, saleRes] = await Promise.all([
+            axios.get(`${API_BASE}/transport-bilti/${id}`, { params: { source } }),
+            axios.get(`${API_BASE.replace(/\/$/, "")}/wh-vouchers/sale/${id}/summary`),
+          ]);
+          row = {
+            ...(saleRes.data?.sale || saleRes.data || {}),
+            ...(biltiRes.data || {}),
+          };
         } catch (saleErr) {
           console.warn("Sale detail lookup unavailable; using Transport Bilti data", saleErr);
+          const biltiRes = await axios.get(`${API_BASE}/transport-bilti/${id}`, { params: { source } });
+          row = biltiRes.data || {};
         }
+      } else {
+        const res = await axios.get(`${API_BASE}/transport-bilti/${id}`, {
+          params: source ? { source } : undefined,
+        });
+        row = res.data || {};
       }
       setMeta(row);
+
+      if (row.transporter_id) {
+        setTransporters((prev) => {
+          const exists = prev.some((item) => sameId(getRecordId(item), row.transporter_id));
+          if (exists || !row.transporter_name) return prev;
+          return [
+            {
+              id: row.transporter_id,
+              _id: row.transporter_id,
+              name: row.transporter_name,
+              address: row.transporter_address || "",
+              pan_no: row.transporter_pan_no || "",
+              mobile: row.transporter_mobile || "",
+            },
+            ...prev,
+          ];
+        });
+      }
 
       const sourceDate =
         row.outward_entry_date ||
@@ -540,7 +608,7 @@ export default function TransportBiltiPage() {
 
     try {
       const res = await axios.post(`${API_BASE}/transporters`, transportForm);
-      await loadMasterData();
+      await loadStaticMasterData();
       setFormData((prev) => ({ ...prev, transporter_id: String(res.data.id) }));
       setTransportForm({ name: "", address: "", pan_no: "", gst_no: "", aadhar_no: "", mobile: "" });
       setShowTransportForm(false);
@@ -567,7 +635,8 @@ export default function TransportBiltiPage() {
         sale_id: mode === "sale" ? selectedSaleId : null,
       });
       alert(res.data.message || (formData.id ? "Bilti updated successfully" : "Bilti saved successfully"));
-      await loadMasterData();
+      await loadStaticMasterData();
+      if (mode === "outward" || mode === "sale") await loadSourceList(mode, true);
       if (res.data.id || res.data._id) {
         await loadBilti(res.data._id || res.data.id);
       }
@@ -597,7 +666,8 @@ export default function TransportBiltiPage() {
         sale_id: mode === "sale" ? selectedSaleId : null,
       });
       alert("Bilti edited successfully");
-      await loadMasterData();
+      await loadStaticMasterData();
+      if (mode === "outward" || mode === "sale") await loadSourceList(mode, true);
       if (res.data._id || res.data.id) {
         await loadBilti(res.data._id || res.data.id);
       } else if (mode === "outward" && selectedOutwardId) {
