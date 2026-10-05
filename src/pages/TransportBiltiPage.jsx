@@ -51,7 +51,6 @@ export default function TransportBiltiPage() {
     transport_rate: "",
     detain_amount: "",
     others_exp: "",
-    advance_date: "",
     advance_amount: "",
     tds_percent: "0",
     round_off: "0",
@@ -241,17 +240,25 @@ export default function TransportBiltiPage() {
     setWarehouses(warehouseRes.data || []);
   };
 
-  const loadSourceList = async (sourceMode, force = false, completedOverride = null) => {
+  const loadSourceList = async (sourceMode, force = false, completedOverride = null, includeSavedOverride = false) => {
     if (sourceMode !== "outward" && sourceMode !== "sale") return;
     const completed = completedOverride === null ? showCompletedSaleOnly : Boolean(completedOverride);
-    const loadedKey = sourceMode === "sale" && completed ? "saleCompleted" : sourceMode;
+    const includeSaved = sourceMode === "sale" && (includeSavedOverride || completed);
+    const loadedKey = sourceMode === "sale" && completed
+      ? (includeSaved ? "saleCompletedSaved" : "saleCompleted")
+      : sourceMode;
     if (!force && sourceLoaded[loadedKey]) return;
 
     const endpoint = sourceMode === "outward"
       ? `${API_BASE}/transport-bilti/outward-list`
       : `${API_BASE}/transport-bilti/sale-list`;
 
-    const res = await axios.get(endpoint, sourceMode === "sale" ? { params: { completed: completed ? "1" : "0" } } : undefined);
+    const res = await axios.get(
+      endpoint,
+      sourceMode === "sale"
+        ? { params: { completed: completed ? "1" : "0", include_bilti: includeSaved ? "1" : "0" } }
+        : undefined
+    );
     if (sourceMode === "outward") {
       setOutwardList(res.data || []);
     } else {
@@ -263,7 +270,7 @@ export default function TransportBiltiPage() {
   const refreshCurrentSource = async () => {
     if (mode === "outward" || mode === "sale") {
       try {
-        await loadSourceList(mode, true);
+        await loadSourceList(mode, true, mode === "sale" ? showCompletedSaleOnly : null, mode === "sale" && showCompletedSaleOnly);
       } catch (err) {
         console.error(err);
         alert("Transport source refresh failed");
@@ -330,6 +337,29 @@ export default function TransportBiltiPage() {
     setSelectedSaleId("");
   };
 
+  const returnAfterEditorSave = async () => {
+    try {
+      if (mode === "outward" || mode === "sale") {
+        await loadSourceList(
+          mode,
+          true,
+          mode === "sale" ? showCompletedSaleOnly : null,
+          mode === "sale" && showCompletedSaleOnly
+        );
+      }
+    } catch (err) {
+      console.warn("Transport source refresh after save failed", err);
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("edit")) {
+      window.history.back();
+      return;
+    }
+
+    closeEditorPopup();
+  };
+
   const switchMode = async (nextMode) => {
     setMode(nextMode);
     resetForm();
@@ -351,7 +381,7 @@ export default function TransportBiltiPage() {
     resetForm();
     setShowCompletedSaleOnly(true);
     try {
-      await loadSourceList("sale", force, true);
+      await loadSourceList("sale", force, true, true);
     } catch (err) {
       console.error(err);
       alert("Completed Warehouse Sale load failed");
@@ -463,7 +493,6 @@ export default function TransportBiltiPage() {
         transport_rate: row.transport_rate ?? "",
         detain_amount: row.detain_amount ?? "",
         others_exp: row.others_exp ?? "",
-        advance_date: row.advance_date ?? "",
         advance_amount: row.advance_amount ?? "",
         tds_percent: String(row.tds_percent ?? "0"),
         round_off: String(row.round_off ?? "0"),
@@ -567,7 +596,7 @@ export default function TransportBiltiPage() {
   const pendingSaleList = useMemo(() => {
     const search = sourceSearch.trim().toLowerCase();
     return saleList.filter((row) => {
-      if (row.bilti_id) return false;
+      if (!showCompletedSaleOnly && row.bilti_id) return false;
       const searchable = [
         row.voucher_no,
         row.warehouse_name,
@@ -702,12 +731,8 @@ export default function TransportBiltiPage() {
         outward_id: mode === "outward" ? selectedOutwardId : null,
         sale_id: mode === "sale" ? selectedSaleId : null,
       });
-      alert(res.data.message || (formData.id ? "Bilti updated successfully" : "Bilti saved successfully"));
       await loadStaticMasterData();
-      if (mode === "outward" || mode === "sale") await loadSourceList(mode, true, mode === "sale" ? showCompletedSaleOnly : null);
-      if (res.data.id || res.data._id) {
-        await loadBilti(res.data._id || res.data.id);
-      }
+      await returnAfterEditorSave();
     } catch (err) {
       console.error(err);
       alert(err?.response?.data?.error || "Bilti save failed");
@@ -734,16 +759,8 @@ export default function TransportBiltiPage() {
         outward_id: mode === "outward" ? selectedOutwardId : null,
         sale_id: mode === "sale" ? selectedSaleId : null,
       });
-      alert("Bilti edited successfully");
       await loadStaticMasterData();
-      if (mode === "outward" || mode === "sale") await loadSourceList(mode, true, mode === "sale" ? showCompletedSaleOnly : null);
-      if (res.data._id || res.data.id) {
-        await loadBilti(res.data._id || res.data.id);
-      } else if (mode === "outward" && selectedOutwardId) {
-        loadBilti(selectedOutwardId);
-      } else if (mode === "sale" && selectedSaleId) {
-        loadBilti(selectedSaleId, "sale");
-      }
+      await returnAfterEditorSave();
     } catch (err) {
       console.error(err);
       alert(err?.response?.data?.error || "Bilti edit failed");
@@ -828,7 +845,6 @@ const buildTransportPdf = () => {
     ["Destination", formData.destination || "-"],
     ["Vehicle", formData.lorry_no || "-"],
     ["Product", formData.product_name || "-"],
-    ["ADV Date", formatDate(formData.advance_date) || "-"],
     ["Days", formData.days || "0"],
   ];
 
@@ -980,7 +996,6 @@ const buildTransportPdf = () => {
     ["Net Freight", money(netFreight)],
     ["TDS Amount", money(tds)],
     ["Round Off", money(calculation.roundOff)],
-    ["ADV Date", formatDate(formData.advance_date) || "-"],
     ["Advance Paid", money(advance)],
   ];
 
@@ -1071,9 +1086,6 @@ const shareToWhatsApp = async () => {
     <div style={{ padding: 20, background: "#f8fafc", minHeight: "100vh", fontFamily: "Segoe UI, Arial, sans-serif" }}>
       <div style={{ ...card, marginBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
         <h2 style={{ margin: 0, color: "#0f172a" }}>Create Transport Bilti</h2>
-        <button onClick={resetForm} style={{ ...btn, background: "#475569", padding: "8px 14px", display: "inline-flex", alignItems: "center", gap: 8 }}>
-          <FaTimes /> Close
-        </button>
       </div>
 
       <div style={{ ...card, marginBottom: 16 }}>
@@ -1234,8 +1246,13 @@ const shareToWhatsApp = async () => {
                       <button
                         type="button"
                         onClick={() => {
-                          setSelectedSaleId(String(row.id));
-                          loadBilti(row.id, "sale", row);
+                          const saleId = String(row.id);
+                          setSelectedSaleId(saleId);
+                          if (row.bilti_id) {
+                            loadBilti(String(row.bilti_id));
+                          } else {
+                            loadBilti(saleId, "sale", row);
+                          }
                           setShowCompletedSaleOnly(Boolean(showCompletedSaleOnly));
                         }}
                         style={{ ...btn, background: "#2563eb", padding: "7px 12px" }}
@@ -1310,26 +1327,24 @@ const shareToWhatsApp = async () => {
                 <button
                   type="button"
                   onClick={closeEditorPopup}
-                  style={{
-                    ...btn,
-                    background: "rgba(255,255,255,.18)",
-                    border: "1px solid rgba(255,255,255,.35)",
-                    padding: "9px 14px",
-                  }}
-                >
-                  ← Back to {mode === "sale" ? "Warehouse Sale" : mode === "outward" ? "Outward" : "List"}
-                </button>
-                <button
-                  type="button"
-                  onClick={closeEditorPopup}
                   aria-label="Close transport bilti"
+                  title="Close"
                   style={{
-                    ...btn,
-                    background: "rgba(255,255,255,.18)",
-                    border: "1px solid rgba(255,255,255,.35)",
-                    padding: "9px 12px",
-                    fontSize: 18,
+                    width: 42,
+                    height: 42,
+                    minWidth: 42,
+                    borderRadius: "50%",
+                    border: "2px solid #fecaca",
+                    background: "#dc2626",
+                    color: "#fff",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: 24,
                     lineHeight: 1,
+                    fontWeight: 800,
+                    cursor: "pointer",
+                    boxShadow: "0 8px 18px rgba(220,38,38,.28)",
                   }}
                 >
                   ×
@@ -1566,10 +1581,6 @@ const shareToWhatsApp = async () => {
               <div>
                 <label style={label}>Others Exp</label>
                 <input type="number" name="others_exp" value={formData.others_exp} onChange={handleChange} style={input} />
-              </div>
-              <div>
-                <label style={label}>ADV Date</label>
-                <input type="date" name="advance_date" value={formData.advance_date} onChange={handleChange} style={input} />
               </div>
               <div>
                 <label style={label}>Advance</label>
