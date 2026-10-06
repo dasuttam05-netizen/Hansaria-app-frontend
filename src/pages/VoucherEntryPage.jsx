@@ -150,6 +150,12 @@ function VoucherEntryPage() {
 
   const [adjustments, setAdjustments] = useState({});
 
+  const [transportPayments, setTransportPayments] = useState([]);
+
+  const [loadingPayments, setLoadingPayments] = useState(false);
+
+  const [editingPaymentId, setEditingPaymentId] = useState("");
+
   /* ==========================================================
      SEARCH / POPUP
   ========================================================== */
@@ -183,6 +189,32 @@ function VoucherEntryPage() {
   useEffect(() => {
     setActiveType(normalizeType(queryType));
   }, [queryType]);
+
+  useEffect(() => {
+    if (activeType !== "transport") return undefined;
+
+    let cancelled = false;
+    const loadPayments = async () => {
+      try {
+        setLoadingPayments(true);
+        const response = await axios.get(`${API_BASE}/transport-payments`);
+        if (cancelled) return;
+        const rows = response?.data?.rows ?? [];
+        setTransportPayments(Array.isArray(rows) ? rows : []);
+      } catch (err) {
+        if (!cancelled) {
+          setError(err?.response?.data?.error || "Transport payment list load failed.");
+        }
+      } finally {
+        if (!cancelled) setLoadingPayments(false);
+      }
+    };
+
+    loadPayments();
+    return () => {
+      cancelled = true;
+    };
+  }, [activeType]);
 
   /* ==========================================================
      LOAD TRANSPORTERS
@@ -262,6 +294,7 @@ function VoucherEntryPage() {
             params: {
               transporter_id:
                 form.transporter_id,
+              exclude_payment_id: editingPaymentId || undefined,
             },
           }
         );
@@ -325,7 +358,7 @@ function VoucherEntryPage() {
     return () => {
       cancelled = true;
     };
-  }, [form.transporter_id]);
+  }, [form.transporter_id, editingPaymentId]);
 
   /* ==========================================================
      TRANSPORTER FILTER
@@ -557,9 +590,54 @@ function VoucherEntryPage() {
     setForm(emptyForm());
     setPendingBills([]);
     setAdjustments({});
+    setEditingPaymentId("");
     setTransportSearch("");
     setMessage("");
     setError("");
+  };
+
+  const startEditPayment = (payment) => {
+    const paymentAdjustments = Array.isArray(payment.adjustments)
+      ? payment.adjustments
+      : Array.isArray(payment.allocations)
+      ? payment.allocations
+      : [];
+
+    setEditingPaymentId(String(payment._id || ""));
+    setForm({
+      ...emptyForm(),
+      voucher_no: payment.voucher_no || "",
+      auto_voucher: false,
+      date: String(payment.date || "").slice(0, 10) || today(),
+      warehouse_id: payment.warehouse_id || "",
+      warehouse_name: payment.warehouse_name || "",
+      sale_id: payment.sale_id || "",
+      sale_voucher_no: payment.sale_voucher_no || "",
+      outward_id: payment.outward_id || "",
+      outward_voucher_no: payment.outward_voucher_no || "",
+      transporter_id: payment.transporter_id || "",
+      transporter_name: payment.transporter_name || "",
+      amount: payment.amount ?? "",
+      payment_method: payment.payment_method || "Cash",
+      fund_source: payment.fund_source || "",
+      advance_amount: payment.advance_amount ?? 0,
+      on_account_amount: payment.on_account_amount ?? 0,
+      narration: payment.narration || "",
+    });
+    setAdjustments(
+      Object.fromEntries(
+        paymentAdjustments
+          .map((item) => [
+            String(item.bilti_id || item.id || ""),
+            numberValue(item.adjusted_amount ?? item.amount),
+          ])
+          .filter(([id]) => id)
+      )
+    );
+    setTransportSearch(payment.transporter_name || "");
+    setMessage("");
+    setError("");
+    document.getElementById("transport-payment-form")?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
   /* ==========================================================
@@ -785,11 +863,15 @@ function VoucherEntryPage() {
             billAdjustments,
         };
 
-        const response =
-          await axios.post(
-            `${API_BASE}/transport-payments`,
-            payload
-          );
+        const response = editingPaymentId
+          ? await axios.put(
+              `${API_BASE}/transport-payments/${encodeURIComponent(editingPaymentId)}`,
+              payload
+            )
+          : await axios.post(
+              `${API_BASE}/transport-payments`,
+              payload
+            );
 
         console.log(
           "Transport payment saved:",
@@ -798,13 +880,23 @@ function VoucherEntryPage() {
 
         setMessage(
           response?.data?.message ||
-          "Transport payment saved successfully."
+          (editingPaymentId
+            ? "Transport payment updated successfully."
+            : "Transport payment saved successfully.")
         );
 
-        /* Reset after successful save */
+        try {
+          const listResponse = await axios.get(`${API_BASE}/transport-payments`);
+          const rows = listResponse?.data?.rows ?? [];
+          setTransportPayments(Array.isArray(rows) ? rows : []);
+        } catch (listError) {
+          console.error("Transport payment list refresh failed:", listError);
+        }
+
         setForm(emptyForm());
         setPendingBills([]);
         setAdjustments({});
+        setEditingPaymentId("");
       } catch (err) {
         console.error(
           "Transport payment save error:",
@@ -1146,6 +1238,7 @@ function VoucherEntryPage() {
           -------------------------------------------------- */}
 
           <div
+            id="transport-payment-form"
             style={{
               background: "#fff",
               borderRadius: "12px",
@@ -1162,7 +1255,7 @@ function VoucherEntryPage() {
                 color: "#c2410c",
               }}
             >
-              Transport Payment
+              {editingPaymentId ? "Edit Transport Payment" : "Transport Payment"}
             </h3>
 
             <div
@@ -1958,7 +2051,7 @@ function VoucherEntryPage() {
                 fontWeight: 700,
               }}
             >
-              Reset
+              {editingPaymentId ? "Cancel Edit" : "Reset"}
             </button>
 
             <button
@@ -1984,8 +2077,108 @@ function VoucherEntryPage() {
             >
               {saving
                 ? "Saving..."
+                : editingPaymentId
+                ? "Update Transport Payment"
                 : "Save Transport Payment"}
             </button>
+          </div>
+
+          <div
+            style={{
+              background: "#fff",
+              borderRadius: "12px",
+              padding: "20px",
+              marginTop: "20px",
+              boxShadow: "0 2px 10px rgba(0,0,0,0.06)",
+            }}
+          >
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                gap: "12px",
+                flexWrap: "wrap",
+                marginBottom: "14px",
+              }}
+            >
+              <h3 style={{ margin: 0, color: "#172033" }}>Saved Transport Payments</h3>
+              <button
+                type="button"
+                disabled={loadingPayments}
+                onClick={async () => {
+                  try {
+                    setLoadingPayments(true);
+                    const response = await axios.get(`${API_BASE}/transport-payments`);
+                    const rows = response?.data?.rows ?? [];
+                    setTransportPayments(Array.isArray(rows) ? rows : []);
+                  } catch (err) {
+                    setError(err?.response?.data?.error || "Transport payment list load failed.");
+                  } finally {
+                    setLoadingPayments(false);
+                  }
+                }}
+                style={{
+                  border: "1px solid #cbd5e1",
+                  background: "#fff",
+                  borderRadius: "8px",
+                  padding: "8px 12px",
+                  cursor: loadingPayments ? "not-allowed" : "pointer",
+                  fontWeight: 600,
+                }}
+              >
+                {loadingPayments ? "Loading..." : "Refresh"}
+              </button>
+            </div>
+
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "640px" }}>
+                <thead>
+                  <tr style={{ background: "#f1f5f9", color: "#334155", textAlign: "left" }}>
+                    {["Voucher No", "Date", "Transporter", "Amount", "Method", "Action"].map((heading) => (
+                      <th key={heading} style={{ padding: "10px", borderBottom: "1px solid #cbd5e1", whiteSpace: "nowrap" }}>
+                        {heading}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {transportPayments.map((payment) => (
+                    <tr key={payment._id || payment.id}>
+                      <td style={{ padding: "10px", borderBottom: "1px solid #e2e8f0" }}>{payment.voucher_no || "-"}</td>
+                      <td style={{ padding: "10px", borderBottom: "1px solid #e2e8f0", whiteSpace: "nowrap" }}>{String(payment.date || "").slice(0, 10) || "-"}</td>
+                      <td style={{ padding: "10px", borderBottom: "1px solid #e2e8f0" }}>{payment.transporter_name || "-"}</td>
+                      <td style={{ padding: "10px", borderBottom: "1px solid #e2e8f0", textAlign: "right" }}>{money(payment.amount)}</td>
+                      <td style={{ padding: "10px", borderBottom: "1px solid #e2e8f0" }}>{payment.payment_method || "-"}</td>
+                      <td style={{ padding: "8px 10px", borderBottom: "1px solid #e2e8f0" }}>
+                        <button
+                          type="button"
+                          onClick={() => startEditPayment(payment)}
+                          style={{
+                            border: "1px solid #ea580c",
+                            background: "#fff7ed",
+                            color: "#c2410c",
+                            borderRadius: "6px",
+                            padding: "6px 11px",
+                            cursor: "pointer",
+                            fontWeight: 700,
+                          }}
+                        >
+                          Edit
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                  {!loadingPayments && transportPayments.length === 0 && (
+                    <tr>
+                      <td colSpan={6} style={{ padding: "18px 10px", color: "#64748b", textAlign: "center" }}>
+                        No transport payments found.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
           </div>
         </>
       )}
