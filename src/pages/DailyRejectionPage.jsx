@@ -491,25 +491,28 @@ export default function DailyRejectionPage() {
     if (!row) return;
     const progress = progressForm[rowId] || {};
     const currentRejectionBalance = chainRemainingOf(row);
-
-    // IMPORTANT:
-    // Other Qty is view/history information only. It must NEVER reduce the
-    // rejection balance and must NEVER block work completion.
+    const currentOtherBalance = chainOtherRemainingOf(row);
     const unloadingForRejection = toQty(progress.unloading_qty_for_rejection);
     const otherQty = toQty(progress.other_qty);
     const newRejectionQty = toQty(progress.new_rejection_qty);
     const rejectionBalanceAfter = Math.max(currentRejectionBalance - unloadingForRejection, 0);
+    const otherBalanceAfter = Math.max(currentOtherBalance - otherQty, 0);
+    const rejectionAdjustment = rejectionBalanceAfter;
+    const otherAdjustment = otherBalanceAfter;
+    const totalBalanceAfter = rejectionBalanceAfter + otherBalanceAfter;
 
     if (unloadingForRejection <= 0 && otherQty <= 0 && newRejectionQty <= 0) {
       showToast("Enter Unloading Qty for Rejection or Other Qty first.", "warning");
       return;
     }
-
     if (unloadingForRejection > currentRejectionBalance + 0.000001) {
       showToast(`Unloading Qty for Rejection cannot exceed current rejection balance ${money(currentRejectionBalance)} MT.`, "warning");
       return;
     }
-
+    if (otherQty > currentOtherBalance + 0.000001) {
+      showToast(`Other Qty cannot exceed current other balance ${money(currentOtherBalance)} MT.`, "warning");
+      return;
+    }
     if (!String(progress.narration || "").trim()) {
       showToast("Please enter the progress narration.", "warning");
       return;
@@ -518,25 +521,22 @@ export default function DailyRejectionPage() {
     setBusyId(rowId);
     try {
       await axios.post(`${API}/${rowId}/progress`, {
-        // Rejection quantity is the ONLY completion/balance chain.
+        // Existing API compatibility.
         processed_qty: unloadingForRejection,
         unloading_qty_for_rejection: unloadingForRejection,
         rejection_unloading_qty: unloadingForRejection,
-        rejection_adjustment_qty: rejectionBalanceAfter,
-        adjusted_rejection_qty: rejectionBalanceAfter,
-        processed_rejection_qty: unloadingForRejection,
-        remaining_rejection_qty: rejectionBalanceAfter,
-
-        // Other Qty is retained only as view/history data.
+        rejection_adjustment_qty: rejectionAdjustment,
+        adjusted_rejection_qty: rejectionAdjustment,
+        // Separate other-quantity chain.
         other_qty: otherQty,
         processed_other_qty: otherQty,
-        other_processed_qty: otherQty,
-        other_adjustment_qty: 0,
-        adjusted_other_qty: 0,
-        remaining_other_qty: chainOtherRemainingOf(row),
-        remaining_total_qty: rejectionBalanceAfter,
-        processed_total_qty: unloadingForRejection,
-
+        other_adjustment_qty: otherAdjustment,
+        adjusted_other_qty: otherAdjustment,
+        processed_rejection_qty: unloadingForRejection,
+        processed_total_qty: unloadingForRejection + otherQty,
+        remaining_rejection_qty: rejectionBalanceAfter,
+        remaining_other_qty: otherBalanceAfter,
+        remaining_total_qty: totalBalanceAfter,
         new_rejection_qty: newRejectionQty,
         new_lorry_no: String(progress.new_lorry_no || "").trim(),
         destination_type: String(progress.destination_type || "").trim(),
@@ -546,16 +546,17 @@ export default function DailyRejectionPage() {
       });
 
       setProgressForm((prev) => ({ ...prev, [rowId]: {} }));
-
-      if (rejectionBalanceAfter > 0.000001) {
+      if (totalBalanceAfter > 0.000001) {
+        const pendingParts = [];
+        if (rejectionBalanceAfter > 0.000001) pendingParts.push(`Reject ${money(rejectionBalanceAfter)} MT`);
+        if (otherBalanceAfter > 0.000001) pendingParts.push(`Other ${money(otherBalanceAfter)} MT`);
         showToast(
-          `${money(unloadingForRejection)} MT rejection processed. ${money(rejectionBalanceAfter)} MT rejection balance remains pending and can be reassigned on the SAME Rejection No. Other Qty is view-only and does not affect completion.`,
+          `${money(unloadingForRejection)} MT rejection + ${money(otherQty)} MT other adjusted. ${pendingParts.join(" + ")} remains pending and can be reassigned on the SAME Rejection No.`,
           "success"
         );
       } else {
-        showToast("All rejection quantity matched. Rejection balance is 0.00 MT and this work can be completed. Other Qty is view-only.", "success");
+        showToast("All rejection and other quantities matched. Balance is 0.00 MT and this Rejection No. can be closed.", "success");
       }
-
       await loadData();
     } catch (err) {
       showToast(err?.response?.data?.error || err?.message || "Failed to save progress.", "error");
@@ -567,8 +568,10 @@ export default function DailyRejectionPage() {
   const completeRow = async (rowId) => {
     const row = rows.find((item) => idOf(item) === String(rowId));
     const rejectionRemaining = chainRemainingOf(row);
-    if (rejectionRemaining > 0.000001) {
-      showToast(`Work is not complete. Reject Balance: ${money(rejectionRemaining)} MT`, "warning");
+    const otherRemaining = chainOtherRemainingOf(row);
+    const remaining = rejectionRemaining + otherRemaining;
+    if (remaining > 0.000001) {
+      showToast(`Work is not complete. Reject Balance: ${money(rejectionRemaining)} MT, Other Balance: ${money(otherRemaining)} MT`, "warning");
       return;
     }
     setBusyId(rowId);
@@ -632,7 +635,7 @@ export default function DailyRejectionPage() {
     `Other Target: ${money(chainOtherTargetOf(row))}`,
     `Other Processed: ${money(chainOtherProcessedOf(row))}`,
     `Other Remaining: ${money(chainOtherRemainingOf(row))}`,
-    `Completion Balance (Reject): ${money(chainRemainingOf(row))}`,
+    `Total Remaining: ${money(chainTotalRemainingOf(row))}`,
     `Reason: ${row?.reason || "-"}`,
     `Work: ${row?.action_type || "-"}`,
     `Assigned To: ${row?.assigned_to_name || "-"}`,
@@ -793,7 +796,7 @@ export default function DailyRejectionPage() {
               <div><span>Other Target</span><b>{money(chainOtherTargetOf(row))} MT</b></div>
               <div><span>Other Processed</span><b>{money(chainOtherProcessedOf(row))} MT</b></div>
               <div><span>Other Remaining</span><b>{money(chainOtherRemainingOf(row))} MT</b></div>
-              <div><span>Reject Remaining (Completion)</span><b>{money(chainRemainingOf(row))} MT</b></div>
+              <div><span>Total Remaining</span><b>{money(chainTotalRemainingOf(row))} MT</b></div>
               {row?.assignment_narration ? <div style={{ gridColumn: "1 / -1" }}><span>Assignment Narration</span><b>{row.assignment_narration}</b></div> : null}
             </div>
 
@@ -824,7 +827,7 @@ export default function DailyRejectionPage() {
             {withWorkflow && assignedToMe && row?.status === "RUNNING" ? (
               <div className="dr-mobile-worker">
                 <div className="dr-mobile-workflow-title">YOUR ASSIGNED WORK</div>
-                <div className="dr-mobile-worker-work">{row?.action_type || "Work assigned"} · Current Reject {money(chainRemainingOf(row))} MT · Other Qty (View Only) {money(chainOtherTargetOf(row))} MT</div>
+                <div className="dr-mobile-worker-work">{row?.action_type || "Work assigned"} · Current Reject {money(chainRemainingOf(row))} MT · Other {money(chainOtherRemainingOf(row))} MT</div>
                 <div className="dr-chain-summary">
                   <div><b>Reject Target</b><span>{money(chainTargetOf(row))} MT</span></div>
                   <div><b>Reject Processed</b><span>{money(chainProcessedOf(row))} MT</span></div>
@@ -832,14 +835,14 @@ export default function DailyRejectionPage() {
                   <div><b>Other Target</b><span>{money(chainOtherTargetOf(row))} MT</span></div>
                   <div><b>Other Processed</b><span>{money(chainOtherProcessedOf(row))} MT</span></div>
                   <div><b>Other Remaining</b><span>{money(chainOtherRemainingOf(row))} MT</span></div>
-                  <div><b>Reject Remaining (Completion Balance)</b><span>{money(chainRemainingOf(row))} MT</span></div>
+                  <div><b>Total Remaining</b><span>{money(chainTotalRemainingOf(row))} MT</span></div>
                 </div>
                 {row?.assignment_narration ? <div className="dr-assignment-note"><b>Assignment:</b> {row.assignment_narration}</div> : null}
                 {renderFactoryAssignmentDetails(row)}
                 <div className="dr-mobile-progress">
                   <div className="dr-mobile-workflow-title">PROGRESS / CHAIN ENTRY</div>
                   <input type="number" min="0" max={chainRemainingOf(row)} step="0.01" value={(progressForm[rowId] || {}).unloading_qty_for_rejection || ""} onChange={(e) => setProgressForm((prev) => ({ ...prev, [rowId]: { ...(prev[rowId] || {}), unloading_qty_for_rejection: e.target.value } }))} placeholder="Unloading Qty for Rejection (MT)" style={styles.workflowInput} />
-                  <div style={{ ...styles.workflowInput, display:"flex", alignItems:"center", background:"#f8fafc", color:"#64748b", fontWeight:800, boxSizing:"border-box" }}>Other Qty (View Only): {money(chainOtherTargetOf(row))} MT</div>
+                  <input type="number" min="0" step="0.01" value={(progressForm[rowId] || {}).other_qty || ""} onChange={(e) => setProgressForm((prev) => ({ ...prev, [rowId]: { ...(prev[rowId] || {}), other_qty: e.target.value } }))} placeholder="Other Qty (MT)" style={styles.workflowInput} />
                   <input type="number" min="0" step="0.01" value={(progressForm[rowId] || {}).new_rejection_qty || ""} onChange={(e) => setProgressForm((prev) => ({ ...prev, [rowId]: { ...(prev[rowId] || {}), new_rejection_qty: e.target.value } }))} placeholder="New Rejection Qty (MT)" style={styles.workflowInput} />
                   <input value={(progressForm[rowId] || {}).new_lorry_no || ""} onChange={(e) => setProgressForm((prev) => ({ ...prev, [rowId]: { ...(prev[rowId] || {}), new_lorry_no: e.target.value } }))} placeholder="New Lorry No" style={styles.workflowInput} />
                   <input value={(progressForm[rowId] || {}).destination_type || ""} onChange={(e) => setProgressForm((prev) => ({ ...prev, [rowId]: { ...(prev[rowId] || {}), destination_type: e.target.value } }))} placeholder="Destination / Movement" style={styles.workflowInput} />
@@ -847,13 +850,15 @@ export default function DailyRejectionPage() {
                   <div className="dr-rejection-adjust-preview">
                     <span>Reject Balance: <b>{money(chainRemainingOf(row))} MT</b></span>
                     <span>Reject After: <b>{money(Math.max(chainRemainingOf(row) - toQty((progressForm[rowId] || {}).unloading_qty_for_rejection), 0))} MT</b></span>
-                    <span>Other Qty (View Only): <b>{money(chainOtherTargetOf(row))} MT</b></span>
+                    <span>Other Balance: <b>{money(chainOtherRemainingOf(row))} MT</b></span>
+                    <span>Other After: <b>{money(Math.max(chainOtherRemainingOf(row) - toQty((progressForm[rowId] || {}).other_qty), 0))} MT</b></span>
+                    <span>Total After: <b>{money(Math.max(chainRemainingOf(row) - toQty((progressForm[rowId] || {}).unloading_qty_for_rejection), 0) + Math.max(chainOtherRemainingOf(row) - toQty((progressForm[rowId] || {}).other_qty), 0))} MT</b></span>
                   </div>
                   <button type="button" disabled={rowBusy} onClick={() => updateProgress(rowId)} style={styles.completeInline}>{rowBusy ? "Saving..." : "Save Progress / Send Pending"}</button>
                 </div>
                 <div className="dr-mobile-complete">
                   <input value={completionRemarks[rowId] || ""} onChange={(e) => setCompletionRemarks((prev) => ({ ...prev, [rowId]: e.target.value }))} placeholder="Final completion note" style={styles.workflowInput} />
-                  <button type="button" disabled={rowBusy || chainRemainingOf(row) > 0.000001} onClick={() => completeRow(rowId)} style={styles.completeInline}>{rowBusy ? "Completing..." : "✓ Complete Work"}</button>
+                  <button type="button" disabled={rowBusy || chainTotalRemainingOf(row) > 0.000001} onClick={() => completeRow(rowId)} style={styles.completeInline}>{rowBusy ? "Completing..." : "✓ Complete Work"}</button>
                 </div>
               </div>
             ) : null}
@@ -890,7 +895,7 @@ export default function DailyRejectionPage() {
       "Other Target",
       "Other Processed",
       "Other Remaining",
-      "Reject Completion Balance",
+      "Total Remaining",
       "Reason",
       "Work",
       "Assigned To",
@@ -899,44 +904,36 @@ export default function DailyRejectionPage() {
       "Action",
     ];
 
-    const startTableDrag = (event) => {
-      // Only left mouse button starts drag-scrolling. Do not hijack controls inside the table.
-      if (event.button !== 0) return;
-      const target = event.target;
-      if (target?.closest?.("input, textarea, select, button, a, [contenteditable=\"true\"]")) return;
+    const handleTableKeyDown = (event) => {
+      const key = event.key;
+      const scroller = event.currentTarget;
+      const activeTag = String(document.activeElement?.tagName || "").toUpperCase();
 
-      const el = event.currentTarget;
-      tableDragRef.current = {
-        el,
-        startX: event.clientX,
-        startY: event.clientY,
-        startLeft: el.scrollLeft,
-        startTop: el.scrollTop,
-      };
-      el.style.cursor = "grabbing";
-      document.body.style.userSelect = "none";
-      event.preventDefault();
+      // Keep the native form-control keyboard behaviour untouched.
+      if (["INPUT", "TEXTAREA", "SELECT", "BUTTON"].includes(activeTag)) return;
 
-      const move = (moveEvent) => {
-        const drag = tableDragRef.current;
-        if (!drag) return;
-        const dx = moveEvent.clientX - drag.startX;
-        const dy = moveEvent.clientY - drag.startY;
-        drag.el.scrollLeft = drag.startLeft - dx;
-        drag.el.scrollTop = drag.startTop - dy;
-      };
+      if (key === "ArrowLeft" || key === "ArrowRight") {
+        const step = Math.max(220, Math.round(scroller.clientWidth * 0.68));
+        const maxScroll = Math.max(scroller.scrollWidth - scroller.clientWidth, 0);
+        if (maxScroll <= 0) return;
+        event.preventDefault();
+        event.stopPropagation();
+        const nextLeft = key === "ArrowRight"
+          ? Math.min(scroller.scrollLeft + step, maxScroll)
+          : Math.max(scroller.scrollLeft - step, 0);
+        scroller.scrollTo({ left: nextLeft, behavior: "smooth" });
+        return;
+      }
 
-      const stop = () => {
-        const drag = tableDragRef.current;
-        if (drag?.el) drag.el.style.cursor = "grab";
-        tableDragRef.current = null;
-        document.body.style.userSelect = "";
-        window.removeEventListener("mousemove", move);
-        window.removeEventListener("mouseup", stop);
-      };
-
-      window.addEventListener("mousemove", move);
-      window.addEventListener("mouseup", stop);
+      if (key === "Spacebar" || key === " ") {
+        // Space on the focused table area selects the first visible row.
+        const firstRow = tableRows?.[0];
+        if (firstRow) {
+          event.preventDefault();
+          event.stopPropagation();
+          setSelectedRowId(idOf(firstRow));
+        }
+      }
     };
 
     return (
@@ -947,24 +944,69 @@ export default function DailyRejectionPage() {
               className="dr-table-scroll-main"
               style={{
                 ...styles.tableOuter,
-                overflowX: "hidden",
+                overflowX: "auto",
                 overflowY: "auto",
                 maxHeight: "78vh",
                 scrollbarGutter: "stable",
                 outline: "none",
-                cursor: "grab",
               }}
-              onMouseDown={startTableDrag}
+              tabIndex={0}
+              role="region"
+              onKeyDown={handleTableKeyDown}
+              onScroll={(event) => {
+                const main = event.currentTarget;
+                const bottom = main.parentElement?.querySelector(".dr-table-scroll-bottom");
+                if (bottom && Math.abs(bottom.scrollLeft - main.scrollLeft) > 1) {
+                  bottom.scrollLeft = main.scrollLeft;
+                }
+              }}
               onWheel={(event) => {
-                // Normal wheel = vertical. Horizontal wheel / trackpad deltaX = horizontal.
+                // Keep normal mouse-wheel vertical scrolling. Horizontal wheel/trackpad
+                // movement is passed to the table's horizontal scroll position.
                 const el = event.currentTarget;
-                if (Math.abs(event.deltaX) > Math.abs(event.deltaY) && el.scrollWidth > el.clientWidth) {
+                if (Math.abs(event.deltaX) > 0) {
                   event.preventDefault();
                   el.scrollLeft += event.deltaX;
-                } else if (event.shiftKey && el.scrollWidth > el.clientWidth) {
-                  event.preventDefault();
-                  el.scrollLeft += event.deltaY;
                 }
+              }}
+              onMouseDown={(event) => {
+                const target = event.target;
+                const interactive = target?.closest?.("button, input, textarea, select, option, a, [role='button'], [contenteditable='true']");
+                if (interactive || event.button !== 0) return;
+                const el = event.currentTarget;
+                tableDragRef.current = {
+                  active: true,
+                  moved: false,
+                  startX: event.clientX,
+                  startY: event.clientY,
+                  startLeft: el.scrollLeft,
+                  startTop: el.scrollTop,
+                };
+                el.style.cursor = "grabbing";
+                el.style.userSelect = "none";
+              }}
+              onMouseMove={(event) => {
+                const drag = tableDragRef.current;
+                if (!drag?.active) return;
+                const el = event.currentTarget;
+                const dx = event.clientX - drag.startX;
+                const dy = event.clientY - drag.startY;
+                if (Math.abs(dx) > 2 || Math.abs(dy) > 2) drag.moved = true;
+                el.scrollLeft = drag.startLeft - dx;
+                el.scrollTop = drag.startTop - dy;
+              }}
+              onMouseUp={(event) => {
+                const el = event.currentTarget;
+                tableDragRef.current = null;
+                el.style.cursor = "grab";
+                el.style.userSelect = "";
+              }}
+              onMouseLeave={(event) => {
+                const el = event.currentTarget;
+                if (!tableDragRef.current?.active) return;
+                tableDragRef.current = null;
+                el.style.cursor = "grab";
+                el.style.userSelect = "";
               }}
               aria-label="Daily Rejection table"
             >
@@ -998,12 +1040,35 @@ export default function DailyRejectionPage() {
                       <tr
                         key={rowId}
                         className={selectedRowId === rowId ? "dr-selected-row" : ""}
+                        tabIndex={0}
                         onClick={() => setSelectedRowId(rowId)}
+                        onKeyDown={(event) => {
+                          const activeTag = String(document.activeElement?.tagName || "").toUpperCase();
+                          if (["INPUT", "TEXTAREA", "SELECT", "BUTTON"].includes(activeTag)) return;
+                          if (event.key === " " || event.key === "Spacebar") {
+                            event.preventDefault();
+                            event.stopPropagation();
+                            setSelectedRowId(rowId);
+                          } else if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+                            const scroller = event.currentTarget.closest(".dr-table-scroll-main");
+                            if (!scroller) return;
+                            const step = Math.max(220, Math.round(scroller.clientWidth * 0.68));
+                            const maxScroll = Math.max(scroller.scrollWidth - scroller.clientWidth, 0);
+                            if (maxScroll <= 0) return;
+                            event.preventDefault();
+                            event.stopPropagation();
+                            const nextLeft = event.key === "ArrowRight"
+                              ? Math.min(scroller.scrollLeft + step, maxScroll)
+                              : Math.max(scroller.scrollLeft - step, 0);
+                            scroller.scrollTo({ left: nextLeft, behavior: "smooth" });
+                          }
+                        }}
                         style={{
                           outline: "none",
                           background: selectedRowId === rowId ? "#ecfeff" : undefined,
                           boxShadow: selectedRowId === rowId ? "inset 0 0 0 2px #14b8a6" : undefined,
                         }}
+                        title="Press Space to select this entry; then use ← / → to scroll horizontally"
                       >
                         <td style={{ ...styles.td, ...styles.slTd }}>
                           <button type="button" onClick={() => openHistory(row)} title="View S.L. wise details and history" style={styles.slButton}>{rowIndex + 1}</button>
@@ -1054,20 +1119,20 @@ export default function DailyRejectionPage() {
                           </>
                         ) : withWorkflow ? (
                           <td style={{ ...styles.td, ...styles.workflowTd }}>{assignedToMe && row?.status === "RUNNING" ? <div>
-                            <div style={styles.workerInline}><span><b>Reject Target:</b> {money(chainTargetOf(row))} MT &nbsp; <b>Reject Processed:</b> {money(chainProcessedOf(row))} MT &nbsp; <b>Reject Remaining:</b> {money(chainRemainingOf(row))} MT &nbsp; <b>Other Qty (View Only):</b> {money(chainOtherTargetOf(row))} MT</span></div>
+                            <div style={styles.workerInline}><span><b>Reject Target:</b> {money(chainTargetOf(row))} MT &nbsp; <b>Reject Processed:</b> {money(chainProcessedOf(row))} MT &nbsp; <b>Reject Remaining:</b> {money(chainRemainingOf(row))} MT &nbsp; <b>Other Target:</b> {money(chainOtherTargetOf(row))} MT &nbsp; <b>Other Processed:</b> {money(chainOtherProcessedOf(row))} MT &nbsp; <b>Other Remaining:</b> {money(chainOtherRemainingOf(row))} MT &nbsp; <b>Total Remaining:</b> {money(chainTotalRemainingOf(row))} MT</span></div>
                             {row?.assignment_narration ? <div className="dr-assignment-note"><b>Assignment:</b> {row.assignment_narration}</div> : null}
                             {renderFactoryAssignmentDetails(row)}
                             <div className="dr-chain-entry-inline">
                               <input type="number" min="0" max={chainRemainingOf(row)} step="0.01" value={(progressForm[rowId] || {}).unloading_qty_for_rejection || ""} onChange={(e) => setProgressForm((prev) => ({ ...prev, [rowId]: { ...(prev[rowId] || {}), unloading_qty_for_rejection: e.target.value } }))} placeholder="Unloading Qty for Rejection" style={styles.workflowInput} />
-                              <div style={{ ...styles.workflowInput, display:"flex", alignItems:"center", background:"#f8fafc", color:"#64748b", fontWeight:800 }}>Other Qty (View Only): {money(chainOtherTargetOf(row))} MT</div>
+                              <input type="number" min="0" step="0.01" value={(progressForm[rowId] || {}).other_qty || ""} onChange={(e) => setProgressForm((prev) => ({ ...prev, [rowId]: { ...(prev[rowId] || {}), other_qty: e.target.value } }))} placeholder="Other Qty" style={styles.workflowInput} />
                               <input type="number" min="0" step="0.01" value={(progressForm[rowId] || {}).new_rejection_qty || ""} onChange={(e) => setProgressForm((prev) => ({ ...prev, [rowId]: { ...(prev[rowId] || {}), new_rejection_qty: e.target.value } }))} placeholder="New Rejection" style={styles.workflowInput} />
                               <input value={(progressForm[rowId] || {}).new_lorry_no || ""} onChange={(e) => setProgressForm((prev) => ({ ...prev, [rowId]: { ...(prev[rowId] || {}), new_lorry_no: e.target.value } }))} placeholder="New Lorry" style={styles.workflowInput} />
                               <input value={(progressForm[rowId] || {}).destination_type || ""} onChange={(e) => setProgressForm((prev) => ({ ...prev, [rowId]: { ...(prev[rowId] || {}), destination_type: e.target.value } }))} placeholder="Destination" style={styles.workflowInput} />
                               <input value={(progressForm[rowId] || {}).narration || ""} onChange={(e) => setProgressForm((prev) => ({ ...prev, [rowId]: { ...(prev[rowId] || {}), narration: e.target.value } }))} placeholder="Progress narration" style={styles.workflowInput} />
-                              <div className="dr-rejection-adjust-preview"><span>Reject Balance: <b>{money(chainRemainingOf(row))} MT</b></span><span>Reject After: <b>{money(Math.max(chainRemainingOf(row) - toQty((progressForm[rowId] || {}).unloading_qty_for_rejection), 0))} MT</b></span><span>Other Qty (View Only): <b>{money(chainOtherTargetOf(row))} MT</b></span></div>
+                              <div className="dr-rejection-adjust-preview"><span>Reject Balance: <b>{money(chainRemainingOf(row))} MT</b></span><span>Reject After: <b>{money(Math.max(chainRemainingOf(row) - toQty((progressForm[rowId] || {}).unloading_qty_for_rejection), 0))} MT</b></span><span>Other Balance: <b>{money(chainOtherRemainingOf(row))} MT</b></span><span>Other After: <b>{money(Math.max(chainOtherRemainingOf(row) - toQty((progressForm[rowId] || {}).other_qty), 0))} MT</b></span><span>Total After: <b>{money(Math.max(chainRemainingOf(row) - toQty((progressForm[rowId] || {}).unloading_qty_for_rejection), 0) + Math.max(chainOtherRemainingOf(row) - toQty((progressForm[rowId] || {}).other_qty), 0))} MT</b></span></div>
                               <button type="button" disabled={rowBusy} onClick={() => updateProgress(rowId)} style={styles.completeInline}>{rowBusy ? "Saving..." : "Save Progress"}</button>
                             </div>
-                            <div style={styles.workerInline}><input value={completionRemarks[rowId] || ""} onChange={(e) => setCompletionRemarks((prev) => ({ ...prev, [rowId]: e.target.value }))} placeholder="Final completion note" style={styles.workflowInput} /><button type="button" disabled={rowBusy || chainRemainingOf(row) > 0.000001} onClick={() => completeRow(rowId)} style={styles.completeInline}>{rowBusy ? "Completing..." : "✓ Complete Work"}</button></div>
+                            <div style={styles.workerInline}><input value={completionRemarks[rowId] || ""} onChange={(e) => setCompletionRemarks((prev) => ({ ...prev, [rowId]: e.target.value }))} placeholder="Final completion note" style={styles.workflowInput} /><button type="button" disabled={rowBusy || chainTotalRemainingOf(row) > 0.000001} onClick={() => completeRow(rowId)} style={styles.completeInline}>{rowBusy ? "Completing..." : "✓ Complete Work"}</button></div>
                           </div> : <span style={styles.mutedDash}>-</span>}</td>
                         ) : null}
                         <td style={{ ...styles.td, ...styles.actionTd, position: "sticky", right: 0, background: "#fff", zIndex: 4 }}>{renderActionIcons(row)}</td>
@@ -1079,14 +1144,32 @@ export default function DailyRejectionPage() {
             </div>
             <div
               className="dr-table-scroll-bottom"
-              onScroll={(event) => {
+              role="scrollbar"
+              tabIndex={0}
+              aria-orientation="horizontal"
+              aria-label="Daily Rejection horizontal scrollbar"
+              onKeyDown={(event) => {
+                if (!["ArrowLeft", "ArrowRight"].includes(event.key)) return;
+                event.preventDefault();
                 const main = event.currentTarget.previousElementSibling;
-                if (main && Math.abs(main.scrollLeft - event.currentTarget.scrollLeft) > 1) {
-                  main.scrollLeft = event.currentTarget.scrollLeft;
+                if (!main) return;
+                const step = Math.max(220, Math.round(main.clientWidth * 0.68));
+                const maxScroll = Math.max(main.scrollWidth - main.clientWidth, 0);
+                const nextLeft = event.key === "ArrowRight"
+                  ? Math.min(main.scrollLeft + step, maxScroll)
+                  : Math.max(main.scrollLeft - step, 0);
+                main.scrollLeft = nextLeft;
+                event.currentTarget.scrollLeft = nextLeft;
+              }}
+              onScroll={(event) => {
+                const bottom = event.currentTarget;
+                const main = bottom.previousElementSibling;
+                if (main && Math.abs(main.scrollLeft - bottom.scrollLeft) > 1) {
+                  main.scrollLeft = bottom.scrollLeft;
                 }
               }}
             >
-              <div className="dr-table-scroll-bottom-spacer" style={{ width: `${tableMinWidth}px`, height: 1 }} />
+              <div style={{ width: `${tableMinWidth}px`, height: 1 }} />
             </div>
           </div>
         </div>
@@ -1118,38 +1201,25 @@ export default function DailyRejectionPage() {
 
   useEffect(() => {
     const syncHorizontalScrollbars = () => {
-      document.querySelectorAll('.dr-table-scroll-main').forEach((main) => {
-        const bottom = main.parentElement?.querySelector('.dr-table-scroll-bottom');
+      document.querySelectorAll(".dr-table-scroll-main").forEach((main) => {
+        const bottom = main.parentElement?.querySelector(".dr-table-scroll-bottom");
         const spacer = bottom?.firstElementChild;
         if (!bottom || !spacer) return;
-        const width = Math.max(main.scrollWidth, main.clientWidth + 1);
-        spacer.style.width = `${width}px`;
+        spacer.style.width = `${Math.max(main.scrollWidth, main.clientWidth + 1)}px`;
         if (Math.abs(bottom.scrollLeft - main.scrollLeft) > 1) {
           bottom.scrollLeft = main.scrollLeft;
         }
       });
     };
 
-    const syncFromMain = (event) => {
-      const main = event.currentTarget;
-      const bottom = main.parentElement?.querySelector('.dr-table-scroll-bottom');
-      if (bottom && Math.abs(bottom.scrollLeft - main.scrollLeft) > 1) {
-        bottom.scrollLeft = main.scrollLeft;
-      }
-    };
-
-    const mains = Array.from(document.querySelectorAll('.dr-table-scroll-main'));
-    mains.forEach((main) => main.addEventListener('scroll', syncFromMain, { passive: true }));
-
     const frame = window.requestAnimationFrame(syncHorizontalScrollbars);
-    window.addEventListener('resize', syncHorizontalScrollbars);
-    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(syncHorizontalScrollbars) : null;
-    mains.forEach((main) => observer?.observe(main));
+    window.addEventListener("resize", syncHorizontalScrollbars);
+    const observer = typeof ResizeObserver !== "undefined" ? new ResizeObserver(syncHorizontalScrollbars) : null;
+    document.querySelectorAll(".dr-table-scroll-main").forEach((main) => observer?.observe(main));
 
     return () => {
       window.cancelAnimationFrame(frame);
-      window.removeEventListener('resize', syncHorizontalScrollbars);
-      mains.forEach((main) => main.removeEventListener('scroll', syncFromMain));
+      window.removeEventListener("resize", syncHorizontalScrollbars);
       observer?.disconnect();
     };
   }, [rows, reportRows, status, actionFilter, canAssign]);
@@ -1185,22 +1255,23 @@ export default function DailyRejectionPage() {
         .dr-mobile-list { display:none; }
         .dr-scroll-shell { width:100%; max-width:100%; outline:none; }
         .dr-scroll-shell:focus { outline:2px solid rgba(14,116,144,.28); outline-offset:2px; border-radius:14px; }
-        .dr-table-scroll-main { width:100%; max-width:100%; overflow-x:hidden; overflow-y:auto; max-height:78vh; -webkit-overflow-scrolling:touch; overscroll-behavior:contain; background:#fff; border:1px solid #dbe4ee; border-radius:16px; }
-        .dr-table-scroll-bottom { width:100%; max-width:100%; overflow-x:auto; overflow-y:hidden; height:14px; margin-top:4px; scrollbar-color:#64748b #eef2f7; scrollbar-width:auto; cursor:grab; }
-        .dr-table-scroll-bottom:active { cursor:grabbing; }
+        .dr-table-scroll-main { width:100%; max-width:100%; overflow-x:auto; overflow-y:auto; max-height:78vh; -webkit-overflow-scrolling:touch; overscroll-behavior:contain; background:#fff; border:1px solid #dbe4ee; border-radius:16px 16px 0 0; cursor:grab; }
+        .dr-table-scroll-main:active { cursor:grabbing; }
+        .dr-table-scroll-main tbody tr:focus-visible { outline:2px solid #0ea5a8; outline-offset:-2px; }
+        .dr-table-scroll-main tbody tr.dr-selected-row td { background:#ecfeff !important; }
+        .dr-table-scroll-main tbody tr.dr-selected-row { outline:2px solid #14b8a6; outline-offset:-2px; }
+        .dr-table-scroll-main::-webkit-scrollbar { width:12px; height:10px; }
+        .dr-table-scroll-main::-webkit-scrollbar-track { background:#eef2f7; }
+        .dr-table-scroll-main::-webkit-scrollbar-thumb { background:#94a3b8; border-radius:999px; border:2px solid #eef2f7; }
+        .dr-table-scroll-main::-webkit-scrollbar-thumb:hover { background:#64748b; }
+        .dr-table-scroll-main { scrollbar-color:#94a3b8 #eef2f7; scrollbar-width:auto; }
+        .dr-table-scroll-bottom { width:100%; max-width:100%; overflow-x:auto; overflow-y:hidden; height:15px; margin-top:2px; background:#eef2f7; border:1px solid #d7e0ea; border-top:0; border-radius:0 0 12px 12px; }
         .dr-table-scroll-bottom::-webkit-scrollbar { height:12px; }
         .dr-table-scroll-bottom::-webkit-scrollbar-track { background:#eef2f7; border-radius:999px; }
         .dr-table-scroll-bottom::-webkit-scrollbar-thumb { background:#64748b; border-radius:999px; border:2px solid #eef2f7; }
         .dr-table-scroll-bottom::-webkit-scrollbar-thumb:hover { background:#475569; }
-        .dr-table-scroll-bottom-spacer { min-width:100%; }
-        .dr-table-scroll-main tbody tr:focus-visible { outline:2px solid #0ea5a8; outline-offset:-2px; }
-        .dr-table-scroll-main tbody tr.dr-selected-row td { background:#ecfeff !important; }
-        .dr-table-scroll-main tbody tr.dr-selected-row { outline:2px solid #14b8a6; outline-offset:-2px; }
-        .dr-table-scroll-main::-webkit-scrollbar { width:12px; height:12px; }
-        .dr-table-scroll-main::-webkit-scrollbar-track { background:#eef2f7; border-radius:999px; }
-        .dr-table-scroll-main::-webkit-scrollbar-thumb { background:#64748b; border-radius:999px; border:2px solid #eef2f7; }
-        .dr-table-scroll-main::-webkit-scrollbar-thumb:hover { background:#475569; }
-        .dr-table-scroll-main { scrollbar-color:#64748b #eef2f7; scrollbar-width:auto; }
+        .dr-table-scroll-bottom { scrollbar-color:#64748b #eef2f7; scrollbar-width:auto; }
+        .dr-table-scroll-bottom > div { height:1px; min-width:100%; }
         .dr-mobile-card { background:#fff; border:1px solid #dbe4ee; border-radius:16px; padding:12px; box-shadow:0 8px 24px rgba(15,23,42,.05); }
         .dr-mobile-card-head { display:flex; justify-content:space-between; align-items:flex-start; gap:10px; padding-bottom:10px; border-bottom:1px solid #eef2f7; }
         .dr-mobile-rej { font-weight:900; color:#0f172a; font-size:15px; }
@@ -1230,7 +1301,7 @@ export default function DailyRejectionPage() {
         @media (max-width: 720px) {
           .dr-desktop-table { display:none; }
           .dr-mobile-list { display:grid; gap:10px; }
-          }
+        }
         .dr-history-overlay { position:fixed; inset:0; z-index:100000; background:rgba(15,23,42,.52); display:flex; align-items:center; justify-content:center; padding:18px; }
         .dr-history-modal { width:min(1120px,96vw); max-height:90vh; overflow:auto; background:#fff; border-radius:18px; border:1px solid #dbe4ee; box-shadow:0 24px 70px rgba(15,23,42,.25); }
         .dr-history-factory-details { margin-top:7px; border:1px solid #bfdbfe; border-radius:9px; background:#f8fbff; padding:6px 8px; }
