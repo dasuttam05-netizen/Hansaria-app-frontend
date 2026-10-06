@@ -10,6 +10,7 @@ export default function TransportReportPage() {
   const navigate = useNavigate();
   const API_BASE = "/api";
   const [records, setRecords] = useState([]);
+  const [paymentRecords, setPaymentRecords] = useState([]);
   const [searchTerm, setSearchTerm] = useState("");
   const [filters, setFilters] = useState({
     from_date: new Date(new Date().setDate(new Date().getDate() - 30))
@@ -107,17 +108,28 @@ export default function TransportReportPage() {
 
   const fetchReport = useCallback(async () => {
     try {
-      const res = await axios.get(`${API_BASE}/transport-bilti/report/list`, {
-        params: { ...filters, _t: Date.now() },
-        headers: {
-          "Cache-Control": "no-cache",
-          Pragma: "no-cache",
-        },
-      });
-      setRecords(res.data || []);
+      const [biltiResponse, paymentResponse] = await Promise.all([
+        axios.get(`${API_BASE}/transport-bilti/report/list`, {
+          params: { ...filters, _t: Date.now() },
+          headers: {
+            "Cache-Control": "no-cache",
+            Pragma: "no-cache",
+          },
+        }),
+        axios.get(`${API_BASE}/transport-payments`, {
+          params: { ...filters, _t: Date.now() },
+          headers: {
+            "Cache-Control": "no-cache",
+            Pragma: "no-cache",
+          },
+        }),
+      ]);
+      setRecords(biltiResponse.data || []);
+      setPaymentRecords(paymentResponse.data?.rows || []);
     } catch (err) {
       console.error(err);
       setRecords([]);
+      setPaymentRecords([]);
     }
   }, [filters.from_date, filters.to_date]);
 
@@ -163,6 +175,25 @@ export default function TransportReportPage() {
       return haystack.includes(search);
     });
   }, [records, searchTerm]);
+
+  const visiblePayments = useMemo(() => {
+    const search = searchTerm.trim().toLowerCase();
+    if (!search) return paymentRecords;
+
+    return paymentRecords.filter((row) =>
+      [
+        row.voucher_no,
+        row.transporter_name,
+        row.payment_method,
+        row.narration,
+        row.amount,
+      ]
+        .filter((value) => value !== undefined && value !== null)
+        .join(" ")
+        .toLowerCase()
+        .includes(search)
+    );
+  }, [paymentRecords, searchTerm]);
 
   const totals = useMemo(
     () =>
@@ -636,6 +667,63 @@ Rows: ${rows.length}`;
           <button onClick={fetchReport} style={{ ...button, background: "#0f766e", display: "inline-flex", alignItems: "center", gap: 8 }}><FaSyncAlt /> F5 / Refresh</button>
           <button onClick={downloadPDF} style={{ ...button, background: "#2563eb", display: "inline-flex", alignItems: "center", gap: 8 }}><FaFilePdf /> Report PDF</button>
           <button onClick={shareReportWhatsApp} style={{ ...button, background: "#16a34a", display: "inline-flex", alignItems: "center", gap: 8 }}><FaWhatsapp /> WhatsApp Report</button>
+        </div>
+      </div>
+
+      <div style={{ ...card, marginBottom: 16, overflow: "hidden" }}>
+        <h3 style={{ margin: "0 0 14px", color: "#0f172a" }}>Transport Payment Vouchers</h3>
+        <div style={{ overflowX: "auto", maxHeight: "45vh" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 900 }}>
+            <thead>
+              <tr>
+                {["Voucher No", "Date", "Transporter", "Amount", "Bill Adjusted", "Advance", "On Account", "Method", "Narration", "Action"].map((heading) => (
+                  <th key={heading} style={th}>{heading}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {visiblePayments.length ? visiblePayments.map((payment) => {
+                const allocations = Array.isArray(payment.adjustments)
+                  ? payment.adjustments
+                  : Array.isArray(payment.allocations)
+                  ? payment.allocations
+                  : [];
+                const adjusted = allocations.reduce(
+                  (total, item) => total + Number(item.adjusted_amount ?? item.amount ?? 0),
+                  0
+                );
+
+                return (
+                  <tr key={payment._id || payment.id}>
+                    <td style={td}>{payment.voucher_no || "-"}</td>
+                    <td style={td}>{dateValue(payment.date) || "-"}</td>
+                    <td style={td}>{payment.transporter_name || "-"}</td>
+                    <td style={{ ...td, textAlign: "right" }}>{num(payment.amount)}</td>
+                    <td style={{ ...td, textAlign: "right" }}>{num(adjusted)}</td>
+                    <td style={{ ...td, textAlign: "right" }}>{num(payment.advance_amount)}</td>
+                    <td style={{ ...td, textAlign: "right" }}>{num(payment.on_account_amount)}</td>
+                    <td style={td}>{payment.payment_method || "-"}</td>
+                    <td style={{ ...td, whiteSpace: "normal", minWidth: 160 }}>{payment.narration || "-"}</td>
+                    <td style={td}>
+                      <button
+                        type="button"
+                        onClick={() => navigate(`/voucher-entry?type=transport&edit=${encodeURIComponent(payment._id || payment.id)}`)}
+                        style={{ ...button, background: "#ea580c", padding: "7px 11px" }}
+                      >
+                        Edit
+                      </button>
+                    </td>
+                  </tr>
+                );
+              }) : (
+                <tr>
+                  <td style={{ ...td, textAlign: "center", color: "#64748b" }} colSpan={10}>
+                    No transport payment vouchers found for this date range.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
         </div>
       </div>
 
