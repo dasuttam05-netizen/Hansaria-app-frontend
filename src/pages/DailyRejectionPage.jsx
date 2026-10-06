@@ -158,6 +158,7 @@ export default function DailyRejectionPage() {
   const [busyId, setBusyId] = useState("");
   const [completionRemarks, setCompletionRemarks] = useState({});
   const [selectedRowId, setSelectedRowId] = useState("");
+  const tableDragRef = useRef({ active: false, moved: false, startX: 0, startY: 0, startLeft: 0, startTop: 0 });
   const [assignNarration, setAssignNarration] = useState({});
   const [progressForm, setProgressForm] = useState({});
   const [editId, setEditId] = useState("");
@@ -903,47 +904,10 @@ export default function DailyRejectionPage() {
       "Action",
     ];
 
-    const handleTableKeyDown = (event) => {
-      const key = event.key;
-      const scroller = event.currentTarget;
-      const activeTag = String(document.activeElement?.tagName || "").toUpperCase();
-
-      // Keep the native form-control keyboard behaviour untouched.
-      if (["INPUT", "TEXTAREA", "SELECT", "BUTTON"].includes(activeTag)) return;
-
-      if (key === "ArrowLeft" || key === "ArrowRight") {
-        const step = Math.max(220, Math.round(scroller.clientWidth * 0.68));
-        const maxScroll = Math.max(scroller.scrollWidth - scroller.clientWidth, 0);
-        if (maxScroll <= 0) return;
-        event.preventDefault();
-        event.stopPropagation();
-        const nextLeft = key === "ArrowRight"
-          ? Math.min(scroller.scrollLeft + step, maxScroll)
-          : Math.max(scroller.scrollLeft - step, 0);
-        scroller.scrollTo({ left: nextLeft, behavior: "smooth" });
-        return;
-      }
-
-      if (key === "Spacebar" || key === " ") {
-        // Space on the focused table area selects the first visible row.
-        const firstRow = tableRows?.[0];
-        if (firstRow) {
-          event.preventDefault();
-          event.stopPropagation();
-          setSelectedRowId(idOf(firstRow));
-        }
-      }
-    };
-
     return (
       <>
         <div className="dr-desktop-table">
           <div className="dr-scroll-shell">
-            <div className="dr-scroll-hint" aria-hidden="true">
-              <span>Tab → focus table</span>
-              <span>← / → scroll</span>
-              <span>Mouse → drag bottom scrollbar</span>
-            </div>
             <div
               className="dr-table-scroll-main"
               style={{
@@ -953,69 +917,58 @@ export default function DailyRejectionPage() {
                 maxHeight: "78vh",
                 scrollbarGutter: "stable",
                 outline: "none",
+                cursor: "grab",
+                userSelect: tableDragRef.current.active ? "none" : undefined,
               }}
-              tabIndex={0}
               role="region"
-              onKeyDown={handleTableKeyDown}
-              onWheel={(event) => {
-                // Mouse wheel / trackpad over the Daily Rejection grid moves horizontally.
-                // Vertical wheel movement is intentionally converted to horizontal scroll
-                // so the right-side columns can be reached without zooming the browser.
-                const el = event.currentTarget;
-                if (el.scrollWidth <= el.clientWidth) return;
-
-                const amount = Math.abs(event.deltaX) > Math.abs(event.deltaY)
-                  ? event.deltaX
-                  : event.deltaY;
-
-                if (!amount) return;
-
-                event.preventDefault();
-                event.stopPropagation();
-                el.scrollLeft += amount;
-              }}
               onMouseDown={(event) => {
-                // Left-click + drag anywhere on the table pans horizontally.
-                // Do not hijack normal interaction with inputs, buttons or selects.
                 const target = event.target;
-                const activeTag = String(target?.tagName || "").toUpperCase();
-                if (event.button !== 0 || ["INPUT", "TEXTAREA", "SELECT", "BUTTON", "A"].includes(activeTag)) return;
-
+                const interactive = target?.closest?.("button, input, textarea, select, option, a, [role='button']");
+                if (interactive) return;
+                if (event.button !== 0) return;
                 const el = event.currentTarget;
-                if (el.scrollWidth <= el.clientWidth) return;
-
-                el.dataset.drHorizontalDragging = "true";
-                el.dataset.drHorizontalStartX = String(event.clientX);
-                el.dataset.drHorizontalStartScroll = String(el.scrollLeft);
+                tableDragRef.current = {
+                  active: true,
+                  moved: false,
+                  startX: event.clientX,
+                  startY: event.clientY,
+                  startLeft: el.scrollLeft,
+                  startTop: el.scrollTop,
+                };
                 el.style.cursor = "grabbing";
                 el.style.userSelect = "none";
               }}
               onMouseMove={(event) => {
+                const drag = tableDragRef.current;
+                if (!drag.active) return;
                 const el = event.currentTarget;
-                if (el.dataset.drHorizontalDragging !== "true") return;
-
-                const startX = Number(el.dataset.drHorizontalStartX || event.clientX);
-                const startScroll = Number(el.dataset.drHorizontalStartScroll || el.scrollLeft);
-                const distance = event.clientX - startX;
-
-                event.preventDefault();
-                el.scrollLeft = startScroll - distance;
+                const dx = event.clientX - drag.startX;
+                const dy = event.clientY - drag.startY;
+                if (Math.abs(dx) > 3 || Math.abs(dy) > 3) drag.moved = true;
+                el.scrollLeft = drag.startLeft - dx;
+                el.scrollTop = drag.startTop - dy;
+                if (drag.moved) event.preventDefault();
               }}
               onMouseUp={(event) => {
-                const el = event.currentTarget;
-                el.dataset.drHorizontalDragging = "false";
-                el.style.cursor = "grab";
-                el.style.userSelect = "";
+                tableDragRef.current.active = false;
+                event.currentTarget.style.cursor = "grab";
+                event.currentTarget.style.userSelect = "";
               }}
               onMouseLeave={(event) => {
-                const el = event.currentTarget;
-                if (el.dataset.drHorizontalDragging !== "true") return;
-                el.dataset.drHorizontalDragging = "false";
-                el.style.cursor = "grab";
-                el.style.userSelect = "";
+                if (tableDragRef.current.active) tableDragRef.current.active = false;
+                event.currentTarget.style.cursor = "grab";
+                event.currentTarget.style.userSelect = "";
               }}
-              aria-label="Daily Rejection table. Use mouse wheel to scroll horizontally, click and drag left/right, press Tab to focus, then Space to select an entry and Left/Right arrows to scroll."
-              title="Mouse wheel = left/right scroll. Click and drag = left/right pan. Tab + Space = select entry. ← / → = horizontal scroll."
+              onWheel={(event) => {
+                // Keep normal mouse-wheel behaviour so vertical wheel moves the table
+                // vertically. Trackpads / horizontal wheels can move it horizontally.
+                const el = event.currentTarget;
+                if (event.shiftKey && Math.abs(event.deltaY) > Math.abs(event.deltaX)) {
+                  event.preventDefault();
+                  el.scrollLeft += event.deltaY;
+                }
+              }}
+              aria-label="Daily Rejection table. Drag with the left mouse button to move left, right, up, and down. Use the scrollbars for precise movement."
             >
               <table style={{ ...styles.dataTable, width: "100%", minWidth: `${tableMinWidth}px` }}>
                 <thead>
@@ -1047,35 +1000,12 @@ export default function DailyRejectionPage() {
                       <tr
                         key={rowId}
                         className={selectedRowId === rowId ? "dr-selected-row" : ""}
-                        tabIndex={0}
                         onClick={() => setSelectedRowId(rowId)}
-                        onKeyDown={(event) => {
-                          const activeTag = String(document.activeElement?.tagName || "").toUpperCase();
-                          if (["INPUT", "TEXTAREA", "SELECT", "BUTTON"].includes(activeTag)) return;
-                          if (event.key === " " || event.key === "Spacebar") {
-                            event.preventDefault();
-                            event.stopPropagation();
-                            setSelectedRowId(rowId);
-                          } else if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
-                            const scroller = event.currentTarget.closest(".dr-table-scroll-main");
-                            if (!scroller) return;
-                            const step = Math.max(220, Math.round(scroller.clientWidth * 0.68));
-                            const maxScroll = Math.max(scroller.scrollWidth - scroller.clientWidth, 0);
-                            if (maxScroll <= 0) return;
-                            event.preventDefault();
-                            event.stopPropagation();
-                            const nextLeft = event.key === "ArrowRight"
-                              ? Math.min(scroller.scrollLeft + step, maxScroll)
-                              : Math.max(scroller.scrollLeft - step, 0);
-                            scroller.scrollTo({ left: nextLeft, behavior: "smooth" });
-                          }
-                        }}
                         style={{
                           outline: "none",
                           background: selectedRowId === rowId ? "#ecfeff" : undefined,
                           boxShadow: selectedRowId === rowId ? "inset 0 0 0 2px #14b8a6" : undefined,
                         }}
-                        title="Press Space to select this entry; then use ← / → to scroll horizontally"
                       >
                         <td style={{ ...styles.td, ...styles.slTd }}>
                           <button type="button" onClick={() => openHistory(row)} title="View S.L. wise details and history" style={styles.slButton}>{rowIndex + 1}</button>
@@ -1207,10 +1137,7 @@ export default function DailyRejectionPage() {
 
         .dr-mobile-list { display:none; }
         .dr-scroll-shell { width:100%; max-width:100%; outline:none; }
-        .dr-scroll-shell:focus { outline:2px solid rgba(14,116,144,.28); outline-offset:2px; border-radius:14px; }
-        .dr-scroll-hint { display:flex; justify-content:space-between; align-items:center; gap:10px; min-height:24px; padding:0 8px 5px; color:#64748b; font-size:10px; font-weight:800; letter-spacing:.2px; white-space:nowrap; }
-        .dr-table-scroll-main { width:100%; max-width:100%; overflow-x:auto; overflow-y:hidden; max-height:78vh; -webkit-overflow-scrolling:touch; overscroll-behavior-x:contain; overscroll-behavior-y:contain; background:#fff; border:1px solid #dbe4ee; border-radius:16px; cursor:grab; }
-        .dr-table-scroll-main:active { cursor:grabbing; }
+        .dr-table-scroll-main { width:100%; max-width:100%; overflow-x:auto; overflow-y:auto; max-height:78vh; -webkit-overflow-scrolling:touch; overscroll-behavior-x:contain; overscroll-behavior-y:contain; background:#fff; border:1px solid #dbe4ee; border-radius:16px; }
         .dr-table-scroll-main tbody tr:focus-visible { outline:2px solid #0ea5a8; outline-offset:-2px; }
         .dr-table-scroll-main tbody tr.dr-selected-row td { background:#ecfeff !important; }
         .dr-table-scroll-main tbody tr.dr-selected-row { outline:2px solid #14b8a6; outline-offset:-2px; }
@@ -1248,7 +1175,6 @@ export default function DailyRejectionPage() {
         @media (max-width: 720px) {
           .dr-desktop-table { display:none; }
           .dr-mobile-list { display:grid; gap:10px; }
-          .dr-scroll-hint { display:none; }
         }
         .dr-history-overlay { position:fixed; inset:0; z-index:100000; background:rgba(15,23,42,.52); display:flex; align-items:center; justify-content:center; padding:18px; }
         .dr-history-modal { width:min(1120px,96vw); max-height:90vh; overflow:auto; background:#fff; border-radius:18px; border:1px solid #dbe4ee; box-shadow:0 24px 70px rgba(15,23,42,.25); }
@@ -1634,7 +1560,7 @@ const styles = {
   toolbar: { background: '#fff', border: '1px solid #dbe4ee', borderRadius: 16, padding: 11, display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', alignItems: 'center' }, tabs: { display: 'flex', gap: 7, flexWrap: 'wrap' }, toolbarRight: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' },
   tab: { border: '1px solid #cbd5e1', background: '#fff', color: '#334155', borderRadius: 999, padding: '8px 12px', fontWeight: 800, cursor: 'pointer' }, tabActive: { border: '1px solid #0f766e', background: '#0f766e', color: '#fff', borderRadius: 999, padding: '8px 12px', fontWeight: 800, cursor: 'pointer' }, compactSelect: { minHeight: 40, border: '1px solid #cbd5e1', borderRadius: 10, padding: '8px 10px', background: '#fff' },
   primary: { border: 0, background: '#0f766e', color: '#fff', borderRadius: 11, padding: '10px 15px', fontWeight: 900, cursor: 'pointer', boxShadow: '0 5px 12px rgba(15,118,110,.16)' }, secondary: { border: '1px solid #cbd5e1', background: '#fff', color: '#334155', borderRadius: 11, padding: '10px 14px', fontWeight: 900, cursor: 'pointer' },
-  tableOuter: { width: '100%', maxWidth: '100%', overflowX: 'auto', overflowY: 'hidden', WebkitOverflowScrolling: 'touch', overscrollBehaviorX: 'contain', scrollbarWidth: 'auto', cursor: 'grab', background: '#fff', border: '1px solid #dbe4ee', borderRadius: 16, boxShadow: '0 10px 28px rgba(15,23,42,.05)' },
+  tableOuter: { width: '100%', maxWidth: '100%', overflowX: 'auto', overflowY: 'hidden', WebkitOverflowScrolling: 'touch', overscrollBehaviorX: 'contain', scrollbarWidth: 'auto', background: '#fff', border: '1px solid #dbe4ee', borderRadius: 16, boxShadow: '0 10px 28px rgba(15,23,42,.05)' },
   dataTable: { width: 'max-content', minWidth: 1500, borderCollapse: 'separate', borderSpacing: 0, fontSize: 12 },
   th: { position: 'sticky', top: 0, zIndex: 3, background: '#0f766e', color: '#fff', padding: '8px 7px', textAlign: 'left', fontWeight: 900, whiteSpace: 'nowrap', borderRight: '1px solid rgba(255,255,255,.14)' },
   qtyTh: { whiteSpace: 'normal', width: 56, minWidth: 50, maxWidth: 66, lineHeight: 1.02, textAlign: 'center', wordBreak: 'break-word' },
