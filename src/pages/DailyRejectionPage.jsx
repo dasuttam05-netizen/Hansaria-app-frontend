@@ -958,19 +958,64 @@ export default function DailyRejectionPage() {
               role="region"
               onKeyDown={handleTableKeyDown}
               onWheel={(event) => {
-                // Mouse wheel over the Daily Rejection grid moves horizontally.
-                // This keeps the table from moving up/down while the user is trying to
-                // inspect the right-side columns. Use the normal page scrollbar outside
-                // the grid for vertical page movement.
+                // Mouse wheel / trackpad over the Daily Rejection grid moves horizontally.
+                // Vertical wheel movement is intentionally converted to horizontal scroll
+                // so the right-side columns can be reached without zooming the browser.
                 const el = event.currentTarget;
                 if (el.scrollWidth <= el.clientWidth) return;
-                const amount = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY;
+
+                const amount = Math.abs(event.deltaX) > Math.abs(event.deltaY)
+                  ? event.deltaX
+                  : event.deltaY;
+
                 if (!amount) return;
+
                 event.preventDefault();
+                event.stopPropagation();
                 el.scrollLeft += amount;
               }}
-              aria-label="Daily Rejection table. Press Tab to focus. Press Space on an entry to select it, then use Left and Right arrows to scroll horizontally. Drag the bottom scrollbar with the mouse."
-              title="Tab to focus, then use ← / →. Drag the bottom scrollbar with the mouse."
+              onMouseDown={(event) => {
+                // Left-click + drag anywhere on the table pans horizontally.
+                // Do not hijack normal interaction with inputs, buttons or selects.
+                const target = event.target;
+                const activeTag = String(target?.tagName || "").toUpperCase();
+                if (event.button !== 0 || ["INPUT", "TEXTAREA", "SELECT", "BUTTON", "A"].includes(activeTag)) return;
+
+                const el = event.currentTarget;
+                if (el.scrollWidth <= el.clientWidth) return;
+
+                el.dataset.drHorizontalDragging = "true";
+                el.dataset.drHorizontalStartX = String(event.clientX);
+                el.dataset.drHorizontalStartScroll = String(el.scrollLeft);
+                el.style.cursor = "grabbing";
+                el.style.userSelect = "none";
+              }}
+              onMouseMove={(event) => {
+                const el = event.currentTarget;
+                if (el.dataset.drHorizontalDragging !== "true") return;
+
+                const startX = Number(el.dataset.drHorizontalStartX || event.clientX);
+                const startScroll = Number(el.dataset.drHorizontalStartScroll || el.scrollLeft);
+                const distance = event.clientX - startX;
+
+                event.preventDefault();
+                el.scrollLeft = startScroll - distance;
+              }}
+              onMouseUp={(event) => {
+                const el = event.currentTarget;
+                el.dataset.drHorizontalDragging = "false";
+                el.style.cursor = "grab";
+                el.style.userSelect = "";
+              }}
+              onMouseLeave={(event) => {
+                const el = event.currentTarget;
+                if (el.dataset.drHorizontalDragging !== "true") return;
+                el.dataset.drHorizontalDragging = "false";
+                el.style.cursor = "grab";
+                el.style.userSelect = "";
+              }}
+              aria-label="Daily Rejection table. Use mouse wheel to scroll horizontally, click and drag left/right, press Tab to focus, then Space to select an entry and Left/Right arrows to scroll."
+              title="Mouse wheel = left/right scroll. Click and drag = left/right pan. Tab + Space = select entry. ← / → = horizontal scroll."
             >
               <table style={{ ...styles.dataTable, width: "100%", minWidth: `${tableMinWidth}px` }}>
                 <thead>
@@ -1164,7 +1209,8 @@ export default function DailyRejectionPage() {
         .dr-scroll-shell { width:100%; max-width:100%; outline:none; }
         .dr-scroll-shell:focus { outline:2px solid rgba(14,116,144,.28); outline-offset:2px; border-radius:14px; }
         .dr-scroll-hint { display:flex; justify-content:space-between; align-items:center; gap:10px; min-height:24px; padding:0 8px 5px; color:#64748b; font-size:10px; font-weight:800; letter-spacing:.2px; white-space:nowrap; }
-        .dr-table-scroll-main { width:100%; max-width:100%; overflow-x:auto; overflow-y:auto; max-height:78vh; -webkit-overflow-scrolling:touch; overscroll-behavior-x:contain; overscroll-behavior-y:contain; background:#fff; border:1px solid #dbe4ee; border-radius:16px; }
+        .dr-table-scroll-main { width:100%; max-width:100%; overflow-x:auto; overflow-y:hidden; max-height:78vh; -webkit-overflow-scrolling:touch; overscroll-behavior-x:contain; overscroll-behavior-y:contain; background:#fff; border:1px solid #dbe4ee; border-radius:16px; cursor:grab; }
+        .dr-table-scroll-main:active { cursor:grabbing; }
         .dr-table-scroll-main tbody tr:focus-visible { outline:2px solid #0ea5a8; outline-offset:-2px; }
         .dr-table-scroll-main tbody tr.dr-selected-row td { background:#ecfeff !important; }
         .dr-table-scroll-main tbody tr.dr-selected-row { outline:2px solid #14b8a6; outline-offset:-2px; }
@@ -1588,7 +1634,7 @@ const styles = {
   toolbar: { background: '#fff', border: '1px solid #dbe4ee', borderRadius: 16, padding: 11, display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', alignItems: 'center' }, tabs: { display: 'flex', gap: 7, flexWrap: 'wrap' }, toolbarRight: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' },
   tab: { border: '1px solid #cbd5e1', background: '#fff', color: '#334155', borderRadius: 999, padding: '8px 12px', fontWeight: 800, cursor: 'pointer' }, tabActive: { border: '1px solid #0f766e', background: '#0f766e', color: '#fff', borderRadius: 999, padding: '8px 12px', fontWeight: 800, cursor: 'pointer' }, compactSelect: { minHeight: 40, border: '1px solid #cbd5e1', borderRadius: 10, padding: '8px 10px', background: '#fff' },
   primary: { border: 0, background: '#0f766e', color: '#fff', borderRadius: 11, padding: '10px 15px', fontWeight: 900, cursor: 'pointer', boxShadow: '0 5px 12px rgba(15,118,110,.16)' }, secondary: { border: '1px solid #cbd5e1', background: '#fff', color: '#334155', borderRadius: 11, padding: '10px 14px', fontWeight: 900, cursor: 'pointer' },
-  tableOuter: { width: '100%', maxWidth: '100%', overflowX: 'auto', overflowY: 'hidden', WebkitOverflowScrolling: 'touch', overscrollBehaviorX: 'contain', scrollbarWidth: 'auto', background: '#fff', border: '1px solid #dbe4ee', borderRadius: 16, boxShadow: '0 10px 28px rgba(15,23,42,.05)' },
+  tableOuter: { width: '100%', maxWidth: '100%', overflowX: 'auto', overflowY: 'hidden', WebkitOverflowScrolling: 'touch', overscrollBehaviorX: 'contain', scrollbarWidth: 'auto', cursor: 'grab', background: '#fff', border: '1px solid #dbe4ee', borderRadius: 16, boxShadow: '0 10px 28px rgba(15,23,42,.05)' },
   dataTable: { width: 'max-content', minWidth: 1500, borderCollapse: 'separate', borderSpacing: 0, fontSize: 12 },
   th: { position: 'sticky', top: 0, zIndex: 3, background: '#0f766e', color: '#fff', padding: '8px 7px', textAlign: 'left', fontWeight: 900, whiteSpace: 'nowrap', borderRight: '1px solid rgba(255,255,255,.14)' },
   qtyTh: { whiteSpace: 'normal', width: 56, minWidth: 50, maxWidth: 66, lineHeight: 1.02, textAlign: 'center', wordBreak: 'break-word' },
