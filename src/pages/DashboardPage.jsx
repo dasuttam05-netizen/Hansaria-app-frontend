@@ -107,28 +107,26 @@ export default function DashboardPage() {
   const API_BASE = "/api";
   const fetchData = async (currentUser, isActive) => {
     try {
-      // Start the dashboard payload and its live report reads together.
-      // The returned data is unchanged; this only removes the old sequential
-      // wait where all five report requests started after /api/dashboard.
-      const currentMonth = new Date().toISOString().slice(0, 7);
-      const [payload, reportResults] = await Promise.all([
-        API.get(`${API_BASE}/dashboard`),
-        Promise.allSettled([
-          API.get(`${API_BASE}/reports/party-stock`),
-          API.get(`${API_BASE}/reports/warehouse-stock`),
-          API.get(`${API_BASE}/reports/total-stock`),
-          API.get(`${API_BASE}/reports/warehouse-rent-month-end`, {
-            params: { month: currentMonth },
-          }),
-          API.get(`${API_BASE}/outward/stock-journal`),
-        ]),
-      ]);
+      const payload = await API.get(`${API_BASE}/dashboard`);
 
       if (!isActive()) {
         return;
       }
 
       const data = payload?.data || {};
+
+      // Use the same live report endpoints as Stock Report and Warehouse Rent
+      // Month End Report so dashboard totals cannot diverge from the reports.
+      const currentMonth = new Date().toISOString().slice(0, 7);
+      const reportResults = await Promise.allSettled([
+        API.get(`${API_BASE}/reports/party-stock`),
+        API.get(`${API_BASE}/reports/warehouse-stock`),
+        API.get(`${API_BASE}/reports/total-stock`),
+        API.get(`${API_BASE}/reports/warehouse-rent-month-end`, {
+          params: { month: currentMonth },
+        }),
+        API.get(`${API_BASE}/outward/stock-journal`),
+      ]);
 
       if (!isActive()) {
         return;
@@ -522,7 +520,7 @@ export default function DashboardPage() {
   };
 
   const rawMenuItems = [
-    { title: "Dashboard", icon: <FaHome /> },
+    { title: "Dashboard", permission: "dashboard.view", icon: <FaHome /> },
     {
       title: "Employee",
       permission: "employees.view",
@@ -531,34 +529,9 @@ export default function DashboardPage() {
         { label: "Employee Management", permission: "employees.view", action: () => navigate("/employees") },
       ],
     },
-    {
-      title: "Company Name",
-      permission: "companies.manage",
-      icon: <FaBuilding />,
-      submenu: [
-        { label: "Company Management", permission: "companies.manage", action: () => navigate("/companies") },
-      ],
-    },
-    {
-      title: "Company Account",
-      permission: "companyAccounts.manage",
-      icon: <FaBuilding />,
-      submenu: [
-        {
-          label: "Company Account Management",
-          permission: "companyAccounts.manage",
-          action: () => navigate("/company-accounts"),
-        },
-      ],
-    },
-    {
-      title: "Location",
-      permission: "locations.manage",
-      icon: <FaMapMarkerAlt />,
-      submenu: [
-        { label: "Location Management", permission: "locations.manage", action: () => navigate("/locations") },
-      ],
-    },
+
+
+
     {
       title: "Warehouse",
       permission: [
@@ -588,14 +561,7 @@ export default function DashboardPage() {
         { label: "Stock Report", permission: ["warehouse.trading.purchase.view", "warehouse.trading.sale.view", "warehouse.trading.payment.view", "warehouse.trading.receipt.view", "warehouse.trading.journal.view"], action: () => navigate("/warehouse-trading") },
       ],
     },
-    {
-      title: "Products",
-      permission: "products.manage",
-      icon: <FaBoxOpen />,
-      submenu: [
-        { label: "Products Management", permission: "products.manage", action: () => navigate("/products") },
-      ],
-    },
+
     {
       title: "Masters and Admin",
       permission: [
@@ -608,7 +574,6 @@ export default function DashboardPage() {
       ],
       icon: <FaCog />,
       submenu: [
-        { label: "Employees", permission: "employees.view", action: () => navigate("/employees") },
         { label: "Location", permission: "locations.view", action: () => navigate("/locations") },
         { label: "Companies", permission: "companies.view", action: () => navigate("/companies") },
         { label: "Company Accounts", permission: "companyAccounts.view", action: () => navigate("/company-accounts") },
@@ -830,6 +795,14 @@ export default function DashboardPage() {
       ),
     }))
     .filter((item) => !item.submenu || item.submenu.length > 0);
+
+  useEffect(() => {
+    if (hasPermission(user, "dashboard.view")) return;
+    setActive((current) => {
+      if (current && current !== "Dashboard" && menuItems.some((item) => item.title === current)) return current;
+      return "";
+    });
+  }, [user]);
 
   const quickActions = [
     {
@@ -1141,7 +1114,7 @@ export default function DashboardPage() {
     "warehouse.trading.journal.view",
   ]);
 
-  const canViewDashboardOverview = canViewResourceOverview || canViewStockReport;
+  const canViewDashboardOverview = hasPermission(user, "dashboard.view") && (canViewResourceOverview || canViewStockReport);
 
   const settingsItems = [
     {
