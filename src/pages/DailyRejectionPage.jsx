@@ -158,7 +158,7 @@ export default function DailyRejectionPage() {
   const [busyId, setBusyId] = useState("");
   const [completionRemarks, setCompletionRemarks] = useState({});
   const [selectedRowId, setSelectedRowId] = useState("");
-  const tableDragRef = useRef({ active: false, moved: false, startX: 0, startY: 0, startLeft: 0, startTop: 0 });
+  const tableDragRef = useRef(null);
   const [assignNarration, setAssignNarration] = useState({});
   const [progressForm, setProgressForm] = useState({});
   const [editId, setEditId] = useState("");
@@ -491,28 +491,25 @@ export default function DailyRejectionPage() {
     if (!row) return;
     const progress = progressForm[rowId] || {};
     const currentRejectionBalance = chainRemainingOf(row);
-    const currentOtherBalance = chainOtherRemainingOf(row);
+
+    // IMPORTANT:
+    // Other Qty is view/history information only. It must NEVER reduce the
+    // rejection balance and must NEVER block work completion.
     const unloadingForRejection = toQty(progress.unloading_qty_for_rejection);
     const otherQty = toQty(progress.other_qty);
     const newRejectionQty = toQty(progress.new_rejection_qty);
     const rejectionBalanceAfter = Math.max(currentRejectionBalance - unloadingForRejection, 0);
-    const otherBalanceAfter = Math.max(currentOtherBalance - otherQty, 0);
-    const rejectionAdjustment = rejectionBalanceAfter;
-    const otherAdjustment = otherBalanceAfter;
-    const totalBalanceAfter = rejectionBalanceAfter + otherBalanceAfter;
 
     if (unloadingForRejection <= 0 && otherQty <= 0 && newRejectionQty <= 0) {
       showToast("Enter Unloading Qty for Rejection or Other Qty first.", "warning");
       return;
     }
+
     if (unloadingForRejection > currentRejectionBalance + 0.000001) {
       showToast(`Unloading Qty for Rejection cannot exceed current rejection balance ${money(currentRejectionBalance)} MT.`, "warning");
       return;
     }
-    if (otherQty > currentOtherBalance + 0.000001) {
-      showToast(`Other Qty cannot exceed current other balance ${money(currentOtherBalance)} MT.`, "warning");
-      return;
-    }
+
     if (!String(progress.narration || "").trim()) {
       showToast("Please enter the progress narration.", "warning");
       return;
@@ -521,22 +518,25 @@ export default function DailyRejectionPage() {
     setBusyId(rowId);
     try {
       await axios.post(`${API}/${rowId}/progress`, {
-        // Existing API compatibility.
+        // Rejection quantity is the ONLY completion/balance chain.
         processed_qty: unloadingForRejection,
         unloading_qty_for_rejection: unloadingForRejection,
         rejection_unloading_qty: unloadingForRejection,
-        rejection_adjustment_qty: rejectionAdjustment,
-        adjusted_rejection_qty: rejectionAdjustment,
-        // Separate other-quantity chain.
+        rejection_adjustment_qty: rejectionBalanceAfter,
+        adjusted_rejection_qty: rejectionBalanceAfter,
+        processed_rejection_qty: unloadingForRejection,
+        remaining_rejection_qty: rejectionBalanceAfter,
+
+        // Other Qty is retained only as view/history data.
         other_qty: otherQty,
         processed_other_qty: otherQty,
-        other_adjustment_qty: otherAdjustment,
-        adjusted_other_qty: otherAdjustment,
-        processed_rejection_qty: unloadingForRejection,
-        processed_total_qty: unloadingForRejection + otherQty,
-        remaining_rejection_qty: rejectionBalanceAfter,
-        remaining_other_qty: otherBalanceAfter,
-        remaining_total_qty: totalBalanceAfter,
+        other_processed_qty: otherQty,
+        other_adjustment_qty: 0,
+        adjusted_other_qty: 0,
+        remaining_other_qty: chainOtherRemainingOf(row),
+        remaining_total_qty: rejectionBalanceAfter,
+        processed_total_qty: unloadingForRejection,
+
         new_rejection_qty: newRejectionQty,
         new_lorry_no: String(progress.new_lorry_no || "").trim(),
         destination_type: String(progress.destination_type || "").trim(),
@@ -546,17 +546,16 @@ export default function DailyRejectionPage() {
       });
 
       setProgressForm((prev) => ({ ...prev, [rowId]: {} }));
-      if (totalBalanceAfter > 0.000001) {
-        const pendingParts = [];
-        if (rejectionBalanceAfter > 0.000001) pendingParts.push(`Reject ${money(rejectionBalanceAfter)} MT`);
-        if (otherBalanceAfter > 0.000001) pendingParts.push(`Other ${money(otherBalanceAfter)} MT`);
+
+      if (rejectionBalanceAfter > 0.000001) {
         showToast(
-          `${money(unloadingForRejection)} MT rejection + ${money(otherQty)} MT other adjusted. ${pendingParts.join(" + ")} remains pending and can be reassigned on the SAME Rejection No.`,
+          `${money(unloadingForRejection)} MT rejection processed. ${money(rejectionBalanceAfter)} MT rejection balance remains pending and can be reassigned on the SAME Rejection No. Other Qty is view-only and does not affect completion.`,
           "success"
         );
       } else {
-        showToast("All rejection and other quantities matched. Balance is 0.00 MT and this Rejection No. can be closed.", "success");
+        showToast("All rejection quantity matched. Rejection balance is 0.00 MT and this work can be completed. Other Qty is view-only.", "success");
       }
+
       await loadData();
     } catch (err) {
       showToast(err?.response?.data?.error || err?.message || "Failed to save progress.", "error");
@@ -568,10 +567,8 @@ export default function DailyRejectionPage() {
   const completeRow = async (rowId) => {
     const row = rows.find((item) => idOf(item) === String(rowId));
     const rejectionRemaining = chainRemainingOf(row);
-    const otherRemaining = chainOtherRemainingOf(row);
-    const remaining = rejectionRemaining + otherRemaining;
-    if (remaining > 0.000001) {
-      showToast(`Work is not complete. Reject Balance: ${money(rejectionRemaining)} MT, Other Balance: ${money(otherRemaining)} MT`, "warning");
+    if (rejectionRemaining > 0.000001) {
+      showToast(`Work is not complete. Reject Balance: ${money(rejectionRemaining)} MT`, "warning");
       return;
     }
     setBusyId(rowId);
@@ -635,7 +632,7 @@ export default function DailyRejectionPage() {
     `Other Target: ${money(chainOtherTargetOf(row))}`,
     `Other Processed: ${money(chainOtherProcessedOf(row))}`,
     `Other Remaining: ${money(chainOtherRemainingOf(row))}`,
-    `Total Remaining: ${money(chainTotalRemainingOf(row))}`,
+    `Completion Balance (Reject): ${money(chainRemainingOf(row))}`,
     `Reason: ${row?.reason || "-"}`,
     `Work: ${row?.action_type || "-"}`,
     `Assigned To: ${row?.assigned_to_name || "-"}`,
@@ -796,7 +793,7 @@ export default function DailyRejectionPage() {
               <div><span>Other Target</span><b>{money(chainOtherTargetOf(row))} MT</b></div>
               <div><span>Other Processed</span><b>{money(chainOtherProcessedOf(row))} MT</b></div>
               <div><span>Other Remaining</span><b>{money(chainOtherRemainingOf(row))} MT</b></div>
-              <div><span>Total Remaining</span><b>{money(chainTotalRemainingOf(row))} MT</b></div>
+              <div><span>Reject Remaining (Completion)</span><b>{money(chainRemainingOf(row))} MT</b></div>
               {row?.assignment_narration ? <div style={{ gridColumn: "1 / -1" }}><span>Assignment Narration</span><b>{row.assignment_narration}</b></div> : null}
             </div>
 
@@ -827,7 +824,7 @@ export default function DailyRejectionPage() {
             {withWorkflow && assignedToMe && row?.status === "RUNNING" ? (
               <div className="dr-mobile-worker">
                 <div className="dr-mobile-workflow-title">YOUR ASSIGNED WORK</div>
-                <div className="dr-mobile-worker-work">{row?.action_type || "Work assigned"} · Current Reject {money(chainRemainingOf(row))} MT · Other {money(chainOtherRemainingOf(row))} MT</div>
+                <div className="dr-mobile-worker-work">{row?.action_type || "Work assigned"} · Current Reject {money(chainRemainingOf(row))} MT · Other Qty (View Only) {money(chainOtherTargetOf(row))} MT</div>
                 <div className="dr-chain-summary">
                   <div><b>Reject Target</b><span>{money(chainTargetOf(row))} MT</span></div>
                   <div><b>Reject Processed</b><span>{money(chainProcessedOf(row))} MT</span></div>
@@ -835,14 +832,14 @@ export default function DailyRejectionPage() {
                   <div><b>Other Target</b><span>{money(chainOtherTargetOf(row))} MT</span></div>
                   <div><b>Other Processed</b><span>{money(chainOtherProcessedOf(row))} MT</span></div>
                   <div><b>Other Remaining</b><span>{money(chainOtherRemainingOf(row))} MT</span></div>
-                  <div><b>Total Remaining</b><span>{money(chainTotalRemainingOf(row))} MT</span></div>
+                  <div><b>Reject Remaining (Completion Balance)</b><span>{money(chainRemainingOf(row))} MT</span></div>
                 </div>
                 {row?.assignment_narration ? <div className="dr-assignment-note"><b>Assignment:</b> {row.assignment_narration}</div> : null}
                 {renderFactoryAssignmentDetails(row)}
                 <div className="dr-mobile-progress">
                   <div className="dr-mobile-workflow-title">PROGRESS / CHAIN ENTRY</div>
                   <input type="number" min="0" max={chainRemainingOf(row)} step="0.01" value={(progressForm[rowId] || {}).unloading_qty_for_rejection || ""} onChange={(e) => setProgressForm((prev) => ({ ...prev, [rowId]: { ...(prev[rowId] || {}), unloading_qty_for_rejection: e.target.value } }))} placeholder="Unloading Qty for Rejection (MT)" style={styles.workflowInput} />
-                  <input type="number" min="0" step="0.01" value={(progressForm[rowId] || {}).other_qty || ""} onChange={(e) => setProgressForm((prev) => ({ ...prev, [rowId]: { ...(prev[rowId] || {}), other_qty: e.target.value } }))} placeholder="Other Qty (MT)" style={styles.workflowInput} />
+                  <div style={{ ...styles.workflowInput, display:"flex", alignItems:"center", background:"#f8fafc", color:"#64748b", fontWeight:800, boxSizing:"border-box" }}>Other Qty (View Only): {money(chainOtherTargetOf(row))} MT</div>
                   <input type="number" min="0" step="0.01" value={(progressForm[rowId] || {}).new_rejection_qty || ""} onChange={(e) => setProgressForm((prev) => ({ ...prev, [rowId]: { ...(prev[rowId] || {}), new_rejection_qty: e.target.value } }))} placeholder="New Rejection Qty (MT)" style={styles.workflowInput} />
                   <input value={(progressForm[rowId] || {}).new_lorry_no || ""} onChange={(e) => setProgressForm((prev) => ({ ...prev, [rowId]: { ...(prev[rowId] || {}), new_lorry_no: e.target.value } }))} placeholder="New Lorry No" style={styles.workflowInput} />
                   <input value={(progressForm[rowId] || {}).destination_type || ""} onChange={(e) => setProgressForm((prev) => ({ ...prev, [rowId]: { ...(prev[rowId] || {}), destination_type: e.target.value } }))} placeholder="Destination / Movement" style={styles.workflowInput} />
@@ -850,15 +847,13 @@ export default function DailyRejectionPage() {
                   <div className="dr-rejection-adjust-preview">
                     <span>Reject Balance: <b>{money(chainRemainingOf(row))} MT</b></span>
                     <span>Reject After: <b>{money(Math.max(chainRemainingOf(row) - toQty((progressForm[rowId] || {}).unloading_qty_for_rejection), 0))} MT</b></span>
-                    <span>Other Balance: <b>{money(chainOtherRemainingOf(row))} MT</b></span>
-                    <span>Other After: <b>{money(Math.max(chainOtherRemainingOf(row) - toQty((progressForm[rowId] || {}).other_qty), 0))} MT</b></span>
-                    <span>Total After: <b>{money(Math.max(chainRemainingOf(row) - toQty((progressForm[rowId] || {}).unloading_qty_for_rejection), 0) + Math.max(chainOtherRemainingOf(row) - toQty((progressForm[rowId] || {}).other_qty), 0))} MT</b></span>
+                    <span>Other Qty (View Only): <b>{money(chainOtherTargetOf(row))} MT</b></span>
                   </div>
                   <button type="button" disabled={rowBusy} onClick={() => updateProgress(rowId)} style={styles.completeInline}>{rowBusy ? "Saving..." : "Save Progress / Send Pending"}</button>
                 </div>
                 <div className="dr-mobile-complete">
                   <input value={completionRemarks[rowId] || ""} onChange={(e) => setCompletionRemarks((prev) => ({ ...prev, [rowId]: e.target.value }))} placeholder="Final completion note" style={styles.workflowInput} />
-                  <button type="button" disabled={rowBusy || chainTotalRemainingOf(row) > 0.000001} onClick={() => completeRow(rowId)} style={styles.completeInline}>{rowBusy ? "Completing..." : "✓ Complete Work"}</button>
+                  <button type="button" disabled={rowBusy || chainRemainingOf(row) > 0.000001} onClick={() => completeRow(rowId)} style={styles.completeInline}>{rowBusy ? "Completing..." : "✓ Complete Work"}</button>
                 </div>
               </div>
             ) : null}
@@ -895,7 +890,7 @@ export default function DailyRejectionPage() {
       "Other Target",
       "Other Processed",
       "Other Remaining",
-      "Total Remaining",
+      "Reject Completion Balance",
       "Reason",
       "Work",
       "Assigned To",
@@ -903,6 +898,46 @@ export default function DailyRejectionPage() {
       ...(showManagerWorkflow || showReportWorkflow ? ["Assign Work", "Select Staff", "Narration", "Work Action"] : withWorkflow ? ["Work Action"] : []),
       "Action",
     ];
+
+    const startTableDrag = (event) => {
+      // Only left mouse button starts drag-scrolling. Do not hijack controls inside the table.
+      if (event.button !== 0) return;
+      const target = event.target;
+      if (target?.closest?.("input, textarea, select, button, a, [contenteditable=\"true\"]")) return;
+
+      const el = event.currentTarget;
+      tableDragRef.current = {
+        el,
+        startX: event.clientX,
+        startY: event.clientY,
+        startLeft: el.scrollLeft,
+        startTop: el.scrollTop,
+      };
+      el.style.cursor = "grabbing";
+      document.body.style.userSelect = "none";
+      event.preventDefault();
+
+      const move = (moveEvent) => {
+        const drag = tableDragRef.current;
+        if (!drag) return;
+        const dx = moveEvent.clientX - drag.startX;
+        const dy = moveEvent.clientY - drag.startY;
+        drag.el.scrollLeft = drag.startLeft - dx;
+        drag.el.scrollTop = drag.startTop - dy;
+      };
+
+      const stop = () => {
+        const drag = tableDragRef.current;
+        if (drag?.el) drag.el.style.cursor = "grab";
+        tableDragRef.current = null;
+        document.body.style.userSelect = "";
+        window.removeEventListener("mousemove", move);
+        window.removeEventListener("mouseup", stop);
+      };
+
+      window.addEventListener("mousemove", move);
+      window.addEventListener("mouseup", stop);
+    };
 
     return (
       <>
@@ -918,57 +953,19 @@ export default function DailyRejectionPage() {
                 scrollbarGutter: "stable",
                 outline: "none",
                 cursor: "grab",
-                userSelect: tableDragRef.current.active ? "none" : undefined,
               }}
-              role="region"
-              onMouseDown={(event) => {
-                const target = event.target;
-                const interactive = target?.closest?.("button, input, textarea, select, option, a, [role='button']");
-                if (interactive) return;
-                if (event.button !== 0) return;
-                const el = event.currentTarget;
-                tableDragRef.current = {
-                  active: true,
-                  moved: false,
-                  startX: event.clientX,
-                  startY: event.clientY,
-                  startLeft: el.scrollLeft,
-                  startTop: el.scrollTop,
-                };
-                el.style.cursor = "grabbing";
-                el.style.userSelect = "none";
-              }}
-              onMouseMove={(event) => {
-                const drag = tableDragRef.current;
-                if (!drag.active) return;
-                const el = event.currentTarget;
-                const dx = event.clientX - drag.startX;
-                const dy = event.clientY - drag.startY;
-                if (Math.abs(dx) > 3 || Math.abs(dy) > 3) drag.moved = true;
-                el.scrollLeft = drag.startLeft - dx;
-                el.scrollTop = drag.startTop - dy;
-                if (drag.moved) event.preventDefault();
-              }}
-              onMouseUp={(event) => {
-                tableDragRef.current.active = false;
-                event.currentTarget.style.cursor = "grab";
-                event.currentTarget.style.userSelect = "";
-              }}
-              onMouseLeave={(event) => {
-                if (tableDragRef.current.active) tableDragRef.current.active = false;
-                event.currentTarget.style.cursor = "grab";
-                event.currentTarget.style.userSelect = "";
-              }}
+              onMouseDown={startTableDrag}
               onWheel={(event) => {
-                // Keep normal mouse-wheel behaviour so vertical wheel moves the table
-                // vertically. Trackpads / horizontal wheels can move it horizontally.
+                // Normal mouse wheel = vertical scrolling. Shift + wheel = horizontal.
                 const el = event.currentTarget;
-                if (event.shiftKey && Math.abs(event.deltaY) > Math.abs(event.deltaX)) {
+                if (event.shiftKey && el.scrollWidth > el.clientWidth) {
+                  const amount = event.deltaY || event.deltaX;
+                  if (!amount) return;
                   event.preventDefault();
-                  el.scrollLeft += event.deltaY;
+                  el.scrollLeft += amount;
                 }
               }}
-              aria-label="Daily Rejection table. Drag with the left mouse button to move left, right, up, and down. Use the scrollbars for precise movement."
+              aria-label="Daily Rejection table. Drag with the left mouse button to move in all directions."
             >
               <table style={{ ...styles.dataTable, width: "100%", minWidth: `${tableMinWidth}px` }}>
                 <thead>
@@ -1006,6 +1003,7 @@ export default function DailyRejectionPage() {
                           background: selectedRowId === rowId ? "#ecfeff" : undefined,
                           boxShadow: selectedRowId === rowId ? "inset 0 0 0 2px #14b8a6" : undefined,
                         }}
+                        title="Drag with the left mouse button to scroll the table in all directions"
                       >
                         <td style={{ ...styles.td, ...styles.slTd }}>
                           <button type="button" onClick={() => openHistory(row)} title="View S.L. wise details and history" style={styles.slButton}>{rowIndex + 1}</button>
@@ -1056,20 +1054,20 @@ export default function DailyRejectionPage() {
                           </>
                         ) : withWorkflow ? (
                           <td style={{ ...styles.td, ...styles.workflowTd }}>{assignedToMe && row?.status === "RUNNING" ? <div>
-                            <div style={styles.workerInline}><span><b>Reject Target:</b> {money(chainTargetOf(row))} MT &nbsp; <b>Reject Processed:</b> {money(chainProcessedOf(row))} MT &nbsp; <b>Reject Remaining:</b> {money(chainRemainingOf(row))} MT &nbsp; <b>Other Target:</b> {money(chainOtherTargetOf(row))} MT &nbsp; <b>Other Processed:</b> {money(chainOtherProcessedOf(row))} MT &nbsp; <b>Other Remaining:</b> {money(chainOtherRemainingOf(row))} MT &nbsp; <b>Total Remaining:</b> {money(chainTotalRemainingOf(row))} MT</span></div>
+                            <div style={styles.workerInline}><span><b>Reject Target:</b> {money(chainTargetOf(row))} MT &nbsp; <b>Reject Processed:</b> {money(chainProcessedOf(row))} MT &nbsp; <b>Reject Remaining:</b> {money(chainRemainingOf(row))} MT &nbsp; <b>Other Qty (View Only):</b> {money(chainOtherTargetOf(row))} MT</span></div>
                             {row?.assignment_narration ? <div className="dr-assignment-note"><b>Assignment:</b> {row.assignment_narration}</div> : null}
                             {renderFactoryAssignmentDetails(row)}
                             <div className="dr-chain-entry-inline">
                               <input type="number" min="0" max={chainRemainingOf(row)} step="0.01" value={(progressForm[rowId] || {}).unloading_qty_for_rejection || ""} onChange={(e) => setProgressForm((prev) => ({ ...prev, [rowId]: { ...(prev[rowId] || {}), unloading_qty_for_rejection: e.target.value } }))} placeholder="Unloading Qty for Rejection" style={styles.workflowInput} />
-                              <input type="number" min="0" step="0.01" value={(progressForm[rowId] || {}).other_qty || ""} onChange={(e) => setProgressForm((prev) => ({ ...prev, [rowId]: { ...(prev[rowId] || {}), other_qty: e.target.value } }))} placeholder="Other Qty" style={styles.workflowInput} />
+                              <div style={{ ...styles.workflowInput, display:"flex", alignItems:"center", background:"#f8fafc", color:"#64748b", fontWeight:800 }}>Other Qty (View Only): {money(chainOtherTargetOf(row))} MT</div>
                               <input type="number" min="0" step="0.01" value={(progressForm[rowId] || {}).new_rejection_qty || ""} onChange={(e) => setProgressForm((prev) => ({ ...prev, [rowId]: { ...(prev[rowId] || {}), new_rejection_qty: e.target.value } }))} placeholder="New Rejection" style={styles.workflowInput} />
                               <input value={(progressForm[rowId] || {}).new_lorry_no || ""} onChange={(e) => setProgressForm((prev) => ({ ...prev, [rowId]: { ...(prev[rowId] || {}), new_lorry_no: e.target.value } }))} placeholder="New Lorry" style={styles.workflowInput} />
                               <input value={(progressForm[rowId] || {}).destination_type || ""} onChange={(e) => setProgressForm((prev) => ({ ...prev, [rowId]: { ...(prev[rowId] || {}), destination_type: e.target.value } }))} placeholder="Destination" style={styles.workflowInput} />
                               <input value={(progressForm[rowId] || {}).narration || ""} onChange={(e) => setProgressForm((prev) => ({ ...prev, [rowId]: { ...(prev[rowId] || {}), narration: e.target.value } }))} placeholder="Progress narration" style={styles.workflowInput} />
-                              <div className="dr-rejection-adjust-preview"><span>Reject Balance: <b>{money(chainRemainingOf(row))} MT</b></span><span>Reject After: <b>{money(Math.max(chainRemainingOf(row) - toQty((progressForm[rowId] || {}).unloading_qty_for_rejection), 0))} MT</b></span><span>Other Balance: <b>{money(chainOtherRemainingOf(row))} MT</b></span><span>Other After: <b>{money(Math.max(chainOtherRemainingOf(row) - toQty((progressForm[rowId] || {}).other_qty), 0))} MT</b></span><span>Total After: <b>{money(Math.max(chainRemainingOf(row) - toQty((progressForm[rowId] || {}).unloading_qty_for_rejection), 0) + Math.max(chainOtherRemainingOf(row) - toQty((progressForm[rowId] || {}).other_qty), 0))} MT</b></span></div>
+                              <div className="dr-rejection-adjust-preview"><span>Reject Balance: <b>{money(chainRemainingOf(row))} MT</b></span><span>Reject After: <b>{money(Math.max(chainRemainingOf(row) - toQty((progressForm[rowId] || {}).unloading_qty_for_rejection), 0))} MT</b></span><span>Other Qty (View Only): <b>{money(chainOtherTargetOf(row))} MT</b></span></div>
                               <button type="button" disabled={rowBusy} onClick={() => updateProgress(rowId)} style={styles.completeInline}>{rowBusy ? "Saving..." : "Save Progress"}</button>
                             </div>
-                            <div style={styles.workerInline}><input value={completionRemarks[rowId] || ""} onChange={(e) => setCompletionRemarks((prev) => ({ ...prev, [rowId]: e.target.value }))} placeholder="Final completion note" style={styles.workflowInput} /><button type="button" disabled={rowBusy || chainTotalRemainingOf(row) > 0.000001} onClick={() => completeRow(rowId)} style={styles.completeInline}>{rowBusy ? "Completing..." : "✓ Complete Work"}</button></div>
+                            <div style={styles.workerInline}><input value={completionRemarks[rowId] || ""} onChange={(e) => setCompletionRemarks((prev) => ({ ...prev, [rowId]: e.target.value }))} placeholder="Final completion note" style={styles.workflowInput} /><button type="button" disabled={rowBusy || chainRemainingOf(row) > 0.000001} onClick={() => completeRow(rowId)} style={styles.completeInline}>{rowBusy ? "Completing..." : "✓ Complete Work"}</button></div>
                           </div> : <span style={styles.mutedDash}>-</span>}</td>
                         ) : null}
                         <td style={{ ...styles.td, ...styles.actionTd, position: "sticky", right: 0, background: "#fff", zIndex: 4 }}>{renderActionIcons(row)}</td>
@@ -1137,7 +1135,8 @@ export default function DailyRejectionPage() {
 
         .dr-mobile-list { display:none; }
         .dr-scroll-shell { width:100%; max-width:100%; outline:none; }
-        .dr-table-scroll-main { width:100%; max-width:100%; overflow-x:auto; overflow-y:auto; max-height:78vh; -webkit-overflow-scrolling:touch; overscroll-behavior-x:contain; overscroll-behavior-y:contain; background:#fff; border:1px solid #dbe4ee; border-radius:16px; }
+        .dr-scroll-shell:focus { outline:2px solid rgba(14,116,144,.28); outline-offset:2px; border-radius:14px; }
+        .dr-table-scroll-main { width:100%; max-width:100%; overflow-x:auto; overflow-y:auto; max-height:78vh; -webkit-overflow-scrolling:touch; overscroll-behavior:contain; background:#fff; border:1px solid #dbe4ee; border-radius:16px; }
         .dr-table-scroll-main tbody tr:focus-visible { outline:2px solid #0ea5a8; outline-offset:-2px; }
         .dr-table-scroll-main tbody tr.dr-selected-row td { background:#ecfeff !important; }
         .dr-table-scroll-main tbody tr.dr-selected-row { outline:2px solid #14b8a6; outline-offset:-2px; }
@@ -1175,7 +1174,7 @@ export default function DailyRejectionPage() {
         @media (max-width: 720px) {
           .dr-desktop-table { display:none; }
           .dr-mobile-list { display:grid; gap:10px; }
-        }
+          }
         .dr-history-overlay { position:fixed; inset:0; z-index:100000; background:rgba(15,23,42,.52); display:flex; align-items:center; justify-content:center; padding:18px; }
         .dr-history-modal { width:min(1120px,96vw); max-height:90vh; overflow:auto; background:#fff; border-radius:18px; border:1px solid #dbe4ee; box-shadow:0 24px 70px rgba(15,23,42,.25); }
         .dr-history-factory-details { margin-top:7px; border:1px solid #bfdbfe; border-radius:9px; background:#f8fbff; padding:6px 8px; }
