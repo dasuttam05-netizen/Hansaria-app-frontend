@@ -127,6 +127,7 @@ function Icon({ type, size = 18 }) {
 }
 
 export default function DailyRejectionPage() {
+  const tableDragRef = useRef(null);
   const navigate = useNavigate();
   const session = loadSession() || {};
   const user = session.user || null;
@@ -158,7 +159,6 @@ export default function DailyRejectionPage() {
   const [busyId, setBusyId] = useState("");
   const [completionRemarks, setCompletionRemarks] = useState({});
   const [selectedRowId, setSelectedRowId] = useState("");
-  const tableDragRef = useRef(null);
   const [assignNarration, setAssignNarration] = useState({});
   const [progressForm, setProgressForm] = useState({});
   const [editId, setEditId] = useState("");
@@ -876,8 +876,8 @@ export default function DailyRejectionPage() {
     const showManagerWorkflow = withWorkflow && canAssign;
     const showReportWorkflow = reportMode;
     const baseColumns = 20;
-    const totalColumns = baseColumns + 1 + (showManagerWorkflow || showReportWorkflow ? 4 : withWorkflow ? 1 : 0) + 1;
-    const tableMinWidth = showManagerWorkflow ? 1980 : showReportWorkflow ? 1900 : withWorkflow ? 1740 : 1600;
+    const totalColumns = baseColumns + 1 + (showManagerWorkflow || showReportWorkflow ? 3 : withWorkflow ? 1 : 0) + 1;
+    const tableMinWidth = showManagerWorkflow ? 1880 : showReportWorkflow ? 1780 : withWorkflow ? 1740 : 1600;
     const headers = [
       "S.L",
       "Date",
@@ -900,9 +900,29 @@ export default function DailyRejectionPage() {
       "Work",
       "Assigned To",
       "Status",
-      ...(showManagerWorkflow || showReportWorkflow ? ["Assign Work", "Select Staff", "Narration", "Work Action"] : withWorkflow ? ["Work Action"] : []),
+      ...(showManagerWorkflow || showReportWorkflow ? ["Assign Work", "Narration", "Work Action"] : withWorkflow ? ["Work Action"] : []),
       "Action",
     ];
+
+    // Right-side workflow columns stay visible while the left-side data scrolls.
+    const rightWidths = { action: 92, workAction: 162, narration: 188, assignWork: 190 };
+    const stickyRightStyle = (kind, isHeader = false) => {
+      const right = kind === "action"
+        ? 0
+        : kind === "workAction"
+          ? rightWidths.action
+          : kind === "narration"
+            ? rightWidths.action + rightWidths.workAction
+            : rightWidths.action + rightWidths.workAction + rightWidths.narration;
+      const width = rightWidths[kind] || undefined;
+      return {
+        position: "sticky",
+        right,
+        zIndex: isHeader ? 9 : 6,
+        ...(width ? { width, minWidth: width, maxWidth: width, boxSizing: "border-box" } : {}),
+        boxShadow: kind === "assignWork" ? "-7px 0 12px rgba(15,23,42,.08)" : undefined,
+      };
+    };
 
     const handleTableKeyDown = (event) => {
       const key = event.key;
@@ -953,57 +973,51 @@ export default function DailyRejectionPage() {
               tabIndex={0}
               role="region"
               onKeyDown={handleTableKeyDown}
-              onScroll={(event) => {
-                const main = event.currentTarget;
-                const bottom = main.parentElement?.querySelector(".dr-table-scroll-bottom");
-                if (bottom && Math.abs(bottom.scrollLeft - main.scrollLeft) > 1) {
-                  bottom.scrollLeft = main.scrollLeft;
-                }
-              }}
               onWheel={(event) => {
-                // Keep normal mouse-wheel vertical scrolling. Horizontal wheel/trackpad
-                // movement is passed to the table's horizontal scroll position.
                 const el = event.currentTarget;
-                if (Math.abs(event.deltaX) > 0) {
+                // Keep normal vertical wheel scrolling. Horizontal wheel / trackpad moves left-right.
+                if (Math.abs(event.deltaX) > Math.abs(event.deltaY) && el.scrollWidth > el.clientWidth) {
                   event.preventDefault();
                   el.scrollLeft += event.deltaX;
                 }
               }}
-              onMouseDown={(event) => {
+              onPointerDown={(event) => {
                 const target = event.target;
-                const interactive = target?.closest?.("button, input, textarea, select, option, a, [role='button'], [contenteditable='true']");
+                const interactive = target?.closest?.("button, input, textarea, select, option, a, [role='button'], [data-no-drag='true']");
                 if (interactive || event.button !== 0) return;
                 const el = event.currentTarget;
                 tableDragRef.current = {
                   active: true,
-                  moved: false,
+                  pointerId: event.pointerId,
                   startX: event.clientX,
                   startY: event.clientY,
                   startLeft: el.scrollLeft,
                   startTop: el.scrollTop,
                 };
+                try { el.setPointerCapture(event.pointerId); } catch (_) {}
                 el.style.cursor = "grabbing";
                 el.style.userSelect = "none";
               }}
-              onMouseMove={(event) => {
+              onPointerMove={(event) => {
                 const drag = tableDragRef.current;
-                if (!drag?.active) return;
+                if (!drag || !drag.active || drag.pointerId !== event.pointerId) return;
                 const el = event.currentTarget;
                 const dx = event.clientX - drag.startX;
                 const dy = event.clientY - drag.startY;
-                if (Math.abs(dx) > 2 || Math.abs(dy) > 2) drag.moved = true;
                 el.scrollLeft = drag.startLeft - dx;
                 el.scrollTop = drag.startTop - dy;
               }}
-              onMouseUp={(event) => {
+              onPointerUp={(event) => {
+                const drag = tableDragRef.current;
+                if (!drag || drag.pointerId !== event.pointerId) return;
                 const el = event.currentTarget;
+                try { el.releasePointerCapture(event.pointerId); } catch (_) {}
                 tableDragRef.current = null;
                 el.style.cursor = "grab";
                 el.style.userSelect = "";
               }}
-              onMouseLeave={(event) => {
+              onPointerCancel={(event) => {
                 const el = event.currentTarget;
-                if (!tableDragRef.current?.active) return;
                 tableDragRef.current = null;
                 el.style.cursor = "grab";
                 el.style.userSelect = "";
@@ -1018,8 +1032,10 @@ export default function DailyRejectionPage() {
                         key={`${head}-${headIndex}`}
                         style={{
                           ...styles.th,
-                          ...(head === "Action" ? styles.actionTh : {}),
-                          ...(head === "Assign Work" || head === "Select Staff" || head === "Work Action" ? styles.workflowTh : {}),
+                          ...(head === "Action" ? { ...styles.actionTh, ...stickyRightStyle("action", true) } : {}),
+                          ...(head === "Assign Work" ? { ...styles.workflowTh, ...stickyRightStyle("assignWork", true) } : {}),
+                          ...(head === "Narration" ? { ...styles.workflowTh, ...stickyRightStyle("narration", true) } : {}),
+                          ...(head === "Work Action" ? { ...styles.workflowTh, ...stickyRightStyle("workAction", true) } : {}),
                           ...(head.includes("Qty") || head.includes("Reject") || head.includes("Other") || head.includes("Total") ? styles.qtyTh : {}),
                         }}
                       >
@@ -1095,30 +1111,23 @@ export default function DailyRejectionPage() {
                         <td style={styles.td}><span style={{ ...styles.statusChip, ...statusStyle(row?.status) }}>{row?.status || "PENDING"}</span></td>
                         {showManagerWorkflow ? (
                           <>
-                            <td style={{ ...styles.td, ...styles.workflowTd }}><SearchableSelect
+                            <td style={{ ...styles.td, ...styles.workflowTd, ...stickyRightStyle("assignWork") }}><SearchableSelect
                               value={actionValue}
                               options={WORK_DESCRIPTIONS.map((item) => ({ value: item, label: item }))}
                               onChange={(value) => { setAssignedAction((prev) => ({ ...prev, [rowId]: value })); if (value === "SEND TO FACTORY") openFactoryModal(rowId); }}
                               placeholder="Work Description / type to search"
                             /></td>
-                            <td style={{ ...styles.td, ...styles.workflowTd }}><SearchableSelect
-                              value={employeeValue}
-                              options={masters.employees.map((item) => ({ value: idOf(item), label: textOf(item) }))}
-                              onChange={(value) => setAssignedEmployee((prev) => ({ ...prev, [rowId]: value }))}
-                              placeholder="Staff / type to search"
-                            /></td>
-                            <td style={{ ...styles.td, ...styles.workflowTd }}><input value={assignNarration[rowId] || ""} onChange={(e) => setAssignNarration((prev) => ({ ...prev, [rowId]: e.target.value }))} placeholder="Assignment narration" style={styles.workflowInput} /></td>
-                            <td style={{ ...styles.td, ...styles.workflowTd }}><button type="button" disabled={rowBusy || isComplete || !actionValue || !employeeValue} onClick={() => assignRow(rowId)} style={{ ...styles.assignButtonInline, opacity: rowBusy || isComplete || !actionValue || !employeeValue ? 0.55 : 1 }}>{rowBusy ? "Assigning..." : row?.status === "RUNNING" ? "Reassign & Keep Running" : "Assign & Start Work"}</button></td>
+                            <td style={{ ...styles.td, ...styles.workflowTd, ...stickyRightStyle("narration") }}><input value={assignNarration[rowId] || ""} onChange={(e) => setAssignNarration((prev) => ({ ...prev, [rowId]: e.target.value }))} placeholder="Assignment narration" style={styles.workflowInput} /></td>
+                            <td style={{ ...styles.td, ...styles.workflowTd, ...stickyRightStyle("workAction") }}><button type="button" disabled={rowBusy || isComplete || !actionValue || !employeeValue} onClick={() => assignRow(rowId)} style={{ ...styles.assignButtonInline, opacity: rowBusy || isComplete || !actionValue || !employeeValue ? 0.55 : 1 }}>{rowBusy ? "Assigning..." : row?.status === "RUNNING" ? "Reassign & Keep Running" : "Assign & Start Work"}</button></td>
                           </>
                         ) : showReportWorkflow ? (
                           <>
-                            <td style={{ ...styles.td, ...styles.workflowTd }}><span style={styles.reportWorkflowValue}>{row?.action_type || "-"}</span></td>
-                            <td style={{ ...styles.td, ...styles.workflowTd }}><span style={styles.reportWorkflowValue}>{row?.assigned_to_name || "-"}</span></td>
-                            <td style={{ ...styles.td, ...styles.workflowTd }}><span style={styles.reportWorkflowValue}>{row?.assignment_narration || "-"}</span></td>
-                            <td style={{ ...styles.td, ...styles.workflowTd }}><span style={{ ...styles.reportWorkflowChip, ...statusStyle(row?.status) }}>{row?.status === "COMPLETE" ? "Completed" : row?.status === "RUNNING" ? "Running" : row?.status === "ASSIGNED" ? "Assigned" : "Pending"}</span></td>
+                            <td style={{ ...styles.td, ...styles.workflowTd, ...stickyRightStyle("assignWork") }}><span style={styles.reportWorkflowValue}>{row?.action_type || "-"}</span></td>
+                            <td style={{ ...styles.td, ...styles.workflowTd, ...stickyRightStyle("narration") }}><span style={styles.reportWorkflowValue}>{row?.assignment_narration || row?.assigned_to_name || "-"}</span></td>
+                            <td style={{ ...styles.td, ...styles.workflowTd, ...stickyRightStyle("workAction") }}><span style={{ ...styles.reportWorkflowChip, ...statusStyle(row?.status) }}>{row?.status === "COMPLETE" ? "Completed" : row?.status === "RUNNING" ? "Running" : row?.status === "ASSIGNED" ? "Assigned" : "Pending"}</span></td>
                           </>
                         ) : withWorkflow ? (
-                          <td style={{ ...styles.td, ...styles.workflowTd }}>{assignedToMe && row?.status === "RUNNING" ? <div>
+                          <td style={{ ...styles.td, ...styles.workflowTd, ...stickyRightStyle("workAction") }}>{assignedToMe && row?.status === "RUNNING" ? <div>
                             <div style={styles.workerInline}><span><b>Reject Target:</b> {money(chainTargetOf(row))} MT &nbsp; <b>Reject Processed:</b> {money(chainProcessedOf(row))} MT &nbsp; <b>Reject Remaining:</b> {money(chainRemainingOf(row))} MT &nbsp; <b>Other Target:</b> {money(chainOtherTargetOf(row))} MT &nbsp; <b>Other Processed:</b> {money(chainOtherProcessedOf(row))} MT &nbsp; <b>Other Remaining:</b> {money(chainOtherRemainingOf(row))} MT &nbsp; <b>Total Remaining:</b> {money(chainTotalRemainingOf(row))} MT</span></div>
                             {row?.assignment_narration ? <div className="dr-assignment-note"><b>Assignment:</b> {row.assignment_narration}</div> : null}
                             {renderFactoryAssignmentDetails(row)}
@@ -1135,7 +1144,7 @@ export default function DailyRejectionPage() {
                             <div style={styles.workerInline}><input value={completionRemarks[rowId] || ""} onChange={(e) => setCompletionRemarks((prev) => ({ ...prev, [rowId]: e.target.value }))} placeholder="Final completion note" style={styles.workflowInput} /><button type="button" disabled={rowBusy || chainTotalRemainingOf(row) > 0.000001} onClick={() => completeRow(rowId)} style={styles.completeInline}>{rowBusy ? "Completing..." : "✓ Complete Work"}</button></div>
                           </div> : <span style={styles.mutedDash}>-</span>}</td>
                         ) : null}
-                        <td style={{ ...styles.td, ...styles.actionTd, position: "sticky", right: 0, background: "#fff", zIndex: 4 }}>{renderActionIcons(row)}</td>
+                        <td style={{ ...styles.td, ...styles.actionTd, ...stickyRightStyle("action") }}>{renderActionIcons(row)}</td>
                       </tr>
                     );
                   }) : <tr><td colSpan={totalColumns} style={styles.emptyCell}>No Daily Rejection records found.</td></tr>}
@@ -1144,32 +1153,14 @@ export default function DailyRejectionPage() {
             </div>
             <div
               className="dr-table-scroll-bottom"
-              role="scrollbar"
-              tabIndex={0}
-              aria-orientation="horizontal"
-              aria-label="Daily Rejection horizontal scrollbar"
-              onKeyDown={(event) => {
-                if (!["ArrowLeft", "ArrowRight"].includes(event.key)) return;
-                event.preventDefault();
-                const main = event.currentTarget.previousElementSibling;
-                if (!main) return;
-                const step = Math.max(220, Math.round(main.clientWidth * 0.68));
-                const maxScroll = Math.max(main.scrollWidth - main.clientWidth, 0);
-                const nextLeft = event.key === "ArrowRight"
-                  ? Math.min(main.scrollLeft + step, maxScroll)
-                  : Math.max(main.scrollLeft - step, 0);
-                main.scrollLeft = nextLeft;
-                event.currentTarget.scrollLeft = nextLeft;
-              }}
               onScroll={(event) => {
-                const bottom = event.currentTarget;
-                const main = bottom.previousElementSibling;
-                if (main && Math.abs(main.scrollLeft - bottom.scrollLeft) > 1) {
-                  main.scrollLeft = bottom.scrollLeft;
+                const main = event.currentTarget.previousElementSibling;
+                if (main && Math.abs(main.scrollLeft - event.currentTarget.scrollLeft) > 1) {
+                  main.scrollLeft = event.currentTarget.scrollLeft;
                 }
               }}
             >
-              <div style={{ width: `${tableMinWidth}px`, height: 1 }} />
+              <div className="dr-table-scroll-bottom-spacer" />
             </div>
           </div>
         </div>
@@ -1177,6 +1168,41 @@ export default function DailyRejectionPage() {
       </>
     );
   };
+
+  useEffect(() => {
+    const syncHorizontalScrollbars = () => {
+      document.querySelectorAll(".dr-table-scroll-main").forEach((main) => {
+        const shell = main.parentElement;
+        const bottom = shell?.querySelector(".dr-table-scroll-bottom");
+        const spacer = bottom?.querySelector(".dr-table-scroll-bottom-spacer");
+        if (!bottom || !spacer) return;
+        spacer.style.width = `${Math.max(main.scrollWidth, main.clientWidth + 1)}px`;
+        if (Math.abs(bottom.scrollLeft - main.scrollLeft) > 1) bottom.scrollLeft = main.scrollLeft;
+      });
+    };
+
+    const onMainScroll = (event) => {
+      const main = event.currentTarget;
+      const bottom = main.parentElement?.querySelector(".dr-table-scroll-bottom");
+      if (bottom && Math.abs(bottom.scrollLeft - main.scrollLeft) > 1) {
+        bottom.scrollLeft = main.scrollLeft;
+      }
+    };
+
+    const mains = Array.from(document.querySelectorAll(".dr-table-scroll-main"));
+    mains.forEach((main) => main.addEventListener("scroll", onMainScroll, { passive: true }));
+    const observer = typeof ResizeObserver !== "undefined" ? new ResizeObserver(syncHorizontalScrollbars) : null;
+    mains.forEach((main) => observer?.observe(main));
+    const frame = window.requestAnimationFrame(syncHorizontalScrollbars);
+    window.addEventListener("resize", syncHorizontalScrollbars);
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener("resize", syncHorizontalScrollbars);
+      mains.forEach((main) => main.removeEventListener("scroll", onMainScroll));
+      observer?.disconnect();
+    };
+  }, [rows, reportRows, status, actionFilter, canAssign]);
 
   const editRow = async (row) => {
     if (!canEdit) return;
@@ -1198,31 +1224,6 @@ export default function DailyRejectionPage() {
     });
     setShowForm(true);
   };
-
-  useEffect(() => {
-    const syncHorizontalScrollbars = () => {
-      document.querySelectorAll(".dr-table-scroll-main").forEach((main) => {
-        const bottom = main.parentElement?.querySelector(".dr-table-scroll-bottom");
-        const spacer = bottom?.firstElementChild;
-        if (!bottom || !spacer) return;
-        spacer.style.width = `${Math.max(main.scrollWidth, main.clientWidth + 1)}px`;
-        if (Math.abs(bottom.scrollLeft - main.scrollLeft) > 1) {
-          bottom.scrollLeft = main.scrollLeft;
-        }
-      });
-    };
-
-    const frame = window.requestAnimationFrame(syncHorizontalScrollbars);
-    window.addEventListener("resize", syncHorizontalScrollbars);
-    const observer = typeof ResizeObserver !== "undefined" ? new ResizeObserver(syncHorizontalScrollbars) : null;
-    document.querySelectorAll(".dr-table-scroll-main").forEach((main) => observer?.observe(main));
-
-    return () => {
-      window.cancelAnimationFrame(frame);
-      window.removeEventListener("resize", syncHorizontalScrollbars);
-      observer?.disconnect();
-    };
-  }, [rows, reportRows, status, actionFilter, canAssign]);
 
   const submitReport = async () => {
     if (!canReport) return;
@@ -1255,23 +1256,22 @@ export default function DailyRejectionPage() {
         .dr-mobile-list { display:none; }
         .dr-scroll-shell { width:100%; max-width:100%; outline:none; }
         .dr-scroll-shell:focus { outline:2px solid rgba(14,116,144,.28); outline-offset:2px; border-radius:14px; }
-        .dr-table-scroll-main { width:100%; max-width:100%; overflow-x:auto; overflow-y:auto; max-height:78vh; -webkit-overflow-scrolling:touch; overscroll-behavior:contain; background:#fff; border:1px solid #dbe4ee; border-radius:16px 16px 0 0; cursor:grab; }
+                .dr-table-scroll-main { width:100%; max-width:100%; overflow-x:auto; overflow-y:hidden; max-height:78vh; -webkit-overflow-scrolling:touch; overscroll-behavior-x:contain; overscroll-behavior-y:contain; background:#fff; border:1px solid #dbe4ee; border-radius:16px; cursor:grab; }
         .dr-table-scroll-main:active { cursor:grabbing; }
         .dr-table-scroll-main tbody tr:focus-visible { outline:2px solid #0ea5a8; outline-offset:-2px; }
         .dr-table-scroll-main tbody tr.dr-selected-row td { background:#ecfeff !important; }
         .dr-table-scroll-main tbody tr.dr-selected-row { outline:2px solid #14b8a6; outline-offset:-2px; }
-        .dr-table-scroll-main::-webkit-scrollbar { width:12px; height:10px; }
-        .dr-table-scroll-main::-webkit-scrollbar-track { background:#eef2f7; }
-        .dr-table-scroll-main::-webkit-scrollbar-thumb { background:#94a3b8; border-radius:999px; border:2px solid #eef2f7; }
-        .dr-table-scroll-main::-webkit-scrollbar-thumb:hover { background:#64748b; }
-        .dr-table-scroll-main { scrollbar-color:#94a3b8 #eef2f7; scrollbar-width:auto; }
-        .dr-table-scroll-bottom { width:100%; max-width:100%; overflow-x:auto; overflow-y:hidden; height:15px; margin-top:2px; background:#eef2f7; border:1px solid #d7e0ea; border-top:0; border-radius:0 0 12px 12px; }
+        .dr-table-scroll-main th[style*="position: sticky"], .dr-table-scroll-main td[style*="position: sticky"] { background-clip: padding-box; }
+        .dr-table-scroll-main::-webkit-scrollbar { width:12px; height:12px; }
+        .dr-table-scroll-main::-webkit-scrollbar-track { background:#eef2f7; border-radius:999px; }
+        .dr-table-scroll-main::-webkit-scrollbar-thumb { background:#64748b; border-radius:999px; border:2px solid #eef2f7; }
+        .dr-table-scroll-main::-webkit-scrollbar-thumb:hover { background:#475569; }
+        .dr-table-scroll-main { scrollbar-color:#64748b #eef2f7; scrollbar-width:auto; cursor:grab; }
+        .dr-table-scroll-bottom { width:100%; max-width:100%; overflow-x:auto; overflow-y:hidden; height:14px; margin-top:3px; background:#eef2f7; border:1px solid #dbe4ee; border-radius:999px; scrollbar-width:auto; scrollbar-color:#64748b #dbe4ee; }
         .dr-table-scroll-bottom::-webkit-scrollbar { height:12px; }
-        .dr-table-scroll-bottom::-webkit-scrollbar-track { background:#eef2f7; border-radius:999px; }
-        .dr-table-scroll-bottom::-webkit-scrollbar-thumb { background:#64748b; border-radius:999px; border:2px solid #eef2f7; }
-        .dr-table-scroll-bottom::-webkit-scrollbar-thumb:hover { background:#475569; }
-        .dr-table-scroll-bottom { scrollbar-color:#64748b #eef2f7; scrollbar-width:auto; }
-        .dr-table-scroll-bottom > div { height:1px; min-width:100%; }
+        .dr-table-scroll-bottom::-webkit-scrollbar-track { background:#dbe4ee; border-radius:999px; }
+        .dr-table-scroll-bottom::-webkit-scrollbar-thumb { background:#64748b; border-radius:999px; border:2px solid #dbe4ee; }
+        .dr-table-scroll-bottom-spacer { height:1px; min-width:100%; }
         .dr-mobile-card { background:#fff; border:1px solid #dbe4ee; border-radius:16px; padding:12px; box-shadow:0 8px 24px rgba(15,23,42,.05); }
         .dr-mobile-card-head { display:flex; justify-content:space-between; align-items:flex-start; gap:10px; padding-bottom:10px; border-bottom:1px solid #eef2f7; }
         .dr-mobile-rej { font-weight:900; color:#0f172a; font-size:15px; }
@@ -1301,6 +1301,7 @@ export default function DailyRejectionPage() {
         @media (max-width: 720px) {
           .dr-desktop-table { display:none; }
           .dr-mobile-list { display:grid; gap:10px; }
+          .dr-scroll-hint { display:none; }
         }
         .dr-history-overlay { position:fixed; inset:0; z-index:100000; background:rgba(15,23,42,.52); display:flex; align-items:center; justify-content:center; padding:18px; }
         .dr-history-modal { width:min(1120px,96vw); max-height:90vh; overflow:auto; background:#fff; border-radius:18px; border:1px solid #dbe4ee; box-shadow:0 24px 70px rgba(15,23,42,.25); }
@@ -1686,7 +1687,7 @@ const styles = {
   toolbar: { background: '#fff', border: '1px solid #dbe4ee', borderRadius: 16, padding: 11, display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', alignItems: 'center' }, tabs: { display: 'flex', gap: 7, flexWrap: 'wrap' }, toolbarRight: { display: 'flex', gap: 8, flexWrap: 'wrap', alignItems: 'center' },
   tab: { border: '1px solid #cbd5e1', background: '#fff', color: '#334155', borderRadius: 999, padding: '8px 12px', fontWeight: 800, cursor: 'pointer' }, tabActive: { border: '1px solid #0f766e', background: '#0f766e', color: '#fff', borderRadius: 999, padding: '8px 12px', fontWeight: 800, cursor: 'pointer' }, compactSelect: { minHeight: 40, border: '1px solid #cbd5e1', borderRadius: 10, padding: '8px 10px', background: '#fff' },
   primary: { border: 0, background: '#0f766e', color: '#fff', borderRadius: 11, padding: '10px 15px', fontWeight: 900, cursor: 'pointer', boxShadow: '0 5px 12px rgba(15,118,110,.16)' }, secondary: { border: '1px solid #cbd5e1', background: '#fff', color: '#334155', borderRadius: 11, padding: '10px 14px', fontWeight: 900, cursor: 'pointer' },
-  tableOuter: { width: '100%', maxWidth: '100%', overflowX: 'auto', overflowY: 'hidden', WebkitOverflowScrolling: 'touch', overscrollBehaviorX: 'contain', scrollbarWidth: 'auto', background: '#fff', border: '1px solid #dbe4ee', borderRadius: 16, boxShadow: '0 10px 28px rgba(15,23,42,.05)' },
+  tableOuter: { width: '100%', maxWidth: '100%', overflowX: 'auto', overflowY: 'hidden', WebkitOverflowScrolling: 'touch', overscrollBehaviorX: 'contain', scrollbarWidth: 'auto', cursor: 'grab', background: '#fff', border: '1px solid #dbe4ee', borderRadius: 16, boxShadow: '0 10px 28px rgba(15,23,42,.05)' },
   dataTable: { width: 'max-content', minWidth: 1500, borderCollapse: 'separate', borderSpacing: 0, fontSize: 12 },
   th: { position: 'sticky', top: 0, zIndex: 3, background: '#0f766e', color: '#fff', padding: '8px 7px', textAlign: 'left', fontWeight: 900, whiteSpace: 'nowrap', borderRight: '1px solid rgba(255,255,255,.14)' },
   qtyTh: { whiteSpace: 'normal', width: 56, minWidth: 50, maxWidth: 66, lineHeight: 1.02, textAlign: 'center', wordBreak: 'break-word' },
