@@ -947,7 +947,7 @@ export default function DailyRejectionPage() {
               className="dr-table-scroll-main"
               style={{
                 ...styles.tableOuter,
-                overflowX: "auto",
+                overflowX: "hidden",
                 overflowY: "auto",
                 maxHeight: "78vh",
                 scrollbarGutter: "stable",
@@ -956,16 +956,17 @@ export default function DailyRejectionPage() {
               }}
               onMouseDown={startTableDrag}
               onWheel={(event) => {
-                // Normal mouse wheel = vertical scrolling. Shift + wheel = horizontal.
+                // Normal wheel = vertical. Horizontal wheel / trackpad deltaX = horizontal.
                 const el = event.currentTarget;
-                if (event.shiftKey && el.scrollWidth > el.clientWidth) {
-                  const amount = event.deltaY || event.deltaX;
-                  if (!amount) return;
+                if (Math.abs(event.deltaX) > Math.abs(event.deltaY) && el.scrollWidth > el.clientWidth) {
                   event.preventDefault();
-                  el.scrollLeft += amount;
+                  el.scrollLeft += event.deltaX;
+                } else if (event.shiftKey && el.scrollWidth > el.clientWidth) {
+                  event.preventDefault();
+                  el.scrollLeft += event.deltaY;
                 }
               }}
-              aria-label="Daily Rejection table. Drag with the left mouse button to move in all directions."
+              aria-label="Daily Rejection table"
             >
               <table style={{ ...styles.dataTable, width: "100%", minWidth: `${tableMinWidth}px` }}>
                 <thead>
@@ -1003,7 +1004,6 @@ export default function DailyRejectionPage() {
                           background: selectedRowId === rowId ? "#ecfeff" : undefined,
                           boxShadow: selectedRowId === rowId ? "inset 0 0 0 2px #14b8a6" : undefined,
                         }}
-                        title="Drag with the left mouse button to scroll the table in all directions"
                       >
                         <td style={{ ...styles.td, ...styles.slTd }}>
                           <button type="button" onClick={() => openHistory(row)} title="View S.L. wise details and history" style={styles.slButton}>{rowIndex + 1}</button>
@@ -1077,6 +1077,17 @@ export default function DailyRejectionPage() {
                 </tbody>
               </table>
             </div>
+            <div
+              className="dr-table-scroll-bottom"
+              onScroll={(event) => {
+                const main = event.currentTarget.previousElementSibling;
+                if (main && Math.abs(main.scrollLeft - event.currentTarget.scrollLeft) > 1) {
+                  main.scrollLeft = event.currentTarget.scrollLeft;
+                }
+              }}
+            >
+              <div className="dr-table-scroll-bottom-spacer" style={{ width: `${tableMinWidth}px`, height: 1 }} />
+            </div>
           </div>
         </div>
         {renderMobileCards(tableRows, withWorkflow)}
@@ -1104,6 +1115,44 @@ export default function DailyRejectionPage() {
     });
     setShowForm(true);
   };
+
+  useEffect(() => {
+    const syncHorizontalScrollbars = () => {
+      document.querySelectorAll('.dr-table-scroll-main').forEach((main) => {
+        const bottom = main.parentElement?.querySelector('.dr-table-scroll-bottom');
+        const spacer = bottom?.firstElementChild;
+        if (!bottom || !spacer) return;
+        const width = Math.max(main.scrollWidth, main.clientWidth + 1);
+        spacer.style.width = `${width}px`;
+        if (Math.abs(bottom.scrollLeft - main.scrollLeft) > 1) {
+          bottom.scrollLeft = main.scrollLeft;
+        }
+      });
+    };
+
+    const syncFromMain = (event) => {
+      const main = event.currentTarget;
+      const bottom = main.parentElement?.querySelector('.dr-table-scroll-bottom');
+      if (bottom && Math.abs(bottom.scrollLeft - main.scrollLeft) > 1) {
+        bottom.scrollLeft = main.scrollLeft;
+      }
+    };
+
+    const mains = Array.from(document.querySelectorAll('.dr-table-scroll-main'));
+    mains.forEach((main) => main.addEventListener('scroll', syncFromMain, { passive: true }));
+
+    const frame = window.requestAnimationFrame(syncHorizontalScrollbars);
+    window.addEventListener('resize', syncHorizontalScrollbars);
+    const observer = typeof ResizeObserver !== 'undefined' ? new ResizeObserver(syncHorizontalScrollbars) : null;
+    mains.forEach((main) => observer?.observe(main));
+
+    return () => {
+      window.cancelAnimationFrame(frame);
+      window.removeEventListener('resize', syncHorizontalScrollbars);
+      mains.forEach((main) => main.removeEventListener('scroll', syncFromMain));
+      observer?.disconnect();
+    };
+  }, [rows, reportRows, status, actionFilter, canAssign]);
 
   const submitReport = async () => {
     if (!canReport) return;
@@ -1136,7 +1185,14 @@ export default function DailyRejectionPage() {
         .dr-mobile-list { display:none; }
         .dr-scroll-shell { width:100%; max-width:100%; outline:none; }
         .dr-scroll-shell:focus { outline:2px solid rgba(14,116,144,.28); outline-offset:2px; border-radius:14px; }
-        .dr-table-scroll-main { width:100%; max-width:100%; overflow-x:auto; overflow-y:auto; max-height:78vh; -webkit-overflow-scrolling:touch; overscroll-behavior:contain; background:#fff; border:1px solid #dbe4ee; border-radius:16px; }
+        .dr-table-scroll-main { width:100%; max-width:100%; overflow-x:hidden; overflow-y:auto; max-height:78vh; -webkit-overflow-scrolling:touch; overscroll-behavior:contain; background:#fff; border:1px solid #dbe4ee; border-radius:16px; }
+        .dr-table-scroll-bottom { width:100%; max-width:100%; overflow-x:auto; overflow-y:hidden; height:14px; margin-top:4px; scrollbar-color:#64748b #eef2f7; scrollbar-width:auto; cursor:grab; }
+        .dr-table-scroll-bottom:active { cursor:grabbing; }
+        .dr-table-scroll-bottom::-webkit-scrollbar { height:12px; }
+        .dr-table-scroll-bottom::-webkit-scrollbar-track { background:#eef2f7; border-radius:999px; }
+        .dr-table-scroll-bottom::-webkit-scrollbar-thumb { background:#64748b; border-radius:999px; border:2px solid #eef2f7; }
+        .dr-table-scroll-bottom::-webkit-scrollbar-thumb:hover { background:#475569; }
+        .dr-table-scroll-bottom-spacer { min-width:100%; }
         .dr-table-scroll-main tbody tr:focus-visible { outline:2px solid #0ea5a8; outline-offset:-2px; }
         .dr-table-scroll-main tbody tr.dr-selected-row td { background:#ecfeff !important; }
         .dr-table-scroll-main tbody tr.dr-selected-row { outline:2px solid #14b8a6; outline-offset:-2px; }
