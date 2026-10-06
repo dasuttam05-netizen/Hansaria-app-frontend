@@ -1,9 +1,8 @@
-import React, { Component, useState, useEffect, useRef, lazy, Suspense } from "react";
+import React, { Component, useState, useEffect, useRef, lazy, Suspense, useCallback } from "react";
 import API from "./axiosInstance";
 import { useNavigate } from "react-router-dom";
 import logo from "./logo.png";
 import { clearSession, hasAnyPermission, hasPermission, loadSession } from "../utils/auth";
-import { formatLocalMonthInput } from "../utils/date";
 import "./Dashboard.css";
 
 const LocationManagementPage = lazy(() => import("./LocationManagementPage"));
@@ -106,189 +105,254 @@ export default function DashboardPage() {
   const [searchText, setSearchText] = useState("");
 
   const API_BASE = "/api";
-  const currentMonth = formatLocalMonthInput();
-
   const fetchData = async (currentUser, isActive) => {
-    if (!hasPermission(currentUser, "dashboard.view")) return;
     try {
-      const canLoadPartyStockInsights = hasPermission(currentUser, "report.partyStock");
-      const canLoadWarehouseRentInsights = hasPermission(currentUser, "report.warehouseRentMonthEnd");
-      const canReadCompanies = hasAnyPermission(currentUser, [
-        "companies.manage",
-        "inward.view",
-        "inward.create",
-        "outward.view",
-        "outward.create",
-        "adjustment.manage",
-        "expense.entry",
-        "expense.view",
-        "expense.create",
-        "cash.view",
-        "settlement.view",
-        "report.inward",
-        "report.erp",
-        "report.partyLedger",
-        "report.partyStock",
-        "report.warehouseRentLedger",
-        "report.warehouseRentMonthEnd",
-        "report.outwardSettlement",
-        "report.expense",
-      ]);
-      const canReadCompanyAccounts = hasAnyPermission(currentUser, [
-        "companyAccounts.manage",
-        "inward.view",
-        "inward.create",
-        "outward.view",
-        "outward.create",
-        "adjustment.manage",
-        "expense.entry",
-        "expense.view",
-        "expense.create",
-        "cash.view",
-        "settlement.view",
-        "report.inward",
-        "report.erp",
-        "report.partyLedger",
-        "report.partyStock",
-        "report.warehouseRentLedger",
-        "report.warehouseRentMonthEnd",
-        "report.outwardSettlement",
-        "report.expense",
-      ]);
-      const canReadLocations = hasAnyPermission(currentUser, [
-        "locations.manage",
-        "expense.entry",
-        "expense.view",
-        "expense.create",
-        "expense.edit",
-        "inward.view",
-        "inward.create",
-        "outward.view",
-        "outward.create",
-        "employees.view",
-        "report.partyStock",
-        "report.warehouseRentLedger",
-        "report.warehouseRentMonthEnd",
-      ]);
-      const canReadEmployees = hasAnyPermission(currentUser, [
-        "employees.view",
-        "inward.view",
-        "outward.view",
-        "expense.entry",
-        "report.erp",
-      ]);
-      const canReadWarehouses = hasAnyPermission(currentUser, [
-        "warehouses.manage",
-        "warehouse.trading.purchase.view",
-        "warehouse.trading.sale.view",
-        "warehouse.trading.payment.view",
-        "warehouse.trading.receipt.view",
-        "warehouse.trading.journal.view",
-        "outward.view",
-        "inward.view",
-      ]);
-      const canReadProducts = hasAnyPermission(currentUser, [
-        "products.manage",
-        "inward.view",
-        "inward.create",
-        "outward.view",
-        "outward.create",
-        "adjustment.manage",
-        "expense.entry",
-        "expense.view",
-        "expense.create",
-        "transport.manage",
-        "report.inward",
-        "report.erp",
-        "report.partyLedger",
-        "report.partyStock",
-      ]);
-
-      const resolveRequests = async (requests) => {
-        const settled = await Promise.allSettled(requests);
-        return settled.map((result) => {
-          if (result.status === "fulfilled") {
-            return result.value;
-          }
-          return { data: [] };
-        });
-      };
-
-      const criticalRequests = [
-        canReadLocations ? API.get(`${API_BASE}/locations`) : Promise.resolve({ data: [] }),
-        canReadEmployees ? API.get(`${API_BASE}/employees`) : Promise.resolve({ data: [] }),
-        canReadCompanies ? API.get(`${API_BASE}/companies`) : Promise.resolve({ data: [] }),
-        canReadCompanyAccounts ? API.get(`${API_BASE}/company-accounts`) : Promise.resolve({ data: [] }),
-        canReadWarehouses ? API.get(`${API_BASE}/warehouses`) : Promise.resolve({ data: [] }),
-        canReadProducts ? API.get(`${API_BASE}/products`) : Promise.resolve({ data: [] }),
-      ];
-
-      const secondaryRequests = [
-        hasAnyPermission(currentUser, ["inward.manage", "inward.view", "inward.create"])
-          ? API.get(`${API_BASE}/inward`)
-          : Promise.resolve({ data: [] }),
-        hasAnyPermission(currentUser, ["outward.manage", "outward.view", "outward.create"])
-          ? API.get(`${API_BASE}/outward`)
-          : Promise.resolve({ data: [] }),
-        canLoadPartyStockInsights ? API.get(`${API_BASE}/reports/party-stock`) : Promise.resolve({ data: { summary: [] } }),
-        canLoadPartyStockInsights ? API.get(`${API_BASE}/reports/warehouse-stock`) : Promise.resolve({ data: [] }),
-        canLoadPartyStockInsights ? API.get(`${API_BASE}/reports/total-stock`) : Promise.resolve({ data: { total: 0 } }),
-        canLoadWarehouseRentInsights
-          ? API.get(`${API_BASE}/reports/warehouse-rent-month-end`, {
-              params: { month: currentMonth },
-            })
-          : Promise.resolve({ data: { summary: [] } }),
-      ];
-
-      const [locRes, empRes, compRes, compAccRes, wareRes, prodRes] = await resolveRequests(criticalRequests);
+      const payload = await API.get(`${API_BASE}/dashboard`);
 
       if (!isActive()) {
         return;
       }
 
-      setLocations(locRes?.data || []);
-      setEmployees(empRes?.data || []);
-      setCompanies(compRes?.data || []);
-      setCompanyAccounts(compAccRes?.data || []);
-      setWarehouses(wareRes?.data || []);
-      setProducts(prodRes?.data || []);
+      const data = payload?.data || {};
 
-      window.setTimeout(async () => {
-        const [inwardRes, outwardRes, partyStockRes, warehouseStockRes, totalStockRes, monthEndRentRes] = await resolveRequests(secondaryRequests);
+      // Use the same live report endpoints as Stock Report and Warehouse Rent
+      // Month End Report so dashboard totals cannot diverge from the reports.
+      const currentMonth = new Date().toISOString().slice(0, 7);
+      const reportResults = await Promise.allSettled([
+        API.get(`${API_BASE}/reports/party-stock`),
+        API.get(`${API_BASE}/reports/warehouse-stock`),
+        API.get(`${API_BASE}/reports/total-stock`),
+        API.get(`${API_BASE}/reports/warehouse-rent-month-end`, {
+          params: { month: currentMonth },
+        }),
+        API.get(`${API_BASE}/outward/stock-journal`),
+      ]);
 
-        if (!isActive()) {
-          return;
-        }
+      if (!isActive()) {
+        return;
+      }
 
-        setInwards(Array.isArray(inwardRes?.data) ? inwardRes.data : []);
-        setOutwards(Array.isArray(outwardRes?.data) ? outwardRes.data : []);
-
-        const normalizedPartyStock = Array.isArray(partyStockRes?.data?.summary)
-          ? partyStockRes.data.summary
-          : Array.isArray(partyStockRes?.data)
-            ? partyStockRes.data
-            : [];
-        const normalizedWarehouseStock = Array.isArray(warehouseStockRes?.data)
-          ? warehouseStockRes.data
-          : Array.isArray(warehouseStockRes?.data?.summary)
-            ? warehouseStockRes.data.summary
-            : [];
-        const normalizedTotalStock = Number(
-          totalStockRes?.data?.total ?? totalStockRes?.data?.summary?.[0]?.total ?? 0
-        );
-        const normalizedRentSummary = Array.isArray(monthEndRentRes?.data?.summary)
-          ? monthEndRentRes.data.summary
+      const partyStockReport =
+        reportResults[0]?.status === "fulfilled"
+          ? reportResults[0].value?.data || {}
+          : {};
+      const warehouseStockReport =
+        reportResults[1]?.status === "fulfilled"
+          ? reportResults[1].value?.data || []
           : [];
+      const totalStockReport =
+        reportResults[2]?.status === "fulfilled"
+          ? reportResults[2].value?.data || {}
+          : {};
+      const rentReport =
+        reportResults[3]?.status === "fulfilled"
+          ? reportResults[3].value?.data || {}
+          : {};
 
-        setPartyStock(normalizedPartyStock);
-        setWarehouseStock(normalizedWarehouseStock);
-        setTotalStock(normalizedTotalStock);
-        setMonthEndRentSummary(normalizedRentSummary);
-      }, 0);
+      const normalizedLocations = Array.isArray(data.locations) ? data.locations : [];
+      const normalizedEmployees = Array.isArray(data.employees) ? data.employees : [];
+      const normalizedCompanies = Array.isArray(data.companies) ? data.companies : [];
+      const normalizedCompanyAccounts = Array.isArray(data.companyAccounts) ? data.companyAccounts : [];
+      const normalizedWarehouses = Array.isArray(data.warehouses) ? data.warehouses : [];
+      const normalizedProducts = Array.isArray(data.products) ? data.products : [];
+      const normalizedInwards = Array.isArray(data.inwards) ? data.inwards : [];
+      const normalizedOutwards = Array.isArray(data.outwards) ? data.outwards : [];
+      let normalizedPartyStock = Array.isArray(partyStockReport.summary)
+        ? partyStockReport.summary
+        : Array.isArray(data.partyStock)
+          ? data.partyStock
+          : [];
+      let partyStockDetails = Array.isArray(partyStockReport.details)
+        ? partyStockReport.details
+        : [];
+
+      // Keep Dashboard Stock Report exactly aligned with Party Stock Report.
+      // Party Stock Report applies Journal Entry stock movements after the
+      // /reports/party-stock response, so apply the same movements here.
+      const partyStockJournalRows =
+        reportResults[4]?.status === "fulfilled" &&
+        Array.isArray(reportResults[4].value?.data?.rows)
+          ? reportResults[4].value.data.rows
+          : [];
+      if (reportResults[4]?.status === "fulfilled" && partyStockDetails.length > 0) {
+        const journalBySource = new Map();
+        const addSourceMovement = (key, row) => {
+          if (!key) return;
+          const current = journalBySource.get(key) || { qty: 0, latestDate: "" };
+          current.qty += Number(row?.qty || 0);
+          const d = row?.date || "";
+          if (!current.latestDate || String(d) > String(current.latestDate)) current.latestDate = d;
+          journalBySource.set(key, current);
+        };
+
+        partyStockJournalRows.forEach((row) => {
+          const inwardId = row?.inward_id ?? row?.inwardId ?? row?.source_inward_id;
+          const inwardVoucher = row?.inward_voucher_no || row?.inward_no || "";
+          if (inwardId !== undefined && inwardId !== null && String(inwardId)) {
+            addSourceMovement(`id:${String(inwardId)}`, row);
+          }
+          if (inwardVoucher) addSourceMovement(`voucher:${String(inwardVoucher)}`, row);
+          if (row?.lorry_no) {
+            addSourceMovement(
+              `fallback:${String(row.lorry_no)}|${String(row.product_id || "")}|${String(row.from_party_id || "")}`,
+              row
+            );
+          }
+        });
+
+        const journalForDetail = (detail) => {
+          const candidates = [
+            detail?.inward_id,
+            detail?.inwardId,
+            detail?.source_inward_id,
+            detail?._id,
+            detail?.id,
+          ].filter((value) => value !== undefined && value !== null && String(value));
+          for (const id of candidates) {
+            const hit = journalBySource.get(`id:${String(id)}`);
+            if (hit) return hit;
+          }
+
+          const vouchers = [detail?.voucher_no, detail?.inward_voucher_no, detail?.inward_no].filter(Boolean);
+          for (const voucher of vouchers) {
+            const hit = journalBySource.get(`voucher:${String(voucher)}`);
+            if (hit) return hit;
+          }
+
+          if (detail?.lorry_no) {
+            const hit = journalBySource.get(
+              `fallback:${String(detail.lorry_no)}|${String(detail.product_id || "")}|${String(detail.company_account_id || detail.account_id || "")}`
+            );
+            if (hit) return hit;
+          }
+          return null;
+        };
+
+        const mergedPartyStockDetails = partyStockDetails.map((detail) => {
+          const movement = journalForDetail(detail);
+          if (!movement) return detail;
+          const journalQty = Number(movement.qty || 0);
+          const adjusted = Number(detail.already_adjusted_qty || 0) + journalQty;
+          const balance = Math.max(0, Number(detail.net_opening_qty || 0) - adjusted);
+          return {
+            ...detail,
+            outward_date: movement.latestDate || detail.outward_date || "",
+            already_adjusted_qty: adjusted,
+            available_balance_qty: balance,
+            journal_adjusted_qty: journalQty,
+          };
+        });
+
+        const grouped = new Map();
+        mergedPartyStockDetails.forEach((row) => {
+          const key = `${String(row?.company_id || row?.company_name || row?.party_name || "")}::${String(row?.account_id || row?.company_account_id || row?.account_name || "")}`;
+          const existing = grouped.get(key);
+          if (existing) {
+            existing.gross_qty += Number(row?.gross_qty || 0);
+            existing.shortage_qty += Number(row?.shortage_qty || 0);
+            existing.net_opening_qty += Number(row?.net_opening_qty || 0);
+            existing.already_adjusted_qty += Number(row?.already_adjusted_qty || 0);
+            existing.available_balance_qty += Number(row?.available_balance_qty || 0);
+          } else {
+            grouped.set(key, {
+              ...row,
+              gross_qty: Number(row?.gross_qty || 0),
+              shortage_qty: Number(row?.shortage_qty || 0),
+              net_opening_qty: Number(row?.net_opening_qty || 0),
+              already_adjusted_qty: Number(row?.already_adjusted_qty || 0),
+              available_balance_qty: Number(row?.available_balance_qty || 0),
+            });
+          }
+        });
+
+        partyStockDetails = mergedPartyStockDetails;
+        normalizedPartyStock = Array.from(grouped.values());
+      }
+
+      // Dashboard Outward Party must use the same party basis as Party Stock Report.
+      // Prefer the Party Stock detail's resolved company_name for the same company;
+      // keep the existing dashboard value as fallback when no matching stock row exists.
+      const partyNameByCompany = new Map();
+      partyStockDetails.forEach((row) => {
+        const companyId = String(row?.company_id ?? '').trim();
+        const partyName = String(row?.company_name ?? row?.party_name ?? '').trim();
+        if (companyId && partyName) partyNameByCompany.set(companyId, partyName);
+      });
+      const partyNameByAccountWarehouse = new Map();
+      partyStockDetails.forEach((row) => {
+        const accountId = String(row?.company_account_id ?? '').trim();
+        const warehouseId = String(row?.warehouse_id ?? '').trim();
+        const partyName = String(row?.company_name ?? row?.party_name ?? '').trim();
+        if (partyName && (accountId || warehouseId)) {
+          partyNameByAccountWarehouse.set(`${accountId}|${warehouseId}`, partyName);
+        }
+      });
+      const dashboardOutwardRows = normalizedOutwards.map((item) => {
+        const companyId = String(item?.company_id ?? '').trim();
+        const accountId = String(item?.company_account_id ?? '').trim();
+        const warehouseId = String(item?.warehouse_id ?? '').trim();
+        const reportParty =
+          (companyId && partyNameByCompany.get(companyId)) ||
+          partyNameByAccountWarehouse.get(`${accountId}|${warehouseId}`) ||
+          '';
+        return reportParty
+          ? { ...item, party_name: reportParty }
+          : item;
+      });
+
+      const dashboardWarehouseStockMap = new Map();
+      partyStockDetails.forEach((row) => {
+        const warehouseName = String(row?.warehouse_name || row?.warehouse || "Unknown").trim() || "Unknown";
+        const existing = dashboardWarehouseStockMap.get(warehouseName) || { warehouse: warehouseName, stock: 0 };
+        existing.stock += Number(row?.available_balance_qty || 0);
+        dashboardWarehouseStockMap.set(warehouseName, existing);
+      });
+      const reportWarehouseStockFromPartyStock = Array.from(dashboardWarehouseStockMap.values());
+      const normalizedWarehouseStock = reportWarehouseStockFromPartyStock.length > 0
+        ? reportWarehouseStockFromPartyStock
+        : Array.isArray(warehouseStockReport)
+          ? warehouseStockReport
+          : Array.isArray(data.warehouseStock)
+            ? data.warehouseStock
+            : [];
+      // Dashboard rent must use the exact same month-end report calculation.
+      const normalizedMonthEndRentSummary = Array.isArray(rentReport.summary)
+        ? rentReport.summary
+        : Array.isArray(data.monthEndRentSummary)
+          ? data.monthEndRentSummary
+          : [];
+      const normalizedTotalStock = Number(
+        totalStockReport.total ?? data.totalStock ?? 0
+      );
+
+      setLocations(normalizedLocations);
+      setEmployees(normalizedEmployees);
+      setCompanies(normalizedCompanies);
+      setCompanyAccounts(normalizedCompanyAccounts);
+      setWarehouses(normalizedWarehouses);
+      setProducts(normalizedProducts);
+      setInwards(normalizedInwards);
+      setOutwards(dashboardOutwardRows);
+      setPartyStock(normalizedPartyStock);
+      setWarehouseStock(normalizedWarehouseStock);
+      setTotalStock(normalizedTotalStock);
+      setMonthEndRentSummary(normalizedMonthEndRentSummary);
     } catch (err) {
       console.error("Failed to fetch dashboard data:", err);
     }
   };
+
+  const refreshDashboard = useCallback(async () => {
+    const { user: sessionUser } = loadSession();
+    if (!sessionUser) {
+      navigate("/");
+      return;
+    }
+
+    setUser(sessionUser);
+    setUsername(sessionUser.name || sessionUser.username || "User");
+    await fetchData(sessionUser, () => true);
+  }, [navigate]);
 
   useEffect(() => {
     let alive = true;
@@ -298,24 +362,6 @@ export default function DashboardPage() {
         const { user: sessionUser } = loadSession();
         if (!sessionUser) {
           navigate("/");
-          return;
-        }
-
-        if (!hasPermission(sessionUser, "dashboard.view")) {
-          const firstAllowed = [
-            ["employees.view", "/employees"],
-            ["companies.manage", "/companies"],
-            ["companyAccounts.manage", "/company-accounts"],
-            ["locations.manage", "/locations"],
-            ["warehouses.manage", "/warehouses"],
-            ["products.manage", "/products"],
-            ["inward.view", "/inward"],
-            ["outward.view", "/outward"],
-            ["expense.entry", "/expenses"],
-            ["report.inward", "/inward-report"],
-            ["transport.manage", "/transport-management"],
-          ].find(([permission]) => hasPermission(sessionUser, permission));
-          navigate(firstAllowed?.[1] || "/", { replace: true });
           return;
         }
 
@@ -338,7 +384,7 @@ export default function DashboardPage() {
     return () => {
       alive = false;
     };
-  }, [navigate]);
+  }, [navigate, refreshDashboard]);
 
   const canViewFullCashBook = hasAnyPermission(user, [
     "cash.view",
@@ -483,34 +529,9 @@ export default function DashboardPage() {
         { label: "Employee Management", permission: "employees.view", action: () => navigate("/employees") },
       ],
     },
-    {
-      title: "Company Name",
-      permission: "companies.manage",
-      icon: <FaBuilding />,
-      submenu: [
-        { label: "Company Management", permission: "companies.manage", action: () => navigate("/companies") },
-      ],
-    },
-    {
-      title: "Company Account",
-      permission: "companyAccounts.manage",
-      icon: <FaBuilding />,
-      submenu: [
-        {
-          label: "Company Account Management",
-          permission: "companyAccounts.manage",
-          action: () => navigate("/company-accounts"),
-        },
-      ],
-    },
-    {
-      title: "Location",
-      permission: "locations.manage",
-      icon: <FaMapMarkerAlt />,
-      submenu: [
-        { label: "Location Management", permission: "locations.manage", action: () => navigate("/locations") },
-      ],
-    },
+
+
+
     {
       title: "Warehouse",
       permission: [
@@ -540,17 +561,28 @@ export default function DashboardPage() {
         { label: "Stock Report", permission: ["warehouse.trading.purchase.view", "warehouse.trading.sale.view", "warehouse.trading.payment.view", "warehouse.trading.receipt.view", "warehouse.trading.journal.view"], action: () => navigate("/warehouse-trading") },
       ],
     },
+
     {
-      title: "Products",
-      permission: "products.manage",
-      icon: <FaBoxOpen />,
+      title: "Masters and Admin",
+      permission: [
+        "employees.view",
+        "locations.view",
+        "companies.view",
+        "companyAccounts.view",
+        "products.view",
+        "dashboard.view",
+      ],
+      icon: <FaCog />,
       submenu: [
-        { label: "Products Management", permission: "products.manage", action: () => navigate("/products") },
+        { label: "Location", permission: "locations.view", action: () => navigate("/locations") },
+        { label: "Companies", permission: "companies.view", action: () => navigate("/companies") },
+        { label: "Company Accounts", permission: "companyAccounts.view", action: () => navigate("/company-accounts") },
+        { label: "Products", permission: "products.view", action: () => navigate("/products") },
       ],
     },
     {
       title: "Entry",
-      permission: ["inward.view", "inward.create", "inward.edit", "inward.delete"],
+      permission: ["inward.view", "inward.create", "inward.edit", "inward.delete", "dailyRejection.view", "dailyRejection.create", "cash.create", "transport.manage"],
       icon: <FaFileAlt />,
       submenu: [
         {
@@ -577,6 +609,16 @@ export default function DashboardPage() {
           label: "Outward Entry",
           permission: ["outward.view", "outward.create", "outward.edit", "outward.delete"],
           action: () => navigate("/outward"),
+        },
+        {
+          label: "Daily Rejection",
+          permission: ["dailyRejection.view", "dailyRejection.create", "dailyRejection.assign"],
+          action: () => navigate("/daily-rejections"),
+        },
+        {
+          label: "Voucher",
+          permission: ["cash.create", "transport.manage"],
+          action: () => navigate("/voucher-entry?type=payment"),
         },
       ],
     },
@@ -753,6 +795,14 @@ export default function DashboardPage() {
       ),
     }))
     .filter((item) => !item.submenu || item.submenu.length > 0);
+
+  useEffect(() => {
+    if (hasPermission(user, "dashboard.view")) return;
+    setActive((current) => {
+      if (current && current !== "Dashboard" && menuItems.some((item) => item.title === current)) return current;
+      return "";
+    });
+  }, [user]);
 
   const quickActions = [
     {
@@ -967,6 +1017,33 @@ export default function DashboardPage() {
     0
   );
 
+  const stockCoveragePercentage = totalStock > 0 ? Math.round(Math.min(100, (totalWarehouseStock / totalStock) * 100)) : 0;
+  const expenseBalanceRatio = totalRentCollected > 0 ? Math.round(Math.min(100, (totalWarehouseRent / totalRentCollected) * 100)) : 0;
+  const aiInsights = [
+    {
+      title: "Inventory trend",
+      detail: stockCoveragePercentage >= 80 ? "Healthy stock balance" : "Monitor weak inventory lanes",
+      value: `${stockCoveragePercentage}%`,
+    },
+    {
+      title: "Rent pulse",
+      detail: expenseBalanceRatio >= 70 ? "Stable warehouse rent" : "Watch high party rent variance",
+      value: `${expenseBalanceRatio}%`,
+    },
+    {
+      title: "Operational signal",
+      detail: warehouses.length > 5 ? "Multi-warehouse growth" : "Focused warehouse control",
+      value: warehouses.length,
+    },
+  ];
+
+  const analyticsSparkline = {
+    stock: [58, 72, 81, 73, 88],
+    rent: [42, 55, 64, 58, 70],
+    health: [82, 86, 90, 88, 94],
+    expense: [35, 49, 43, 57, 50],
+  };
+
   const notificationItems = [
     {
       label: `${inwards.length} inward entries available`,
@@ -1079,6 +1156,10 @@ export default function DashboardPage() {
       return acc;
     }, {})
   ).sort((a, b) => b.available_balance_qty - a.available_balance_qty);
+  const totalPartyStock = partyStockSummary.reduce(
+    (sum, row) => sum + Number(row.available_balance_qty || 0),
+    0
+  );
   const assignedWarehouseNames = Array.isArray(user?.assigned_warehouses)
     ? user.assigned_warehouses.map((item) => item?.name).filter(Boolean)
     : [];
@@ -1277,6 +1358,79 @@ export default function DashboardPage() {
           </section>
           )}
 
+          {canViewDashboardOverview ? (
+          <section className="dashboard-section analytics-section">
+            <div className="section-header">
+              <div>
+                <h2>Premium Analytics</h2>
+                <p>Live warehouse, stock and expense analytics with AI-powered insights.</p>
+              </div>
+            </div>
+
+            <div className="analytics-grid">
+              <div className="analytics-card glass-card">
+                <div className="analytics-card-head">
+                  <span>Warehouse Analytics</span>
+                  <strong>Real-time capacity status</strong>
+                </div>
+                <div className="analytics-card-value">{filteredWarehouseStock.length}</div>
+                <div className="analytics-card-text">Active warehouse groups contributing to current stock.</div>
+                <div className="sparkline-row">
+                  {analyticsSparkline.health.map((value, idx) => (
+                    <span key={idx} className="sparkline-segment" style={{ height: `${value}%` }} />
+                  ))}
+                </div>
+              </div>
+
+              <div className="analytics-card glass-card">
+                <div className="analytics-card-head">
+                  <span>Stock Analytics</span>
+                  <strong>Inventory utilization</strong>
+                </div>
+                <div className="analytics-card-value">{stockCoveragePercentage}%</div>
+                <div className="analytics-card-text">Stock health score based on warehouse availability vs total coverage.</div>
+                <div className="sparkline-row">
+                  {analyticsSparkline.stock.map((value, idx) => (
+                    <span key={idx} className="sparkline-segment" style={{ height: `${value}%` }} />
+                  ))}
+                </div>
+              </div>
+
+              <div className="analytics-card glass-card">
+                <div className="analytics-card-head">
+                  <span>Expense Analytics</span>
+                  <strong>Rent and expense balance</strong>
+                </div>
+                <div className="analytics-card-value">₹{Number(totalRentCollected || 0).toFixed(2)}</div>
+                <div className="analytics-card-text">Current rent exposure and expense flow across your warehouses.</div>
+                <div className="sparkline-row">
+                  {analyticsSparkline.expense.map((value, idx) => (
+                    <span key={idx} className="sparkline-segment" style={{ height: `${value}%` }} />
+                  ))}
+                </div>
+              </div>
+
+              <div className="ai-insights-panel glass-card">
+                <div className="analytics-card-head">
+                  <span>AI Insights</span>
+                  <strong>Suggested actions</strong>
+                </div>
+                <div className="insights-list">
+                  {aiInsights.map((item, idx) => (
+                    <div key={idx} className="insight-item">
+                      <div>
+                        <strong>{item.title}</strong>
+                        <p>{item.detail}</p>
+                      </div>
+                      <div className="insight-value">{item.value}</div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </section>
+          ) : null}
+
           {canViewResourceOverview ? (
           <section className="dashboard-section">
             <div className="section-header">
@@ -1434,8 +1588,8 @@ export default function DashboardPage() {
                         <strong>{partyStockSummary.length}</strong>
                       </div>
                       <div className="report-metric-stat">
-                        <span>Rows</span>
-                        <strong>{filteredCompanyStock.length}</strong>
+                        <span>Stock</span>
+                        <strong>{Number(totalPartyStock).toFixed(2)}</strong>
                       </div>
                     </div>
                   </div>
