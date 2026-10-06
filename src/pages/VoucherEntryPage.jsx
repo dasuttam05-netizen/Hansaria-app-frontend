@@ -1,4 +1,5 @@
 import React, {
+  useCallback,
   useEffect,
   useMemo,
   useState,
@@ -107,6 +108,7 @@ function VoucherEntryPage() {
 
   const queryType =
     searchParams.get("type") || "payment";
+  const requestedEditId = searchParams.get("edit") || "";
 
   const normalizeType = (type) => {
     const value = String(type || "").toLowerCase();
@@ -587,6 +589,9 @@ function VoucherEntryPage() {
   ========================================================== */
 
   const resetForm = () => {
+    if (requestedEditId) {
+      navigate("/voucher-entry?type=transport", { replace: true });
+    }
     setForm(emptyForm());
     setPendingBills([]);
     setAdjustments({});
@@ -596,7 +601,7 @@ function VoucherEntryPage() {
     setError("");
   };
 
-  const startEditPayment = (payment) => {
+  const startEditPayment = useCallback((payment) => {
     const paymentAdjustments = Array.isArray(payment.adjustments)
       ? payment.adjustments
       : Array.isArray(payment.allocations)
@@ -638,7 +643,25 @@ function VoucherEntryPage() {
     setMessage("");
     setError("");
     document.getElementById("transport-payment-form")?.scrollIntoView({ behavior: "smooth", block: "start" });
-  };
+  }, []);
+
+  useEffect(() => {
+    if (
+      activeType !== "transport" ||
+      !requestedEditId ||
+      editingPaymentId === requestedEditId
+    ) {
+      return;
+    }
+
+    const payment = transportPayments.find(
+      (row) => String(row._id || row.id) === requestedEditId
+    );
+    if (payment) {
+      startEditPayment(payment);
+      navigate("/voucher-entry?type=transport", { replace: true });
+    }
+  }, [activeType, editingPaymentId, navigate, requestedEditId, startEditPayment, transportPayments]);
 
   /* ==========================================================
      TAB CHANGE
@@ -897,6 +920,9 @@ function VoucherEntryPage() {
         setPendingBills([]);
         setAdjustments({});
         setEditingPaymentId("");
+        if (requestedEditId) {
+          navigate("/voucher-entry?type=transport", { replace: true });
+        }
       } catch (err) {
         console.error(
           "Transport payment save error:",
