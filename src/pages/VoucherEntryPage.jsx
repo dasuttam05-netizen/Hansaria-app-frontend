@@ -1530,29 +1530,6 @@ function VoucherEntryPage() {
                 </select>
               </div>
 
-              {/* Fund Source */}
-              <div>
-                <label
-                  style={labelStyle}
-                >
-                  Fund Source
-                </label>
-
-                <input
-                  value={
-                    form.fund_source
-                  }
-                  onChange={(e) =>
-                    updateForm(
-                      "fund_source",
-                      e.target.value
-                    )
-                  }
-                  placeholder="Fund Source"
-                  style={inputStyle}
-                />
-              </div>
-
             </div>
           </div>
 
