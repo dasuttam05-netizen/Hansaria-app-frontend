@@ -969,4 +969,7 @@ Payable: ${num(row.payable_amount)}`;
           </div>
         </div>
       )}
-
+      </div>
+    </div>
+  );
+}
