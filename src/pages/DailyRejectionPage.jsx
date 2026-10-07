@@ -416,12 +416,15 @@ export default function DailyRejectionPage() {
       showToast(`Factory rejection qty cannot exceed current rejection balance ${money(rejectionBalance)} MT.`, "warning");
       return;
     }
-    if (otherQty > otherBalance + 0.000001) {
-      showToast(`Factory other qty cannot exceed current other balance ${money(otherBalance)} MT.`, "warning");
+    // Other Qty is a separate/noting quantity. It must NOT be limited by the
+    // current Other balance and it does NOT complete the rejection chain.
+    // Send To Factory can be saved only when the full pending Reject Qty is entered.
+    if (rejectionQty <= 0) {
+      showToast("Enter the Reject Qty first. Send To Factory can be saved only after the full Reject Qty is completed.", "warning");
       return;
     }
-    if (rejectionQty <= 0 && otherQty <= 0) {
-      showToast("Enter a pending rejection or other quantity first.", "warning");
+    if (Math.abs(rejectionQty - rejectionBalance) > 0.000001) {
+      showToast(`Reject Qty must be completed. Current pending rejection is ${money(rejectionBalance)} MT.`, "warning");
       return;
     }
     const totalQty = rejectionQty + otherQty;
