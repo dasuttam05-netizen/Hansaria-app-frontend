@@ -127,6 +127,16 @@ export default function TransportBiltiPage() {
   const getRecordId = (record) => record?._id || record?.id || "";
   const sameId = (left, right) => String(left ?? "") === String(right ?? "");
 
+  // Transport Bilti must keep rendering even when an API returns an
+  // object/error payload instead of the expected array.
+  const asArray = (value) => {
+    if (Array.isArray(value)) return value;
+    if (Array.isArray(value?.data)) return value.data;
+    if (Array.isArray(value?.rows)) return value.rows;
+    if (Array.isArray(value?.items)) return value.items;
+    return [];
+  };
+
   const numberToWords = (value) => {
     const number = Number(value);
     if (!Number.isFinite(number)) return "Zero";
@@ -201,6 +211,7 @@ export default function TransportBiltiPage() {
   const formatDate = (dateStr) => {
     if (!dateStr) return "";
     const d = new Date(dateStr);
+    if (Number.isNaN(d.getTime())) return String(dateStr);
     return `${String(d.getDate()).padStart(2, "0")}-${String(
       d.getMonth() + 1
     ).padStart(2, "0")}-${d.getFullYear()}`;
@@ -234,12 +245,12 @@ export default function TransportBiltiPage() {
       axios.get(`${API_BASE}/warehouses`),
     ]);
 
-    setTransporters(transportRes.data || []);
-    setCompanies(companyRes.data || []);
-    setCompanyAccounts(accountRes.data || []);
-    setBuyers(buyerRes.data || []);
-    setConsignees(consigneeRes.data || []);
-    setWarehouses(warehouseRes.data || []);
+    setTransporters(asArray(transportRes.data));
+    setCompanies(asArray(companyRes.data));
+    setCompanyAccounts(asArray(accountRes.data));
+    setBuyers(asArray(buyerRes.data));
+    setConsignees(asArray(consigneeRes.data));
+    setWarehouses(asArray(warehouseRes.data));
   };
 
   const loadSourceList = async (sourceMode, force = false, completedOverride = null, includeSavedOverride = false) => {
@@ -259,12 +270,13 @@ export default function TransportBiltiPage() {
         ? { params: { completed: completed ? "1" : "0", include_bilti: includeSaved ? "1" : "0" } }
         : undefined
     );
+    const rows = asArray(res.data);
     if (sourceMode === "outward") {
-      setOutwardList(res.data || []);
+      setOutwardList(rows);
     } else if (completed) {
-      setCompletedSaleSourceList(res.data || []);
+      setCompletedSaleSourceList(rows);
     } else {
-      setPendingSaleSourceList(res.data || []);
+      setPendingSaleSourceList(rows);
     }
     setSourceLoaded((prev) => ({ ...prev, [loadedKey]: true }));
   };
