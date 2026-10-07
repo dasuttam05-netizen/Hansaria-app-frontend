@@ -11,6 +11,8 @@ export default function TransportReportPage() {
   const API_BASE = "/api";
   const [records, setRecords] = useState([]);
   const [paymentRecords, setPaymentRecords] = useState([]);
+  const [activeSection, setActiveSection] = useState("payment");
+  const [selectedLedgerTransporter, setSelectedLedgerTransporter] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
   const [filters, setFilters] = useState({
     from_date: new Date(new Date().setDate(new Date().getDate() - 30))
@@ -194,6 +196,32 @@ export default function TransportReportPage() {
         .includes(search)
     );
   }, [paymentRecords, searchTerm]);
+
+  const transporterLedgerRows = useMemo(() => {
+    const grouped = new Map();
+    visibleRecords.forEach((row) => {
+      const name = String(row.transporter_name || "Unknown Transporter").trim() || "Unknown Transporter";
+      if (!grouped.has(name)) {
+        grouped.set(name, {
+          name, bills: 0, gross: 0, net: 0, shortage: 0, detain: 0, others: 0, advance: 0, tds: 0, payable: 0, paid: 0, balance: 0, rows: [],
+        });
+      }
+      const item = grouped.get(name);
+      item.bills += 1;
+      item.gross += Number(row.gross_freight) || 0;
+      item.net += Number(row.net_amount) || 0;
+      item.shortage += Number(row.shortage_amount) || 0;
+      item.detain += Number(row.detain_amount) || 0;
+      item.others += Number(row.others_exp) || 0;
+      item.advance += Number(row.advance_amount) || 0;
+      item.tds += Number(row.tds_amount) || 0;
+      item.payable += Number(row.payable_amount) || 0;
+      item.paid += getPayAmount(row);
+      item.balance += getBalanceAmount(row);
+      item.rows.push(row);
+    });
+    return Array.from(grouped.values()).sort((a, b) => a.name.localeCompare(b.name));
+  }, [visibleRecords]);
 
   const totals = useMemo(
     () =>
@@ -670,6 +698,21 @@ Rows: ${rows.length}`;
         </div>
       </div>
 
+
+      <div style={{ ...card, marginBottom: 16, padding: 8, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+        {[
+          ['payment', 'Transport Payment'],
+          ['bilti', 'Bilti Full Report'],
+          ['ledger', 'Transporter Ledger'],
+        ].map(([key, label]) => (
+          <button key={key} type="button" onClick={() => setActiveSection(key)} style={{
+            ...button, background: activeSection === key ? '#0f766e' : '#e2e8f0', color: activeSection === key ? '#fff' : '#0f172a',
+          }}>
+            {label}
+          </button>
+        ))}
+      </div>
+      {activeSection === "payment" && (
       <div style={{ ...card, marginBottom: 16, overflow: "hidden" }}>
         <h3 style={{ margin: "0 0 14px", color: "#0f172a" }}>Transport Payment Vouchers</h3>
         <div style={{ overflowX: "auto", maxHeight: "45vh" }}>
@@ -727,6 +770,8 @@ Rows: ${rows.length}`;
         </div>
       </div>
 
+      )}
+      {activeSection === "bilti" && (
       <div style={{ ...card, overflow: "hidden" }}>
         <div style={{ overflowX: "auto", maxHeight: "72vh" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
@@ -859,7 +904,69 @@ Payable: ${num(row.payable_amount)}`;
             </tbody>
           </table>
         </div>
-      </div>
-    </div>
-  );
-}
+      </div>      )}
+      {activeSection === "ledger" && (
+        <div style={{ ...card, overflow: "hidden" }}>
+          <h3 style={{ margin: "0 0 14px", color: "#0f172a" }}>Transporter Ledger</h3>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+              <thead>
+                <tr>
+                  {['Transporter', 'Bilti', 'Gross Freight', 'Net Amount', 'Advance', 'TDS', 'Payable', 'Paid', 'Balance', 'Action'].map((heading) => (
+                    <th key={heading} style={th}>{heading}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {transporterLedgerRows.length ? transporterLedgerRows.map((item) => {
+                  const open = selectedLedgerTransporter === item.name;
+                  return (
+                    <React.Fragment key={item.name}>
+                      <tr>
+                        <td style={{ ...td, fontWeight: 700 }}>{item.name}</td>
+                        <td style={td}>{item.bills}</td>
+                        <td style={td}>{num(item.gross)}</td>
+                        <td style={td}>{num(item.net)}</td>
+                        <td style={td}>{num(item.advance)}</td>
+                        <td style={td}>{num(item.tds)}</td>
+                        <td style={td}>{num(item.payable)}</td>
+                        <td style={td}>{num(item.paid)}</td>
+                        <td style={{ ...td, fontWeight: 700 }}>{num(item.balance)}</td>
+                        <td style={td}>
+                          <button type="button" onClick={() => setSelectedLedgerTransporter(open ? "" : item.name)} style={{ ...button, background: open ? "#64748b" : "#7c3aed", padding: "7px 11px" }}>
+                            {open ? 'Hide Details' : 'Details'}
+                          </button>
+                        </td>
+                      </tr>
+                      {open && (
+                        <tr>
+                          <td colSpan={10} style={{ padding: 0, background: '#f8fafc' }}>
+                            <div style={{ padding: 12, overflowX: 'auto' }}>
+                              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                                <thead><tr>{['Date','Bilti','Lorry','Destination','Gross','Payable','Paid','Balance'].map((h) => <th key={h} style={{ ...th, background: '#475569' }}>{h}</th>)}</tr></thead>
+                                <tbody>{item.rows.map((row) => (
+                                  <tr key={row.id || row.bilti_no}>
+                                    <td style={td}>{dateValue(row.dispatch_date)}</td>
+                                    <td style={td}>{row.bilti_no || '-'}</td>
+                                    <td style={td}>{row.lorry_no || row.outward_lorry_no || row.sale_lorry_no || '-'}</td>
+                                    <td style={td}>{row.destination || '-'}</td>
+                                    <td style={td}>{num(row.gross_freight)}</td>
+                                    <td style={td}>{num(row.payable_amount)}</td>
+                                    <td style={td}>{num(getPayAmount(row))}</td>
+                                    <td style={td}>{num(getBalanceAmount(row))}</td>
+                                  </tr>
+                                ))}</tbody>
+                              </table>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
+                  );
+                }) : <tr><td style={{ ...td, textAlign: 'center', color: '#64748b' }} colSpan={10}>No transporter ledger found.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
