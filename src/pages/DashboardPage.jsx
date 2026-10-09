@@ -150,6 +150,10 @@ export default function DashboardPage() {
       // Month End Report so dashboard totals cannot diverge from the reports.
       // These refresh in parallel after the initial dashboard content is visible.
       const currentMonth = new Date().toISOString().slice(0, 7);
+      // Start Stock Journal first: it is a lightweight response but was being
+      // queued behind other report requests in the browser. Keep it in the same
+      // Promise.allSettled result position so all report calculations below are unchanged.
+      const stockJournalPromise = API.get(`${API_BASE}/outward/stock-journal`);
       const reportResults = await Promise.allSettled([
         API.get(`${API_BASE}/reports/party-stock`),
         API.get(`${API_BASE}/reports/warehouse-stock`),
@@ -157,7 +161,7 @@ export default function DashboardPage() {
         API.get(`${API_BASE}/reports/warehouse-rent-month-end`, {
           params: { month: currentMonth },
         }),
-        API.get(`${API_BASE}/outward/stock-journal`),
+        stockJournalPromise,
       ]);
 
       if (!isActive()) {
