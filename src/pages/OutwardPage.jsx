@@ -83,58 +83,6 @@ const accountBelongsToCompany = (account, companyId, company) => {
   return sameText(account?.company_name, company?.name);
 };
 
-const mobileCard = {
-  border: "1px solid #bbf7d0",
-  borderRadius: 14,
-  background: "#ecfdf5",
-  padding: 12,
-  boxShadow: "0 8px 18px rgba(34, 197, 94, 0.08)",
-};
-
-const mobileCardTitle = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "flex-start",
-  gap: 12,
-  marginBottom: 10,
-};
-
-const mobileCardBadge = {
-  display: "inline-flex",
-  alignItems: "center",
-  borderRadius: 999,
-  padding: "4px 10px",
-  fontSize: 12,
-  fontWeight: 700,
-  color: "#1f3d05",
-  background: "#d9f99d",
-  whiteSpace: "nowrap",
-};
-
-const mobileRow = {
-  display: "flex",
-  justifyContent: "space-between",
-  gap: 12,
-  padding: "6px 0",
-  borderTop: "1px solid #d9f99d",
-};
-
-const mobileLabel = {
-  color: "#1f3d05",
-  fontSize: 13,
-  fontWeight: 800,
-  flex: "0 0 42%",
-};
-
-const mobileValue = {
-  color: "#14532d",
-  fontSize: 14,
-  fontWeight: 600,
-  textAlign: "right",
-  wordBreak: "break-word",
-  flex: "1 1 auto",
-};
-
 const normalizeIdList = (input) => {
   if (!Array.isArray(input)) return [];
   return input.map((item) => getRecordId(item)).filter(Boolean);
@@ -765,28 +713,31 @@ export default function OutwardPage() {
   };
 
   const fetchOutwards = async () => {
-    try {
-      const res = await axios.get(`${API_BASE}/outward`);
-      const outwardRows = Array.isArray(res.data)
-        ? res.data.map((row) => ({
-            ...row,
-            // Party Stock Report uses company_name as party_name.
-            // Keep dashboard Outward Entries aligned to the same Party value.
-            party_name: row.company_name || row.party_name || row.company_account_name || row.account_name || "",
-          }))
-        : [];
-      setOutwards(outwardRows);
-      // refresh settlement summary as well
-      try {
-        const sres = await axios.get(`${API_BASE}/outward-settlement/report/list`);
-        setSettlementRows(Array.isArray(sres.data) ? sres.data : []);
-      } catch (e) {
-        setSettlementRows([]);
-      }
-    } catch (err) {
-      console.error(err);
+    const [outwardResult, settlementResult] = await Promise.allSettled([
+      axios.get(`${API_BASE}/outward`),
+      axios.get(`${API_BASE}/outward-settlement/report/list`),
+    ]);
+
+    if (outwardResult.status === "rejected") {
+      console.error(outwardResult.reason);
       toast.error("Error fetching outwards", { theme: "colored" });
+      return;
     }
+
+    const outwardRows = Array.isArray(outwardResult.value.data)
+      ? outwardResult.value.data.map((row) => ({
+          ...row,
+          // Party Stock Report uses company_name as party_name.
+          // Keep dashboard Outward Entries aligned to the same Party value.
+          party_name: row.company_name || row.party_name || row.company_account_name || row.account_name || "",
+        }))
+      : [];
+    setOutwards(outwardRows);
+    setSettlementRows(
+      settlementResult.status === "fulfilled" && Array.isArray(settlementResult.value.data)
+        ? settlementResult.value.data
+        : []
+    );
   };
 
   const refreshMasters = async () => {
@@ -2230,7 +2181,7 @@ Consignee: ${row.consignee_name}`;
             <div style={{ color: "#64748b", fontSize: "13px" }}>Use row actions to edit, copy, adjust, or settle records quickly.</div>
           </div>
         </div>
-        <div style={{ overflowX: "auto", overflowY: "auto", maxHeight: "78vh" }} className="ledger-desktop-table">
+        <div style={{ overflowX: "auto", overflowY: "auto", maxHeight: "78vh" }} className="ledger-desktop-table outward-ledger-table">
           <table
             style={{
               width: "100%",
@@ -2530,216 +2481,6 @@ Consignee: ${row.consignee_name}`;
               </tbody>
             </table>
           </div>
-
-        <div className="ledger-mobile-view" style={{ marginTop: 12, display: "grid", gap: 12 }}>
-          {filteredOutwards.length > 0 ? (
-            filteredOutwards.map((row, idx) => {
-              const isSelected = selectedUnloadingOutward && String(selectedUnloadingOutward.id) === String(row.id);
-              return (
-                <React.Fragment key={row.id}>
-                  <div key={row.id} style={{ ...mobileCard, cursor: "pointer" }} onClick={() => openUnloadingDetails(row)}>
-                    <div style={mobileCardTitle}>
-                      <div>
-                        <div style={{ fontSize: 16, fontWeight: 800, color: "#1f3d05" }}>
-                          {row.sl_no != null ? row.sl_no : row.id} � {row.inv_no || "-"}
-                        </div>
-                        <div style={{ fontSize: 13, color: "#365314", marginTop: 2 }}>
-                          {formatDate(row.date)} � {row.self_loading || "No"}
-                        </div>
-                      </div>
-                      <span style={mobileCardBadge}>{row.lorry_no || "No Lorry"}</span>
-                    </div>
-
-                    <div style={{ ...mobileRow, alignItems: "center" }}>
-                      <span style={mobileLabel}>Actions</span>
-                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "flex-end" }}>
-                        {canEdit ? (
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              handleEdit(row);
-                            }}
-                            style={{ background: "#3b82f6", color: "#fff", border: "none", padding: "8px 12px", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 700 }}
-                          >
-                            Edit
-                          </button>
-                        ) : null}
-                        {canDelete ? (
-                          <button
-                            type="button"
-                            onClick={() => handleDelete(row.id)}
-                            style={{ background: "#ef4444", color: "#fff", border: "none", padding: "8px 12px", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 700 }}
-                          >
-                            Delete
-                          </button>
-                        ) : null}
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleCopy(row);
-                          }}
-                          style={{ background: "#64748b", color: "#fff", border: "none", padding: "8px 12px", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 700 }}
-                        >
-                          Copy
-                        </button>
-                        {canAdjust ? (
-                          <button
-                            type="button"
-                            onClick={() => openAdjustmentModal(row)}
-                            style={{ background: "#f59e0b", color: "#fff", border: "none", padding: "8px 12px", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 700 }}
-                          >
-                            Adjust
-                          </button>
-                        ) : null}
-                        {canEdit ? (
-                          <button
-                            type="button"
-                            onClick={() => openSettlementModal(row)}
-                            style={{ background: "#22c55e", color: "#fff", border: "none", padding: "8px 12px", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 700 }}
-                          >
-                            Settle
-                          </button>
-                        ) : null}
-                      </div>
-                    </div>
-                  </div>
-                  {isSelected ? (
-                    <div style={{ ...cardStyle, marginTop: 10, padding: "16px 18px", background: "#fff" }}>
-                      <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 12, alignItems: "flex-start" }}>
-                        <div>
-                          <div style={{ fontSize: 16, fontWeight: 800, color: "#0f172a" }}>
-                            Selected Outward: {selectedUnloadingOutward.sl_no != null ? selectedUnloadingOutward.sl_no : selectedUnloadingOutward.id} {selectedUnloadingOutward.inv_no ? `(${selectedUnloadingOutward.inv_no})` : ""}
-                          </div>
-                          <div style={{ fontSize: 13, color: "#475569", marginTop: 6 }}>
-                            {formatDate(selectedUnloadingOutward.date)} • {selectedUnloadingOutward.warehouse_name || selectedUnloadingOutward.location_name || "—"}
-                          </div>
-                          <div style={{ fontSize: 13, color: "#475569", marginTop: 4 }}>
-                            Lorry No: {selectedUnloadingOutward.lorry_no || "—"}
-                          </div>
-                          <div style={{ fontSize: 13, color: "#475569", marginTop: 4 }}>
-                            Unloading Weight: {formatWeight(selectedUnloadingOutward.weight || selectedUnloadingOutward.qty || selectedUnloadingOutward.unloading_qty || 0)} kg
-                          </div>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => setSelectedUnloadingOutward(null)}
-                          style={{ ...btnPrimary, background: "#ef4444", minWidth: 120 }}
-                        >
-                          Close details
-                        </button>
-                      </div>
-                      <div style={{ marginTop: 20 }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
-                          <div style={{ fontSize: 15, fontWeight: 800, color: "#14532d" }}>Unloading / Buyer Details</div>
-                          {selectedUnloadingLoading ? (
-                            <div style={{ color: "#0ea5a4", fontWeight: 700 }}>Loading details...</div>
-                          ) : null}
-                        </div>
-                        {selectedUnloadingError ? (
-                          <div style={{ color: "#dc2626", padding: 12, background: "#fef2f2", borderRadius: 10 }}>{selectedUnloadingError}</div>
-                        ) : selectedUnloadingDetails.length === 0 && !selectedUnloadingLoading ? (
-                          <div style={{ color: "#475569", padding: 14, borderRadius: 10, background: "#f8fafc" }}>
-                            No unloading details found for this entry.
-                          </div>
-                        ) : (
-                          <>
-                            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12, marginBottom: 16 }}>
-                              <div style={{ background: "#ffffff", border: "1px solid #d1fae5", borderRadius: 12, padding: 14 }}>
-                                <div style={{ fontSize: 13, fontWeight: 700, color: "#0f766e", marginBottom: 10 }}>Godowan / Palti weight</div>
-                                <div style={{ fontSize: 14, fontWeight: 700, color: "#14532d" }}>{selectedUnloadingTotals.totalGodawanPaltiWeight.toFixed(2)} kg</div>
-                                <div style={{ fontSize: 12, color: "#475569", marginTop: 6 }}>Total Godowan and Palti unloading weight</div>
-                              </div>
-                              <div style={{ background: "#ffffff", border: "1px solid #d1fae5", borderRadius: 12, padding: 14 }}>
-                                <div style={{ fontSize: 13, fontWeight: 700, color: "#0f766e", marginBottom: 10 }}>Consignee / Rate summary</div>
-                                <div style={{ fontSize: 14, fontWeight: 700, color: "#14532d" }}>{selectedUnloadingTotals.consigneeWeight.toFixed(2)} kg</div>
-                                <div style={{ fontSize: 12, color: "#475569", marginTop: 6 }}>Total weight from consignee/rate lines</div>
-                                <div style={{ marginTop: 12, fontSize: 14, fontWeight: 700, color: "#14532d" }}>{selectedUnloadingTotals.avgRate.toFixed(2)}</div>
-                                <div style={{ fontSize: 12, color: "#475569", marginTop: 6 }}>Average rate by consignee rate line weight</div>
-                                <div style={{ marginTop: 14, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
-                                  <div>
-                                    <div style={{ fontSize: 12, color: "#475569" }}>Claim total</div>
-                                    <div style={{ fontSize: 14, fontWeight: 700, color: "#14532d" }}>{selectedUnloadingTotals.totalClaim.toFixed(2)}</div>
-                                  </div>
-                                  <div>
-                                    <div style={{ fontSize: 12, color: "#475569" }}>Deduction total</div>
-                                    <div style={{ fontSize: 14, fontWeight: 700, color: "#14532d" }}>{selectedUnloadingTotals.totalOtherDeduction.toFixed(2)}</div>
-                                  </div>
-                                  <div>
-                                    <div style={{ fontSize: 12, color: "#475569" }}>Shortage total</div>
-                                    <div style={{ fontSize: 14, fontWeight: 700, color: "#14532d" }}>{selectedUnloadingTotals.totalShortage.toFixed(2)}</div>
-                                  </div>
-                                  <div>
-                                    <div style={{ fontSize: 12, color: "#475569" }}>Shortage amount</div>
-                                    <div style={{ fontSize: 14, fontWeight: 700, color: "#14532d" }}>{selectedUnloadingTotals.totalShortageAmount.toFixed(2)}</div>
-                                  </div>
-                                </div>
-                              </div>
-                            </div>
-                            <div style={{ overflowX: "auto" }}>
-                              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                                <thead>
-                                  <tr>
-                                    <th style={{ ...thStyle, background: "#0f766e" }}>#</th>
-                                    <th style={thStyle}>Buyer</th>
-                                    <th style={thStyle}>Consignee</th>
-                                    <th style={thStyle}>Unloading Qty</th>
-                                    <th style={thStyle}>Rate</th>
-                                    <th style={thStyle}>Claim</th>
-                                    <th style={thStyle}>Deduction</th>
-                                    <th style={thStyle}>Shortage</th>
-                                    <th style={thStyle}>Shortage Amount</th>
-                                    <th style={thStyle}>Status</th>
-                                  </tr>
-                                </thead>
-                                <tbody>
-                                  {selectedUnloadingDetails.map((detail, index) => (
-                                    <tr 
-                                      key={`${detail.id || detail.outward_id}-${index}`}
-                                      onClick={() => handleEditUnloadingDetail(detail)}
-                                      style={{ cursor: "pointer" }}
-                                    >
-                                      <td style={tdStyle}>{index + 1}</td>
-                                      <td style={tdStyle}>{detail.buyer_name || "—"}</td>
-                                      <td style={tdStyle}>{detail.consignee_name || "—"}</td>
-                                      <td style={tdStyle}>{Number(detail.qty || detail.weight || 0).toFixed(2)}</td>
-                                      <td style={tdStyle}>{Number(detail.rate || 0).toFixed(2)}</td>
-                                      <td style={tdStyle}>{Number(detail.claim || 0).toFixed(2)}</td>
-                                      <td style={tdStyle}>{Number(detail.other_deduction || 0).toFixed(2)}</td>
-                                      <td style={tdStyle}>{Number(detail.shortage || 0).toFixed(2)}</td>
-                                      <td style={tdStyle}>{Number(detail.shortage_amount || 0).toFixed(2)}</td>
-                                      <td style={tdStyle}>{detail.status || "Pending"}</td>
-                                    </tr>
-                                  ))}
-                                  <tr style={{ background: "#f0fdf4" }}>
-                                    <td style={{ ...tdStyle, fontWeight: 700 }} colSpan={3}>Totals</td>
-                                    <td style={{ ...tdStyle, fontWeight: 700 }}>{selectedUnloadingTotals.totalQty.toFixed(2)}</td>
-                                    <td style={{ ...tdStyle, fontWeight: 700 }}>{selectedUnloadingTotals.avgRate.toFixed(2)}</td>
-                                    <td style={{ ...tdStyle, fontWeight: 700 }}>{selectedUnloadingTotals.totalClaim.toFixed(2)}</td>
-                                    <td style={{ ...tdStyle, fontWeight: 700 }}>{selectedUnloadingTotals.totalOtherDeduction.toFixed(2)}</td>
-                                    <td style={{ ...tdStyle, fontWeight: 700 }}>{selectedUnloadingTotals.totalShortage.toFixed(2)}</td>
-                                    <td style={{ ...tdStyle, fontWeight: 700 }}>{selectedUnloadingTotals.totalShortageAmount.toFixed(2)}</td>
-                                    <td style={tdStyle}></td>
-                                  </tr>
-                                </tbody>
-                              </table>
-                            </div>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  ) : null}
-                </React.Fragment>
-              );
-            })
-          ) : (
-            <div style={mobileCard}>
-              <div style={{ color: "#365314", textAlign: "center", fontWeight: 600 }}>No outward records found</div>
-            </div>
-          )}
-        </div>
-
 
       {filterView !== "all" && (
         <div style={{ ...cardStyle, padding: 12, margin: "10px 16px 16px 16px", background: "#fff" }}>
@@ -3095,9 +2836,6 @@ Consignee: ${row.consignee_name}`;
   </div>
   );
 }
-
-
-
 
 
 
