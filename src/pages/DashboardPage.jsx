@@ -77,6 +77,7 @@ export default function DashboardPage() {
   const [warehouseStock, setWarehouseStock] = useState([]);
   const [totalStock, setTotalStock] = useState(0);
   const [monthEndRentSummary, setMonthEndRentSummary] = useState([]);
+  const [summaryLoading, setSummaryLoading] = useState(true);
 
   const [showLocationPopup, setShowLocationPopup] = useState(false);
   const [showEmployeePopup, setShowEmployeePopup] = useState(false);
@@ -106,19 +107,21 @@ export default function DashboardPage() {
 
   const API_BASE = "/api";
   const fetchData = async (currentUser, isActive) => {
+    setSummaryLoading(true);
     try {
-      const payload = await API.get(`${API_BASE}/dashboard`);
+      // Load master/recent-entry lists first; stock/rent totals still come from
+      // the same report endpoints below, so their calculation logic is unchanged.
+      const payload = await API.get(`${API_BASE}/dashboard?fast=1`);
 
       if (!isActive()) {
         return;
       }
 
       const data = payload?.data || {};
+      let fallbackData = data;
 
-      // Render the dashboard payload immediately. These are the same fallback
-      // values already used below if a live report request fails. The live
-      // report requests still run and replace these values with the same
-      // report-derived calculations used before this performance change.
+      // Render master/recent-entry lists immediately. Stock/rent summaries are
+      // marked as loading until the existing report APIs return their values.
       const normalizedLocations = Array.isArray(data.locations) ? data.locations : [];
       const normalizedEmployees = Array.isArray(data.employees) ? data.employees : [];
       const normalizedCompanies = Array.isArray(data.companies) ? data.companies : [];
@@ -136,10 +139,12 @@ export default function DashboardPage() {
       setProducts(normalizedProducts);
       setInwards(normalizedInwards);
       setOutwards(normalizedOutwards);
-      setPartyStock(Array.isArray(data.partyStock) ? data.partyStock : []);
-      setWarehouseStock(Array.isArray(data.warehouseStock) ? data.warehouseStock : []);
-      setTotalStock(Number(data.totalStock ?? 0));
-      setMonthEndRentSummary(Array.isArray(data.monthEndRentSummary) ? data.monthEndRentSummary : []);
+      if (!data.meta?.partial) {
+        setPartyStock(Array.isArray(data.partyStock) ? data.partyStock : []);
+        setWarehouseStock(Array.isArray(data.warehouseStock) ? data.warehouseStock : []);
+        setTotalStock(Number(data.totalStock ?? 0));
+        setMonthEndRentSummary(Array.isArray(data.monthEndRentSummary) ? data.monthEndRentSummary : []);
+      }
 
       // Use the same live report endpoints as Stock Report and Warehouse Rent
       // Month End Report so dashboard totals cannot diverge from the reports.
@@ -154,6 +159,21 @@ export default function DashboardPage() {
         }),
         API.get(`${API_BASE}/outward/stock-journal`),
       ]);
+
+      if (!isActive()) {
+        return;
+      }
+
+      // If a report request fails, obtain the old full response only as fallback.
+      // Successful normal loads no longer repeat stock/rent calculations here.
+      if (data.meta?.partial && reportResults.some((result) => result.status === "rejected")) {
+        try {
+          const fallbackPayload = await API.get(`${API_BASE}/dashboard`);
+          fallbackData = fallbackPayload?.data || data;
+        } catch (fallbackError) {
+          console.error("Failed to load dashboard summary fallback:", fallbackError);
+        }
+      }
 
       if (!isActive()) {
         return;
@@ -178,8 +198,8 @@ export default function DashboardPage() {
 
       let normalizedPartyStock = Array.isArray(partyStockReport.summary)
         ? partyStockReport.summary
-        : Array.isArray(data.partyStock)
-          ? data.partyStock
+        : Array.isArray(fallbackData.partyStock)
+          ? fallbackData.partyStock
           : [];
       let partyStockDetails = Array.isArray(partyStockReport.details)
         ? partyStockReport.details
@@ -331,17 +351,17 @@ export default function DashboardPage() {
         ? reportWarehouseStockFromPartyStock
         : Array.isArray(warehouseStockReport)
           ? warehouseStockReport
-          : Array.isArray(data.warehouseStock)
-            ? data.warehouseStock
+          : Array.isArray(fallbackData.warehouseStock)
+            ? fallbackData.warehouseStock
             : [];
       // Dashboard rent must use the exact same month-end report calculation.
       const normalizedMonthEndRentSummary = Array.isArray(rentReport.summary)
         ? rentReport.summary
-        : Array.isArray(data.monthEndRentSummary)
-          ? data.monthEndRentSummary
+        : Array.isArray(fallbackData.monthEndRentSummary)
+          ? fallbackData.monthEndRentSummary
           : [];
       const normalizedTotalStock = Number(
-        totalStockReport.total ?? data.totalStock ?? 0
+        totalStockReport.total ?? fallbackData.totalStock ?? 0
       );
 
       setLocations(normalizedLocations);
@@ -356,8 +376,10 @@ export default function DashboardPage() {
       setWarehouseStock(normalizedWarehouseStock);
       setTotalStock(normalizedTotalStock);
       setMonthEndRentSummary(normalizedMonthEndRentSummary);
+      setSummaryLoading(false);
     } catch (err) {
       console.error("Failed to fetch dashboard data:", err);
+      setSummaryLoading(false);
     }
   };
 
@@ -1355,11 +1377,11 @@ export default function DashboardPage() {
             <div className="hero-stat hero-stat-grid">
               <div className="hero-stat-item">
                 <span>Total Stock</span>
-                <strong>{Number(totalWarehouseStock).toFixed(2)}</strong>
+                <strong>{summaryLoading ? "Loading…" : Number(totalWarehouseStock).toFixed(2)}</strong>
               </div>
               <div className="hero-stat-item">
                 <span>Total Rent</span>
-                <strong>₹{Number(totalRentCollected || 0).toFixed(2)}</strong>
+                <strong>{summaryLoading ? "Loading…" : `₹${Number(totalRentCollected || 0).toFixed(2)}`}</strong>
               </div>
               <div className="hero-stat-item">
                 <span>Warehouse</span>
@@ -1505,11 +1527,11 @@ export default function DashboardPage() {
               <div className="report-highlight-row" style={{ marginBottom: "14px" }}>
                 <div className="report-highlight-card">
                   <span>Total Available Stock</span>
-                  <strong>{Number(totalWarehouseStock).toFixed(2)}</strong>
+                  <strong>{summaryLoading ? "Loading…" : Number(totalWarehouseStock).toFixed(2)}</strong>
                 </div>
                 <div className="report-highlight-card">
                   <span>Total Current Rent</span>
-                  <strong>{Number(totalRentCollected).toFixed(2)}</strong>
+                  <strong>{summaryLoading ? "Loading…" : Number(totalRentCollected).toFixed(2)}</strong>
                 </div>
               </div>
 
@@ -1567,7 +1589,7 @@ export default function DashboardPage() {
                       </div>
                       <div className="report-metric-stat">
                         <span>Total Stock</span>
-                        <strong>{Number(totalWarehouseStock).toFixed(2)}</strong>
+                        <strong>{summaryLoading ? "Loading…" : Number(totalWarehouseStock).toFixed(2)}</strong>
                       </div>
                     </div>
                   </div>
@@ -1588,7 +1610,7 @@ export default function DashboardPage() {
                             <td className="table-value-cell">{Number(row.stock || 0).toFixed(2)}</td>
                           </tr>
                         )) : (
-                          <tr><td colSpan="3">No warehouse stock data available</td></tr>
+                          <tr><td colSpan="3">{summaryLoading ? "Loading stock data…" : "No warehouse stock data available"}</td></tr>
                         )}
                       </tbody>
                     </table>
@@ -1608,7 +1630,7 @@ export default function DashboardPage() {
                       </div>
                       <div className="report-metric-stat">
                         <span>Stock</span>
-                        <strong>{Number(totalPartyStock).toFixed(2)}</strong>
+                        <strong>{summaryLoading ? "Loading…" : Number(totalPartyStock).toFixed(2)}</strong>
                       </div>
                     </div>
                   </div>
@@ -1629,7 +1651,7 @@ export default function DashboardPage() {
                             <td className="table-value-cell">{Number(row.available_balance_qty || 0).toFixed(2)}</td>
                           </tr>
                         )) : (
-                          <tr><td colSpan="3">No party stock data available</td></tr>
+                          <tr><td colSpan="3">{summaryLoading ? "Loading stock data…" : "No party stock data available"}</td></tr>
                         )}
                       </tbody>
                     </table>
