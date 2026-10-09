@@ -190,26 +190,6 @@ export default function DashboardPage() {
         reportResults[1]?.status === "fulfilled"
           ? reportResults[1].value?.data || {}
           : {};
-      let compatibilityWarehouseStock = null;
-      let compatibilityTotalStock = null;
-      if (
-        reportResults[0]?.status === "fulfilled" &&
-        (!Array.isArray(partyStockReport.dashboardSummaries?.warehouseStock) ||
-          partyStockReport.dashboardSummaries?.totalStock === undefined)
-      ) {
-        const compatibilityResults = await Promise.allSettled([
-          API.get(`${API_BASE}/reports/warehouse-stock`),
-          API.get(`${API_BASE}/reports/total-stock`),
-        ]);
-        compatibilityWarehouseStock =
-          compatibilityResults[0]?.status === "fulfilled"
-            ? compatibilityResults[0].value?.data || []
-            : null;
-        compatibilityTotalStock =
-          compatibilityResults[1]?.status === "fulfilled"
-            ? compatibilityResults[1].value?.data || {}
-            : null;
-      }
       if (!isActive()) {
         return;
       }
@@ -369,11 +349,9 @@ export default function DashboardPage() {
         ? reportWarehouseStockFromPartyStock
         : Array.isArray(partyStockReport.dashboardSummaries?.warehouseStock)
           ? partyStockReport.dashboardSummaries.warehouseStock
-          : Array.isArray(compatibilityWarehouseStock)
-            ? compatibilityWarehouseStock
-            : Array.isArray(fallbackData.warehouseStock)
-              ? fallbackData.warehouseStock
-              : [];
+          : Array.isArray(fallbackData.warehouseStock)
+            ? fallbackData.warehouseStock
+            : [];
       // Dashboard rent must use the exact same month-end report calculation.
       const normalizedMonthEndRentSummary = Array.isArray(rentReport.summary)
         ? rentReport.summary
@@ -382,7 +360,6 @@ export default function DashboardPage() {
           : [];
       const normalizedTotalStock = Number(
         partyStockReport.dashboardSummaries?.totalStock ??
-          compatibilityTotalStock?.total ??
           fallbackData.totalStock ??
           0
       );
