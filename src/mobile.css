@@ -258,6 +258,10 @@ button {
     display: none !important;
   }
 
+  .outward-ledger-table {
+    display: block !important;
+  }
+
   .ledger-mobile-view {
     display: block !important;
     width: 100% !important;
