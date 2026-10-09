@@ -150,14 +150,13 @@ export default function DashboardPage() {
       // Month End Report so dashboard totals cannot diverge from the reports.
       // These refresh in parallel after the initial dashboard content is visible.
       const currentMonth = new Date().toISOString().slice(0, 7);
-      // Start Stock Journal first: it is a lightweight response but was being
-      // queued behind other report requests in the browser. Keep it in the same
-      // Promise.allSettled result position so all report calculations below are unchanged.
+      // Load the stock journal in parallel so its movements can be applied to
+      // the party stock details returned by the dashboard report request.
       const stockJournalPromise = API.get(`${API_BASE}/outward/stock-journal`);
       const reportResults = await Promise.allSettled([
-        API.get(`${API_BASE}/reports/party-stock`),
-        API.get(`${API_BASE}/reports/warehouse-stock`),
-        API.get(`${API_BASE}/reports/total-stock`),
+        API.get(`${API_BASE}/reports/party-stock`, {
+          params: { dashboard_summaries: 1 },
+        }),
         API.get(`${API_BASE}/reports/warehouse-rent-month-end`, {
           params: { month: currentMonth, summary_only: 1 },
         }),
@@ -187,18 +186,33 @@ export default function DashboardPage() {
         reportResults[0]?.status === "fulfilled"
           ? reportResults[0].value?.data || {}
           : {};
-      const warehouseStockReport =
-        reportResults[1]?.status === "fulfilled"
-          ? reportResults[1].value?.data || []
-          : [];
-      const totalStockReport =
-        reportResults[2]?.status === "fulfilled"
-          ? reportResults[2].value?.data || {}
-          : {};
       const rentReport =
-        reportResults[3]?.status === "fulfilled"
-          ? reportResults[3].value?.data || {}
+        reportResults[1]?.status === "fulfilled"
+          ? reportResults[1].value?.data || {}
           : {};
+      let compatibilityWarehouseStock = null;
+      let compatibilityTotalStock = null;
+      if (
+        reportResults[0]?.status === "fulfilled" &&
+        (!Array.isArray(partyStockReport.dashboardSummaries?.warehouseStock) ||
+          partyStockReport.dashboardSummaries?.totalStock === undefined)
+      ) {
+        const compatibilityResults = await Promise.allSettled([
+          API.get(`${API_BASE}/reports/warehouse-stock`),
+          API.get(`${API_BASE}/reports/total-stock`),
+        ]);
+        compatibilityWarehouseStock =
+          compatibilityResults[0]?.status === "fulfilled"
+            ? compatibilityResults[0].value?.data || []
+            : null;
+        compatibilityTotalStock =
+          compatibilityResults[1]?.status === "fulfilled"
+            ? compatibilityResults[1].value?.data || {}
+            : null;
+      }
+      if (!isActive()) {
+        return;
+      }
 
       let normalizedPartyStock = Array.isArray(partyStockReport.summary)
         ? partyStockReport.summary
@@ -213,11 +227,11 @@ export default function DashboardPage() {
       // Party Stock Report applies Journal Entry stock movements after the
       // /reports/party-stock response, so apply the same movements here.
       const partyStockJournalRows =
-        reportResults[4]?.status === "fulfilled" &&
-        Array.isArray(reportResults[4].value?.data?.rows)
-          ? reportResults[4].value.data.rows
+        reportResults[2]?.status === "fulfilled" &&
+        Array.isArray(reportResults[2].value?.data?.rows)
+          ? reportResults[2].value.data.rows
           : [];
-      if (reportResults[4]?.status === "fulfilled" && partyStockDetails.length > 0) {
+      if (reportResults[2]?.status === "fulfilled" && partyStockDetails.length > 0) {
         const journalBySource = new Map();
         const addSourceMovement = (key, row) => {
           if (!key) return;
@@ -353,11 +367,13 @@ export default function DashboardPage() {
       const reportWarehouseStockFromPartyStock = Array.from(dashboardWarehouseStockMap.values());
       const normalizedWarehouseStock = reportWarehouseStockFromPartyStock.length > 0
         ? reportWarehouseStockFromPartyStock
-        : Array.isArray(warehouseStockReport)
-          ? warehouseStockReport
-          : Array.isArray(fallbackData.warehouseStock)
-            ? fallbackData.warehouseStock
-            : [];
+        : Array.isArray(partyStockReport.dashboardSummaries?.warehouseStock)
+          ? partyStockReport.dashboardSummaries.warehouseStock
+          : Array.isArray(compatibilityWarehouseStock)
+            ? compatibilityWarehouseStock
+            : Array.isArray(fallbackData.warehouseStock)
+              ? fallbackData.warehouseStock
+              : [];
       // Dashboard rent must use the exact same month-end report calculation.
       const normalizedMonthEndRentSummary = Array.isArray(rentReport.summary)
         ? rentReport.summary
@@ -365,7 +381,10 @@ export default function DashboardPage() {
           ? fallbackData.monthEndRentSummary
           : [];
       const normalizedTotalStock = Number(
-        totalStockReport.total ?? fallbackData.totalStock ?? 0
+        partyStockReport.dashboardSummaries?.totalStock ??
+          compatibilityTotalStock?.total ??
+          fallbackData.totalStock ??
+          0
       );
 
       setLocations(normalizedLocations);
