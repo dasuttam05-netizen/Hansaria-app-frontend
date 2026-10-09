@@ -159,7 +159,7 @@ export default function DashboardPage() {
         API.get(`${API_BASE}/reports/warehouse-stock`),
         API.get(`${API_BASE}/reports/total-stock`),
         API.get(`${API_BASE}/reports/warehouse-rent-month-end`, {
-          params: { month: currentMonth },
+          params: { month: currentMonth, summary_only: 1 },
         }),
         stockJournalPromise,
       ]);
