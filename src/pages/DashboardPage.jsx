@@ -115,8 +115,35 @@ export default function DashboardPage() {
 
       const data = payload?.data || {};
 
+      // Render the dashboard payload immediately. These are the same fallback
+      // values already used below if a live report request fails. The live
+      // report requests still run and replace these values with the same
+      // report-derived calculations used before this performance change.
+      const normalizedLocations = Array.isArray(data.locations) ? data.locations : [];
+      const normalizedEmployees = Array.isArray(data.employees) ? data.employees : [];
+      const normalizedCompanies = Array.isArray(data.companies) ? data.companies : [];
+      const normalizedCompanyAccounts = Array.isArray(data.companyAccounts) ? data.companyAccounts : [];
+      const normalizedWarehouses = Array.isArray(data.warehouses) ? data.warehouses : [];
+      const normalizedProducts = Array.isArray(data.products) ? data.products : [];
+      const normalizedInwards = Array.isArray(data.inwards) ? data.inwards : [];
+      const normalizedOutwards = Array.isArray(data.outwards) ? data.outwards : [];
+
+      setLocations(normalizedLocations);
+      setEmployees(normalizedEmployees);
+      setCompanies(normalizedCompanies);
+      setCompanyAccounts(normalizedCompanyAccounts);
+      setWarehouses(normalizedWarehouses);
+      setProducts(normalizedProducts);
+      setInwards(normalizedInwards);
+      setOutwards(normalizedOutwards);
+      setPartyStock(Array.isArray(data.partyStock) ? data.partyStock : []);
+      setWarehouseStock(Array.isArray(data.warehouseStock) ? data.warehouseStock : []);
+      setTotalStock(Number(data.totalStock ?? 0));
+      setMonthEndRentSummary(Array.isArray(data.monthEndRentSummary) ? data.monthEndRentSummary : []);
+
       // Use the same live report endpoints as Stock Report and Warehouse Rent
       // Month End Report so dashboard totals cannot diverge from the reports.
+      // These refresh in parallel after the initial dashboard content is visible.
       const currentMonth = new Date().toISOString().slice(0, 7);
       const reportResults = await Promise.allSettled([
         API.get(`${API_BASE}/reports/party-stock`),
@@ -149,14 +176,6 @@ export default function DashboardPage() {
           ? reportResults[3].value?.data || {}
           : {};
 
-      const normalizedLocations = Array.isArray(data.locations) ? data.locations : [];
-      const normalizedEmployees = Array.isArray(data.employees) ? data.employees : [];
-      const normalizedCompanies = Array.isArray(data.companies) ? data.companies : [];
-      const normalizedCompanyAccounts = Array.isArray(data.companyAccounts) ? data.companyAccounts : [];
-      const normalizedWarehouses = Array.isArray(data.warehouses) ? data.warehouses : [];
-      const normalizedProducts = Array.isArray(data.products) ? data.products : [];
-      const normalizedInwards = Array.isArray(data.inwards) ? data.inwards : [];
-      const normalizedOutwards = Array.isArray(data.outwards) ? data.outwards : [];
       let normalizedPartyStock = Array.isArray(partyStockReport.summary)
         ? partyStockReport.summary
         : Array.isArray(data.partyStock)
