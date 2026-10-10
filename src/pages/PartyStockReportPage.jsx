@@ -4,6 +4,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import MultiSelectDropdown from "../components/MultiSelectDropdown";
 import ReportSectionToggles from "../components/ReportSectionToggles";
 import { formatDisplayDate } from "../utils/date";
+import { FaBook, FaCalendarAlt, FaFileExport } from "react-icons/fa";
 
 export default function PartyStockReportPage() {
   const API_BASE = "/api";
@@ -600,9 +601,12 @@ export default function PartyStockReportPage() {
           </div>
           <h3 style={{ margin: "4px 0 0", color: "#0f172a", fontSize: 18 }}>Filters</h3>
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))", gap: 14, alignItems: "stretch" }}>
-          <div style={{ ...filterField, gridColumn: "1 / -1" }}>
-            <div style={{ marginBottom: 8 }}>Date Range</div>
+        <div style={{ display: "flex", flexWrap: "wrap", alignItems: "stretch", gap: 14 }}>
+          <div style={{ ...filterField, flex: "1 1 440px" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 7, marginBottom: 8 }}>
+              <FaCalendarAlt aria-hidden="true" />
+              <span>Date Range</span>
+            </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))", gap: 12 }}>
               <label>
                 From Date
@@ -614,7 +618,19 @@ export default function PartyStockReportPage() {
               </label>
             </div>
           </div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "flex-end", gap: 10, flex: "1 1 220px" }}>
+            <button onClick={exportCSV} style={{ ...button, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, background: "#2563eb", minHeight: 42 }}>
+              <FaFileExport aria-hidden="true" />
+              Export CSV
+            </button>
+            <button onClick={exportJournalCSV} style={{ ...button, display: "inline-flex", alignItems: "center", justifyContent: "center", gap: 8, background: "#7c3aed", minHeight: 42 }}>
+              <FaBook aria-hidden="true" />
+              Journal CSV
+            </button>
+          </div>
+        </div>
 
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))", gap: 14, alignItems: "stretch", marginTop: 14 }}>
           <label style={{ ...filterField, display: "block" }}>
             Employee
             <select name="employee_id" value={filters.employee_id} onChange={handleChange} style={filterInput}>
@@ -664,14 +680,6 @@ export default function PartyStockReportPage() {
               ))}
             </select>
           </label>
-        </div>
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, flexWrap: "wrap", marginTop: 16, paddingTop: 14, borderTop: "1px solid #e2e8f0" }}>
-          <button onClick={exportCSV} style={{ ...button, background: "#2563eb" }}>
-            Export CSV
-          </button>
-          <button onClick={exportJournalCSV} style={{ ...button, background: "#7c3aed" }}>
-            Journal CSV
-          </button>
         </div>
         <div style={{ marginTop: 14 }}>
           <ReportSectionToggles
