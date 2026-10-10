@@ -180,11 +180,14 @@ export default function PartyStockReportPage() {
   };
 
   const input = {
-    padding: "10px 12px",
+    width: "100%",
+    boxSizing: "border-box",
+    height: 42,
+    padding: "9px 12px",
     border: "1px solid #cbd5e1",
     borderRadius: 10,
     fontSize: 14,
-    minWidth: 160,
+    minWidth: 0,
     background: "#fff",
     color: "#0f172a",
   };
@@ -571,27 +574,47 @@ export default function PartyStockReportPage() {
         </button>
       </div>
 
-      <div style={{ ...card, marginBottom: 16, borderTop: "4px solid #0f766e" }}>
-        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-          <input type="date" name="from_date" value={filters.from_date} onChange={handleChange} style={input} />
-          <input type="date" name="to_date" value={filters.to_date} onChange={handleChange} style={input} />
+      <div style={{ ...card, marginBottom: 16, borderTop: "4px solid #0f766e", background: "linear-gradient(145deg, #ffffff 0%, #f8fafc 100%)" }}>
+        <div style={{ marginBottom: 16 }}>
+          <div style={{ color: "#0f766e", fontSize: 11, fontWeight: 800, letterSpacing: 1, textTransform: "uppercase" }}>
+            Refine report
+          </div>
+          <h3 style={{ margin: "4px 0 0", color: "#0f172a", fontSize: 18 }}>Filters</h3>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))", gap: 14, alignItems: "end" }}>
+          <label style={{ display: "block", minWidth: 0, color: "#475569", fontSize: 12, fontWeight: 700 }}>
+            From Date
+            <input type="date" name="from_date" value={filters.from_date} onChange={handleChange} style={{ ...input, display: "block", marginTop: 6 }} />
+          </label>
 
-          <select name="employee_id" value={filters.employee_id} onChange={handleChange} style={input}>
-            <option value="">All Employees</option>
-            {employees.map((e) => (
-              <option key={e.id} value={e.id}>{e.name}</option>
-            ))}
-          </select>
+          <label style={{ display: "block", minWidth: 0, color: "#475569", fontSize: 12, fontWeight: 700 }}>
+            To Date
+            <input type="date" name="to_date" value={filters.to_date} onChange={handleChange} style={{ ...input, display: "block", marginTop: 6 }} />
+          </label>
 
-          <select name="company_id" value={filters.company_id} onChange={handleChange} style={input}>
-            <option value="">All Parties</option>
-            {companies.map((c) => (
-              <option key={c.id} value={c.id}>{c.name}</option>
-            ))}
-          </select>
+          <label style={{ display: "block", minWidth: 0, color: "#475569", fontSize: 12, fontWeight: 700 }}>
+            Employee
+            <select name="employee_id" value={filters.employee_id} onChange={handleChange} style={{ ...input, display: "block", marginTop: 6 }}>
+              <option value="">All Employees</option>
+              {employees.map((e) => (
+                <option key={e.id} value={e.id}>{e.name}</option>
+              ))}
+            </select>
+          </label>
+
+          <label style={{ display: "block", minWidth: 0, color: "#475569", fontSize: 12, fontWeight: 700 }}>
+            Party
+            <select name="company_id" value={filters.company_id} onChange={handleChange} style={{ ...input, display: "block", marginTop: 6 }}>
+              <option value="">All Parties</option>
+              {companies.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </label>
 
           <MultiSelectDropdown
             label="Locations"
+            containerStyle={{ minWidth: 0, flex: "none", width: "100%" }}
             options={locations.map((item) => ({ value: String(item.id ?? item._id ?? ""), label: item.name || "" }))}
             value={filters.location_ids}
             onChange={(next) => handleChange({ target: { name: "location_ids", value: next } })}
@@ -600,19 +623,24 @@ export default function PartyStockReportPage() {
 
           <MultiSelectDropdown
             label="Warehouses"
+            containerStyle={{ minWidth: 0, flex: "none", width: "100%" }}
             options={warehouses.map((item) => ({ value: String(item.id ?? item._id ?? ""), label: item.name || "" }))}
             value={filters.warehouse_ids}
             onChange={(next) => handleChange({ target: { name: "warehouse_ids", value: next } })}
             placeholder="All Warehouses"
           />
 
-          <select name="product_id" value={filters.product_id} onChange={handleChange} style={input}>
-            <option value="">All Products</option>
-            {products.map((p) => (
-              <option key={p.id} value={p.id}>{p.name}</option>
-            ))}
-          </select>
-
+          <label style={{ display: "block", minWidth: 0, color: "#475569", fontSize: 12, fontWeight: 700 }}>
+            Product
+            <select name="product_id" value={filters.product_id} onChange={handleChange} style={{ ...input, display: "block", marginTop: 6 }}>
+              <option value="">All Products</option>
+              {products.map((p) => (
+                <option key={p.id} value={p.id}>{p.name}</option>
+              ))}
+            </select>
+          </label>
+        </div>
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, flexWrap: "wrap", marginTop: 16, paddingTop: 14, borderTop: "1px solid #e2e8f0" }}>
           <button onClick={exportCSV} style={{ ...button, background: "#2563eb" }}>
             Export CSV
           </button>
