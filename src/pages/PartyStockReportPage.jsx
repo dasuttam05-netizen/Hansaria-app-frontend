@@ -100,6 +100,52 @@ export default function PartyStockReportPage() {
     [companies, filters.company_id]
   );
 
+  const openInwardEntry = (row) => {
+    const inwardId =
+      row.inward_id ||
+      row.inwardId ||
+      row._id ||
+      row.id;
+    if (!inwardId) return;
+
+    const params = new URLSearchParams(location.search);
+    [
+      "from_date",
+      "to_date",
+      "employee_id",
+      "company_id",
+      "account_id",
+      "product_id",
+      "location_ids",
+      "warehouse_ids",
+      "location_id",
+      "warehouse_id",
+    ].forEach((key) => params.delete(key));
+
+    Object.entries({
+      from_date: filters.from_date,
+      to_date: filters.to_date,
+      employee_id: filters.employee_id,
+      company_id: filters.company_id,
+      account_id: filters.account_id,
+      product_id: filters.product_id,
+      location_ids: normalizeIdList(filters.location_ids).join(","),
+      warehouse_ids: normalizeIdList(filters.warehouse_ids).join(","),
+    }).forEach(([key, value]) => {
+      if (value) params.set(key, value);
+    });
+
+    const query = params.toString();
+    const returnTo = `${location.pathname}${query ? `?${query}` : ""}${location.hash}`;
+
+    navigate("/inward", {
+      state: {
+        partyStockEditInwardId: String(inwardId),
+        partyStockReturnTo: returnTo,
+      },
+    });
+  };
+
   const card = {
     background: "#fff",
     border: "1px solid #dbe4ea",
@@ -685,7 +731,24 @@ export default function PartyStockReportPage() {
                     <td style={td}>{formatDisplayDate(row.date)}</td>
                     <td style={td}>{formatDisplayDate(row.outward_date) || "-"}</td>
                     <td style={td}>{row.days_diff}</td>
-                    <td style={{ ...td, textAlign: "right" }}>{num(row.gross_qty)}</td>
+                    <td style={{ ...td, textAlign: "right" }}>
+                      <button
+                        type="button"
+                        onClick={() => openInwardEntry(row)}
+                        title="Open and edit this inward entry"
+                        style={{
+                          border: "1px solid #bfdbfe",
+                          borderRadius: 7,
+                          padding: "5px 8px",
+                          background: "#eff6ff",
+                          color: "#1d4ed8",
+                          fontWeight: 800,
+                          cursor: "pointer",
+                        }}
+                      >
+                        {num(row.gross_qty)}
+                      </button>
+                    </td>
                     <td style={{ ...td, textAlign: "right", color: "#c2410c" }}>{num(row.shortage_qty)}</td>
                     <td style={{ ...td, textAlign: "right" }}>{num(row.net_opening_qty)}</td>
                     <td style={{ ...td, textAlign: "right", color: "#7c3aed" }}>{num(row.already_adjusted_qty)}</td>
