@@ -11,6 +11,7 @@ export default function MultiSelectDropdown({
   maxHeight = 220,
   containerStyle = {},
   openOnType = false,
+  singleSelect = false,
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -65,10 +66,17 @@ export default function MultiSelectDropdown({
   };
 
   const clearAll = () => {
-    onChange?.([]);
+    onChange?.(singleSelect ? "" : []);
     if (openOnType) {
       setSearch("");
     }
+    if (singleSelect) setOpen(false);
+  };
+
+  const selectSingleValue = (option) => {
+    onChange?.(option.value);
+    setSearch(option.label);
+    setOpen(false);
   };
 
   return (
@@ -80,14 +88,20 @@ export default function MultiSelectDropdown({
         <>
           <input
             type="text"
-            value={search}
+            value={singleSelect && !open ? selectedLabels[0] || "" : search}
             onChange={(event) => {
               const query = event.target.value;
               setSearch(query);
               setOpen(true);
             }}
-            onClick={() => setOpen(true)}
-            onFocus={() => setOpen(true)}
+            onClick={() => {
+              if (singleSelect && !open) setSearch("");
+              setOpen(true);
+            }}
+            onFocus={() => {
+              if (singleSelect && !open) setSearch("");
+              setOpen(true);
+            }}
             placeholder={placeholder}
             aria-label={`Search ${label || placeholder}`}
             style={{
@@ -104,7 +118,7 @@ export default function MultiSelectDropdown({
               boxShadow: open ? `0 0 0 3px ${accent}22` : "none",
             }}
           />
-          {selectedLabels.length ? (
+          {selectedLabels.length && !singleSelect ? (
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginTop: 6, color: "#166534", fontSize: 11 }}>
               <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {selectedLabels.length} selected: {selectedLabels.join(", ")}
@@ -162,13 +176,15 @@ export default function MultiSelectDropdown({
           <div style={{ padding: 12, borderBottom: "1px solid #bbf7d0", background: "#dcfce7" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
               <strong style={{ fontSize: 13, color: "#0f172a" }}>{label || placeholder}</strong>
-              <button
-                type="button"
-                onClick={clearAll}
-                style={{ border: "none", background: "transparent", color: accent, cursor: "pointer", fontWeight: 700 }}
-              >
-                Clear
-              </button>
+              {singleSelect ? null : (
+                <button
+                  type="button"
+                  onClick={clearAll}
+                  style={{ border: "none", background: "transparent", color: accent, cursor: "pointer", fontWeight: 700 }}
+                >
+                  Clear
+                </button>
+              )}
             </div>
             {searchable && !openOnType ? (
               <input
@@ -193,6 +209,28 @@ export default function MultiSelectDropdown({
             {filteredOptions.length ? (
               filteredOptions.map((option) => {
                 const checked = selectedValues.includes(option.value);
+                if (singleSelect) {
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      onClick={() => selectSingleValue(option)}
+                      style={{
+                        display: "block",
+                        width: "100%",
+                        padding: "9px 10px",
+                        border: 0,
+                        borderRadius: 8,
+                        background: checked ? `${accent}18` : "transparent",
+                        color: "#0f172a",
+                        textAlign: "left",
+                        cursor: "pointer",
+                      }}
+                    >
+                      {option.label}
+                    </button>
+                  );
+                }
                 return (
                   <label
                     key={option.value}
