@@ -192,6 +192,25 @@ export default function PartyStockReportPage() {
     color: "#0f172a",
   };
 
+  const filterField = {
+    minWidth: 0,
+    padding: 10,
+    border: "1px solid #bbf7d0",
+    borderRadius: 12,
+    background: "#f0fdf4",
+    color: "#166534",
+    fontSize: 12,
+    fontWeight: 700,
+  };
+
+  const filterInput = {
+    ...input,
+    display: "block",
+    marginTop: 6,
+    borderColor: "#86c9a5",
+    background: "#fbfffc",
+  };
+
   const button = {
     padding: "10px 16px",
     border: "none",
@@ -581,20 +600,24 @@ export default function PartyStockReportPage() {
           </div>
           <h3 style={{ margin: "4px 0 0", color: "#0f172a", fontSize: 18 }}>Filters</h3>
         </div>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))", gap: 14, alignItems: "end" }}>
-          <label style={{ display: "block", minWidth: 0, color: "#475569", fontSize: 12, fontWeight: 700 }}>
-            From Date
-            <input type="date" name="from_date" value={filters.from_date} onChange={handleChange} style={{ ...input, display: "block", marginTop: 6 }} />
-          </label>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))", gap: 14, alignItems: "stretch" }}>
+          <div style={{ ...filterField, gridColumn: "1 / -1" }}>
+            <div style={{ marginBottom: 8 }}>Date Range</div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))", gap: 12 }}>
+              <label>
+                From Date
+                <input type="date" name="from_date" value={filters.from_date} onChange={handleChange} style={filterInput} />
+              </label>
+              <label>
+                To Date
+                <input type="date" name="to_date" value={filters.to_date} onChange={handleChange} style={filterInput} />
+              </label>
+            </div>
+          </div>
 
-          <label style={{ display: "block", minWidth: 0, color: "#475569", fontSize: 12, fontWeight: 700 }}>
-            To Date
-            <input type="date" name="to_date" value={filters.to_date} onChange={handleChange} style={{ ...input, display: "block", marginTop: 6 }} />
-          </label>
-
-          <label style={{ display: "block", minWidth: 0, color: "#475569", fontSize: 12, fontWeight: 700 }}>
+          <label style={{ ...filterField, display: "block" }}>
             Employee
-            <select name="employee_id" value={filters.employee_id} onChange={handleChange} style={{ ...input, display: "block", marginTop: 6 }}>
+            <select name="employee_id" value={filters.employee_id} onChange={handleChange} style={filterInput}>
               <option value="">All Employees</option>
               {employees.map((e) => (
                 <option key={e.id} value={e.id}>{e.name}</option>
@@ -602,9 +625,9 @@ export default function PartyStockReportPage() {
             </select>
           </label>
 
-          <label style={{ display: "block", minWidth: 0, color: "#475569", fontSize: 12, fontWeight: 700 }}>
+          <label style={{ ...filterField, display: "block" }}>
             Party
-            <select name="company_id" value={filters.company_id} onChange={handleChange} style={{ ...input, display: "block", marginTop: 6 }}>
+            <select name="company_id" value={filters.company_id} onChange={handleChange} style={filterInput}>
               <option value="">All Parties</option>
               {companies.map((c) => (
                 <option key={c.id} value={c.id}>{c.name}</option>
@@ -614,7 +637,8 @@ export default function PartyStockReportPage() {
 
           <MultiSelectDropdown
             label="Locations"
-            containerStyle={{ minWidth: 0, flex: "none", width: "100%" }}
+            containerStyle={{ ...filterField, flex: "none", width: "100%" }}
+            openOnType
             options={locations.map((item) => ({ value: String(item.id ?? item._id ?? ""), label: item.name || "" }))}
             value={filters.location_ids}
             onChange={(next) => handleChange({ target: { name: "location_ids", value: next } })}
@@ -623,16 +647,17 @@ export default function PartyStockReportPage() {
 
           <MultiSelectDropdown
             label="Warehouses"
-            containerStyle={{ minWidth: 0, flex: "none", width: "100%" }}
+            containerStyle={{ ...filterField, flex: "none", width: "100%" }}
+            openOnType
             options={warehouses.map((item) => ({ value: String(item.id ?? item._id ?? ""), label: item.name || "" }))}
             value={filters.warehouse_ids}
             onChange={(next) => handleChange({ target: { name: "warehouse_ids", value: next } })}
             placeholder="All Warehouses"
           />
 
-          <label style={{ display: "block", minWidth: 0, color: "#475569", fontSize: 12, fontWeight: 700 }}>
+          <label style={{ ...filterField, display: "block" }}>
             Product
-            <select name="product_id" value={filters.product_id} onChange={handleChange} style={{ ...input, display: "block", marginTop: 6 }}>
+            <select name="product_id" value={filters.product_id} onChange={handleChange} style={filterInput}>
               <option value="">All Products</option>
               {products.map((p) => (
                 <option key={p.id} value={p.id}>{p.name}</option>
