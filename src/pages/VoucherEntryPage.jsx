@@ -13,6 +13,7 @@ import {
 } from "react-router-dom";
 
 import { getApiUrl } from "../utils/api";
+import WarehouseRentPaymentEntry from "./WarehouseRentPaymentEntry";
 
 const API_BASE = getApiUrl("/api");
 
@@ -127,6 +128,9 @@ function VoucherEntryPage() {
       value === "transport_payment"
     ) {
       return "transport";
+    }
+    if (value === "warehouse-rent" || value === "warehouse_rent") {
+      return "warehouse-rent";
     }
 
     return "payment";
@@ -773,6 +777,11 @@ function VoucherEntryPage() {
       return;
     }
 
+    if (type === "warehouse-rent") {
+      navigate("/voucher-entry?type=warehouse-rent");
+      return;
+    }
+
     navigate(
       "/voucher-entry?type=payment"
     );
@@ -1100,8 +1109,8 @@ function VoucherEntryPage() {
                 fontSize: "13px",
               }}
             >
-              Payment, Receipt, Journal &
-              Transport Payment
+              Payment, Receipt, Journal, Transport &
+              Warehouse Rent Payment
             </div>
           </div>
 
@@ -1238,8 +1247,26 @@ function VoucherEntryPage() {
         >
           Transport Payment
         </button>
+
+        <button
+          type="button"
+          onClick={() => changeType("warehouse-rent")}
+          style={{
+            padding: "10px 18px",
+            borderRadius: "10px",
+            border: "none",
+            cursor: "pointer",
+            fontWeight: 700,
+            background: activeType === "warehouse-rent" ? "#0f766e" : "#eef2f7",
+            color: activeType === "warehouse-rent" ? "#fff" : "#334155",
+          }}
+        >
+          Warehouse Rent Payment
+        </button>
       </div>
 
+      {activeType === "warehouse-rent" ? <WarehouseRentPaymentEntry /> : (
+      <>
       {/* ======================================================
           MESSAGE
       ====================================================== */}
@@ -2131,6 +2158,8 @@ function VoucherEntryPage() {
                   </tbody>
                 </table>
               </div>
+            )}
+            </>
             )}
           </div>
 
