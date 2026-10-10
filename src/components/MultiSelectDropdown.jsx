@@ -10,6 +10,7 @@ export default function MultiSelectDropdown({
   searchable = true,
   maxHeight = 220,
   containerStyle = {},
+  openOnType = false,
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -63,35 +64,84 @@ export default function MultiSelectDropdown({
     onChange?.(nextSelected);
   };
 
-  const clearAll = () => onChange?.([]);
+  const clearAll = () => {
+    onChange?.([]);
+    if (openOnType) {
+      setSearch("");
+      setOpen(false);
+    }
+  };
 
   return (
     <div ref={rootRef} style={{ position: "relative", minWidth: 220, flex: "1 1 220px", ...containerStyle }}>
       {label ? (
         <div style={{ marginBottom: 6, fontSize: 12, fontWeight: 700, color: "#475569" }}>{label}</div>
       ) : null}
-      <button
-        type="button"
-        onClick={() => setOpen((prev) => !prev)}
-        style={{
-          width: "100%",
-          padding: "11px 12px",
-          borderRadius: 10,
-          border: "1px solid #cbd5e1",
-          background: "#fff",
-          fontSize: 14,
-          textAlign: "left",
-          cursor: "pointer",
-          boxShadow: open ? `0 0 0 3px ${accent}22` : "none",
-        }}
-      >
-        <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
-          <span style={{ color: selectedLabels.length ? "#0f172a" : "#64748b", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {selectedLabels.length ? selectedLabels.join(", ") : placeholder}
-          </span>
-          <span style={{ color: accent, fontWeight: 700 }}>{selectedLabels.length || 0}</span>
-        </div>
-      </button>
+      {openOnType ? (
+        <>
+          <input
+            type="text"
+            value={search}
+            onChange={(event) => {
+              const query = event.target.value;
+              setSearch(query);
+              setOpen(Boolean(query.trim()));
+            }}
+            placeholder={placeholder}
+            aria-label={`Search ${label || placeholder}`}
+            style={{
+              width: "100%",
+              boxSizing: "border-box",
+              height: 42,
+              padding: "9px 12px",
+              borderRadius: 10,
+              border: `1px solid ${open ? accent : "#86c9a5"}`,
+              background: "#f0fdf4",
+              color: "#0f172a",
+              fontSize: 14,
+              outline: "none",
+              boxShadow: open ? `0 0 0 3px ${accent}22` : "none",
+            }}
+          />
+          {selectedLabels.length ? (
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginTop: 6, color: "#166534", fontSize: 11 }}>
+              <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {selectedLabels.length} selected: {selectedLabels.join(", ")}
+              </span>
+              <button
+                type="button"
+                onClick={clearAll}
+                style={{ flexShrink: 0, padding: 0, border: 0, background: "transparent", color: "#15803d", cursor: "pointer", fontWeight: 700 }}
+              >
+                Clear
+              </button>
+            </div>
+          ) : null}
+        </>
+      ) : (
+        <button
+          type="button"
+          onClick={() => setOpen((prev) => !prev)}
+          style={{
+            width: "100%",
+            padding: "11px 12px",
+            borderRadius: 10,
+            border: "1px solid #cbd5e1",
+            background: "#fff",
+            fontSize: 14,
+            textAlign: "left",
+            cursor: "pointer",
+            boxShadow: open ? `0 0 0 3px ${accent}22` : "none",
+          }}
+        >
+          <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center" }}>
+            <span style={{ color: selectedLabels.length ? "#0f172a" : "#64748b", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+              {selectedLabels.length ? selectedLabels.join(", ") : placeholder}
+            </span>
+            <span style={{ color: accent, fontWeight: 700 }}>{selectedLabels.length || 0}</span>
+          </div>
+        </button>
+      )}
 
       {open ? (
         <div
@@ -119,7 +169,7 @@ export default function MultiSelectDropdown({
                 Clear
               </button>
             </div>
-            {searchable ? (
+            {searchable && !openOnType ? (
               <input
                 type="text"
                 value={search}
