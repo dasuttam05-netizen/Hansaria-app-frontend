@@ -72,6 +72,7 @@ export default function InwardPage() {
   const location = useLocation();
   const navigate = useNavigate();
   const [inwards, setInwards] = useState([]);
+  const [inwardsLoaded, setInwardsLoaded] = useState(false);
   const [showForm, setShowForm] = useState(false);
   const [editData, setEditData] = useState(null);
   const [hoveredInwardId, setHoveredInwardId] = useState(null);
@@ -95,6 +96,7 @@ export default function InwardPage() {
   const [companies, setCompanies] = useState([]);
   const [companyAccounts, setCompanyAccounts] = useState([]);
   const inwardFileRef = useRef(null);
+  const reportEditOpenedRef = useRef("");
   const [showCompanyModal, setShowCompanyModal] = useState(false);
   const [showAccountModal, setShowAccountModal] = useState(false);
   const [companyForm, setCompanyForm] = useState({ name: "", mobile: "", address: "" });
@@ -324,6 +326,8 @@ export default function InwardPage() {
     } catch (err) {
       console.error(err);
       toast.error("Error fetching inwards", { theme: "colored" });
+    } finally {
+      setInwardsLoaded(true);
     }
   };
 
@@ -436,6 +440,10 @@ export default function InwardPage() {
   const closeFormModal = () => {
     setShowForm(false);
     setEditData(null);
+    const returnTo = location.state?.partyStockReturnTo;
+    if (returnTo) {
+      navigate(returnTo, { replace: true });
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -504,6 +512,27 @@ export default function InwardPage() {
     });
     setShowForm(true);
   };
+
+  useEffect(() => {
+    const requestedId = String(location.state?.partyStockEditInwardId || "");
+    if (!requestedId || !inwardsLoaded || reportEditOpenedRef.current === requestedId) return;
+
+    const row = inwards.find((item) =>
+      [item.id, item._id, item.legacy_id, item.sl_no]
+        .filter((id) => id !== undefined && id !== null)
+        .some((id) => String(id) === requestedId)
+    );
+
+    reportEditOpenedRef.current = requestedId;
+    if (!row) {
+      toast.error("The selected inward entry could not be found.", { theme: "colored" });
+      const returnTo = location.state?.partyStockReturnTo;
+      if (returnTo) navigate(returnTo, { replace: true });
+      return;
+    }
+
+    handleEdit(row);
+  }, [inwards, inwardsLoaded, location.state, navigate]);
 
   const handleDelete = async (id) => {
     if (!canDelete) {
@@ -1238,5 +1267,4 @@ Weight: ${row.weight}`;
     </div>
   );
 }
-
 
