@@ -68,7 +68,6 @@ export default function MultiSelectDropdown({
     onChange?.([]);
     if (openOnType) {
       setSearch("");
-      setOpen(false);
     }
   };
 
@@ -85,8 +84,10 @@ export default function MultiSelectDropdown({
             onChange={(event) => {
               const query = event.target.value;
               setSearch(query);
-              setOpen(Boolean(query.trim()));
+              setOpen(true);
             }}
+            onClick={() => setOpen(true)}
+            onFocus={() => setOpen(true)}
             placeholder={placeholder}
             aria-label={`Search ${label || placeholder}`}
             style={{
@@ -95,8 +96,8 @@ export default function MultiSelectDropdown({
               height: 42,
               padding: "9px 12px",
               borderRadius: 10,
-              border: `1px solid ${open ? accent : "#86c9a5"}`,
-              background: "#f0fdf4",
+              border: `1px solid ${open ? accent : "#cbd5e1"}`,
+              background: "#fff",
               color: "#0f172a",
               fontSize: 14,
               outline: "none",
@@ -151,14 +152,14 @@ export default function MultiSelectDropdown({
             left: 0,
             right: 0,
             zIndex: 30,
-            background: "#fff",
-            border: "1px solid #dbe4ea",
+            background: "#f0fdf4",
+            border: "1px solid #86c9a5",
             borderRadius: 12,
             boxShadow: "0 18px 40px rgba(15, 23, 42, 0.14)",
             overflow: "hidden",
           }}
         >
-          <div style={{ padding: 12, borderBottom: "1px solid #e2e8f0", background: "#f8fafc" }}>
+          <div style={{ padding: 12, borderBottom: "1px solid #bbf7d0", background: "#dcfce7" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
               <strong style={{ fontSize: 13, color: "#0f172a" }}>{label || placeholder}</strong>
               <button
