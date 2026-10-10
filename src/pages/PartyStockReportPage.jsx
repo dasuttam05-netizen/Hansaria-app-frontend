@@ -19,6 +19,9 @@ export default function PartyStockReportPage() {
   const [products, setProducts] = useState([]);
   const [visibleSections, setVisibleSections] = useState(["totals", "summary", "details", "journal"]);
   const [filtersReady, setFiltersReady] = useState(false);
+  const [adjustmentDetails, setAdjustmentDetails] = useState(null);
+  const [loadingAdjustmentDetails, setLoadingAdjustmentDetails] = useState(false);
+  const [adjustmentDetailsError, setAdjustmentDetailsError] = useState("");
 
   const [filters, setFilters] = useState({
     from_date: "",
@@ -144,6 +147,28 @@ export default function PartyStockReportPage() {
         partyStockReturnTo: returnTo,
       },
     });
+  };
+
+  const showAdjustmentDetails = async (row) => {
+    const inwardId = row.inward_id || row.inwardId || row._id || row.id;
+    if (!inwardId) return;
+
+    setAdjustmentDetails({ row, entries: [] });
+    setAdjustmentDetailsError("");
+    setLoadingAdjustmentDetails(true);
+    try {
+      const response = await axios.get(`${API_BASE}/reports/party-stock/adjustment-details`, {
+        params: { inward_id: inwardId },
+      });
+      const entries = Array.isArray(response.data?.entries) ? response.data.entries : [];
+      setAdjustmentDetails({ row, entries });
+    } catch (error) {
+      setAdjustmentDetailsError(
+        error?.response?.data?.error || "Could not load adjustment entry details."
+      );
+    } finally {
+      setLoadingAdjustmentDetails(false);
+    }
   };
 
   const card = {
@@ -751,7 +776,24 @@ export default function PartyStockReportPage() {
                     </td>
                     <td style={{ ...td, textAlign: "right", color: "#c2410c" }}>{num(row.shortage_qty)}</td>
                     <td style={{ ...td, textAlign: "right" }}>{num(row.net_opening_qty)}</td>
-                    <td style={{ ...td, textAlign: "right", color: "#7c3aed" }}>{num(row.already_adjusted_qty)}</td>
+                    <td style={{ ...td, textAlign: "right" }}>
+                      <button
+                        type="button"
+                        onClick={() => showAdjustmentDetails(row)}
+                        title="View all adjustment entries for this inward"
+                        style={{
+                          border: "1px solid #ddd6fe",
+                          borderRadius: 7,
+                          padding: "5px 8px",
+                          background: "#f5f3ff",
+                          color: "#7c3aed",
+                          fontWeight: 800,
+                          cursor: "pointer",
+                        }}
+                      >
+                        {num(row.already_adjusted_qty)}
+                      </button>
+                    </td>
                     <td style={{ ...td, textAlign: "right", fontWeight: 800, color: "#047857" }}>{num(row.available_balance_qty)}</td>
                   </tr>
                 ))
@@ -850,6 +892,143 @@ export default function PartyStockReportPage() {
           </div>
         </div>
       ) : null}
+
+      {adjustmentDetails && (
+        <div
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setAdjustmentDetails(null);
+          }}
+          style={{
+            position: "fixed",
+            inset: 0,
+            zIndex: 1200,
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            padding: 16,
+            background: "rgba(15,23,42,0.58)",
+          }}
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="party-stock-adjustment-title"
+            style={{
+              width: "min(1000px, 100%)",
+              maxHeight: "90vh",
+              overflow: "hidden",
+              borderRadius: 16,
+              background: "#fff",
+              boxShadow: "0 24px 70px rgba(15,23,42,0.3)",
+              border: "1px solid #ddd6fe",
+            }}
+          >
+            <header
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
+                gap: 12,
+                padding: "18px 20px",
+                color: "#fff",
+                background: "linear-gradient(110deg, #4c1d95, #7c3aed)",
+              }}
+            >
+              <div>
+                <div style={{ color: "#ddd6fe", fontSize: 11, fontWeight: 800, letterSpacing: 1, textTransform: "uppercase" }}>
+                  Inward Adjustment Breakdown
+                </div>
+                <h3 id="party-stock-adjustment-title" style={{ margin: "4px 0 0", color: "#fff" }}>
+                  {adjustmentDetails.row.company_name || adjustmentDetails.row.account_name || "Stock adjustment details"}
+                </h3>
+                <div style={{ marginTop: 4, color: "#ede9fe", fontSize: 13 }}>
+                  {adjustmentDetails.row.product_name || "-"} · Lorry {adjustmentDetails.row.lorry_no || "-"} · Inward {formatDisplayDate(adjustmentDetails.row.date) || "-"}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAdjustmentDetails(null)}
+                aria-label="Close adjustment details"
+                style={{
+                  border: "1px solid rgba(255,255,255,0.4)",
+                  borderRadius: 9,
+                  padding: "8px 12px",
+                  background: "rgba(255,255,255,0.12)",
+                  color: "#fff",
+                  fontWeight: 800,
+                  cursor: "pointer",
+                }}
+              >
+                Close
+              </button>
+            </header>
+
+            <div style={{ padding: 20, overflowY: "auto", maxHeight: "calc(90vh - 90px)" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 10, marginBottom: 16 }}>
+                <div style={{ padding: 13, borderRadius: 10, background: "#f5f3ff", border: "1px solid #ddd6fe" }}>
+                  <div style={{ color: "#6d28d9", fontSize: 11, fontWeight: 800, textTransform: "uppercase" }}>Already Adjusted</div>
+                  <div style={{ color: "#4c1d95", fontSize: 20, fontWeight: 800, marginTop: 5 }}>{num(adjustmentDetails.row.already_adjusted_qty)}</div>
+                </div>
+                <div style={{ padding: 13, borderRadius: 10, background: "#f8fafc", border: "1px solid #e2e8f0" }}>
+                  <div style={{ color: "#64748b", fontSize: 11, fontWeight: 800, textTransform: "uppercase" }}>Adjustment Entries</div>
+                  <div style={{ color: "#172033", fontSize: 20, fontWeight: 800, marginTop: 5 }}>
+                    {loadingAdjustmentDetails ? "…" : adjustmentDetails.entries.length}
+                  </div>
+                </div>
+                <div style={{ padding: 13, borderRadius: 10, background: "#ecfdf5", border: "1px solid #a7f3d0" }}>
+                  <div style={{ color: "#047857", fontSize: 11, fontWeight: 800, textTransform: "uppercase" }}>Entry Quantity Total</div>
+                  <div style={{ color: "#065f46", fontSize: 20, fontWeight: 800, marginTop: 5 }}>
+                    {num(adjustmentDetails.entries.reduce((total, entry) => total + (Number(entry.quantity) || 0), 0))}
+                  </div>
+                </div>
+              </div>
+
+              {loadingAdjustmentDetails ? (
+                <div style={{ padding: 32, textAlign: "center", color: "#64748b" }}>Loading adjustment entries...</div>
+              ) : adjustmentDetailsError ? (
+                <div role="alert" style={{ padding: 14, borderRadius: 9, background: "#fef2f2", border: "1px solid #fecaca", color: "#b91c1c" }}>
+                  {adjustmentDetailsError}
+                </div>
+              ) : adjustmentDetails.entries.length === 0 ? (
+                <div style={{ padding: 24, textAlign: "center", borderRadius: 10, background: "#f8fafc", color: "#64748b" }}>
+                  No individual adjustment entries were found for this inward record.
+                </div>
+              ) : (
+                <div style={{ overflow: "auto", border: "1px solid #e2e8f0", borderRadius: 10, maxHeight: "52vh" }}>
+                  <table style={{ width: "100%", minWidth: 800, borderCollapse: "separate", borderSpacing: 0, fontSize: 13 }}>
+                    <thead>
+                      <tr>
+                        {["Type", "Date", "Reference", "Party", "Warehouse", "Product", "Lorry", "Adjusted Qty"].map((heading) => (
+                          <th key={heading} style={{ ...th, position: "sticky", top: 0, background: "#4c1d95" }}>{heading}</th>
+                        ))}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {adjustmentDetails.entries.map((entry, index) => (
+                        <tr key={entry.id || `${entry.reference}-${index}`} style={{ background: index % 2 === 0 ? "#fff" : "#faf8ff" }}>
+                          <td style={td}>
+                            <span style={{ display: "inline-block", padding: "4px 8px", borderRadius: 999, background: entry.type === "Stock Journal" ? "#eff6ff" : "#f5f3ff", color: entry.type === "Stock Journal" ? "#1d4ed8" : "#6d28d9", fontWeight: 700 }}>
+                              {entry.type}
+                            </span>
+                          </td>
+                          <td style={td}>{formatDisplayDate(entry.date) || "-"}</td>
+                          <td style={{ ...td, fontWeight: 700 }}>{entry.reference || "-"}</td>
+                          <td style={td}>{entry.party || "-"}</td>
+                          <td style={td}>{entry.warehouse || "-"}</td>
+                          <td style={td}>{entry.product || "-"}</td>
+                          <td style={td}>{entry.lorry || "-"}</td>
+                          <td style={{ ...td, textAlign: "right", fontWeight: 800, color: "#6d28d9" }}>{num(entry.quantity)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          </section>
+        </div>
+      )}
     </div>
   );
 }
