@@ -152,6 +152,10 @@ function VoucherEntryPage() {
 
   const [adjustments, setAdjustments] = useState({});
 
+  const [adjustmentMode, setAdjustmentMode] = useState("manual");
+
+  const [activeAdjustmentBillId, setActiveAdjustmentBillId] = useState("");
+
   const [transportPayments, setTransportPayments] = useState([]);
 
   const [loadingPayments, setLoadingPayments] = useState(false);
@@ -607,6 +611,35 @@ function VoucherEntryPage() {
     }));
   };
 
+  const getAdjustmentBillId = (bill) =>
+    String(
+      bill.id ||
+        bill._id ||
+        bill.outward_id ||
+        bill.sale_id ||
+        ""
+    );
+
+  const autoAdjustBill = (bill, amount = enteredAmount) => {
+    const id = getAdjustmentBillId(bill);
+    if (!id) return;
+
+    const currentAdjustment = numberValue(adjustments[id]);
+    const availableAmount = Math.max(
+      0,
+      numberValue(amount) - adjustedTotal + currentAdjustment
+    );
+    const pending = numberValue(
+      bill.pending_amount ??
+        bill.pending ??
+        bill.amount ??
+        bill.balance ??
+        0
+    );
+
+    setAdjustment(bill, Math.min(availableAmount, pending));
+  };
+
   /* ==========================================================
      RESET
   ========================================================== */
@@ -618,6 +651,8 @@ function VoucherEntryPage() {
     setForm(emptyForm());
     setPendingBills([]);
     setAdjustments({});
+    setAdjustmentMode("manual");
+    setActiveAdjustmentBillId("");
     setEditingPaymentId("");
     setTransportSearch("");
     setMessage("");
@@ -662,6 +697,8 @@ function VoucherEntryPage() {
           .filter(([id]) => id)
       )
     );
+    setAdjustmentMode("manual");
+    setActiveAdjustmentBillId("");
     setTransportSearch(payment.transporter_name || "");
     setMessage("");
     setError("");
@@ -1354,8 +1391,7 @@ function VoucherEntryPage() {
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns:
-                  "repeat(auto-fit,minmax(220px,1fr))",
+                gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
                 gap: "16px",
                 padding: "18px",
                 background: "rgba(255,255,255,0.78)",
@@ -1483,12 +1519,19 @@ function VoucherEntryPage() {
                   min="0"
                   step="0.01"
                   value={form.amount}
-                  onChange={(e) =>
-                    updateForm(
-                      "amount",
-                      e.target.value
-                    )
-                  }
+                  onChange={(e) => {
+                    const value = e.target.value;
+                    updateForm("amount", value);
+                    if (adjustmentMode === "auto" && activeAdjustmentBillId) {
+                      const activeBill = pendingBills.find(
+                        (bill) =>
+                          getAdjustmentBillId(bill) === activeAdjustmentBillId
+                      );
+                      if (activeBill) {
+                        autoAdjustBill(activeBill, numberValue(value));
+                      }
+                    }
+                  }}
                   placeholder="0.00"
                   style={inputStyle}
                 />
@@ -1654,12 +1697,55 @@ function VoucherEntryPage() {
                     marginTop: "4px",
                   }}
                 >
-                  Select bill-wise amount
-                  to adjust.
+                  Enter a payment amount to show bills. Auto fills the bill under the cursor; Manual lets you enter each amount.
                 </div>
               </div>
 
               <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                <div
+                  role="group"
+                  aria-label="Adjustment mode"
+                  style={{
+                    display: "flex",
+                    padding: "3px",
+                    gap: "3px",
+                    border: "1px solid #fed7aa",
+                    borderRadius: "10px",
+                    background: "#fff7ed",
+                  }}
+                >
+                  {["manual", "auto"].map((mode) => (
+                    <button
+                      key={mode}
+                      type="button"
+                      aria-pressed={adjustmentMode === mode}
+                      onClick={() => {
+                        setAdjustmentMode(mode);
+                        if (mode === "auto" && activeAdjustmentBillId) {
+                          const activeBill = pendingBills.find(
+                            (bill) => getAdjustmentBillId(bill) === activeAdjustmentBillId
+                          );
+                          if (activeBill) autoAdjustBill(activeBill);
+                        }
+                      }}
+                      style={{
+                        border: "none",
+                        borderRadius: "7px",
+                        padding: "7px 11px",
+                        cursor: "pointer",
+                        fontWeight: 800,
+                        textTransform: "capitalize",
+                        color: adjustmentMode === mode ? "#fff" : "#9a3412",
+                        background:
+                          adjustmentMode === mode
+                            ? mode === "auto" ? "#ea580c" : "#475569"
+                            : "transparent",
+                      }}
+                    >
+                      {mode === "auto" ? "Auto Adjust" : "Manual"}
+                    </button>
+                  ))}
+                </div>
                 <div
                   style={{
                     background: "#f8fafc",
@@ -1719,6 +1805,7 @@ function VoucherEntryPage() {
             )}
 
             {form.transporter_id &&
+              enteredAmount > 0 &&
               loadingPending && (
                 <div
                   style={{
@@ -1732,6 +1819,7 @@ function VoucherEntryPage() {
               )}
 
             {form.transporter_id &&
+              enteredAmount > 0 &&
               !loadingPending &&
               pendingBills.length ===
                 0 && (
@@ -1750,8 +1838,25 @@ function VoucherEntryPage() {
                 </div>
               )}
 
-            {pendingBills.length >
-              0 && (
+            {form.transporter_id &&
+              enteredAmount <= 0 &&
+              !loadingPending && (
+                <div
+                  style={{
+                    padding: "20px",
+                    textAlign: "center",
+                    color: "#9a3412",
+                    background: "#fff7ed",
+                    border: "1px dashed #fdba74",
+                    borderRadius: "8px",
+                  }}
+                >
+                  Enter the payment amount above to view pending transport bills.
+                </div>
+              )}
+
+            {pendingBills.length > 0 &&
+              enteredAmount > 0 && (
               <div
                 style={{
                   overflowX: "auto",
@@ -1973,10 +2078,27 @@ function VoucherEntryPage() {
                                       .value
                                   )
                                 }
+                                readOnly={adjustmentMode === "auto"}
+                                onMouseEnter={() => {
+                                  const billId = getAdjustmentBillId(bill);
+                                  setActiveAdjustmentBillId(billId);
+                                  if (adjustmentMode === "auto") {
+                                    autoAdjustBill(bill);
+                                  }
+                                }}
+                                onFocus={() => {
+                                  const billId = getAdjustmentBillId(bill);
+                                  setActiveAdjustmentBillId(billId);
+                                  if (adjustmentMode === "auto") {
+                                    autoAdjustBill(bill);
+                                  }
+                                }}
                                 style={{
                                   ...inputStyle,
                                   textAlign:
                                     "right",
+                                  cursor: adjustmentMode === "auto" ? "pointer" : "text",
+                                  opacity: adjustmentMode === "auto" ? 0.9 : 1,
                                   borderColor: numberValue(adjustments[id]) > 0 ? "#0f766e" : "#cbd5e1",
                                   background: numberValue(adjustments[id]) > 0 ? "#f0fdfa" : "#fff",
                                   fontWeight: 700,
