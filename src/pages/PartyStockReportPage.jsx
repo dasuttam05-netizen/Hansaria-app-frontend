@@ -631,25 +631,27 @@ export default function PartyStockReportPage() {
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 220px), 1fr))", gap: 14, alignItems: "stretch", marginTop: 14 }}>
-          <label style={{ ...filterField, display: "block" }}>
-            Employee
-            <select name="employee_id" value={filters.employee_id} onChange={handleChange} style={filterInput}>
-              <option value="">All Employees</option>
-              {employees.map((e) => (
-                <option key={e.id} value={e.id}>{e.name}</option>
-              ))}
-            </select>
-          </label>
+          <MultiSelectDropdown
+            label="Employee"
+            containerStyle={{ ...filterField, flex: "none", width: "100%" }}
+            openOnType
+            singleSelect
+            options={employees.map((item) => ({ value: String(item.id ?? item._id ?? ""), label: item.name || "" }))}
+            value={filters.employee_id}
+            onChange={(next) => handleChange({ target: { name: "employee_id", value: next } })}
+            placeholder="All Employees"
+          />
 
-          <label style={{ ...filterField, display: "block" }}>
-            Party
-            <select name="company_id" value={filters.company_id} onChange={handleChange} style={filterInput}>
-              <option value="">All Parties</option>
-              {companies.map((c) => (
-                <option key={c.id} value={c.id}>{c.name}</option>
-              ))}
-            </select>
-          </label>
+          <MultiSelectDropdown
+            label="Party"
+            containerStyle={{ ...filterField, flex: "none", width: "100%" }}
+            openOnType
+            singleSelect
+            options={companies.map((item) => ({ value: String(item.id ?? item._id ?? ""), label: item.name || "" }))}
+            value={filters.company_id}
+            onChange={(next) => handleChange({ target: { name: "company_id", value: next } })}
+            placeholder="All Parties"
+          />
 
           <MultiSelectDropdown
             label="Locations"
@@ -671,15 +673,16 @@ export default function PartyStockReportPage() {
             placeholder="All Warehouses"
           />
 
-          <label style={{ ...filterField, display: "block" }}>
-            Product
-            <select name="product_id" value={filters.product_id} onChange={handleChange} style={filterInput}>
-              <option value="">All Products</option>
-              {products.map((p) => (
-                <option key={p.id} value={p.id}>{p.name}</option>
-              ))}
-            </select>
-          </label>
+          <MultiSelectDropdown
+            label="Product"
+            containerStyle={{ ...filterField, flex: "none", width: "100%" }}
+            openOnType
+            singleSelect
+            options={products.map((item) => ({ value: String(item.id ?? item._id ?? ""), label: item.name || "" }))}
+            value={filters.product_id}
+            onChange={(next) => handleChange({ target: { name: "product_id", value: next } })}
+            placeholder="All Products"
+          />
         </div>
         <div style={{ marginTop: 14 }}>
           <ReportSectionToggles
