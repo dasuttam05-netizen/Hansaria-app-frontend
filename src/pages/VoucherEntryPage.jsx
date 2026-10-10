@@ -2159,8 +2159,6 @@ function VoucherEntryPage() {
                 </table>
               </div>
             )}
-            </>
-            )}
           </div>
 
           {/* --------------------------------------------------
@@ -2761,6 +2759,8 @@ function VoucherEntryPage() {
             </div>
           </div>
         </div>
+      )}
+      </>
       )}
     </div>
   );
