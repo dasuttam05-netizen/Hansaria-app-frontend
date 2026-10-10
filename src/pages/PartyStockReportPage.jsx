@@ -102,43 +102,52 @@ export default function PartyStockReportPage() {
 
   const card = {
     background: "#fff",
-    border: "1px solid #e2e8f0",
+    border: "1px solid #dbe4ea",
     borderRadius: 16,
-    padding: 16,
-    boxShadow: "0 10px 30px rgba(15, 23, 42, 0.08)",
+    padding: 18,
+    boxShadow: "0 12px 32px rgba(15, 23, 42, 0.07)",
   };
 
   const input = {
     padding: "10px 12px",
     border: "1px solid #cbd5e1",
-    borderRadius: 8,
+    borderRadius: 10,
     fontSize: 14,
     minWidth: 160,
+    background: "#fff",
+    color: "#0f172a",
   };
 
   const button = {
     padding: "10px 16px",
     border: "none",
-    borderRadius: 8,
+    borderRadius: 10,
     fontWeight: 700,
     cursor: "pointer",
     color: "#fff",
   };
 
   const th = {
+    position: "sticky",
+    top: 0,
+    zIndex: 3,
     background: "#0f766e",
     color: "#fff",
-    padding: "10px 12px",
-    border: "1px solid #dbe4ea",
+    padding: "12px 12px",
+    border: "1px solid #0d665f",
     textAlign: "left",
     whiteSpace: "nowrap",
+    boxShadow: "0 2px 4px rgba(15,23,42,0.12)",
+    fontSize: 12,
+    letterSpacing: "0.2px",
   };
 
   const td = {
-    padding: "10px 12px",
+    padding: "11px 12px",
     border: "1px solid #e2e8f0",
-    background: "#fff",
+    background: "transparent",
     whiteSpace: "nowrap",
+    color: "#334155",
   };
 
   const tdHover = {
@@ -455,15 +464,18 @@ export default function PartyStockReportPage() {
   );
 
   return (
-    <div style={{ padding: 20, background: "#f8fafc", minHeight: "100vh", fontFamily: "Segoe UI, Arial, sans-serif" }}>
-      <div style={{ ...card, marginBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+    <div style={{ padding: 20, background: "linear-gradient(180deg, #f1f5f9 0%, #f8fafc 280px)", minHeight: "100vh", fontFamily: "Segoe UI, Arial, sans-serif" }}>
+      <div style={{ ...card, marginBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, flexWrap: "wrap", padding: "22px 24px", background: "linear-gradient(115deg, #0f172a 0%, #134e4a 74%, #0f766e 100%)", border: "none", color: "#fff" }}>
         <div>
-          <h2 style={{ margin: 0, color: "#0f172a" }}>Party Wise Stock Report</h2>
-          <p style={{ margin: "6px 0 0", color: "#64748b" }}>
+          <div style={{ color: "#99f6e4", fontSize: 11, fontWeight: 800, letterSpacing: 1.4, textTransform: "uppercase", marginBottom: 5 }}>
+            Stock & Party Overview
+          </div>
+          <h2 style={{ margin: 0, color: "#fff" }}>Party Wise Stock Report</h2>
+          <p style={{ margin: "6px 0 0", color: "#cbd5e1", maxWidth: 900, lineHeight: 1.5 }}>
             Detailed party (company) wise stock report with address, contact details, and stock calculations. Includes Gross Qty, Shortage, Net Opening, Already Adjusted, and Available Balance.
           </p>
           {dashboardView ? (
-            <div style={{ marginTop: 12, color: "#0f766e", fontWeight: 700, fontSize: 14 }}>
+            <div style={{ marginTop: 12, color: "#99f6e4", fontWeight: 700, fontSize: 14 }}>
               Focused detail view
               {activeWarehouseName ? ` | Warehouse: ${activeWarehouseName}` : ""}
               {activeCompanyName ? ` | Party: ${activeCompanyName}` : ""}
@@ -474,10 +486,10 @@ export default function PartyStockReportPage() {
           onClick={() => navigate("/dashboard")}
           style={{
             padding: "8px 16px",
-            background: "#6366f1",
+            background: "rgba(255,255,255,0.12)",
             color: "#fff",
-            border: "none",
-            borderRadius: 4,
+            border: "1px solid rgba(255,255,255,0.28)",
+            borderRadius: 10,
             fontSize: 14,
             cursor: "pointer",
             fontWeight: 600,
@@ -488,7 +500,7 @@ export default function PartyStockReportPage() {
         </button>
       </div>
 
-      <div style={{ ...card, marginBottom: 16 }}>
+      <div style={{ ...card, marginBottom: 16, borderTop: "4px solid #0f766e" }}>
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
           <input type="date" name="from_date" value={filters.from_date} onChange={handleChange} style={input} />
           <input type="date" name="to_date" value={filters.to_date} onChange={handleChange} style={input} />
@@ -553,19 +565,33 @@ export default function PartyStockReportPage() {
       </div>
 
       {visibleSections.includes("totals") ? (
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 16, marginBottom: 16 }}>
-        <div style={card}><div>Gross Qty</div><div style={{ fontSize: 24, fontWeight: 700 }}>{num(totals.gross)}</div></div>
-        <div style={card}><div>Shortage</div><div style={{ fontSize: 24, fontWeight: 700 }}>{num(totals.shortage)}</div></div>
-        <div style={card}><div>Net Opening</div><div style={{ fontSize: 24, fontWeight: 700 }}>{num(totals.net)}</div></div>
-        <div style={card}><div>Already Adjusted</div><div style={{ fontSize: 24, fontWeight: 700 }}>{num(totals.adjusted)}</div></div>
-        <div style={card}><div>Available Balance</div><div style={{ fontSize: 24, fontWeight: 700 }}>{num(totals.balance)}</div></div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 12, marginBottom: 16 }}>
+      {[
+        { label: "Gross Qty", value: totals.gross, accent: "#2563eb", tint: "#eff6ff" },
+        { label: "Shortage", value: totals.shortage, accent: "#ea580c", tint: "#fff7ed" },
+        { label: "Net Opening", value: totals.net, accent: "#0f766e", tint: "#f0fdfa" },
+        { label: "Already Adjusted", value: totals.adjusted, accent: "#7c3aed", tint: "#f5f3ff" },
+        { label: "Available Balance", value: totals.balance, accent: "#047857", tint: "#ecfdf5" },
+      ].map((metric) => (
+        <div key={metric.label} style={{ ...card, padding: "15px 17px", borderLeft: `4px solid ${metric.accent}`, background: metric.tint }}>
+          <div style={{ color: "#64748b", fontSize: 11, fontWeight: 800, letterSpacing: 0.6, textTransform: "uppercase" }}>{metric.label}</div>
+          <div style={{ color: "#172033", fontSize: 21, fontWeight: 800, marginTop: 7 }}>{num(metric.value)}</div>
+        </div>
+      ))}
       </div>
       ) : null}
 
       {!dashboardView && visibleSections.includes("summary") ? (
-        <div style={{ ...card, marginBottom: 16, overflowX: "auto" }}>
-          <h3 style={{ margin: "0 0 12px", color: "#0f172a" }}>Summary by Party</h3>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+        <div style={{ ...card, marginBottom: 16, overflow: "hidden", padding: 0 }}>
+          <div style={{ padding: "17px 18px", borderBottom: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <div>
+              <div style={{ color: "#0f766e", fontSize: 11, fontWeight: 800, letterSpacing: 1, textTransform: "uppercase", marginBottom: 4 }}>Party Summary</div>
+              <h3 style={{ margin: 0, color: "#0f172a" }}>Summary by Party</h3>
+            </div>
+            <span style={{ padding: "6px 10px", borderRadius: 999, background: "#f0fdfa", color: "#0f766e", fontSize: 12, fontWeight: 800 }}>{summary.length} records</span>
+          </div>
+          <div style={{ overflow: "auto", maxHeight: "65vh" }}>
+          <table style={{ width: "100%", minWidth: 980, borderCollapse: "separate", borderSpacing: 0, fontSize: 13 }}>
             <thead>
               <tr>
                 <th style={th}>Party Name</th>
@@ -581,15 +607,15 @@ export default function PartyStockReportPage() {
             <tbody>
               {summary.length > 0 ? (
                 summary.map((row, index) => (
-                  <tr key={`${row.party_name}-${row.warehouse_name}-${index}`} style={{ transition: "background-color 0.2s ease" }} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#87ceeb'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#fff'}>
-                    <td style={td}>{row.party_name}</td>
+                  <tr key={`${row.party_name}-${row.warehouse_name}-${index}`} style={{ background: index % 2 === 0 ? "#fff" : "#f8fafc" }}>
+                    <td style={{ ...td, fontWeight: 800, color: "#0f766e" }}>{row.party_name}</td>
                     <td style={td}>{row.company_address || "-"}</td>
                     <td style={td}>{row.warehouse_name || "-"}</td>
-                    <td style={td}>{num(row.gross_qty)}</td>
-                    <td style={td}>{num(row.shortage_qty)}</td>
-                    <td style={td}>{num(row.net_opening_qty)}</td>
-                    <td style={td}>{num(row.already_adjusted_qty)}</td>
-                    <td style={td}>{num(row.available_balance_qty)}</td>
+                    <td style={{ ...td, textAlign: "right" }}>{num(row.gross_qty)}</td>
+                    <td style={{ ...td, textAlign: "right", color: "#c2410c" }}>{num(row.shortage_qty)}</td>
+                    <td style={{ ...td, textAlign: "right" }}>{num(row.net_opening_qty)}</td>
+                    <td style={{ ...td, textAlign: "right", color: "#7c3aed" }}>{num(row.already_adjusted_qty)}</td>
+                    <td style={{ ...td, textAlign: "right", fontWeight: 800, color: "#047857" }}>{num(row.available_balance_qty)}</td>
                   </tr>
                 ))
               ) : (
@@ -598,27 +624,34 @@ export default function PartyStockReportPage() {
                 </tr>
               )}
               {summary.length > 0 && (
-                <tr style={{ backgroundColor: "#87ceeb", fontWeight: 700 }}>
-                  <td style={td} colSpan="3">Total Weight</td>
-                  <td style={td}>{num(summaryTotals.gross)}</td>
-                  <td style={td}>{num(summaryTotals.shortage)}</td>
-                  <td style={td}>{num(summaryTotals.net)}</td>
-                  <td style={td}>{num(summaryTotals.adjusted)}</td>
-                  <td style={td}>{num(summaryTotals.balance)}</td>
+                <tr style={{ background: "#e6fffb", fontWeight: 800 }}>
+                  <td style={{ ...td, background: "#e6fffb" }} colSpan="3">Total Weight</td>
+                  <td style={{ ...td, background: "#e6fffb", textAlign: "right" }}>{num(summaryTotals.gross)}</td>
+                  <td style={{ ...td, background: "#e6fffb", textAlign: "right" }}>{num(summaryTotals.shortage)}</td>
+                  <td style={{ ...td, background: "#e6fffb", textAlign: "right" }}>{num(summaryTotals.net)}</td>
+                  <td style={{ ...td, background: "#e6fffb", textAlign: "right" }}>{num(summaryTotals.adjusted)}</td>
+                  <td style={{ ...td, background: "#e6fffb", textAlign: "right" }}>{num(summaryTotals.balance)}</td>
                 </tr>
               )}
             </tbody>
           </table>
+          </div>
         </div>
       ) : null}
 
       {visibleSections.includes("details") ? (
-      <div style={{ ...card, overflow: "hidden" }}>
-        <h3 style={{ marginTop: 0, marginBottom: 12, color: "#0f172a" }}>
-          {dashboardView ? "Filtered Details" : "Full Details"}
-        </h3>
-        <div style={{ overflowX: "auto", maxHeight: "72vh" }}>
-          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+      <div style={{ ...card, overflow: "hidden", padding: 0, marginBottom: 16 }}>
+        <div style={{ padding: "17px 18px", borderBottom: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <div>
+            <div style={{ color: "#2563eb", fontSize: 11, fontWeight: 800, letterSpacing: 1, textTransform: "uppercase", marginBottom: 4 }}>Stock Detail Register</div>
+            <h3 style={{ margin: 0, color: "#0f172a" }}>
+              {dashboardView ? "Filtered Details" : "Full Details"}
+            </h3>
+          </div>
+          <span style={{ padding: "6px 10px", borderRadius: 999, background: "#eff6ff", color: "#1d4ed8", fontSize: 12, fontWeight: 800 }}>{details.length} records</span>
+        </div>
+        <div style={{ overflow: "auto", maxHeight: "72vh" }}>
+          <table style={{ width: "100%", minWidth: 1500, borderCollapse: "separate", borderSpacing: 0, fontSize: 13 }}>
             <thead>
               <tr>
                 <th style={th}>Party</th>
@@ -640,9 +673,9 @@ export default function PartyStockReportPage() {
             </thead>
             <tbody>
               {details.length > 0 ? (
-                details.map((row) => (
-                  <tr key={row.id} style={{ transition: "background-color 0.2s ease" }} onMouseEnter={(e) => e.currentTarget.style.backgroundColor = '#87ceeb'} onMouseLeave={(e) => e.currentTarget.style.backgroundColor = '#fff'}>
-                    <td style={td}>{row.company_name || row.account_name || "Unknown Party"}</td>
+                details.map((row, index) => (
+                  <tr key={row.id} style={{ background: index % 2 === 0 ? "#fff" : "#f8fafc" }}>
+                    <td style={{ ...td, fontWeight: 800, color: "#0f766e" }}>{row.company_name || row.account_name || "Unknown Party"}</td>
                     <td style={td}>{row.account_name || "-"}</td>
                     <td style={td}>{row.lorry_no}</td>
                     <td style={td}>{row.employee_name}</td>
@@ -652,11 +685,11 @@ export default function PartyStockReportPage() {
                     <td style={td}>{formatDisplayDate(row.date)}</td>
                     <td style={td}>{formatDisplayDate(row.outward_date) || "-"}</td>
                     <td style={td}>{row.days_diff}</td>
-                    <td style={td}>{num(row.gross_qty)}</td>
-                    <td style={td}>{num(row.shortage_qty)}</td>
-                    <td style={td}>{num(row.net_opening_qty)}</td>
-                    <td style={td}>{num(row.already_adjusted_qty)}</td>
-                    <td style={td}>{num(row.available_balance_qty)}</td>
+                    <td style={{ ...td, textAlign: "right" }}>{num(row.gross_qty)}</td>
+                    <td style={{ ...td, textAlign: "right", color: "#c2410c" }}>{num(row.shortage_qty)}</td>
+                    <td style={{ ...td, textAlign: "right" }}>{num(row.net_opening_qty)}</td>
+                    <td style={{ ...td, textAlign: "right", color: "#7c3aed" }}>{num(row.already_adjusted_qty)}</td>
+                    <td style={{ ...td, textAlign: "right", fontWeight: 800, color: "#047857" }}>{num(row.available_balance_qty)}</td>
                   </tr>
                 ))
               ) : (
@@ -667,13 +700,13 @@ export default function PartyStockReportPage() {
             </tbody>
             {details.length > 0 && (
               <tfoot>
-                <tr style={{ background: "#ecfdf5", fontWeight: 700 }}>
-                  <td style={td} colSpan="10">Totals</td>
-                  <td style={td}>{num(totals.gross)}</td>
-                  <td style={td}>{num(totals.shortage)}</td>
-                  <td style={td}>{num(totals.net)}</td>
-                  <td style={td}>{num(totals.adjusted)}</td>
-                  <td style={td}>{num(totals.balance)}</td>
+                <tr style={{ background: "#e6fffb", fontWeight: 800 }}>
+                  <td style={{ ...td, background: "#e6fffb" }} colSpan="10">Totals</td>
+                  <td style={{ ...td, background: "#e6fffb", textAlign: "right" }}>{num(totals.gross)}</td>
+                  <td style={{ ...td, background: "#e6fffb", textAlign: "right" }}>{num(totals.shortage)}</td>
+                  <td style={{ ...td, background: "#e6fffb", textAlign: "right" }}>{num(totals.net)}</td>
+                  <td style={{ ...td, background: "#e6fffb", textAlign: "right" }}>{num(totals.adjusted)}</td>
+                  <td style={{ ...td, background: "#e6fffb", textAlign: "right" }}>{num(totals.balance)}</td>
                 </tr>
               </tfoot>
             )}
@@ -683,9 +716,10 @@ export default function PartyStockReportPage() {
       ) : null}
 
       {visibleSections.includes("journal") ? (
-        <div style={{ ...card, marginTop: 16, overflow: "hidden" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", marginBottom: 12 }}>
+        <div style={{ ...card, marginTop: 16, overflow: "hidden", padding: 0 }}>
+          <div style={{ padding: "17px 18px", borderBottom: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
             <div>
+              <div style={{ color: "#7c3aed", fontSize: 11, fontWeight: 800, letterSpacing: 1, textTransform: "uppercase", marginBottom: 4 }}>Movement History</div>
               <h3 style={{ margin: 0, color: "#0f172a" }}>Stock Journal / Party Stock Movement</h3>
               <div style={{ marginTop: 4, color: "#64748b", fontSize: 12 }}>
                 Existing Inward/Outward logic remains unchanged. This journal records the actual FIFO stock movement.
@@ -693,8 +727,8 @@ export default function PartyStockReportPage() {
             </div>
             <button onClick={exportJournalCSV} style={{ ...button, background: "#7c3aed" }}>Export Journal CSV</button>
           </div>
-          <div style={{ overflowX: "auto", maxHeight: "72vh" }}>
-            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+          <div style={{ overflow: "auto", maxHeight: "72vh" }}>
+            <table style={{ width: "100%", minWidth: 1300, borderCollapse: "separate", borderSpacing: 0, fontSize: 13 }}>
               <thead>
                 <tr>
                   <th style={th}>Date</th>
@@ -715,7 +749,7 @@ export default function PartyStockReportPage() {
               </thead>
               <tbody>
                 {normalizedJournalRows.length > 0 ? normalizedJournalRows.map((row, index) => (
-                  <tr key={`${row.journal_no || row.outward_id}-${row.inward_id}-${index}`}>
+                  <tr key={`${row.journal_no || row.outward_id}-${row.inward_id}-${index}`} style={{ background: index % 2 === 0 ? "#fff" : "#f8fafc" }}>
                     <td style={td}>{formatDisplayDate(row.date)}</td>
                     <td style={td}>{row.journal_no || "-"}</td>
                     <td style={td}>{row.warehouse_name || "-"}</td>
@@ -738,14 +772,14 @@ export default function PartyStockReportPage() {
               {normalizedJournalRows.length > 0 && (
                 <tfoot>
                   <tr style={{ background: "#f3e8ff", fontWeight: 700 }}>
-                    <td style={td} colSpan="6">Journal Totals</td>
-                    <td style={td}>{num(journalTotals.qty)}</td>
-                    <td style={td}>-</td>
-                    <td style={td}>{num(journalTotals.cost)}</td>
-                    <td style={td}>-</td>
-                    <td style={td}>{num(journalTotals.sale)}</td>
-                    <td style={td}>{num(journalTotals.profit)}</td>
-                    <td style={td} colSpan="2">-</td>
+                    <td style={{ ...td, background: "#f3e8ff" }} colSpan="6">Journal Totals</td>
+                    <td style={{ ...td, background: "#f3e8ff" }}>{num(journalTotals.qty)}</td>
+                    <td style={{ ...td, background: "#f3e8ff" }}>-</td>
+                    <td style={{ ...td, background: "#f3e8ff" }}>{num(journalTotals.cost)}</td>
+                    <td style={{ ...td, background: "#f3e8ff" }}>-</td>
+                    <td style={{ ...td, background: "#f3e8ff" }}>{num(journalTotals.sale)}</td>
+                    <td style={{ ...td, background: "#f3e8ff" }}>{num(journalTotals.profit)}</td>
+                    <td style={{ ...td, background: "#f3e8ff" }} colSpan="2">-</td>
                   </tr>
                 </tfoot>
               )}
