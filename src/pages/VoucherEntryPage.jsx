@@ -158,6 +158,8 @@ function VoucherEntryPage() {
 
   const [transportPayments, setTransportPayments] = useState([]);
 
+  const [savedPaymentSearch, setSavedPaymentSearch] = useState("");
+
   const [loadingPayments, setLoadingPayments] = useState(false);
 
   const [editingPaymentId, setEditingPaymentId] = useState("");
@@ -396,6 +398,23 @@ function VoucherEntryPage() {
     transporters,
     transportSearch,
   ]);
+
+  const filteredTransportPayments = useMemo(() => {
+    const search = savedPaymentSearch.trim().toLowerCase();
+    if (!search) return transportPayments;
+
+    return transportPayments.filter((payment) =>
+      [
+        payment.voucher_no,
+        payment.date,
+        payment.transporter_name,
+        payment.amount,
+        payment.payment_method,
+      ].some((value) =>
+        String(value ?? "").toLowerCase().includes(search)
+      )
+    );
+  }, [savedPaymentSearch, transportPayments]);
 
   /* ==========================================================
      TOTAL ADJUSTED
@@ -2390,32 +2409,55 @@ function VoucherEntryPage() {
                   </span>
                 </h3>
               </div>
-              <button
-                type="button"
-                disabled={loadingPayments}
-                onClick={async () => {
-                  try {
-                    setLoadingPayments(true);
-                    const response = await axios.get(`${API_BASE}/transport-payments`);
-                    const rows = response?.data?.rows ?? [];
-                    setTransportPayments(Array.isArray(rows) ? rows : []);
-                  } catch (err) {
-                    setError(err?.response?.data?.error || "Transport payment list load failed.");
-                  } finally {
-                    setLoadingPayments(false);
-                  }
-                }}
+              <div
                 style={{
-                  border: "1px solid #cbd5e1",
-                  background: "#fff",
-                  borderRadius: "8px",
-                  padding: "8px 12px",
-                  cursor: loadingPayments ? "not-allowed" : "pointer",
-                  fontWeight: 600,
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "8px",
+                  flex: "1 1 340px",
+                  justifyContent: "flex-end",
                 }}
               >
-                {loadingPayments ? "Loading..." : "Refresh"}
-              </button>
+                <input
+                  type="search"
+                  value={savedPaymentSearch}
+                  onChange={(event) => setSavedPaymentSearch(event.target.value)}
+                  placeholder="Search voucher, date, transporter, amount or method"
+                  aria-label="Search saved transport payments"
+                  style={{
+                    ...inputStyle,
+                    width: "min(100%, 390px)",
+                    background: "#f8fafc",
+                  }}
+                />
+                <button
+                  type="button"
+                  disabled={loadingPayments}
+                  onClick={async () => {
+                    try {
+                      setLoadingPayments(true);
+                      const response = await axios.get(`${API_BASE}/transport-payments`);
+                      const rows = response?.data?.rows ?? [];
+                      setTransportPayments(Array.isArray(rows) ? rows : []);
+                    } catch (err) {
+                      setError(err?.response?.data?.error || "Transport payment list load failed.");
+                    } finally {
+                      setLoadingPayments(false);
+                    }
+                  }}
+                  style={{
+                    border: "1px solid #cbd5e1",
+                    background: "#fff",
+                    borderRadius: "8px",
+                    padding: "8px 12px",
+                    cursor: loadingPayments ? "not-allowed" : "pointer",
+                    fontWeight: 600,
+                    whiteSpace: "nowrap",
+                  }}
+                >
+                  {loadingPayments ? "Loading..." : "Refresh"}
+                </button>
+              </div>
             </div>
 
             <div style={{ overflowX: "auto", border: "1px solid #e2e8f0", borderRadius: "10px" }}>
@@ -2430,7 +2472,7 @@ function VoucherEntryPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {transportPayments.map((payment, index) => (
+                  {filteredTransportPayments.map((payment, index) => (
                     <tr
                       key={payment._id || payment.id}
                       style={{ background: index % 2 === 0 ? "#fff" : "#f8fafc" }}
@@ -2473,10 +2515,12 @@ function VoucherEntryPage() {
                       </td>
                     </tr>
                   ))}
-                  {!loadingPayments && transportPayments.length === 0 && (
+                  {!loadingPayments && filteredTransportPayments.length === 0 && (
                     <tr>
                       <td colSpan={6} style={{ padding: "18px 10px", color: "#64748b", textAlign: "center" }}>
-                        No transport payments found.
+                        {transportPayments.length === 0
+                          ? "No transport payments found."
+                          : "No payments match your search."}
                       </td>
                     </tr>
                   )}
@@ -2681,25 +2725,6 @@ function VoucherEntryPage() {
                           {name}
                         </div>
 
-                        {getId(
-                          item
-                        ) && (
-                          <div
-                            style={{
-                              fontSize:
-                                "12px",
-                              color:
-                                "#64748b",
-                              marginTop:
-                                "3px",
-                            }}
-                          >
-                            ID:{" "}
-                            {getId(
-                              item
-                            )}
-                          </div>
-                        )}
                       </button>
                     );
                   }
