@@ -9,6 +9,7 @@ export default function MultiSelectDropdown({
   accent = "#0f766e",
   searchable = true,
   maxHeight = 220,
+  containerStyle = {},
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -65,7 +66,7 @@ export default function MultiSelectDropdown({
   const clearAll = () => onChange?.([]);
 
   return (
-    <div ref={rootRef} style={{ position: "relative", minWidth: 220, flex: "1 1 220px" }}>
+    <div ref={rootRef} style={{ position: "relative", minWidth: 220, flex: "1 1 220px", ...containerStyle }}>
       {label ? (
         <div style={{ marginBottom: 6, fontSize: 12, fontWeight: 700, color: "#475569" }}>{label}</div>
       ) : null}
