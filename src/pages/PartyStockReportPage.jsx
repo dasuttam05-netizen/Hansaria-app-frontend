@@ -943,7 +943,7 @@ export default function PartyStockReportPage() {
                   {adjustmentDetails.row.company_name || adjustmentDetails.row.account_name || "Stock adjustment details"}
                 </h3>
                 <div style={{ marginTop: 4, color: "#ede9fe", fontSize: 13 }}>
-                  Stock source: {adjustmentDetails.row.product_name || "-"} · Lorry {adjustmentDetails.row.lorry_no || "-"} · {formatDisplayDate(adjustmentDetails.row.date) || "-"}
+                  Outward entries that consumed this stock
                 </div>
               </div>
               <button
@@ -999,7 +999,7 @@ export default function PartyStockReportPage() {
                   <table style={{ width: "100%", minWidth: 1350, borderCollapse: "separate", borderSpacing: 0, fontSize: 13 }}>
                     <thead>
                       <tr>
-                        {["Type", "Outward Date", "Outward Voucher", "Destination Account", "Party", "Location", "Warehouse", "Lorry", "Outward Qty", "Adjusted Qty"].map((heading) => (
+                        {["Type", "Outward Date", "Outward Voucher", "Destination Account", "Consignee", "Location", "Warehouse", "Lorry No", "Outward Total Qty", "Adjusted Qty"].map((heading) => (
                           <th key={heading} style={{ ...th, position: "sticky", top: 0, background: "#4c1d95" }}>{heading}</th>
                         ))}
                       </tr>
@@ -1015,12 +1015,12 @@ export default function PartyStockReportPage() {
                           <td style={td}>{formatDisplayDate(entry.date) || "-"}</td>
                           <td style={{ ...td, fontWeight: 700 }}>{entry.reference || "-"}</td>
                           <td style={{ ...td, fontWeight: 700, color: "#4c1d95" }}>{entry.account || "-"}</td>
-                          <td style={td}>{entry.party || "-"}</td>
+                          <td style={td}>{entry.consignee || "-"}</td>
                           <td style={td}>{entry.location || "-"}</td>
                           <td style={td}>{entry.warehouse || "-"}</td>
                           <td style={td}>{entry.lorry || "-"}</td>
                           <td style={{ ...td, textAlign: "right", fontWeight: 700, color: "#1d4ed8" }}>
-                            {entry.type === "Stock Journal" ? "-" : num(entry.outward_quantity)}
+                            {entry.outward_quantity == null ? "-" : num(entry.outward_quantity)}
                           </td>
                           <td style={{ ...td, textAlign: "right", fontWeight: 800, color: "#6d28d9" }}>{num(entry.quantity)}</td>
                         </tr>
