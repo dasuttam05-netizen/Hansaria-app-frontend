@@ -23,24 +23,26 @@ export default function TransportReportPage() {
 
   const card = {
     background: "#fff",
-    border: "1px solid #e2e8f0",
+    border: "1px solid #dbe4ea",
     borderRadius: 16,
-    padding: 16,
-    boxShadow: "0 10px 30px rgba(15, 23, 42, 0.08)",
+    padding: 18,
+    boxShadow: "0 12px 32px rgba(15, 23, 42, 0.07)",
   };
 
   const input = {
     padding: "10px 12px",
     border: "1px solid #cbd5e1",
-    borderRadius: 8,
+    borderRadius: 10,
     fontSize: 14,
     minWidth: 160,
+    background: "#fff",
+    color: "#0f172a",
   };
 
   const button = {
     padding: "10px 16px",
     border: "none",
-    borderRadius: 8,
+    borderRadius: 10,
     fontWeight: 700,
     cursor: "pointer",
     color: "#fff",
@@ -49,17 +51,20 @@ export default function TransportReportPage() {
   const th = {
     background: "#0f766e",
     color: "#fff",
-    padding: "10px 12px",
-    border: "1px solid #dbe4ea",
+    padding: "11px 12px",
+    border: "1px solid #e2e8f0",
     textAlign: "left",
     whiteSpace: "nowrap",
+    fontSize: 12,
+    letterSpacing: "0.25px",
   };
 
   const td = {
-    padding: "10px 12px",
+    padding: "11px 12px",
     border: "1px solid #e2e8f0",
     background: "#fff",
     whiteSpace: "nowrap",
+    color: "#334155",
   };
 
   const num = (v) => Number(v || 0).toFixed(2);
@@ -240,6 +245,15 @@ export default function TransportReportPage() {
         { gross: 0, net: 0, shortage: 0, detain: 0, others: 0, advance: 0, tds: 0, payable: 0 }
       ),
     [visibleRecords]
+  );
+
+  const visiblePaymentTotal = useMemo(
+    () =>
+      visiblePayments.reduce(
+        (total, payment) => total + (Number(payment.amount) || 0),
+        0
+      ),
+    [visiblePayments]
   );
 
   const buildReportPdf = (rows, title = "Transport Report") => {
@@ -662,17 +676,25 @@ Rows: ${rows.length}`;
   };
 
   return (
-    <div style={{ padding: 20, background: "#f8fafc", minHeight: "100vh", fontFamily: "Segoe UI, Arial, sans-serif" }}>
-      <div style={{ ...card, marginBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <h2 style={{ margin: 0, color: "#0f172a" }}>Transport Report</h2>
+    <div style={{ padding: 20, background: "linear-gradient(180deg, #f1f5f9 0%, #f8fafc 260px)", minHeight: "100vh", fontFamily: "Segoe UI, Arial, sans-serif" }}>
+      <div style={{ ...card, marginBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, flexWrap: "wrap", padding: "22px 24px", background: "linear-gradient(115deg, #0f172a 0%, #134e4a 74%, #0f766e 100%)", border: "none", color: "#fff" }}>
+        <div>
+          <div style={{ color: "#99f6e4", fontSize: 11, fontWeight: 800, letterSpacing: 1.4, textTransform: "uppercase", marginBottom: 5 }}>
+            Transport Operations
+          </div>
+          <h2 style={{ margin: 0, color: "#fff", fontSize: 25 }}>Transport Report</h2>
+          <div style={{ color: "#cbd5e1", fontSize: 13, marginTop: 5 }}>
+            Review transport payments, bilti details and transporter balances
+          </div>
+        </div>
         <button
           onClick={() => navigate("/dashboard")}
           style={{
             padding: "8px 16px",
-            background: "#6366f1",
+            background: "rgba(255,255,255,0.12)",
             color: "#fff",
-            border: "none",
-            borderRadius: 4,
+            border: "1px solid rgba(255,255,255,0.28)",
+            borderRadius: 10,
             fontSize: 14,
             cursor: "pointer",
             fontWeight: 600,
@@ -682,39 +704,70 @@ Rows: ${rows.length}`;
         </button>
       </div>
 
-      <div style={{ ...card, marginBottom: 16 }}>
+      <div style={{ ...card, marginBottom: 16, borderTop: "4px solid #0f766e" }}>
         <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-          <input type="date" name="from_date" value={filters.from_date} onChange={(e) => setFilters((p) => ({ ...p, from_date: e.target.value }))} style={input} />
-          <input type="date" name="to_date" value={filters.to_date} onChange={(e) => setFilters((p) => ({ ...p, to_date: e.target.value }))} style={input} />
+          <label style={{ display: "grid", gap: 5, color: "#64748b", fontSize: 11, fontWeight: 800, textTransform: "uppercase" }}>
+            From date
+            <input type="date" name="from_date" value={filters.from_date} onChange={(e) => setFilters((p) => ({ ...p, from_date: e.target.value }))} style={input} />
+          </label>
+          <label style={{ display: "grid", gap: 5, color: "#64748b", fontSize: 11, fontWeight: 800, textTransform: "uppercase" }}>
+            To date
+            <input type="date" name="to_date" value={filters.to_date} onChange={(e) => setFilters((p) => ({ ...p, to_date: e.target.value }))} style={input} />
+          </label>
           <input
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Search transport / bilti / voucher / lorry"
-            style={{ ...input, minWidth: 300 }}
+            aria-label="Search transport report"
+            style={{ ...input, minWidth: 260, flex: "1 1 260px", alignSelf: "end" }}
           />
-          <button onClick={fetchReport} style={{ ...button, background: "#0f766e", display: "inline-flex", alignItems: "center", gap: 8 }}><FaSyncAlt /> F5 / Refresh</button>
-          <button onClick={downloadPDF} style={{ ...button, background: "#2563eb", display: "inline-flex", alignItems: "center", gap: 8 }}><FaFilePdf /> Report PDF</button>
-          <button onClick={shareReportWhatsApp} style={{ ...button, background: "#16a34a", display: "inline-flex", alignItems: "center", gap: 8 }}><FaWhatsapp /> WhatsApp Report</button>
+          <button onClick={fetchReport} style={{ ...button, background: "#0f766e", display: "inline-flex", alignItems: "center", gap: 8, alignSelf: "end" }}><FaSyncAlt /> F5 / Refresh</button>
+          <button onClick={downloadPDF} style={{ ...button, background: "#2563eb", display: "inline-flex", alignItems: "center", gap: 8, alignSelf: "end" }}><FaFilePdf /> Report PDF</button>
+          <button onClick={shareReportWhatsApp} style={{ ...button, background: "#16a34a", display: "inline-flex", alignItems: "center", gap: 8, alignSelf: "end" }}><FaWhatsapp /> WhatsApp Report</button>
         </div>
       </div>
 
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 12, marginBottom: 16 }}>
+        {[
+          { label: "Bilti Records", value: visibleRecords.length.toLocaleString(), accent: "#2563eb", tint: "#eff6ff" },
+          { label: "Gross Freight", value: `₹ ${num(totals.gross)}`, accent: "#0f766e", tint: "#f0fdfa" },
+          { label: "Total Payable", value: `₹ ${num(totals.payable)}`, accent: "#7c3aed", tint: "#f5f3ff" },
+          { label: "Payment Vouchers", value: `${visiblePayments.length} · ₹ ${num(visiblePaymentTotal)}`, accent: "#ea580c", tint: "#fff7ed" },
+        ].map((metric) => (
+          <div key={metric.label} style={{ ...card, padding: "15px 17px", borderLeft: `4px solid ${metric.accent}`, background: metric.tint }}>
+            <div style={{ color: "#64748b", fontSize: 11, fontWeight: 800, letterSpacing: 0.6, textTransform: "uppercase" }}>{metric.label}</div>
+            <div style={{ color: "#172033", fontSize: 19, fontWeight: 800, marginTop: 7, overflowWrap: "anywhere" }}>{metric.value}</div>
+          </div>
+        ))}
+      </div>
 
-      <div style={{ ...card, marginBottom: 16, padding: 8, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+      <div style={{ ...card, marginBottom: 16, padding: 8, display: "flex", gap: 8, flexWrap: "wrap", background: "#e9eff5" }}>
         {[
           ['payment', 'Transport Payment'],
           ['bilti', 'Bilti Full Report'],
           ['ledger', 'Transporter Ledger'],
         ].map(([key, label]) => (
           <button key={key} type="button" onClick={() => setActiveSection(key)} style={{
-            ...button, background: activeSection === key ? '#0f766e' : '#e2e8f0', color: activeSection === key ? '#fff' : '#0f172a',
+            ...button,
+            background: activeSection === key ? "#0f766e" : "#fff",
+            color: activeSection === key ? "#fff" : "#334155",
+            boxShadow: activeSection === key ? "0 4px 10px rgba(15,118,110,0.2)" : "none",
           }}>
             {label}
           </button>
         ))}
       </div>
       {activeSection === "payment" && (
-      <div style={{ ...card, marginBottom: 16, overflow: "hidden" }}>
-        <h3 style={{ margin: "0 0 14px", color: "#0f172a" }}>Transport Payment Vouchers</h3>
+      <div style={{ ...card, marginBottom: 16, overflow: "hidden", padding: 0 }}>
+        <div style={{ padding: "17px 18px", borderBottom: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <div>
+            <div style={{ color: "#0f766e", fontSize: 11, fontWeight: 800, letterSpacing: 1, textTransform: "uppercase", marginBottom: 4 }}>Payment History</div>
+            <h3 style={{ margin: 0, color: "#0f172a" }}>Transport Payment Vouchers</h3>
+          </div>
+          <span style={{ padding: "6px 10px", borderRadius: 999, background: "#f0fdfa", color: "#0f766e", fontSize: 12, fontWeight: 800 }}>
+            {visiblePayments.length} records
+          </span>
+        </div>
         <div style={{ overflowX: "auto", maxHeight: "45vh" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, minWidth: 900 }}>
             <thead>
@@ -725,7 +778,7 @@ Rows: ${rows.length}`;
               </tr>
             </thead>
             <tbody>
-              {visiblePayments.length ? visiblePayments.map((payment) => {
+              {visiblePayments.length ? visiblePayments.map((payment, index) => {
                 const allocations = Array.isArray(payment.adjustments)
                   ? payment.adjustments
                   : Array.isArray(payment.allocations)
@@ -737,15 +790,15 @@ Rows: ${rows.length}`;
                 );
 
                 return (
-                  <tr key={payment._id || payment.id}>
-                    <td style={td}>{payment.voucher_no || "-"}</td>
+                  <tr key={payment._id || payment.id} style={{ background: index % 2 === 0 ? "#fff" : "#f8fafc" }}>
+                    <td style={td}><span style={{ display: "inline-block", padding: "5px 8px", borderRadius: 7, background: "#f0fdfa", color: "#0f766e", fontWeight: 800 }}>{payment.voucher_no || "-"}</span></td>
                     <td style={td}>{dateValue(payment.date) || "-"}</td>
-                    <td style={td}>{payment.transporter_name || "-"}</td>
-                    <td style={{ ...td, textAlign: "right" }}>{num(payment.amount)}</td>
+                    <td style={{ ...td, fontWeight: 700 }}>{payment.transporter_name || "-"}</td>
+                    <td style={{ ...td, textAlign: "right", fontWeight: 800, color: "#0f766e" }}>{num(payment.amount)}</td>
                     <td style={{ ...td, textAlign: "right" }}>{num(adjusted)}</td>
                     <td style={{ ...td, textAlign: "right" }}>{num(payment.advance_amount)}</td>
                     <td style={{ ...td, textAlign: "right" }}>{num(payment.on_account_amount)}</td>
-                    <td style={td}>{payment.payment_method || "-"}</td>
+                    <td style={td}><span style={{ display: "inline-block", padding: "4px 8px", borderRadius: 999, background: "#eef2ff", color: "#4338ca", fontSize: 12, fontWeight: 700 }}>{payment.payment_method || "-"}</span></td>
                     <td style={{ ...td, whiteSpace: "normal", minWidth: 160 }}>{payment.narration || "-"}</td>
                     <td style={td}>
                       <button
@@ -772,7 +825,16 @@ Rows: ${rows.length}`;
 
       )}
       {activeSection === "bilti" && (
-      <div style={{ ...card, overflow: "hidden" }}>
+      <div style={{ ...card, overflow: "hidden", padding: 0 }}>
+        <div style={{ padding: "17px 18px", borderBottom: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+          <div>
+            <div style={{ color: "#2563eb", fontSize: 11, fontWeight: 800, letterSpacing: 1, textTransform: "uppercase", marginBottom: 4 }}>Detailed Freight Register</div>
+            <h3 style={{ margin: 0, color: "#0f172a" }}>Bilti Full Report</h3>
+          </div>
+          <span style={{ padding: "6px 10px", borderRadius: 999, background: "#eff6ff", color: "#1d4ed8", fontSize: 12, fontWeight: 800 }}>
+            {visibleRecords.length} records
+          </span>
+        </div>
         <div style={{ overflowX: "auto", maxHeight: "72vh" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
             <thead>
@@ -808,9 +870,9 @@ Rows: ${rows.length}`;
             </thead>
             <tbody>
               {visibleRecords.length > 0 ? (
-                visibleRecords.map((row) => (
-                  <tr key={row.id}>
-                    <td style={td}>{row.bilti_no}</td>
+                visibleRecords.map((row, index) => (
+                  <tr key={row.id} style={{ background: index % 2 === 0 ? "#fff" : "#f8fafc" }}>
+                    <td style={{ ...td, fontWeight: 800, color: "#1d4ed8" }}>{row.bilti_no}</td>
                     <td style={td}>{row.transporter_name}</td>
                   <td style={td}>{formatDisplayDate(row.dispatch_date)}</td>
                     <td style={td}>{row.voucher_no || row.outward_voucher_no || row.sale_voucher_no || ""}</td>
@@ -832,10 +894,10 @@ Rows: ${rows.length}`;
                     <td style={td}>{num(row.advance_amount)}</td>
                     <td style={td}>{num(row.tds_percent)}</td>
                     <td style={td}>{num(row.tds_amount)}</td>
-                    <td style={td}>{num(row.payable_amount)}</td>
+                    <td style={{ ...td, fontWeight: 800, color: "#0f766e" }}>{num(row.payable_amount)}</td>
                     <td style={td}>{dateValue(getPayDate(row))}</td>
                     <td style={td}>{num(getPayAmount(row))}</td>
-                    <td style={td}>{num(getBalanceAmount(row))}</td>
+                    <td style={{ ...td, fontWeight: 700, color: getBalanceAmount(row) > 0 ? "#c2410c" : "#047857" }}>{num(getBalanceAmount(row))}</td>
                     <td style={td}>
                       <div style={{ display: "flex", gap: 6 }}>
                         <button onClick={() => handleEdit(row.id)} style={{ ...button, background: "#2563eb", padding: "8px 10px" }}>
@@ -906,8 +968,16 @@ Payable: ${num(row.payable_amount)}`;
         </div>
       </div>      )}
       {activeSection === "ledger" && (
-        <div style={{ ...card, overflow: "hidden" }}>
-          <h3 style={{ margin: "0 0 14px", color: "#0f172a" }}>Transporter Ledger</h3>
+        <div style={{ ...card, overflow: "hidden", padding: 0 }}>
+          <div style={{ padding: "17px 18px", borderBottom: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <div>
+              <div style={{ color: "#7c3aed", fontSize: 11, fontWeight: 800, letterSpacing: 1, textTransform: "uppercase", marginBottom: 4 }}>Account Summary</div>
+              <h3 style={{ margin: 0, color: "#0f172a" }}>Transporter Ledger</h3>
+            </div>
+            <span style={{ padding: "6px 10px", borderRadius: 999, background: "#f5f3ff", color: "#6d28d9", fontSize: 12, fontWeight: 800 }}>
+              {transporterLedgerRows.length} transporters
+            </span>
+          </div>
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
               <thead>
@@ -918,12 +988,12 @@ Payable: ${num(row.payable_amount)}`;
                 </tr>
               </thead>
               <tbody>
-                {transporterLedgerRows.length ? transporterLedgerRows.map((item) => {
+                {transporterLedgerRows.length ? transporterLedgerRows.map((item, index) => {
                   const open = selectedLedgerTransporter === item.name;
                   return (
                     <React.Fragment key={item.name}>
-                      <tr>
-                        <td style={{ ...td, fontWeight: 700 }}>{item.name}</td>
+                      <tr style={{ background: index % 2 === 0 ? "#fff" : "#f8fafc" }}>
+                        <td style={{ ...td, fontWeight: 800, color: "#5b21b6" }}>{item.name}</td>
                         <td style={td}>{item.bills}</td>
                         <td style={td}>{num(item.gross)}</td>
                         <td style={td}>{num(item.net)}</td>
@@ -931,7 +1001,7 @@ Payable: ${num(row.payable_amount)}`;
                         <td style={td}>{num(item.tds)}</td>
                         <td style={td}>{num(item.payable)}</td>
                         <td style={td}>{num(item.paid)}</td>
-                        <td style={{ ...td, fontWeight: 700 }}>{num(item.balance)}</td>
+                        <td style={{ ...td, fontWeight: 800, color: item.balance > 0 ? "#c2410c" : "#047857" }}>{num(item.balance)}</td>
                         <td style={td}>
                           <button type="button" onClick={() => setSelectedLedgerTransporter(open ? "" : item.name)} style={{ ...button, background: open ? "#64748b" : "#7c3aed", padding: "7px 11px" }}>
                             {open ? 'Hide Details' : 'Details'}
