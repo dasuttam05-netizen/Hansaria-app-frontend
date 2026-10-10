@@ -1007,12 +1007,13 @@ function VoucherEntryPage() {
 
       <div
         style={{
-          background: "#ffffff",
-          borderRadius: "12px",
-          padding: "18px 20px",
+          background: "linear-gradient(120deg, #172554 0%, #1e3a8a 62%, #7c2d12 150%)",
+          border: "1px solid #1e3a8a",
+          borderRadius: "16px",
+          padding: "20px 22px",
           marginBottom: "16px",
           boxShadow:
-            "0 2px 10px rgba(0,0,0,0.06)",
+            "0 12px 28px rgba(23,37,84,0.16)",
         }}
       >
         <div
@@ -1030,7 +1031,7 @@ function VoucherEntryPage() {
                 margin: 0,
                 fontSize: "24px",
                 fontWeight: 700,
-                color: "#172033",
+                color: "#fff",
               }}
             >
               Voucher Entry
@@ -1039,7 +1040,7 @@ function VoucherEntryPage() {
             <div
               style={{
                 marginTop: "5px",
-                color: "#687386",
+                color: "#cbd5e1",
                 fontSize: "13px",
               }}
             >
@@ -1054,9 +1055,10 @@ function VoucherEntryPage() {
               navigate("/dashboard")
             }
             style={{
-              border: "1px solid #d7dce5",
-              background: "#fff",
-              borderRadius: "8px",
+              border: "1px solid rgba(255,255,255,0.35)",
+              background: "rgba(255,255,255,0.1)",
+              color: "#fff",
+              borderRadius: "9px",
               padding: "9px 15px",
               cursor: "pointer",
               fontWeight: 600,
@@ -1077,11 +1079,12 @@ function VoucherEntryPage() {
           gap: "8px",
           flexWrap: "wrap",
           background: "#fff",
-          padding: "10px",
-          borderRadius: "12px",
+          padding: "9px",
+          border: "1px solid #dbe3ee",
+          borderRadius: "14px",
           marginBottom: "16px",
           boxShadow:
-            "0 2px 10px rgba(0,0,0,0.05)",
+            "0 6px 18px rgba(15,23,42,0.06)",
         }}
       >
         <button
@@ -1091,7 +1094,7 @@ function VoucherEntryPage() {
           }
           style={{
             padding: "10px 18px",
-            borderRadius: "8px",
+            borderRadius: "10px",
             border: "none",
             cursor: "pointer",
             fontWeight: 700,
@@ -1115,7 +1118,7 @@ function VoucherEntryPage() {
           }
           style={{
             padding: "10px 18px",
-            borderRadius: "8px",
+            borderRadius: "10px",
             border: "none",
             cursor: "pointer",
             fontWeight: 700,
@@ -1139,7 +1142,7 @@ function VoucherEntryPage() {
           }
           style={{
             padding: "10px 18px",
-            borderRadius: "8px",
+            borderRadius: "10px",
             border: "none",
             cursor: "pointer",
             fontWeight: 700,
@@ -1163,7 +1166,7 @@ function VoucherEntryPage() {
           }
           style={{
             padding: "10px 18px",
-            borderRadius: "8px",
+            borderRadius: "10px",
             border: "none",
             cursor: "pointer",
             fontWeight: 700,
@@ -1289,30 +1292,75 @@ function VoucherEntryPage() {
           <div
             id="transport-payment-form"
             style={{
-              background: "#fff",
-              borderRadius: "12px",
-              padding: "20px",
+              background: "linear-gradient(135deg, #fff7ed 0%, #ffffff 48%)",
+              border: "1px solid #fed7aa",
+              borderTop: "5px solid #ea580c",
+              borderRadius: "16px",
+              padding: "22px",
               boxShadow:
-                "0 2px 10px rgba(0,0,0,0.06)",
+                "0 12px 30px rgba(154,52,18,0.08)",
               marginBottom: "16px",
             }}
           >
-            <h3
+            <div
               style={{
-                marginTop: 0,
-                marginBottom: "18px",
-                color: "#c2410c",
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "space-between",
+                gap: "12px",
+                flexWrap: "wrap",
+                marginBottom: "20px",
               }}
             >
-              {editingPaymentId ? "Edit Transport Payment" : "Transport Payment"}
-            </h3>
+              <div>
+                <div
+                  style={{
+                    color: "#9a3412",
+                    fontSize: "11px",
+                    fontWeight: 800,
+                    letterSpacing: "1.2px",
+                    textTransform: "uppercase",
+                    marginBottom: "4px",
+                  }}
+                >
+                  Voucher Entry / Transport
+                </div>
+                <h3
+                  style={{
+                    margin: 0,
+                    color: "#7c2d12",
+                    fontSize: "21px",
+                    fontWeight: 800,
+                  }}
+                >
+                  {editingPaymentId ? "Edit Transport Payment" : "Transport Payment"}
+                </h3>
+              </div>
+              <span
+                style={{
+                  padding: "7px 12px",
+                  borderRadius: "999px",
+                  background: "#ffedd5",
+                  border: "1px solid #fdba74",
+                  color: "#9a3412",
+                  fontSize: "12px",
+                  fontWeight: 800,
+                }}
+              >
+                {form.auto_voucher ? "AUTO VOUCHER" : "MANUAL VOUCHER"}
+              </span>
+            </div>
 
             <div
               style={{
                 display: "grid",
                 gridTemplateColumns:
                   "repeat(auto-fit,minmax(220px,1fr))",
-                gap: "14px",
+                gap: "16px",
+                padding: "18px",
+                background: "rgba(255,255,255,0.78)",
+                border: "1px solid #ffedd5",
+                borderRadius: "12px",
               }}
             >
 
@@ -1533,7 +1581,13 @@ function VoucherEntryPage() {
                       e.target.value
                     )
                   }
-                  style={inputStyle}
+                  style={{
+                    ...inputStyle,
+                    background: "#fff7ed",
+                    borderColor: "#fdba74",
+                    color: "#7c2d12",
+                    fontWeight: 700,
+                  }}
                 >
                   <option value="Cash">
                     Cash
@@ -2166,10 +2220,11 @@ function VoucherEntryPage() {
           <div
             style={{
               background: "#fff",
-              borderRadius: "12px",
+              border: "1px solid #dbe3ee",
+              borderRadius: "16px",
               padding: "20px",
               marginTop: "20px",
-              boxShadow: "0 2px 10px rgba(0,0,0,0.06)",
+              boxShadow: "0 10px 28px rgba(15,23,42,0.07)",
             }}
           >
             <div
@@ -2179,10 +2234,40 @@ function VoucherEntryPage() {
                 alignItems: "center",
                 gap: "12px",
                 flexWrap: "wrap",
-                marginBottom: "14px",
+                marginBottom: "16px",
               }}
             >
-              <h3 style={{ margin: 0, color: "#172033" }}>Saved Transport Payments</h3>
+              <div>
+                <div
+                  style={{
+                    color: "#64748b",
+                    fontSize: "11px",
+                    fontWeight: 800,
+                    letterSpacing: "1.1px",
+                    textTransform: "uppercase",
+                    marginBottom: "4px",
+                  }}
+                >
+                  Payment history
+                </div>
+                <h3 style={{ margin: 0, color: "#172033", fontSize: "19px" }}>
+                  Saved Transport Payments
+                  <span
+                    style={{
+                      display: "inline-block",
+                      verticalAlign: "middle",
+                      marginLeft: "9px",
+                      padding: "3px 9px",
+                      borderRadius: "999px",
+                      background: "#f1f5f9",
+                      color: "#475569",
+                      fontSize: "12px",
+                    }}
+                  >
+                    {transportPayments.length}
+                  </span>
+                </h3>
+              </div>
               <button
                 type="button"
                 disabled={loadingPayments}
@@ -2211,25 +2296,42 @@ function VoucherEntryPage() {
               </button>
             </div>
 
-            <div style={{ overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "640px" }}>
+            <div style={{ overflowX: "auto", border: "1px solid #e2e8f0", borderRadius: "10px" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", minWidth: "740px" }}>
                 <thead>
-                  <tr style={{ background: "#f1f5f9", color: "#334155", textAlign: "left" }}>
+                  <tr style={{ background: "#172554", color: "#fff", textAlign: "left" }}>
                     {["Voucher No", "Date", "Transporter", "Amount", "Method", "Action"].map((heading) => (
-                      <th key={heading} style={{ padding: "10px", borderBottom: "1px solid #cbd5e1", whiteSpace: "nowrap" }}>
+                      <th key={heading} style={{ padding: "12px 11px", borderBottom: "1px solid #1e3a8a", whiteSpace: "nowrap", fontSize: "12px", letterSpacing: "0.3px" }}>
                         {heading}
                       </th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
-                  {transportPayments.map((payment) => (
-                    <tr key={payment._id || payment.id}>
-                      <td style={{ padding: "10px", borderBottom: "1px solid #e2e8f0" }}>{payment.voucher_no || "-"}</td>
-                      <td style={{ padding: "10px", borderBottom: "1px solid #e2e8f0", whiteSpace: "nowrap" }}>{String(payment.date || "").slice(0, 10) || "-"}</td>
-                      <td style={{ padding: "10px", borderBottom: "1px solid #e2e8f0" }}>{payment.transporter_name || "-"}</td>
-                      <td style={{ padding: "10px", borderBottom: "1px solid #e2e8f0", textAlign: "right" }}>{money(payment.amount)}</td>
-                      <td style={{ padding: "10px", borderBottom: "1px solid #e2e8f0" }}>{payment.payment_method || "-"}</td>
+                  {transportPayments.map((payment, index) => (
+                    <tr
+                      key={payment._id || payment.id}
+                      style={{ background: index % 2 === 0 ? "#fff" : "#f8fafc" }}
+                    >
+                      <td style={{ padding: "11px", borderBottom: "1px solid #e2e8f0" }}>
+                        <span style={{ display: "inline-block", padding: "5px 9px", borderRadius: "7px", background: "#eff6ff", color: "#1d4ed8", fontWeight: 800, whiteSpace: "nowrap" }}>
+                          {payment.voucher_no || "-"}
+                        </span>
+                      </td>
+                      <td style={{ padding: "11px", borderBottom: "1px solid #e2e8f0", whiteSpace: "nowrap", color: "#475569" }}>
+                        {String(payment.date || "").slice(0, 10) || "-"}
+                      </td>
+                      <td style={{ padding: "11px", borderBottom: "1px solid #e2e8f0", fontWeight: 700, color: "#1e293b" }}>
+                        {payment.transporter_name || "-"}
+                      </td>
+                      <td style={{ padding: "11px", borderBottom: "1px solid #e2e8f0", textAlign: "right", fontWeight: 800, color: "#0f766e", whiteSpace: "nowrap" }}>
+                        ₹ {money(payment.amount)}
+                      </td>
+                      <td style={{ padding: "11px", borderBottom: "1px solid #e2e8f0" }}>
+                        <span style={{ display: "inline-block", padding: "5px 9px", borderRadius: "999px", background: "#f1f5f9", color: "#334155", fontSize: "12px", fontWeight: 700 }}>
+                          {payment.payment_method || "-"}
+                        </span>
+                      </td>
                       <td style={{ padding: "8px 10px", borderBottom: "1px solid #e2e8f0" }}>
                         <button
                           type="button"
@@ -2238,8 +2340,8 @@ function VoucherEntryPage() {
                             border: "1px solid #ea580c",
                             background: "#fff7ed",
                             color: "#c2410c",
-                            borderRadius: "6px",
-                            padding: "6px 11px",
+                            borderRadius: "7px",
+                            padding: "7px 13px",
                             cursor: "pointer",
                             fontWeight: 700,
                           }}
