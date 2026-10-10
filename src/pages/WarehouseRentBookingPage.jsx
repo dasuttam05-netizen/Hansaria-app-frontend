@@ -22,6 +22,7 @@ export default function WarehouseRentBookingPage({ embedded = false } = {}) {
   const [warehouseId, setWarehouseId] = useState("");
   const [remarks, setRemarks] = useState("");
   const [selectedReceivable, setSelectedReceivable] = useState([]);
+  const [selectedPayable, setSelectedPayable] = useState([]);
   const [loading, setLoading] = useState(false);
   const [collectBill, setCollectBill] = useState(null);
   const [collectionForm, setCollectionForm] = useState({ amount: "", collection_date: today(), collection_mode: "Bank", reference_no: "", remarks: "" });
@@ -67,6 +68,8 @@ export default function WarehouseRentBookingPage({ embedded = false } = {}) {
   const bookedIdSet = useMemo(() => new Set(bookings.map((b) => String(b.warehouse_id?._id || b.warehouse_id || b.id))), [bookings]);
   const selectableReceivable = useMemo(() => receivableWarehouses.filter((w) => !bookedIdSet.has(String(w.id || w._id))), [receivableWarehouses, bookedIdSet]);
   const allSelected = selectableReceivable.length > 0 && selectableReceivable.every((w) => selectedReceivable.includes(String(w.id || w._id)));
+  const selectablePayable = useMemo(() => payableWarehouses.filter((w) => w.company_id && !bookedIdSet.has(String(w.id || w._id))), [payableWarehouses, bookedIdSet]);
+  const allPayableSelected = selectablePayable.length > 0 && selectablePayable.every((w) => selectedPayable.includes(String(w.id || w._id)));
 
   const handleSave = async () => {
     if (!warehouseId || !rentMonth || !bookingDate) return alert("Select warehouse, month and booking date");
@@ -88,6 +91,35 @@ export default function WarehouseRentBookingPage({ embedded = false } = {}) {
   const toggleAll = () => {
     if (allSelected) setSelectedReceivable([]);
     else setSelectedReceivable(selectableReceivable.map((w) => String(w.id || w._id)));
+  };
+
+  const togglePayable = (id) => {
+    setSelectedPayable((prev) => prev.includes(id) ? prev.filter((item) => item !== id) : [...prev, id]);
+  };
+
+  const toggleAllPayable = () => {
+    setSelectedPayable(allPayableSelected ? [] : selectablePayable.map((warehouse) => String(warehouse.id || warehouse._id)));
+  };
+
+  const generatePayableBills = async () => {
+    if (!rentMonth) return alert("Select rent month");
+    if (!selectedPayable.length) return alert("Select at least one warehouse");
+    try {
+      setLoading(true);
+      const result = await axios.post("/api/warehouse-rent-bookings/bulk", {
+        rent_month: rentMonth,
+        booking_date: bookingDate,
+        warehouse_ids: selectedPayable,
+        rent_flow: "payable",
+      });
+      alert(`Rent bill generation complete. Bills: ${result.data?.created_count || 0}, Already generated: ${result.data?.skipped_count || 0}, Errors: ${result.data?.error_count || 0}`);
+      setSelectedPayable([]);
+      await load();
+    } catch (e) {
+      alert(e?.response?.data?.error || "Failed to generate warehouse rent bills");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const bulkBook = async () => {
@@ -133,7 +165,7 @@ export default function WarehouseRentBookingPage({ embedded = false } = {}) {
   return <div style={{ padding: 16, fontFamily: "Segoe UI, Arial, sans-serif", background: "#f8fafc", minHeight: "100%" }}>
     <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:16,flexWrap:"wrap",gap:8}}>
       <div><h2 style={{margin:0}}>Warehouse Rent Management</h2><div style={{fontSize:13,color:"#64748b",marginTop:4}}>Payable rent + Company rent collection workflow</div></div>
-      {!embedded ? <button onClick={()=>navigate("/warehouses")} style={btn.secondary}>Back To Warehouse Master</button> : <span style={embeddedBadge}>Warehouse Management → Rent</span>}
+      {!embedded ? <button onClick={()=>navigate("/warehouses")} style={btn.secondary}>Back To Warehouse Master</button> : <span style={embeddedBadge}>Warehouse Management → Monthly Rent Bills</span>}
     </div>
 
     <div style={{...card, marginBottom:16}}>
@@ -157,6 +189,26 @@ export default function WarehouseRentBookingPage({ embedded = false } = {}) {
         <label>Remarks<input value={remarks} onChange={e=>setRemarks(e.target.value)} style={input}/></label>
       </div>
       <button disabled={loading} onClick={handleSave} style={btn.primary}>Book Payable Rent</button>
+
+      <div style={{marginTop:22,borderTop:"1px solid #e2e8f0",paddingTop:18}}>
+        <div style={{display:"flex",gap:10,alignItems:"center",justifyContent:"space-between",flexWrap:"wrap",marginBottom:12}}>
+          <div>
+            <h3 style={{margin:"0 0 4px"}}>Monthly Warehouse Rent Bills</h3>
+            <div style={{fontSize:13,color:"#64748b"}}>Generate one separate bill per selected warehouse for {rentMonth}.</div>
+          </div>
+          <div style={{display:"flex",gap:8,alignItems:"center",flexWrap:"wrap"}}>
+            <label style={{fontWeight:700,display:"flex",gap:8,alignItems:"center"}}><input type="checkbox" checked={allPayableSelected} onChange={toggleAllPayable}/> Select All</label>
+            <span style={{fontSize:13,color:"#64748b"}}>{selectedPayable.length} selected</span>
+            <button disabled={loading || !selectedPayable.length} onClick={generatePayableBills} style={btn.primary}>Generate Selected Bills</button>
+          </div>
+        </div>
+        <div style={{overflowX:"auto"}}>
+          <table style={{width:"100%",borderCollapse:"collapse",fontSize:13}}>
+            <thead><tr><th style={th}>Select</th><th style={th}>Warehouse</th><th style={th}>Rent Payee Company</th><th style={th}>Monthly Rent</th><th style={th}>Bill Status · {rentMonth}</th></tr></thead>
+            <tbody>{payableWarehouses.map((w,i)=>{const id=String(w.id||w._id);const booked=bookedIdSet.has(id);const hasCompany=Boolean(w.company_id);return <tr key={id} style={{background:i%2?"#f8fafc":"#fff"}}><td style={td}><input type="checkbox" disabled={booked||!hasCompany} checked={selectedPayable.includes(id)} onChange={()=>togglePayable(id)}/></td><td style={td}>{w.name}</td><td style={td}>{w.company_name||"-"}</td><td style={td}>{money(w.monthly_rent)}</td><td style={td}>{booked?<span style={pill.green}>Bill Generated</span>:!hasCompany?<span style={pill.orange}>Set payee company in Warehouse Master</span>:<span style={pill.orange}>Not Generated</span>}</td></tr>})}{!payableWarehouses.length&&<tr><td colSpan={5} style={td}>No payable warehouse with monthly rent configured.</td></tr>}</tbody>
+          </table>
+        </div>
+      </div>
 
       <div style={{marginTop:22, borderTop:"1px solid #e2e8f0", paddingTop:18}}>
         <h3 style={{marginTop:0}}>2. Company Rent — Bulk Booking / Collection Side</h3>
