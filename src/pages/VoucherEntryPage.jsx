@@ -405,6 +405,29 @@ function VoucherEntryPage() {
     );
   }, [adjustments]);
 
+  const pendingBillsTotal = useMemo(
+    () =>
+      pendingBills.reduce(
+        (total, bill) =>
+          total +
+          numberValue(
+            bill.pending_amount ??
+              bill.pending ??
+              bill.balance ??
+              bill.amount ??
+              0
+          ),
+        0
+      ),
+    [pendingBills]
+  );
+
+  const pendingBillsThStyle = {
+    ...thStyle,
+    color: "#fff",
+    borderBottom: "1px solid #9a3412",
+  };
+
   /* ==========================================================
      ADVANCE
   ========================================================== */
@@ -1543,7 +1566,9 @@ function VoucherEntryPage() {
               borderRadius: "12px",
               padding: "20px",
               boxShadow:
-                "0 2px 10px rgba(0,0,0,0.06)",
+                "0 8px 24px rgba(194,65,12,0.08)",
+              border: "1px solid #fed7aa",
+              borderTop: "4px solid #ea580c",
               marginBottom: "16px",
             }}
           >
@@ -1580,20 +1605,46 @@ function VoucherEntryPage() {
                 </div>
               </div>
 
-              <div
-                style={{
-                  background: "#fff7ed",
-                  border:
-                    "1px solid #fed7aa",
-                  borderRadius: "8px",
-                  padding:
-                    "8px 12px",
-                  fontWeight: 700,
-                  color: "#9a3412",
-                }}
-              >
-                Adjusted: ₹{" "}
-                {money(adjustedTotal)}
+              <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+                <div
+                  style={{
+                    background: "#f8fafc",
+                    border: "1px solid #cbd5e1",
+                    borderRadius: "10px",
+                    padding: "8px 12px",
+                    color: "#334155",
+                    fontSize: "13px",
+                    fontWeight: 700,
+                  }}
+                >
+                  {pendingBills.length} bill{pendingBills.length === 1 ? "" : "s"}
+                </div>
+                <div
+                  style={{
+                    background: "#fff7ed",
+                    border: "1px solid #fed7aa",
+                    borderRadius: "10px",
+                    padding: "8px 12px",
+                    color: "#9a3412",
+                    fontSize: "13px",
+                    fontWeight: 700,
+                  }}
+                >
+                  Pending total: ₹ {money(pendingBillsTotal)}
+                </div>
+                <div
+                  style={{
+                    background: "#ecfdf5",
+                    border: "1px solid #a7f3d0",
+                    borderRadius: "10px",
+                    padding: "8px 12px",
+                    color: "#047857",
+                    fontSize: "13px",
+                    fontWeight: 700,
+                  }}
+                >
+                  Adjusted: ₹ {money(adjustedTotal)}
+                </div>
               </div>
             </div>
 
@@ -1663,13 +1714,13 @@ function VoucherEntryPage() {
                   <thead>
                     <tr
                       style={{
-                        background:
-                          "#f1f5f9",
+                        background: "#7c2d12",
+                        color: "#fff",
                       }}
                     >
                       <th
                         style={
-                          thStyle
+                          pendingBillsThStyle
                         }
                       >
                         Date
@@ -1677,7 +1728,7 @@ function VoucherEntryPage() {
 
                       <th
                         style={
-                          thStyle
+                          pendingBillsThStyle
                         }
                       >
                         Voucher
@@ -1685,7 +1736,7 @@ function VoucherEntryPage() {
 
                       <th
                         style={
-                          thStyle
+                          pendingBillsThStyle
                         }
                       >
                         Warehouse
@@ -1693,7 +1744,7 @@ function VoucherEntryPage() {
 
                       <th
                         style={
-                          thStyle
+                          pendingBillsThStyle
                         }
                       >
                         Sale
@@ -1701,7 +1752,7 @@ function VoucherEntryPage() {
 
                       <th
                         style={
-                          thStyle
+                          pendingBillsThStyle
                         }
                       >
                         Outward
@@ -1709,7 +1760,7 @@ function VoucherEntryPage() {
 
                       <th
                         style={{
-                          ...thStyle,
+                          ...pendingBillsThStyle,
                           textAlign:
                             "right",
                         }}
@@ -1719,7 +1770,7 @@ function VoucherEntryPage() {
 
                       <th
                         style={{
-                          ...thStyle,
+                          ...pendingBillsThStyle,
                           width: "170px",
                         }}
                       >
@@ -1750,31 +1801,50 @@ function VoucherEntryPage() {
                         return (
                           <tr
                             key={id}
+                            style={{
+                              background: index % 2 === 0 ? "#fff" : "#fffaf5",
+                              borderLeft: "3px solid #fb923c",
+                            }}
                           >
                             <td
-                              style={
-                                tdStyle
-                              }
+                              style={{ ...tdStyle, background: "transparent" }}
                             >
-                              {bill.date ||
-                                bill.payment_date ||
-                                "-"}
+                              <span
+                                style={{
+                                  display: "inline-block",
+                                  padding: "5px 9px",
+                                  borderRadius: "999px",
+                                  background: "#f1f5f9",
+                                  color: "#475569",
+                                  fontSize: "12px",
+                                  fontWeight: 700,
+                                  whiteSpace: "nowrap",
+                                }}
+                              >
+                                {bill.date || bill.payment_date || "-"}
+                              </span>
                             </td>
 
                             <td
-                              style={
-                                tdStyle
-                              }
+                              style={{ ...tdStyle, background: "transparent" }}
                             >
-                              {bill.voucher_no ||
-                                bill.transport_voucher_no ||
-                                "-"}
+                              <span
+                                style={{
+                                  display: "inline-block",
+                                  padding: "6px 10px",
+                                  borderRadius: "7px",
+                                  background: "#ffedd5",
+                                  color: "#9a3412",
+                                  fontWeight: 800,
+                                  whiteSpace: "nowrap",
+                                }}
+                              >
+                                {bill.voucher_no || bill.transport_voucher_no || "Unnumbered bill"}
+                              </span>
                             </td>
 
                             <td
-                              style={
-                                tdStyle
-                              }
+                              style={{ ...tdStyle, background: "transparent" }}
                             >
                               {bill.warehouse_name ||
                                 bill.warehouse ||
@@ -1782,9 +1852,7 @@ function VoucherEntryPage() {
                             </td>
 
                             <td
-                              style={
-                                tdStyle
-                              }
+                              style={{ ...tdStyle, background: "transparent" }}
                             >
                               {bill.sale_voucher_no ||
                                 bill.sale_voucher ||
@@ -1792,9 +1860,7 @@ function VoucherEntryPage() {
                             </td>
 
                             <td
-                              style={
-                                tdStyle
-                              }
+                              style={{ ...tdStyle, background: "transparent" }}
                             >
                               {bill.outward_voucher_no ||
                                 bill.outward_voucher ||
@@ -1804,22 +1870,30 @@ function VoucherEntryPage() {
                             <td
                               style={{
                                 ...tdStyle,
+                                background: "transparent",
                                 textAlign:
                                   "right",
                                 fontWeight:
                                   700,
                               }}
                             >
-                              ₹{" "}
-                              {money(
-                                pending
-                              )}
+                              <span
+                                style={{
+                                  display: "inline-block",
+                                  minWidth: "112px",
+                                  padding: "8px 10px",
+                                  borderRadius: "8px",
+                                  background: "#fff7ed",
+                                  color: "#c2410c",
+                                  border: "1px solid #fed7aa",
+                                }}
+                              >
+                                ₹ {money(pending)}
+                              </span>
                             </td>
 
                             <td
-                              style={
-                                tdStyle
-                              }
+                              style={{ ...tdStyle, background: "transparent" }}
                             >
                               <input
                                 type="number"
@@ -1849,6 +1923,9 @@ function VoucherEntryPage() {
                                   ...inputStyle,
                                   textAlign:
                                     "right",
+                                  borderColor: numberValue(adjustments[id]) > 0 ? "#0f766e" : "#cbd5e1",
+                                  background: numberValue(adjustments[id]) > 0 ? "#f0fdfa" : "#fff",
+                                  fontWeight: 700,
                                 }}
                               />
                             </td>
