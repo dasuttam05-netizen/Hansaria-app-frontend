@@ -937,13 +937,13 @@ export default function PartyStockReportPage() {
             >
               <div>
                 <div style={{ color: "#ddd6fe", fontSize: 11, fontWeight: 800, letterSpacing: 1, textTransform: "uppercase" }}>
-                  Inward Adjustment Breakdown
+                  Outward Adjustment Breakdown
                 </div>
                 <h3 id="party-stock-adjustment-title" style={{ margin: "4px 0 0", color: "#fff" }}>
                   {adjustmentDetails.row.company_name || adjustmentDetails.row.account_name || "Stock adjustment details"}
                 </h3>
                 <div style={{ marginTop: 4, color: "#ede9fe", fontSize: 13 }}>
-                  {adjustmentDetails.row.product_name || "-"} · Lorry {adjustmentDetails.row.lorry_no || "-"} · Inward {formatDisplayDate(adjustmentDetails.row.date) || "-"}
+                  Stock source: {adjustmentDetails.row.product_name || "-"} · Lorry {adjustmentDetails.row.lorry_no || "-"} · {formatDisplayDate(adjustmentDetails.row.date) || "-"}
                 </div>
               </div>
               <button
@@ -996,10 +996,10 @@ export default function PartyStockReportPage() {
                 </div>
               ) : (
                 <div style={{ overflow: "auto", border: "1px solid #e2e8f0", borderRadius: 10, maxHeight: "52vh" }}>
-                  <table style={{ width: "100%", minWidth: 800, borderCollapse: "separate", borderSpacing: 0, fontSize: 13 }}>
+                  <table style={{ width: "100%", minWidth: 1350, borderCollapse: "separate", borderSpacing: 0, fontSize: 13 }}>
                     <thead>
                       <tr>
-                        {["Type", "Date", "Reference", "Party", "Warehouse", "Product", "Lorry", "Adjusted Qty"].map((heading) => (
+                        {["Type", "Outward Date", "Outward Voucher", "Destination Account", "Party", "Location", "Warehouse", "Lorry", "Outward Qty", "Adjusted Qty"].map((heading) => (
                           <th key={heading} style={{ ...th, position: "sticky", top: 0, background: "#4c1d95" }}>{heading}</th>
                         ))}
                       </tr>
@@ -1014,10 +1014,14 @@ export default function PartyStockReportPage() {
                           </td>
                           <td style={td}>{formatDisplayDate(entry.date) || "-"}</td>
                           <td style={{ ...td, fontWeight: 700 }}>{entry.reference || "-"}</td>
+                          <td style={{ ...td, fontWeight: 700, color: "#4c1d95" }}>{entry.account || "-"}</td>
                           <td style={td}>{entry.party || "-"}</td>
+                          <td style={td}>{entry.location || "-"}</td>
                           <td style={td}>{entry.warehouse || "-"}</td>
-                          <td style={td}>{entry.product || "-"}</td>
                           <td style={td}>{entry.lorry || "-"}</td>
+                          <td style={{ ...td, textAlign: "right", fontWeight: 700, color: "#1d4ed8" }}>
+                            {entry.type === "Stock Journal" ? "-" : num(entry.outward_quantity)}
+                          </td>
                           <td style={{ ...td, textAlign: "right", fontWeight: 800, color: "#6d28d9" }}>{num(entry.quantity)}</td>
                         </tr>
                       ))}
