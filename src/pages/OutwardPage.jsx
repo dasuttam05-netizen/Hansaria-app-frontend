@@ -154,6 +154,8 @@ export default function OutwardPage() {
   const selectedRowDetailRef = useRef(null);
   const rowRefs = useRef({});
   const submitLockRef = useRef(false);
+  const settlementDetailsRequestRef = useRef(null);
+  const [settlementDetailsLoaded, setSettlementDetailsLoaded] = useState(false);
 
   const [formData, setFormData] = useState({
     date: "",
@@ -713,9 +715,12 @@ export default function OutwardPage() {
   };
 
   const fetchOutwards = async () => {
+    const includeSettlementDetails = filterView === "settled";
     const [outwardResult, settlementResult] = await Promise.allSettled([
       axios.get(`${API_BASE}/outward`),
-      axios.get(`${API_BASE}/outward-settlement/report/list`),
+      axios.get(`${API_BASE}/outward-settlement/report/list`, {
+        params: includeSettlementDetails ? {} : { summary_only: 1 },
+      }),
     ]);
 
     if (outwardResult.status === "rejected") {
@@ -733,11 +738,33 @@ export default function OutwardPage() {
         }))
       : [];
     setOutwards(outwardRows);
-    setSettlementRows(
-      settlementResult.status === "fulfilled" && Array.isArray(settlementResult.value.data)
-        ? settlementResult.value.data
-        : []
-    );
+    if (settlementResult.status === "fulfilled" && Array.isArray(settlementResult.value.data)) {
+      setSettlementRows(settlementResult.value.data);
+      setSettlementDetailsLoaded(includeSettlementDetails);
+    } else {
+      setSettlementRows([]);
+      setSettlementDetailsLoaded(false);
+    }
+  };
+
+  const handleFilterViewChange = (key) => {
+    setFilterView(key);
+    if (key !== "settled" || settlementDetailsLoaded || settlementDetailsRequestRef.current) return;
+
+    const request = axios
+      .get(`${API_BASE}/outward-settlement/report/list`)
+      .then((res) => {
+        setSettlementRows(Array.isArray(res.data) ? res.data : []);
+        setSettlementDetailsLoaded(true);
+      })
+      .catch((err) => {
+        console.error("Error fetching settlement details:", err);
+        toast.error(err?.response?.data?.error || "Error fetching settlement details", { theme: "colored" });
+      })
+      .finally(() => {
+        settlementDetailsRequestRef.current = null;
+      });
+    settlementDetailsRequestRef.current = request;
   };
 
   const refreshMasters = async () => {
@@ -1665,7 +1692,7 @@ Consignee: ${row.consignee_name}`;
             return (
               <div
                 key={item.title}
-                onClick={() => setFilterView(item.key)}
+                onClick={() => handleFilterViewChange(item.key)}
                 style={{
                   borderRadius: "18px",
                   border: isActive ? "1px solid #0ea5a4" : "1px solid rgba(15, 23, 42, 0.08)",
@@ -2836,8 +2863,6 @@ Consignee: ${row.consignee_name}`;
   </div>
   );
 }
-
-
 
 
 
