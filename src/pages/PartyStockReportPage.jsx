@@ -198,7 +198,7 @@ export default function PartyStockReportPage() {
     padding: 10,
     border: "1px solid #bbf7d0",
     borderRadius: 12,
-    background: "#f0fdf4",
+    background: "#ecfdf5",
     color: "#166534",
     fontSize: 12,
     fontWeight: 700,
@@ -412,7 +412,7 @@ export default function PartyStockReportPage() {
               // movement totals consistent.
               const grouped = new Map();
               mergedDetails.forEach((row) => {
-                const key = `${String(row.company_id || row.company_name || row.party_name || "")}::${String(row.account_id || row.company_account_id || row.account_name || "")}`;
+                const key = `${String(row.company_id || row.company_name || row.party_name || "")}::${String(row.warehouse_id || row.warehouse_name || "")}`;
                 const existing = grouped.get(key);
                 if (existing) {
                   existing.gross_qty += Number(row.gross_qty || 0);
@@ -636,6 +636,7 @@ export default function PartyStockReportPage() {
             containerStyle={{ ...filterField, flex: "none", width: "100%" }}
             openOnType
             singleSelect
+            clearable
             options={employees.map((item) => ({ value: String(item.id ?? item._id ?? ""), label: item.name || "" }))}
             value={filters.employee_id}
             onChange={(next) => handleChange({ target: { name: "employee_id", value: next } })}
@@ -647,6 +648,7 @@ export default function PartyStockReportPage() {
             containerStyle={{ ...filterField, flex: "none", width: "100%" }}
             openOnType
             singleSelect
+            clearable
             options={companies.map((item) => ({ value: String(item.id ?? item._id ?? ""), label: item.name || "" }))}
             value={filters.company_id}
             onChange={(next) => handleChange({ target: { name: "company_id", value: next } })}
