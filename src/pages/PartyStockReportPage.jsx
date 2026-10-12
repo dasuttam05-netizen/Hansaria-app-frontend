@@ -13,6 +13,7 @@ export default function PartyStockReportPage() {
   const [summary, setSummary] = useState([]);
   const [details, setDetails] = useState([]);
   const [outwardDetails, setOutwardDetails] = useState([]);
+  const [outwardDetailsMessage, setOutwardDetailsMessage] = useState("");
   const [journalRows, setJournalRows] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [companies, setCompanies] = useState([]);
@@ -326,7 +327,13 @@ export default function PartyStockReportPage() {
           const normalizedDetails = (res.data.details || []).map(normalizePartyStockRow);
           setSummary(normalizedSummary);
           setDetails(normalizedDetails);
-          setOutwardDetails(Array.isArray(res.data.outwardDetails) ? res.data.outwardDetails : []);
+          const hasOutwardDetails = Array.isArray(res.data.outwardDetails);
+          setOutwardDetails(hasOutwardDetails ? res.data.outwardDetails : []);
+          setOutwardDetailsMessage(
+            hasOutwardDetails
+              ? ""
+              : "Company Outward data is not available from the server. Deploy the latest backend report update."
+          );
 
           try {
             const journalParams = {
@@ -461,6 +468,9 @@ export default function PartyStockReportPage() {
           setSummary([]);
           setDetails([]);
           setOutwardDetails([]);
+          setOutwardDetailsMessage(
+            err?.response?.data?.error || "Could not load Company Outward data from the server."
+          );
         }
       }
     };
@@ -831,7 +841,7 @@ export default function PartyStockReportPage() {
                     </td>
                   </tr>
                 )) : (
-                  <tr><td style={td} colSpan="9">No outward adjustment records found</td></tr>
+                  <tr><td style={td} colSpan="9">{outwardDetailsMessage || "No outward adjustment records found"}</td></tr>
                 )}
               </tbody>
             </table>
