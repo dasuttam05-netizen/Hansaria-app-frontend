@@ -177,15 +177,14 @@ export default function MultiSelectDropdown({
           <div style={{ padding: 12, borderBottom: "1px solid #bbf7d0", background: "#dcfce7" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
               <strong style={{ fontSize: 13, color: "#0f172a" }}>{label || placeholder}</strong>
-              {!singleSelect || clearable ? (
-                <button
-                  type="button"
-                  onClick={clearAll}
-                  style={{ border: "none", background: "transparent", color: accent, cursor: "pointer", fontWeight: 700 }}
-                >
-                  Clear
-                </button>
-              )}
+              <button
+                type="button"
+                hidden={singleSelect && !clearable}
+                onClick={clearAll}
+                style={{ border: "none", background: "transparent", color: accent, cursor: "pointer", fontWeight: 700 }}
+              >
+                Clear
+              </button>
             </div>
             {searchable && !openOnType ? (
               <input
