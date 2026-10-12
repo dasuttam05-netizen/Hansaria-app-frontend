@@ -12,6 +12,7 @@ export default function MultiSelectDropdown({
   containerStyle = {},
   openOnType = false,
   singleSelect = false,
+  clearable = false,
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -176,7 +177,7 @@ export default function MultiSelectDropdown({
           <div style={{ padding: 12, borderBottom: "1px solid #bbf7d0", background: "#dcfce7" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8 }}>
               <strong style={{ fontSize: 13, color: "#0f172a" }}>{label || placeholder}</strong>
-              {singleSelect ? null : (
+              {!singleSelect || clearable ? (
                 <button
                   type="button"
                   onClick={clearAll}
