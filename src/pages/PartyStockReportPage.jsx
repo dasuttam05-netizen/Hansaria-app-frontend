@@ -12,13 +12,14 @@ export default function PartyStockReportPage() {
   const navigate = useNavigate();
   const [summary, setSummary] = useState([]);
   const [details, setDetails] = useState([]);
+  const [outwardDetails, setOutwardDetails] = useState([]);
   const [journalRows, setJournalRows] = useState([]);
   const [employees, setEmployees] = useState([]);
   const [companies, setCompanies] = useState([]);
   const [locations, setLocations] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
   const [products, setProducts] = useState([]);
-  const [visibleSections, setVisibleSections] = useState(["totals", "summary", "details", "journal"]);
+  const [visibleSections, setVisibleSections] = useState(["totals", "summary", "outward", "details", "journal"]);
   const [filtersReady, setFiltersReady] = useState(false);
   const [adjustmentDetails, setAdjustmentDetails] = useState(null);
   const [loadingAdjustmentDetails, setLoadingAdjustmentDetails] = useState(false);
@@ -172,6 +173,16 @@ export default function PartyStockReportPage() {
     }
   };
 
+  const showOutwardAllocations = (row) => {
+    setAdjustmentDetails({
+      row: { ...row, already_adjusted_qty: row.adjusted_quantity },
+      entries: row.allocations || [],
+      mode: "outward",
+    });
+    setAdjustmentDetailsError("");
+    setLoadingAdjustmentDetails(false);
+  };
+
   const card = {
     background: "#fff",
     border: "1px solid #dbe4ea",
@@ -315,6 +326,7 @@ export default function PartyStockReportPage() {
           const normalizedDetails = (res.data.details || []).map(normalizePartyStockRow);
           setSummary(normalizedSummary);
           setDetails(normalizedDetails);
+          setOutwardDetails(Array.isArray(res.data.outwardDetails) ? res.data.outwardDetails : []);
 
           try {
             const journalParams = {
@@ -448,6 +460,7 @@ export default function PartyStockReportPage() {
           console.error(err);
           setSummary([]);
           setDetails([]);
+          setOutwardDetails([]);
         }
       }
     };
@@ -694,6 +707,7 @@ export default function PartyStockReportPage() {
             options={[
               { key: "totals", label: "Totals" },
               { key: "summary", label: "Summary" },
+              { key: "outward", label: "Company Outward" },
               { key: "details", label: "Details" },
               { key: "journal", label: "Stock Journal" },
             ]}
@@ -772,6 +786,55 @@ export default function PartyStockReportPage() {
               )}
             </tbody>
           </table>
+          </div>
+        </div>
+      ) : null}
+
+      {!dashboardView && visibleSections.includes("outward") ? (
+        <div style={{ ...card, marginBottom: 16, overflow: "hidden", padding: 0 }}>
+          <div style={{ padding: "17px 18px", borderBottom: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+            <div>
+              <div style={{ color: "#047857", fontSize: 11, fontWeight: 800, letterSpacing: 1, textTransform: "uppercase", marginBottom: 4 }}>Company-wise Outward</div>
+              <h3 style={{ margin: 0, color: "#0f172a" }}>Outward Details by Company</h3>
+            </div>
+            <span style={{ padding: "6px 10px", borderRadius: 999, background: "#ecfdf5", color: "#047857", fontSize: 12, fontWeight: 800 }}>{outwardDetails.length} records</span>
+          </div>
+          <div style={{ overflow: "auto", maxHeight: "65vh" }}>
+            <table style={{ width: "100%", minWidth: 1200, borderCollapse: "separate", borderSpacing: 0, fontSize: 13 }}>
+              <thead>
+                <tr>
+                  {["Company / Party", "Outward Date", "Voucher", "Outward To", "Outward Lorry", "Warehouse", "Product", "Outward Qty", "Adjusted Qty"].map((heading) => (
+                    <th key={heading} style={th}>{heading}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {outwardDetails.length ? outwardDetails.map((row, index) => (
+                  <tr key={row.id} style={{ background: index % 2 === 0 ? "#fff" : "#f8fafc" }}>
+                    <td style={{ ...td, fontWeight: 800, color: "#047857" }}>{row.company_name}</td>
+                    <td style={td}>{formatDisplayDate(row.outward_date) || "-"}</td>
+                    <td style={{ ...td, fontWeight: 700 }}>{row.voucher_no || "-"}</td>
+                    <td style={td}>{row.account_name || "-"}</td>
+                    <td style={td}>{row.lorry_no || "-"}</td>
+                    <td style={td}>{row.warehouse_name || "-"}</td>
+                    <td style={td}>{row.product_name || "-"}</td>
+                    <td style={{ ...td, textAlign: "right" }}>{num(row.outward_quantity)}</td>
+                    <td style={{ ...td, textAlign: "right" }}>
+                      <button
+                        type="button"
+                        onClick={() => showOutwardAllocations(row)}
+                        title="Show inward lorries allocated to this outward"
+                        style={{ border: "1px solid #a7f3d0", borderRadius: 7, padding: "5px 8px", background: "#ecfdf5", color: "#047857", fontWeight: 800, cursor: "pointer" }}
+                      >
+                        {num(row.adjusted_quantity)}
+                      </button>
+                    </td>
+                  </tr>
+                )) : (
+                  <tr><td style={td} colSpan="9">No outward adjustment records found</td></tr>
+                )}
+              </tbody>
+            </table>
           </div>
         </div>
       ) : null}
@@ -1003,13 +1066,13 @@ export default function PartyStockReportPage() {
             >
               <div>
                 <div style={{ color: "#ddd6fe", fontSize: 11, fontWeight: 800, letterSpacing: 1, textTransform: "uppercase" }}>
-                  Outward Adjustment Breakdown
+                  {adjustmentDetails.mode === "outward" ? "Inward Lorry Allocation Breakdown" : "Outward Adjustment Breakdown"}
                 </div>
                 <h3 id="party-stock-adjustment-title" style={{ margin: "4px 0 0", color: "#fff" }}>
                   {adjustmentDetails.row.company_name || adjustmentDetails.row.account_name || "Stock adjustment details"}
                 </h3>
                 <div style={{ marginTop: 4, color: "#ede9fe", fontSize: 13 }}>
-                  Outward entries that consumed this stock
+                  {adjustmentDetails.mode === "outward" ? "Inward lorries allocated to this outward voucher" : "Outward entries that consumed this stock"}
                 </div>
               </div>
               <button
@@ -1045,7 +1108,7 @@ export default function PartyStockReportPage() {
                 <div style={{ padding: 13, borderRadius: 10, background: "#ecfdf5", border: "1px solid #a7f3d0" }}>
                   <div style={{ color: "#047857", fontSize: 11, fontWeight: 800, textTransform: "uppercase" }}>Entry Quantity Total</div>
                   <div style={{ color: "#065f46", fontSize: 20, fontWeight: 800, marginTop: 5 }}>
-                    {num(adjustmentDetails.entries.reduce((total, entry) => total + (Number(entry.quantity) || 0), 0))}
+                    {num(adjustmentDetails.entries.reduce((total, entry) => total + (Number(entry.quantity ?? entry.adjusted_quantity) || 0), 0))}
                   </div>
                 </div>
               </div>
@@ -1062,10 +1125,13 @@ export default function PartyStockReportPage() {
                 </div>
               ) : (
                 <div style={{ overflow: "auto", border: "1px solid #e2e8f0", borderRadius: 10, maxHeight: "52vh" }}>
-                  <table style={{ width: "100%", minWidth: 1350, borderCollapse: "separate", borderSpacing: 0, fontSize: 13 }}>
+                  <table style={{ width: "100%", minWidth: adjustmentDetails.mode === "outward" ? 1100 : 1350, borderCollapse: "separate", borderSpacing: 0, fontSize: 13 }}>
                     <thead>
                       <tr>
-                        {["Type", "Outward Date", "Outward Voucher", "Destination Account", "Consignee", "Location", "Warehouse", "Lorry No", "Outward Total Qty", "Adjusted Qty"].map((heading) => (
+                        {(adjustmentDetails.mode === "outward"
+                          ? ["Inward Date", "Inward Voucher", "Company / Party", "Warehouse", "Location", "Product", "Inward Lorry", "Inward Qty", "Adjusted Qty"]
+                          : ["Type", "Outward Date", "Outward Voucher", "Destination Account", "Consignee", "Location", "Warehouse", "Lorry No", "Outward Total Qty", "Adjusted Qty"]
+                        ).map((heading) => (
                           <th key={heading} style={{ ...th, position: "sticky", top: 0, background: "#4c1d95" }}>{heading}</th>
                         ))}
                       </tr>
@@ -1073,22 +1139,38 @@ export default function PartyStockReportPage() {
                     <tbody>
                       {adjustmentDetails.entries.map((entry, index) => (
                         <tr key={entry.id || `${entry.reference}-${index}`} style={{ background: index % 2 === 0 ? "#fff" : "#faf8ff" }}>
-                          <td style={td}>
-                            <span style={{ display: "inline-block", padding: "4px 8px", borderRadius: 999, background: entry.type === "Stock Journal" ? "#eff6ff" : "#f5f3ff", color: entry.type === "Stock Journal" ? "#1d4ed8" : "#6d28d9", fontWeight: 700 }}>
-                              {entry.type}
-                            </span>
-                          </td>
-                          <td style={td}>{formatDisplayDate(entry.date) || "-"}</td>
-                          <td style={{ ...td, fontWeight: 700 }}>{entry.reference || "-"}</td>
-                          <td style={{ ...td, fontWeight: 700, color: "#4c1d95" }}>{entry.account || "-"}</td>
-                          <td style={td}>{entry.consignee || "-"}</td>
-                          <td style={td}>{entry.location || "-"}</td>
-                          <td style={td}>{entry.warehouse || "-"}</td>
-                          <td style={td}>{entry.lorry || "-"}</td>
-                          <td style={{ ...td, textAlign: "right", fontWeight: 700, color: "#1d4ed8" }}>
-                            {entry.outward_quantity == null ? "-" : num(entry.outward_quantity)}
-                          </td>
-                          <td style={{ ...td, textAlign: "right", fontWeight: 800, color: "#6d28d9" }}>{num(entry.quantity)}</td>
+                          {adjustmentDetails.mode === "outward" ? (
+                            <>
+                              <td style={td}>{formatDisplayDate(entry.inward_date) || "-"}</td>
+                              <td style={{ ...td, fontWeight: 700 }}>{entry.voucher_no || "-"}</td>
+                              <td style={{ ...td, fontWeight: 700, color: "#047857" }}>{entry.company_name || "-"}</td>
+                              <td style={td}>{entry.warehouse_name || "-"}</td>
+                              <td style={td}>{entry.location_name || "-"}</td>
+                              <td style={td}>{entry.product_name || "-"}</td>
+                              <td style={td}>{entry.lorry_no || "-"}</td>
+                              <td style={{ ...td, textAlign: "right", fontWeight: 700 }}>{num(entry.inward_quantity)}</td>
+                              <td style={{ ...td, textAlign: "right", fontWeight: 800, color: "#047857" }}>{num(entry.adjusted_quantity)}</td>
+                            </>
+                          ) : (
+                            <>
+                              <td style={td}>
+                                <span style={{ display: "inline-block", padding: "4px 8px", borderRadius: 999, background: entry.type === "Stock Journal" ? "#eff6ff" : "#f5f3ff", color: entry.type === "Stock Journal" ? "#1d4ed8" : "#6d28d9", fontWeight: 700 }}>
+                                  {entry.type}
+                                </span>
+                              </td>
+                              <td style={td}>{formatDisplayDate(entry.date) || "-"}</td>
+                              <td style={{ ...td, fontWeight: 700 }}>{entry.reference || "-"}</td>
+                              <td style={{ ...td, fontWeight: 700, color: "#4c1d95" }}>{entry.account || "-"}</td>
+                              <td style={td}>{entry.consignee || "-"}</td>
+                              <td style={td}>{entry.location || "-"}</td>
+                              <td style={td}>{entry.warehouse || "-"}</td>
+                              <td style={td}>{entry.lorry || "-"}</td>
+                              <td style={{ ...td, textAlign: "right", fontWeight: 700, color: "#1d4ed8" }}>
+                                {entry.outward_quantity == null ? "-" : num(entry.outward_quantity)}
+                              </td>
+                              <td style={{ ...td, textAlign: "right", fontWeight: 800, color: "#6d28d9" }}>{num(entry.quantity)}</td>
+                            </>
+                          )}
                         </tr>
                       ))}
                     </tbody>
