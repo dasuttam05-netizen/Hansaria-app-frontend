@@ -369,7 +369,6 @@ export default function WarehouseTradingPage() {
   const [activeTab, setActiveTab] = useState(null);
   const [activeVoucherType, setActiveVoucherType] = useState("purchase");
   const [activeReport, setActiveReport] = useState("sale");
-  const [profitLossMode, setProfitLossMode] = useState("direct");
   const [profitLossDownloadType, setProfitLossDownloadType] = useState("xlsx");
 
   const [warehouses, setWarehouses] = useState([]);
@@ -427,6 +426,7 @@ export default function WarehouseTradingPage() {
     showPurchaseBillWise,
     showSaleBillWise,
   } = reportUiState;
+  const profitLossMode = reportFilters.profit_loss_mode || "direct";
   const setReportPage = (value) => reportUiDispatch({ type: "set_report_page", value: typeof value === "function" ? value(reportUiState.reportPage) : value });
   const setReportFilters = (value) => reportUiDispatch({ type: "set_report_filters", value: typeof value === "function" ? value(reportUiState.reportFilters) : value });
   const setSaleFollowupFilter = (value) => reportUiDispatch({ type: "set_sale_followup_filter", value: typeof value === "function" ? value(reportUiState.saleFollowupFilter) : value });
@@ -1989,7 +1989,7 @@ export default function WarehouseTradingPage() {
         params.search = normalizedSearch;
       }
       if (reportType === "profit-loss") {
-        params.mode = filters.profit_loss_mode || profitLossMode || "direct";
+        params.mode = filters.profit_loss_mode || "direct";
         if (filters.profit_from_date) params.from_date = filters.profit_from_date;
         if (filters.profit_to_date) params.to_date = filters.profit_to_date;
         if (filters.profit_location_id) params.buyer_id = filters.profit_location_id;
@@ -5874,7 +5874,7 @@ export default function WarehouseTradingPage() {
     const exportType = format === "pdf" ? "pdf" : "xlsx";
     try {
       const params = {
-        mode: reportFilters.profit_loss_mode || profitLossMode || "direct",
+        mode: reportFilters.profit_loss_mode || "direct",
         export: exportType,
       };
       if (reportFilters.profit_from_date) params.from_date = reportFilters.profit_from_date;
@@ -7708,7 +7708,8 @@ export default function WarehouseTradingPage() {
                       value={profitLossMode}
                       onChange={(e) => {
                         const value = e.target.value === "warehouse" ? "warehouse" : "direct";
-                        setProfitLossMode(value);
+                        setReportData([]);
+                        setReportPageInfo({ page: 1, pageSize: PAGE_SIZE, total: 0, hasMore: false });
                         setReportFilters((prev) => ({ ...prev, profit_loss_mode: value, profit_location_id: "", profit_employee_id: "", profit_farmer_id: "" }));
                         setReportPage(1);
                       }}
