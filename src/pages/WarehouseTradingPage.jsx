@@ -5065,7 +5065,11 @@ export default function WarehouseTradingPage() {
       )],
       ["additional_amount", "Total Add", (item) => formatMoney(item.additional_amount || 0)],
       ["total_less", "Total Less", (item) => formatMoney(item.total_less || item.total_deduction || 0)],
-      ["freight_amount", "Freight", (item) => formatMoney(item.freight_amount || 0)],
+      ["freight_amount", "Freight", (item) => (
+        <button type="button" onClick={() => openProfitLossVoucherDetails(item, "sale")} style={linkButtonStyle}>
+          {formatMoney(item.freight_amount || 0)}
+        </button>
+      )],
       ["staff_expense", "Staff Expense", (item) => {
         const figures = getWarehouseProfitLossFigures(item);
         return <button type="button" onClick={() => openProfitLossOverheadDetails(item, "expenses")} style={linkButtonStyle}>{formatMoney(figures.expenses)}</button>;
