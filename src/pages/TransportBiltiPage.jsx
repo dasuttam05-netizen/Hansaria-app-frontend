@@ -5,6 +5,124 @@ import autoTable from "jspdf-autotable";
 import { FaSave, FaEdit, FaTrash, FaWhatsapp, FaTimes, FaFilePdf } from "react-icons/fa";
 import { consigneeHasBuyer } from "../utils/consigneeBuyers";
 
+function SearchableSelect({ name, value, options, onChange, placeholder, style, disabled = false }) {
+  const [query, setQuery] = useState("");
+  const [open, setOpen] = useState(false);
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  const selectedOption = options.find((option) => String(option.value) === String(value));
+  const normalizedQuery = query.trim().toLowerCase();
+  const filteredOptions = [
+    ...options.filter((option) => String(option.label || "").toLowerCase().includes(normalizedQuery)),
+    ...(value && "clear selection".includes(normalizedQuery) ? [{ value: "", label: "Clear selection" }] : []),
+  ];
+
+  const chooseOption = (option, inputElement) => {
+    onChange({ target: { name, value: option.value } });
+    setQuery("");
+    setOpen(false);
+    setHighlightedIndex(-1);
+
+    const editor = inputElement.closest("[data-transport-bilti-editor]");
+    if (!editor) return;
+    window.setTimeout(() => {
+      const fields = Array.from(
+        editor.querySelectorAll("input:not([type='hidden']):not([readonly]):not(:disabled), select:not(:disabled), textarea:not([readonly]):not(:disabled)")
+      );
+      const nextField = fields[fields.indexOf(inputElement) + 1];
+      if (nextField) nextField.focus();
+    }, 0);
+  };
+
+  const handleKeyDown = (event) => {
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      event.stopPropagation();
+      setOpen(true);
+      if (filteredOptions.length) {
+        setHighlightedIndex((current) => {
+          if (event.key === "ArrowDown") {
+            return current < 0 ? 0 : (current + 1) % filteredOptions.length;
+          }
+          return current < 0
+            ? filteredOptions.length - 1
+            : (current - 1 + filteredOptions.length) % filteredOptions.length;
+        });
+      }
+      return;
+    }
+
+    if (event.key === "Escape" && open) {
+      event.preventDefault();
+      event.stopPropagation();
+      setOpen(false);
+      setQuery("");
+      return;
+    }
+
+    if (event.key === "Enter" && open) {
+      event.preventDefault();
+      event.stopPropagation();
+      if (filteredOptions.length) {
+        chooseOption(filteredOptions[highlightedIndex] || filteredOptions[0], event.currentTarget);
+      }
+    }
+  };
+
+  return (
+    <div style={{ position: "relative", minWidth: 0 }}>
+      <input
+        type="text"
+        role="combobox"
+        aria-label={placeholder}
+        aria-autocomplete="list"
+        aria-expanded={open}
+        aria-controls={`${name}-options`}
+        autoComplete="off"
+        disabled={disabled}
+        placeholder={placeholder}
+        value={open ? query : selectedOption?.label || ""}
+        onFocus={() => {
+          setQuery("");
+          setHighlightedIndex(-1);
+          setOpen(true);
+        }}
+        onBlur={() => window.setTimeout(() => setOpen(false), 120)}
+        onChange={(event) => {
+          setQuery(event.target.value);
+          setHighlightedIndex(-1);
+          setOpen(true);
+        }}
+        onKeyDown={handleKeyDown}
+        style={style}
+      />
+      {open && !disabled && (
+        <div
+          id={`${name}-options`}
+          role="listbox"
+          style={{ position: "absolute", top: "calc(100% + 6px)", left: 0, right: 0, zIndex: 6, maxHeight: 240, overflowY: "auto", padding: 5, border: "1px solid #99f6e4", borderRadius: 12, background: "#fff", boxShadow: "0 14px 30px rgba(15,23,42,.16)" }}
+        >
+          {filteredOptions.length ? filteredOptions.map((option, index) => (
+            <button
+              key={`${option.value}-${index}`}
+              type="button"
+              role="option"
+              aria-selected={String(option.value) === String(value)}
+              onMouseDown={(event) => event.preventDefault()}
+              onMouseEnter={() => setHighlightedIndex(index)}
+              onClick={(event) => chooseOption(option, event.currentTarget.parentElement.previousElementSibling)}
+              style={{ display: "block", width: "100%", padding: "10px 12px", border: 0, borderRadius: 8, textAlign: "left", fontSize: 14, fontWeight: index === highlightedIndex ? 700 : 500, color: index === highlightedIndex ? "#115e59" : "#334155", background: index === highlightedIndex ? "#ccfbf1" : "#fff", cursor: "pointer" }}
+            >
+              {option.label}
+            </button>
+          )) : (
+            <div style={{ padding: "11px 12px", color: "#64748b", fontSize: 13 }}>No matching name found</div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function TransportBiltiPage() {
   const API_BASE = "/api";
   const KG_PER_MT = 1000;
@@ -26,6 +144,7 @@ export default function TransportBiltiPage() {
   const [showCompletedSaleOnly, setShowCompletedSaleOnly] = useState(false);
   const [meta, setMeta] = useState(null);
   const [transportNameDisplay, setTransportNameDisplay] = useState("");
+  const [transportSelectionCleared, setTransportSelectionCleared] = useState(false);
   const [transportSearch, setTransportSearch] = useState("");
   const [isTransportSearchOpen, setIsTransportSearchOpen] = useState(false);
   const [highlightedTransportIndex, setHighlightedTransportIndex] = useState(-1);
@@ -334,6 +453,7 @@ export default function TransportBiltiPage() {
   const resetForm = () => {
     setMeta(null);
     setTransportNameDisplay("");
+    setTransportSelectionCleared(false);
     setSelectedOutwardId("");
     setSelectedSaleId("");
     setSourceSearch("");
@@ -343,6 +463,7 @@ export default function TransportBiltiPage() {
   const clearSelection = () => {
     setMeta(null);
     setTransportNameDisplay("");
+    setTransportSelectionCleared(false);
     setSelectedOutwardId("");
     setSelectedSaleId("");
     setFormData(emptyForm);
@@ -352,6 +473,7 @@ export default function TransportBiltiPage() {
     setMeta(null);
     setShowTransportForm(false);
     setTransportNameDisplay("");
+    setTransportSelectionCleared(false);
     setFormData(emptyForm);
     setSelectedOutwardId("");
     setSelectedSaleId("");
@@ -439,6 +561,7 @@ export default function TransportBiltiPage() {
         row = res.data || {};
       }
       setMeta(row);
+      setTransportSelectionCleared(false);
 
       const loadedTransporter = row.transporter_id
         ? transporters.find((item) => sameId(getRecordId(item), row.transporter_id))
@@ -555,6 +678,7 @@ export default function TransportBiltiPage() {
 
   const selectedTransporter = useMemo(
     () => {
+      if (transportSelectionCleared && !formData.transporter_id) return null;
       const found = transporters.find((t) => String(t.id) === String(formData.transporter_id));
       if (found) return found;
       if (transportNameDisplay || meta?.transporter_name || meta?.transport_name) {
@@ -571,7 +695,7 @@ export default function TransportBiltiPage() {
       }
       return null;
     },
-    [transporters, formData.transporter_id, transportNameDisplay]
+    [transporters, formData.transporter_id, transportNameDisplay, transportSelectionCleared]
   );
 
   const selectedAccount = useMemo(() => {
@@ -745,27 +869,115 @@ export default function TransportBiltiPage() {
   };
 
   const handleEditorKeyDown = (event) => {
-    if (event.key !== "Enter") return;
-
     const current = event.target;
     if (!(current instanceof HTMLElement) || !current.matches("input, select, textarea")) return;
 
     const fields = Array.from(
       event.currentTarget.querySelectorAll("input:not([type='hidden']):not([readonly]):not(:disabled), select:not(:disabled), textarea:not([readonly]):not(:disabled)")
     );
-    const nextField = fields[fields.indexOf(current) + 1];
-    if (!nextField) return;
+    const currentIndex = fields.indexOf(current);
+    if (currentIndex < 0) return;
 
-    if (current.tagName !== "SELECT") event.preventDefault();
-    window.setTimeout(() => nextField.focus(), 0);
+    if (event.key === "Enter") {
+      const nextField = fields[currentIndex + 1];
+      if (!nextField) return;
+      if (current.tagName !== "SELECT") event.preventDefault();
+      window.setTimeout(() => nextField.focus(), 0);
+      return;
+    }
+
+    if (
+      (event.key === "ArrowDown" || event.key === "ArrowUp") &&
+      current.tagName === "INPUT"
+    ) {
+      const nextField = fields[currentIndex + (event.key === "ArrowDown" ? 1 : -1)];
+      if (nextField) {
+        event.preventDefault();
+        nextField.focus();
+      }
+    }
   };
 
-  const matchingTransporters = transporters.filter((transporter) =>
+  const handleModeNavigationKeyDown = (event) => {
+    if (!["ArrowRight", "ArrowDown", "ArrowLeft", "ArrowUp"].includes(event.key)) return;
+    const buttons = Array.from(event.currentTarget.querySelectorAll("[data-mode-navigation]"));
+    const currentIndex = buttons.indexOf(event.target);
+    if (currentIndex < 0 || !buttons.length) return;
+    event.preventDefault();
+    const direction = event.key === "ArrowRight" || event.key === "ArrowDown" ? 1 : -1;
+    buttons[(currentIndex + direction + buttons.length) % buttons.length].focus();
+  };
+
+  const handleSourceListKeyDown = (event) => {
+    if (!["ArrowDown", "ArrowUp", "Enter"].includes(event.key)) return;
+    const list = event.currentTarget.closest("[data-source-list]") || event.currentTarget;
+    const buttons = Array.from(list.querySelectorAll("[data-source-select]"));
+    if (!buttons.length) return;
+    const currentIndex = buttons.indexOf(event.target);
+    if (event.key === "Enter" && currentIndex < 0) {
+      event.preventDefault();
+      buttons[0].click();
+      return;
+    }
+    if (event.key === "Enter") return;
+    if (currentIndex < 0 && event.key === "ArrowDown") {
+      event.preventDefault();
+      buttons[0].focus();
+      return;
+    }
+    if (currentIndex < 0) return;
+    event.preventDefault();
+    const direction = event.key === "ArrowDown" ? 1 : -1;
+    buttons[(currentIndex + direction + buttons.length) % buttons.length].focus();
+  };
+
+  const transportOptions = [
+    ...transporters,
+    ...(formData.transporter_id &&
+    selectedTransporter &&
+    !transporters.some((transporter) => sameId(getRecordId(transporter), formData.transporter_id))
+      ? [selectedTransporter]
+      : []),
+  ];
+  const matchingTransporters = transportOptions.filter((transporter) =>
     String(transporter.name || "").toLowerCase().includes(transportSearch.trim().toLowerCase())
   );
+  const transportSearchOptions = [
+    ...matchingTransporters.map((transporter) => ({ transporter, label: transporter.name || "" })),
+    ...(formData.transporter_id && "clear selection".includes(transportSearch.trim().toLowerCase())
+      ? [{ transporter: null, label: "Clear selection" }]
+      : []),
+  ];
+  const manualAccountOptions = companyAccounts
+    .filter((account) => {
+      if (!formData.company_id) return false;
+      const company = companies.find((item) => sameId(getRecordId(item), formData.company_id));
+      const accountCompanyId = getRecordId({ _id: account.company_id, id: account.company_id });
+      return (
+        sameId(accountCompanyId, formData.company_id) ||
+        String(account.company_name || "").trim().toLowerCase() === String(company?.name || "").trim().toLowerCase()
+      );
+    })
+    .map((account) => ({
+      value: String(getRecordId(account)),
+      label: `${account.account_name || ""}${account.company_name ? ` - ${account.company_name}` : ""}`,
+    }));
+  const buyerOptions = [
+    ...(formData.buyer_name && !buyers.some((buyer) => buyer.name === formData.buyer_name)
+      ? [{ value: formData.buyer_name, label: formData.buyer_name }]
+      : []),
+    ...buyers.map((buyer) => ({ value: buyer.name, label: buyer.name })),
+  ];
+  const consigneeOptions = [
+    ...(formData.consignee_name && !filteredConsignees.some((consignee) => consignee.name === formData.consignee_name)
+      ? [{ value: formData.consignee_name, label: formData.consignee_name }]
+      : []),
+    ...filteredConsignees.map((consignee) => ({ value: consignee.name, label: consignee.name })),
+  ];
 
   const selectTransporter = (transporter) => {
     const transporterId = String(getRecordId(transporter));
+    setTransportSelectionCleared(false);
     setFormData((previous) => ({ ...previous, transporter_id: transporterId }));
     setTransportNameDisplay(transporter.name || "");
     setTransportSearch("");
@@ -778,14 +990,14 @@ export default function TransportBiltiPage() {
       event.preventDefault();
       event.stopPropagation();
       setIsTransportSearchOpen(true);
-      if (matchingTransporters.length) {
+      if (transportSearchOptions.length) {
         setHighlightedTransportIndex((current) => {
           if (event.key === "ArrowDown") {
-            return current < 0 ? 0 : (current + 1) % matchingTransporters.length;
+            return current < 0 ? 0 : (current + 1) % transportSearchOptions.length;
           }
           return current < 0
-            ? matchingTransporters.length - 1
-            : (current - 1 + matchingTransporters.length) % matchingTransporters.length;
+            ? transportSearchOptions.length - 1
+            : (current - 1 + transportSearchOptions.length) % transportSearchOptions.length;
         });
       }
       return;
@@ -799,10 +1011,21 @@ export default function TransportBiltiPage() {
       return;
     }
 
-    if (event.key === "Enter" && isTransportSearchOpen && matchingTransporters.length) {
+    if (event.key === "Enter" && isTransportSearchOpen) {
       event.preventDefault();
       event.stopPropagation();
-      selectTransporter(matchingTransporters[highlightedTransportIndex] || matchingTransporters[0]);
+      const option = transportSearchOptions[highlightedTransportIndex] || transportSearchOptions[0];
+      if (!option) return;
+      if (option.transporter) {
+        selectTransporter(option.transporter);
+      } else {
+        setFormData((previous) => ({ ...previous, transporter_id: "" }));
+        setTransportNameDisplay("");
+        setTransportSelectionCleared(true);
+        setTransportSearch("");
+        setIsTransportSearchOpen(false);
+        setHighlightedTransportIndex(-1);
+      }
       const fields = Array.from(
         event.currentTarget.closest("[data-transport-bilti-editor]").querySelectorAll(
           "input:not([type='hidden']):not([readonly]):not(:disabled), select:not(:disabled), textarea:not([readonly]):not(:disabled)"
@@ -830,6 +1053,7 @@ export default function TransportBiltiPage() {
       };
       setTransporters((prev) => [saved, ...prev.filter((item) => !sameId(getRecordId(item), saved.id || saved._id))]);
       setTransportNameDisplay(saved.name || transportForm.name.trim());
+      setTransportSelectionCleared(false);
       setFormData((prev) => ({ ...prev, transporter_id: String(saved.id || saved._id || "") }));
       setTransportForm({ name: "", address: "", pan_no: "", gst_no: "", aadhar_no: "", mobile: "" });
       setShowTransportForm(false);
@@ -1238,28 +1462,29 @@ const shareToWhatsApp = async () => {
       </div>
 
       <div style={{ ...card, marginBottom: 16 }}>
-        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-          <button onClick={() => switchMode("outward")} style={{ ...btn, background: mode === "outward" ? "#0f766e" : "#64748b" }}>
+        <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }} onKeyDown={handleModeNavigationKeyDown}>
+          <button data-mode-navigation onClick={() => switchMode("outward")} style={{ ...btn, background: mode === "outward" ? "#0f766e" : "#64748b" }}>
             From Outward
           </button>
-          <button onClick={() => switchMode("sale")} style={{ ...btn, background: mode === "sale" ? "#0f766e" : "#64748b" }}>
+          <button data-mode-navigation onClick={() => switchMode("sale")} style={{ ...btn, background: mode === "sale" ? "#0f766e" : "#64748b" }}>
             From Warehouse Sale
           </button>
-          <button onClick={() => switchMode("manual")} style={{ ...btn, background: mode === "manual" ? "#0f766e" : "#64748b" }}>
+          <button data-mode-navigation onClick={() => switchMode("manual")} style={{ ...btn, background: mode === "manual" ? "#0f766e" : "#64748b" }}>
             Manual Bilti
           </button>
-          <button type="button" onClick={() => loadCompletedWarehouseSales(true)} style={{ ...btn, background: showCompletedSaleOnly ? "#7c3aed" : "#64748b" }}>
+          <button data-mode-navigation type="button" onClick={() => loadCompletedWarehouseSales(true)} style={{ ...btn, background: showCompletedSaleOnly ? "#7c3aed" : "#64748b" }}>
             F6 Completed Sale
           </button>
         </div>
       </div>
 
       {mode === "outward" && (
-        <div style={{ ...card, marginBottom: 16 }}>
+        <div data-source-list style={{ ...card, marginBottom: 16 }}>
           <label style={label}>Pending Outward</label>
           <input
             value={sourceSearch}
             onChange={(e) => setSourceSearch(e.target.value)}
+            onKeyDown={handleSourceListKeyDown}
             style={{ ...input, marginBottom: 10 }}
             placeholder="Search by voucher, lorry no, party, warehouse"
           />
@@ -1280,7 +1505,7 @@ const shareToWhatsApp = async () => {
               </div>
             </div>
           )}
-          <div style={{ overflowX: "auto", border: "1px solid #e2e8f0", borderRadius: 8 }}>
+          <div onKeyDown={handleSourceListKeyDown} style={{ overflowX: "auto", border: "1px solid #e2e8f0", borderRadius: 8 }}>
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 860 }}>
               <thead>
                 <tr>
@@ -1310,6 +1535,7 @@ const shareToWhatsApp = async () => {
                     <td style={sourceTd}>{num(row.rate).toFixed(2)}</td>
                     <td style={sourceTd}>
                       <button
+                        data-source-select
                         type="button"
                         onClick={() => {
                           const outwardId = String(row.id);
@@ -1341,11 +1567,12 @@ const shareToWhatsApp = async () => {
       )}
 
       {mode === "sale" && (
-        <div style={{ ...card, marginBottom: 16 }}>
+        <div data-source-list style={{ ...card, marginBottom: 16 }}>
           <label style={label}>{showCompletedSaleOnly ? "Completed Warehouse Sale (F6)" : "Pending Warehouse Sale"}</label>
           <input
             value={sourceSearch}
             onChange={(e) => setSourceSearch(e.target.value)}
+            onKeyDown={handleSourceListKeyDown}
             style={{ ...input, marginBottom: 10 }}
             placeholder="Search by bill no, lorry no, buyer, consignee, warehouse"
           />
@@ -1366,7 +1593,7 @@ const shareToWhatsApp = async () => {
               </div>
             </div>
           )}
-          <div style={{ overflowX: "auto", border: "1px solid #e2e8f0", borderRadius: 8 }}>
+          <div onKeyDown={handleSourceListKeyDown} style={{ overflowX: "auto", border: "1px solid #e2e8f0", borderRadius: 8 }}>
             <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 920 }}>
               <thead>
                 <tr>
@@ -1398,6 +1625,7 @@ const shareToWhatsApp = async () => {
                     <td style={sourceTd}>{num(row.rate).toFixed(2)}</td>
                     <td style={sourceTd}>
                       <button
+                        data-source-select
                         type="button"
                         onClick={() => {
                           const saleId = String(row.id);
@@ -1554,18 +1782,29 @@ const shareToWhatsApp = async () => {
                     aria-label="Transport name results"
                     style={{ position: "absolute", top: "calc(100% + 6px)", left: 0, right: 0, zIndex: 5, maxHeight: 240, overflowY: "auto", padding: 5, border: "1px solid #99f6e4", borderRadius: 12, background: "#fff", boxShadow: "0 14px 30px rgba(15,23,42,.16)" }}
                   >
-                    {matchingTransporters.length ? matchingTransporters.map((transporter, index) => (
+                    {transportSearchOptions.length ? transportSearchOptions.map((option, index) => (
                       <button
-                        key={getRecordId(transporter)}
+                        key={option.transporter ? getRecordId(option.transporter) : "clear-transporter"}
                         type="button"
                         role="option"
                         aria-selected={index === highlightedTransportIndex}
                         onMouseDown={(event) => event.preventDefault()}
                         onMouseEnter={() => setHighlightedTransportIndex(index)}
-                        onClick={() => selectTransporter(transporter)}
+                        onClick={() => {
+                          if (option.transporter) {
+                            selectTransporter(option.transporter);
+                          } else {
+                            setFormData((previous) => ({ ...previous, transporter_id: "" }));
+                            setTransportNameDisplay("");
+                            setTransportSelectionCleared(true);
+                            setTransportSearch("");
+                            setIsTransportSearchOpen(false);
+                            setHighlightedTransportIndex(-1);
+                          }
+                        }}
                         style={{ display: "block", width: "100%", padding: "10px 12px", border: 0, borderRadius: 8, textAlign: "left", fontSize: 14, fontWeight: index === highlightedTransportIndex ? 700 : 500, color: index === highlightedTransportIndex ? "#115e59" : "#334155", background: index === highlightedTransportIndex ? "#ccfbf1" : "#fff", cursor: "pointer" }}
                       >
-                        {transporter.name}
+                        {option.label}
                       </button>
                     )) : (
                       <div style={{ padding: "11px 12px", color: "#64748b", fontSize: 13 }}>No transport name found</div>
@@ -1620,52 +1859,37 @@ const shareToWhatsApp = async () => {
                 <>
                   <div>
                     <label style={label}>Party</label>
-                    <select name="company_id" value={formData.company_id} onChange={handleChange} style={input}>
-                      <option value="">Select Party</option>
-                      {companies.map((c) => (
-                        <option key={getRecordId(c)} value={getRecordId(c)}>{c.name}</option>
-                      ))}
-                    </select>
+                    <SearchableSelect
+                      name="company_id"
+                      value={formData.company_id}
+                      options={companies.map((company) => ({ value: String(getRecordId(company)), label: company.name || "" }))}
+                      onChange={handleChange}
+                      placeholder="Search Party"
+                      style={input}
+                    />
                   </div>
                   <div>
                     <label style={label}>Account</label>
-                    <select name="company_account_id" value={formData.company_account_id} onChange={handleChange} style={input}>
-                      <option value="">Select Account</option>
-                      {companyAccounts
-                        .filter((a) => {
-                          if (!formData.company_id) return false;
-                          const company = companies.find((c) => sameId(getRecordId(c), formData.company_id));
-                          const accountCompanyId = getRecordId({ _id: a.company_id, id: a.company_id });
-                          return (
-                            sameId(accountCompanyId, formData.company_id) ||
-                            String(a.company_name || "").trim().toLowerCase() === String(company?.name || "").trim().toLowerCase()
-                          );
-                        })
-                        .map((a) => (
-                          <option key={getRecordId(a)} value={getRecordId(a)}>
-                            {a.account_name}
-                            {a.company_name ? ` - ${a.company_name}` : ""}
-                          </option>
-                        ))}
-                      {formData.company_id &&
-                        companyAccounts.filter((a) => {
-                          const company = companies.find((c) => sameId(getRecordId(c), formData.company_id));
-                          const accountCompanyId = getRecordId({ _id: a.company_id, id: a.company_id });
-                          return (
-                            sameId(accountCompanyId, formData.company_id) ||
-                            String(a.company_name || "").trim().toLowerCase() === String(company?.name || "").trim().toLowerCase()
-                          );
-                        }).length === 0 && <option value="" disabled>No account found</option>}
-                    </select>
+                    <SearchableSelect
+                      name="company_account_id"
+                      value={formData.company_account_id}
+                      options={manualAccountOptions}
+                      onChange={handleChange}
+                      placeholder={formData.company_id ? "Search Account" : "Select Party First"}
+                      style={input}
+                      disabled={!formData.company_id}
+                    />
                   </div>
                   <div>
                     <label style={label}>Warehouse</label>
-                    <select name="warehouse_id" value={formData.warehouse_id} onChange={handleChange} style={input}>
-                      <option value="">Select Warehouse</option>
-                      {warehouses.map((w) => (
-                        <option key={w.id} value={w.id}>{w.name}</option>
-                      ))}
-                    </select>
+                    <SearchableSelect
+                      name="warehouse_id"
+                      value={formData.warehouse_id}
+                      options={warehouses.map((warehouse) => ({ value: String(warehouse.id), label: warehouse.name || "" }))}
+                      onChange={handleChange}
+                      placeholder="Search Warehouse"
+                      style={input}
+                    />
                   </div>
                 </>
               ) : (
@@ -1695,29 +1919,25 @@ const shareToWhatsApp = async () => {
               </div>
               <div>
                 <label style={label}>Buyer</label>
-                <select name="buyer_name" value={formData.buyer_name} onChange={handleChange} style={input}>
-                  <option value="">Select Buyer</option>
-                  {formData.buyer_name &&
-                    !buyers.some((b) => b.name === formData.buyer_name) && (
-                      <option value={formData.buyer_name}>{formData.buyer_name}</option>
-                    )}
-                  {buyers.map((b) => (
-                    <option key={b.id} value={b.name}>{b.name}</option>
-                  ))}
-                </select>
+                <SearchableSelect
+                  name="buyer_name"
+                  value={formData.buyer_name}
+                  options={buyerOptions}
+                  onChange={handleChange}
+                  placeholder="Search Buyer"
+                  style={input}
+                />
               </div>
               <div>
                 <label style={label}>Consignee</label>
-                <select name="consignee_name" value={formData.consignee_name} onChange={handleChange} style={input}>
-                  <option value="">Select Consignee</option>
-                  {formData.consignee_name &&
-                    !filteredConsignees.some((c) => c.name === formData.consignee_name) && (
-                      <option value={formData.consignee_name}>{formData.consignee_name}</option>
-                    )}
-                  {filteredConsignees.map((c) => (
-                    <option key={c.id} value={c.name}>{c.name}</option>
-                  ))}
-                </select>
+                <SearchableSelect
+                  name="consignee_name"
+                  value={formData.consignee_name}
+                  options={consigneeOptions}
+                  onChange={handleChange}
+                  placeholder="Search Consignee"
+                  style={input}
+                />
               </div>
               <div>
                 <label style={label}>Outward Weight</label>
@@ -1795,11 +2015,18 @@ const shareToWhatsApp = async () => {
               </div>
               <div>
                 <label style={label}>TDS</label>
-                <select name="tds_percent" value={formData.tds_percent} onChange={handleChange} style={input}>
-                  <option value="0">0%</option>
-                  <option value="1">1%</option>
-                  <option value="2">2%</option>
-                </select>
+                <SearchableSelect
+                  name="tds_percent"
+                  value={formData.tds_percent}
+                  options={[
+                    { value: "0", label: "0%" },
+                    { value: "1", label: "1%" },
+                    { value: "2", label: "2%" },
+                  ]}
+                  onChange={handleChange}
+                  placeholder="Search TDS"
+                  style={input}
+                />
               </div>
               <div>
                 <label style={label}>Round Off</label>
