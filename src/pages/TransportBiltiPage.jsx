@@ -26,6 +26,9 @@ export default function TransportBiltiPage() {
   const [showCompletedSaleOnly, setShowCompletedSaleOnly] = useState(false);
   const [meta, setMeta] = useState(null);
   const [transportNameDisplay, setTransportNameDisplay] = useState("");
+  const [transportSearch, setTransportSearch] = useState("");
+  const [isTransportSearchOpen, setIsTransportSearchOpen] = useState(false);
+  const [highlightedTransportIndex, setHighlightedTransportIndex] = useState(-1);
 
   const emptyForm = {
     id: "",
@@ -80,11 +83,14 @@ export default function TransportBiltiPage() {
   };
 
   const input = {
-    padding: "10px 12px",
+    boxSizing: "border-box",
+    minWidth: 0,
+    padding: "11px 13px",
     border: "1px solid #cbd5e1",
-    borderRadius: 8,
+    borderRadius: 10,
     fontSize: 14,
     width: "100%",
+    background: "#fff",
   };
 
   const label = {
@@ -752,6 +758,59 @@ export default function TransportBiltiPage() {
 
     if (current.tagName !== "SELECT") event.preventDefault();
     window.setTimeout(() => nextField.focus(), 0);
+  };
+
+  const matchingTransporters = transporters.filter((transporter) =>
+    String(transporter.name || "").toLowerCase().includes(transportSearch.trim().toLowerCase())
+  );
+
+  const selectTransporter = (transporter) => {
+    const transporterId = String(getRecordId(transporter));
+    setFormData((previous) => ({ ...previous, transporter_id: transporterId }));
+    setTransportNameDisplay(transporter.name || "");
+    setTransportSearch("");
+    setIsTransportSearchOpen(false);
+    setHighlightedTransportIndex(-1);
+  };
+
+  const handleTransportSearchKeyDown = (event) => {
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      event.stopPropagation();
+      setIsTransportSearchOpen(true);
+      if (matchingTransporters.length) {
+        setHighlightedTransportIndex((current) => {
+          if (event.key === "ArrowDown") {
+            return current < 0 ? 0 : (current + 1) % matchingTransporters.length;
+          }
+          return current < 0
+            ? matchingTransporters.length - 1
+            : (current - 1 + matchingTransporters.length) % matchingTransporters.length;
+        });
+      }
+      return;
+    }
+
+    if (event.key === "Escape" && isTransportSearchOpen) {
+      event.preventDefault();
+      event.stopPropagation();
+      setIsTransportSearchOpen(false);
+      setTransportSearch("");
+      return;
+    }
+
+    if (event.key === "Enter" && isTransportSearchOpen && matchingTransporters.length) {
+      event.preventDefault();
+      event.stopPropagation();
+      selectTransporter(matchingTransporters[highlightedTransportIndex] || matchingTransporters[0]);
+      const fields = Array.from(
+        event.currentTarget.closest("[data-transport-bilti-editor]").querySelectorAll(
+          "input:not([type='hidden']):not([readonly]):not(:disabled), select:not(:disabled), textarea:not([readonly]):not(:disabled)"
+        )
+      );
+      const nextField = fields[fields.indexOf(event.currentTarget) + 1];
+      if (nextField) window.setTimeout(() => nextField.focus(), 0);
+    }
   };
 
   const saveTransporter = async () => {
@@ -1447,36 +1506,79 @@ const shareToWhatsApp = async () => {
               </div>
             </div>
 
-            <div style={{ padding: 18 }} onKeyDown={handleEditorKeyDown}>
-          <div style={{ ...card, marginBottom: 16, borderRadius: 16, boxShadow: "0 8px 26px rgba(15,23,42,.07)" }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 12, flexWrap: "wrap" }}>
+            <div style={{ padding: 20 }} onKeyDown={handleEditorKeyDown} data-transport-bilti-editor>
+          <div style={{ ...card, marginBottom: 18, borderRadius: 18, padding: 20, background: "linear-gradient(145deg, #ffffff, #f8fcff)", boxShadow: "0 12px 30px rgba(15,23,42,.08)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, marginBottom: 16, flexWrap: "wrap" }}>
               <div>
-                <div style={{ fontSize: 12, fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: .5 }}>Transport Name</div>
-                <div style={{ marginTop: 4, fontSize: 18, fontWeight: 800, color: "#0f172a" }}>
+                <div style={{ fontSize: 12, fontWeight: 800, color: "#0f766e", textTransform: "uppercase", letterSpacing: 1 }}>Transport Name</div>
+                <div style={{ marginTop: 5, fontSize: 19, fontWeight: 800, color: "#0f172a" }}>
                   {transportNameDisplay || selectedTransporter?.name || "Select Transport"}
                 </div>
               </div>
-              <button onClick={() => setShowTransportForm((p) => !p)} style={{ ...btn, background: "#2563eb", padding: "8px 14px" }}>
+              <button onClick={() => setShowTransportForm((p) => !p)} style={{ ...btn, background: "linear-gradient(135deg, #2563eb, #0f766e)", padding: "10px 16px", borderRadius: 10 }}>
                 New Transport
               </button>
             </div>
 
-            <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: 12, marginBottom: 14 }}>
-              <select name="transporter_id" value={formData.transporter_id} onChange={handleChange} style={input}>
-                <option value="">Select Transport</option>
-                {formData.transporter_id && transportNameDisplay && !transporters.some((t) => sameId(getRecordId(t), formData.transporter_id)) && (
-                  <option value={formData.transporter_id}>{transportNameDisplay}</option>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(260px, 100%), 1fr))", gap: 16, marginBottom: 16, alignItems: "start" }}>
+              <div style={{ position: "relative", minWidth: 0 }}>
+                <input
+                  type="text"
+                  role="combobox"
+                  aria-label="Search transport name"
+                  aria-autocomplete="list"
+                  aria-expanded={isTransportSearchOpen}
+                  placeholder="Type transport name to search"
+                  value={
+                    isTransportSearchOpen
+                      ? transportSearch
+                      : selectedTransporter?.name || transportNameDisplay || ""
+                  }
+                  onFocus={() => {
+                    setTransportSearch("");
+                    setHighlightedTransportIndex(-1);
+                    setIsTransportSearchOpen(true);
+                  }}
+                  onBlur={() => window.setTimeout(() => setIsTransportSearchOpen(false), 120)}
+                  onChange={(event) => {
+                    setTransportSearch(event.target.value);
+                    setHighlightedTransportIndex(-1);
+                    setIsTransportSearchOpen(true);
+                  }}
+                  onKeyDown={handleTransportSearchKeyDown}
+                  style={{ ...input, borderColor: isTransportSearchOpen ? "#0f766e" : "#cbd5e1", boxShadow: isTransportSearchOpen ? "0 0 0 3px rgba(15,118,110,.12)" : "none" }}
+                />
+                {isTransportSearchOpen && (
+                  <div
+                    role="listbox"
+                    aria-label="Transport name results"
+                    style={{ position: "absolute", top: "calc(100% + 6px)", left: 0, right: 0, zIndex: 5, maxHeight: 240, overflowY: "auto", padding: 5, border: "1px solid #99f6e4", borderRadius: 12, background: "#fff", boxShadow: "0 14px 30px rgba(15,23,42,.16)" }}
+                  >
+                    {matchingTransporters.length ? matchingTransporters.map((transporter, index) => (
+                      <button
+                        key={getRecordId(transporter)}
+                        type="button"
+                        role="option"
+                        aria-selected={index === highlightedTransportIndex}
+                        onMouseDown={(event) => event.preventDefault()}
+                        onMouseEnter={() => setHighlightedTransportIndex(index)}
+                        onClick={() => selectTransporter(transporter)}
+                        style={{ display: "block", width: "100%", padding: "10px 12px", border: 0, borderRadius: 8, textAlign: "left", fontSize: 14, fontWeight: index === highlightedTransportIndex ? 700 : 500, color: index === highlightedTransportIndex ? "#115e59" : "#334155", background: index === highlightedTransportIndex ? "#ccfbf1" : "#fff", cursor: "pointer" }}
+                      >
+                        {transporter.name}
+                      </button>
+                    )) : (
+                      <div style={{ padding: "11px 12px", color: "#64748b", fontSize: 13 }}>No transport name found</div>
+                    )}
+                  </div>
                 )}
-                {transporters.map((t) => (
-                  <option key={getRecordId(t)} value={getRecordId(t)}>{t.name}</option>
-                ))}
-              </select>
-              <input value={selectedTransporter?.pan_no || meta?.transporter_pan_no || meta?.pan_no || ""} readOnly placeholder="PAN No" style={{ ...input, background: "#f8fafc" }} />
+              </div>
+              <input value={selectedTransporter?.pan_no || meta?.transporter_pan_no || meta?.pan_no || ""} readOnly placeholder="PAN No" style={{ ...input, background: "#f1f5f9", color: "#475569" }} />
             </div>
 
             {showTransportForm && (
-              <div style={{ border: "1px solid #dbe4ea", borderRadius: 12, padding: 12, marginBottom: 14, background: "#f8fafc" }}>
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 12 }}>
+              <div style={{ border: "1px solid #bae6fd", borderRadius: 14, padding: 16, marginBottom: 16, background: "linear-gradient(145deg, #f0f9ff, #f0fdfa)" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))", gap: 14 }}>
                   <input placeholder="Transport Name" value={transportForm.name} onChange={(e) => setTransportForm((p) => ({ ...p, name: e.target.value }))} style={input} />
                   <input placeholder="Address" value={transportForm.address} onChange={(e) => setTransportForm((p) => ({ ...p, address: e.target.value }))} style={input} />
                   <input placeholder="PAN No" value={transportForm.pan_no} onChange={(e) => setTransportForm((p) => ({ ...p, pan_no: e.target.value }))} style={input} />
@@ -1492,7 +1594,7 @@ const shareToWhatsApp = async () => {
               </div>
             )}
 
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 14 }}>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))", gap: 18 }}>
               <div>
                 <label style={label}>Voucher No</label>
                 <input name="voucher_no" value={formData.voucher_no} onChange={handleChange} style={input} />
