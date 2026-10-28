@@ -903,7 +903,8 @@ export default function TransportBiltiPage() {
   const handleModeNavigationKeyDown = (event) => {
     if (!["ArrowRight", "ArrowDown", "ArrowLeft", "ArrowUp"].includes(event.key)) return;
     const buttons = Array.from(event.currentTarget.querySelectorAll("[data-mode-navigation]"));
-    const currentIndex = buttons.indexOf(event.target);
+    const currentButton = event.target instanceof Element ? event.target.closest("[data-mode-navigation]") : null;
+    const currentIndex = buttons.indexOf(currentButton);
     if (currentIndex < 0 || !buttons.length) return;
     event.preventDefault();
     const direction = event.key === "ArrowRight" || event.key === "ArrowDown" ? 1 : -1;
@@ -936,7 +937,8 @@ export default function TransportBiltiPage() {
   const handleActionNavigationKeyDown = (event) => {
     if (!["ArrowRight", "ArrowDown", "ArrowLeft", "ArrowUp"].includes(event.key)) return;
     const buttons = Array.from(event.currentTarget.querySelectorAll("[data-action-navigation]"));
-    const currentIndex = buttons.indexOf(event.target);
+    const currentButton = event.target instanceof Element ? event.target.closest("[data-action-navigation]") : null;
+    const currentIndex = buttons.indexOf(currentButton);
     if (currentIndex < 0 || !buttons.length) return;
     event.preventDefault();
     const direction = event.key === "ArrowRight" || event.key === "ArrowDown" ? 1 : -1;
@@ -1023,7 +1025,11 @@ export default function TransportBiltiPage() {
       return;
     }
 
-    if (event.key === "Enter" && isTransportSearchOpen) {
+    if (
+      event.key === "Enter" &&
+      isTransportSearchOpen &&
+      (transportSearch.trim() || highlightedTransportIndex >= 0)
+    ) {
       event.preventDefault();
       event.stopPropagation();
       const option = transportSearchOptions[highlightedTransportIndex] || transportSearchOptions[0];
@@ -1780,15 +1786,15 @@ const shareToWhatsApp = async () => {
                   aria-autocomplete="list"
                   aria-expanded={isTransportSearchOpen}
                   placeholder="Type transport name to search"
-                  value={
-                    isTransportSearchOpen
-                      ? transportSearch
-                      : selectedTransporter?.name || transportNameDisplay || ""
-                  }
-                  onFocus={() => {
+                  value={isTransportSearchOpen && transportSearch
+                    ? transportSearch
+                    : selectedTransporter?.name || transportNameDisplay || ""}
+                  onFocus={(event) => {
+                    const inputElement = event.currentTarget;
                     setTransportSearch("");
                     setHighlightedTransportIndex(-1);
                     setIsTransportSearchOpen(true);
+                    window.setTimeout(() => inputElement.select(), 0);
                   }}
                   onBlur={() => window.setTimeout(() => setIsTransportSearchOpen(false), 120)}
                   onChange={(event) => {
