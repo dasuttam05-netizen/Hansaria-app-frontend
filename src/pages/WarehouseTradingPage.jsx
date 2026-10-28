@@ -403,6 +403,17 @@ export default function WarehouseTradingPage() {
   const [reportData, setReportData] = useState([]);
   const [reportFilterOptions, setReportFilterOptions] = useState({ account_ids: [], warehouse_ids: [], farmer_ids: [], buyer_ids: [] });
   const [profitLossFilterOptions, setProfitLossFilterOptions] = useState({ buyers: [], consignees: [], farmers: [], dates: [] });
+  const [profitLossOverheads, setProfitLossOverheads] = useState({ expenses: [], rents: [], adjustments: [] });
+  const [profitLossDetails, setProfitLossDetails] = useState(null);
+  const [showProfitLossManualModal, setShowProfitLossManualModal] = useState(false);
+  const [profitLossManualSaving, setProfitLossManualSaving] = useState(false);
+  const [profitLossManualForm, setProfitLossManualForm] = useState({
+    date: new Date().toISOString().slice(0, 10),
+    warehouse_id: "",
+    entry_type: "expense",
+    amount: "",
+    description: "",
+  });
   const [warehouseStockReport, setWarehouseStockReport] = useState([]);
   const [reportPageInfo, setReportPageInfo] = useState({ page: 1, pageSize: PAGE_SIZE, hasMore: false });
   const [availableSaleStock, setAvailableSaleStock] = useState(null);
@@ -1249,6 +1260,23 @@ export default function WarehouseTradingPage() {
     }, 120);
     return () => window.clearTimeout(timer);
   }, [activeTab, activeReport, reportPage, globalSearch, reportFilters.farmer_id, reportFilters.company_account_id, reportFilters.warehouse_id, reportFilters.sale_buyer_id, reportFilters.sale_company_account_id, reportFilters.sale_journey_token, reportFilters.sale_lorry_no, reportFilters.sale_bill_no, reportFilters.details_of_deduction, reportFilters.profit_loss_mode, reportFilters.profit_from_date, reportFilters.profit_to_date, reportFilters.profit_location_id, reportFilters.profit_employee_id, reportFilters.profit_farmer_id]);
+
+  useEffect(() => {
+    if (activeTab !== "reports" || activeReport !== "profit-loss" || profitLossMode !== "warehouse") return;
+    let active = true;
+    const params = {};
+    if (reportFilters.profit_from_date) params.from_date = reportFilters.profit_from_date;
+    if (reportFilters.profit_to_date) params.to_date = reportFilters.profit_to_date;
+    API.get("/api/warehouse-trading/profit-loss-overheads", { params })
+      .then((response) => {
+        if (active) setProfitLossOverheads(response.data || { expenses: [], rents: [], adjustments: [] });
+      })
+      .catch((error) => {
+        console.error("Failed to load warehouse profit/loss overheads:", error);
+        if (active) setProfitLossOverheads({ expenses: [], rents: [], adjustments: [] });
+      });
+    return () => { active = false; };
+  }, [activeTab, activeReport, profitLossMode, reportFilters.profit_from_date, reportFilters.profit_to_date]);
 
   // Filter options are independent of pagination. Never reload them just
   // because the user moves from page 1 to page 2.
@@ -4571,6 +4599,98 @@ export default function WarehouseTradingPage() {
     }
   };
 
+  const getWarehouseProfitLossFigures = (row) => {
+    const warehouseId = String(row?.warehouse_id || row?.id || "");
+    const sumForWarehouse = (rows) => (Array.isArray(rows) ? rows : [])
+      .filter((entry) => String(entry.warehouse_id || "") === warehouseId)
+      .reduce((sum, entry) => sum + toNumber(entry.amount), 0);
+    const expenses = sumForWarehouse(profitLossOverheads.expenses);
+    const rent = sumForWarehouse(profitLossOverheads.rents);
+    const manualRows = (profitLossOverheads.adjustments || []).filter((entry) => String(entry.warehouse_id || "") === warehouseId);
+    const manualIncome = manualRows.filter((entry) => entry.entry_type === "income").reduce((sum, entry) => sum + toNumber(entry.amount), 0);
+    const manualExpense = manualRows.filter((entry) => entry.entry_type === "expense").reduce((sum, entry) => sum + toNumber(entry.amount), 0);
+    return {
+      expenses,
+      rent,
+      manualIncome,
+      manualExpense,
+      netProfitLoss: toNumber(row?.profit_loss) - expenses - rent - manualExpense + manualIncome,
+    };
+  };
+
+  const openProfitLossVoucherDetails = async (row, type) => {
+    const label = type === "sale" ? "Sale Bills" : "Purchase Bills";
+    const warehouseLabel = row ? (row.warehouse_name || getWarehouseName(row)) : "All Warehouses";
+    setProfitLossDetails({ title: `${warehouseLabel} · ${label}`, type, rows: [], loading: true });
+    try {
+      const params = { type };
+      if (row?.warehouse_id || row?.id) params.warehouse_id = row.warehouse_id || row.id;
+      if (reportFilters.profit_from_date) params.from_date = reportFilters.profit_from_date;
+      if (reportFilters.profit_to_date) params.to_date = reportFilters.profit_to_date;
+      const response = await API.get("/api/wh-vouchers/report/profit-loss-details", { params });
+      setProfitLossDetails((current) => current ? { ...current, rows: response.data?.rows || [], total: response.data?.total || 0, loading: false } : current);
+    } catch (error) {
+      console.error("Failed to load profit/loss voucher details:", error);
+      setProfitLossDetails((current) => current ? { ...current, rows: [], loading: false, error: error.response?.data?.error || "Unable to load bill details." } : current);
+    }
+  };
+
+  const openProfitLossOverheadDetails = (row, type) => {
+    const warehouseId = String(row?.warehouse_id || row?.id || "");
+    const source = type === "expenses" ? profitLossOverheads.expenses
+      : type === "rents" ? profitLossOverheads.rents
+        : profitLossOverheads.adjustments;
+    const rows = (Array.isArray(source) ? source : []).filter((entry) => !warehouseId || String(entry.warehouse_id || "") === warehouseId);
+    const labels = { expenses: "Staff Expenses", rents: "Warehouse Rent", adjustments: "Manual Entries" };
+    setProfitLossDetails({ title: `${row ? getWarehouseName(row) : "All Warehouses"} · ${labels[type]}`, type, rows, loading: false });
+  };
+
+  const saveProfitLossManualEntry = async (event) => {
+    event.preventDefault();
+    const selectedWarehouse = warehouses.find((warehouse) => String(warehouse.id || warehouse._id) === String(profitLossManualForm.warehouse_id));
+    if (!selectedWarehouse) return;
+    setProfitLossManualSaving(true);
+    try {
+      const response = await API.post("/api/warehouse-trading/profit-loss-adjustments", {
+        ...profitLossManualForm,
+        amount: Number(profitLossManualForm.amount),
+        warehouse_name: selectedWarehouse.name || "",
+      });
+      setProfitLossOverheads((current) => ({
+        ...current,
+        adjustments: [{
+          ...profitLossManualForm,
+          id: response.data?.id,
+          amount: Number(profitLossManualForm.amount),
+          warehouse_name: selectedWarehouse.name || "",
+        }, ...(current.adjustments || [])],
+      }));
+      setProfitLossManualForm((current) => ({ ...current, amount: "", description: "" }));
+      setShowProfitLossManualModal(false);
+    } catch (error) {
+      alert(error.response?.data?.error || "Unable to save the manual P/L entry.");
+    } finally {
+      setProfitLossManualSaving(false);
+    }
+  };
+
+  const deleteProfitLossManualEntry = async (entry) => {
+    if (!entry?.id || !window.confirm("Delete this manual Profit/Loss entry?")) return;
+    try {
+      await API.delete(`/api/warehouse-trading/profit-loss-adjustments/${entry.id}`);
+      setProfitLossOverheads((current) => ({
+        ...current,
+        adjustments: (current.adjustments || []).filter((row) => String(row.id) !== String(entry.id)),
+      }));
+      setProfitLossDetails((current) => current ? {
+        ...current,
+        rows: (current.rows || []).filter((row) => String(row.id) !== String(entry.id)),
+      } : current);
+    } catch (error) {
+      alert(error.response?.data?.error || "Unable to delete the manual entry.");
+    }
+  };
+
   const reportColumns = {
     purchase: [
       ["sl", "S.L No", (_item, i) => i + 1],
@@ -4919,17 +5039,51 @@ export default function WarehouseTradingPage() {
     ],
     "profit-loss": profitLossMode === "warehouse" ? [
       ["warehouse", "Warehouse", (item) => item.warehouse_name || getWarehouseName(item)],
+      ["purchase_count", "Purchase Bills", (item) => (
+        <button type="button" onClick={() => openProfitLossVoucherDetails(item, "purchase")} style={linkButtonStyle}>
+          {Number(item.purchase_count || 0)}
+        </button>
+      )],
       ["purchase_qty", "Purchase Qty", (item) => formatDecimal4(item.purchase_qty || 0)],
       ["purchase_rate", "Purchase Rate", (item) => formatMoney(item.purchase_rate || 0)],
-      ["purchase_amount", "Purchase Amount", (item) => formatMoney(item.purchase_amount || 0)],
+      ["purchase_amount", "Purchase Amount", (item) => (
+        <button type="button" onClick={() => openProfitLossVoucherDetails(item, "purchase")} style={linkButtonStyle}>
+          {formatMoney(item.purchase_amount || 0)}
+        </button>
+      )],
+      ["sale_count", "Sale Bills", (item) => (
+        <button type="button" onClick={() => openProfitLossVoucherDetails(item, "sale")} style={linkButtonStyle}>
+          {Number(item.sale_count || 0)}
+        </button>
+      )],
       ["sale_qty", "Sale Qty", (item) => formatDecimal4(item.sale_qty || 0)],
       ["sale_rate", "Sale Rate", (item) => formatMoney(item.sale_rate || 0)],
-      ["gross_amount", "Gross Amount", (item) => formatMoney(item.gross_amount || item.sale_amount || 0)],
+      ["gross_amount", "Sale Amount", (item) => (
+        <button type="button" onClick={() => openProfitLossVoucherDetails(item, "sale")} style={linkButtonStyle}>
+          {formatMoney(item.sale_amount || item.gross_amount || 0)}
+        </button>
+      )],
       ["additional_amount", "Total Add", (item) => formatMoney(item.additional_amount || 0)],
       ["total_less", "Total Less", (item) => formatMoney(item.total_less || item.total_deduction || 0)],
+      ["staff_expense", "Staff Expense", (item) => {
+        const figures = getWarehouseProfitLossFigures(item);
+        return <button type="button" onClick={() => openProfitLossOverheadDetails(item, "expenses")} style={linkButtonStyle}>{formatMoney(figures.expenses)}</button>;
+      }],
+      ["rent_amount", "Rent", (item) => {
+        const figures = getWarehouseProfitLossFigures(item);
+        return <button type="button" onClick={() => openProfitLossOverheadDetails(item, "rents")} style={linkButtonStyle}>{formatMoney(figures.rent)}</button>;
+      }],
+      ["manual_income", "Manual Add", (item) => {
+        const figures = getWarehouseProfitLossFigures(item);
+        return <button type="button" onClick={() => openProfitLossOverheadDetails(item, "adjustments")} style={linkButtonStyle}>{formatMoney(figures.manualIncome)}</button>;
+      }],
+      ["manual_expense", "Manual Less", (item) => {
+        const figures = getWarehouseProfitLossFigures(item);
+        return <button type="button" onClick={() => openProfitLossOverheadDetails(item, "adjustments")} style={linkButtonStyle}>{formatMoney(figures.manualExpense)}</button>;
+      }],
       ["profit_loss", "Profit/Loss", (item) => (
-        <span style={{ color: Number(item.profit_loss || 0) >= 0 ? "#16a34a" : "#dc2626", fontWeight: 800 }}>
-          {formatMoney(item.profit_loss || 0)}
+        <span style={{ color: getWarehouseProfitLossFigures(item).netProfitLoss >= 0 ? "#16a34a" : "#dc2626", fontWeight: 800 }}>
+          {formatMoney(getWarehouseProfitLossFigures(item).netProfitLoss)}
         </span>
       )],
     ] : [
@@ -5265,6 +5419,33 @@ export default function WarehouseTradingPage() {
       ])
     );
   }, [displayReportData, normalizedGlobalSearch]);
+  const profitLossSummaryTotals = useMemo(() => filteredReportDataAll.reduce((totals, row) => {
+    const figures = getWarehouseProfitLossFigures(row);
+    totals.purchaseCount += Number(row.purchase_count || 0);
+    totals.purchaseAmount += toNumber(row.purchase_amount);
+    totals.saleCount += Number(row.sale_count || 0);
+    totals.saleAmount += toNumber(row.sale_amount || row.gross_amount);
+    totals.additionalAmount += toNumber(row.additional_amount);
+    totals.totalLess += toNumber(row.total_less || row.total_deduction);
+    totals.staffExpenses += figures.expenses;
+    totals.rent += figures.rent;
+    totals.manualIncome += figures.manualIncome;
+    totals.manualExpense += figures.manualExpense;
+    totals.netProfitLoss += figures.netProfitLoss;
+    return totals;
+  }, {
+    purchaseCount: 0,
+    purchaseAmount: 0,
+    saleCount: 0,
+    saleAmount: 0,
+    additionalAmount: 0,
+    totalLess: 0,
+    staffExpenses: 0,
+    rent: 0,
+    manualIncome: 0,
+    manualExpense: 0,
+    netProfitLoss: 0,
+  }), [filteredReportDataAll, profitLossOverheads]);
   const filteredReportData = useMemo(() => {
     const serverPagedReport = ["sale", "purchase", "warehouse-stock", "profit-loss"].includes(activeReport);
     if (serverPagedReport) return filteredReportDataAll;
@@ -7534,16 +7715,19 @@ export default function WarehouseTradingPage() {
                       <option value="warehouse">Warehouse Wise</option>
                     </select>
                   </label>
+                  <label style={{ display: "flex", flexDirection: "column", gap: 5, minWidth: 145, fontSize: 12, fontWeight: 700, color: "#334155" }}>From Date<input type="date" value={reportFilters.profit_from_date} onChange={(e) => updateReportFilter("profit_from_date", e.target.value)} style={inp} /></label>
+                  <label style={{ display: "flex", flexDirection: "column", gap: 5, minWidth: 145, fontSize: 12, fontWeight: 700, color: "#334155" }}>To Date<input type="date" value={reportFilters.profit_to_date} onChange={(e) => updateReportFilter("profit_to_date", e.target.value)} style={inp} /></label>
                   {profitLossMode === "direct" && (
                     <>
-                      <label style={{ display: "flex", flexDirection: "column", gap: 5, minWidth: 145, fontSize: 12, fontWeight: 700, color: "#334155" }}>From Date<input type="date" value={reportFilters.profit_from_date} onChange={(e) => updateReportFilter("profit_from_date", e.target.value)} style={inp} /></label>
-                      <label style={{ display: "flex", flexDirection: "column", gap: 5, minWidth: 145, fontSize: 12, fontWeight: 700, color: "#334155" }}>To Date<input type="date" value={reportFilters.profit_to_date} onChange={(e) => updateReportFilter("profit_to_date", e.target.value)} style={inp} /></label>
                       <SearchableSelect label="Buyer" value={reportFilters.profit_location_id} options={profitLossBuyerOptions.map((x) => ({ value: x.id, label: x.name }))} onChange={(v) => updateReportFilter("profit_location_id", v)} placeholder="All Buyers" />
                       <SearchableSelect label="Consignee" value={reportFilters.profit_employee_id} options={profitLossConsigneeOptions.map((x) => ({ value: x.id, label: x.name }))} onChange={(v) => updateReportFilter("profit_employee_id", v)} placeholder="All Consignees" />
                       <SearchableSelect label="All Farmers" value={reportFilters.profit_farmer_id} options={profitLossFarmerOptions.map((x) => ({ value: x.id, label: x.name }))} onChange={(v) => updateReportFilter("profit_farmer_id", v)} placeholder="All Farmers" />
                     </>
                   )}
-                  <button type="button" onClick={() => { setProfitLossMode("direct"); setReportFilters((prev) => ({ ...prev, profit_loss_mode: "direct", profit_from_date: "", profit_to_date: "", profit_location_id: "", profit_employee_id: "", profit_farmer_id: "" })); setReportPage(1); }} style={{ ...btnAction, background: "#64748b" }}>Clear Filters</button>
+                  {profitLossMode === "warehouse" && hasPermission(user, "warehouse.trading.manage") && (
+                    <button type="button" onClick={() => setShowProfitLossManualModal(true)} style={{ ...btnAction, background: "#0f766e" }}>+ Manual Entry</button>
+                  )}
+                  <button type="button" onClick={() => { setReportFilters((prev) => ({ ...prev, profit_loss_mode: profitLossMode, profit_from_date: "", profit_to_date: "", profit_location_id: "", profit_employee_id: "", profit_farmer_id: "" })); setReportPage(1); }} style={{ ...btnAction, background: "#64748b" }}>Clear Filters</button>
                   <div style={{ display: "flex", gap: 8, alignItems: "end" }}>
                     <label style={{ display: "flex", flexDirection: "column", gap: 5, minWidth: 135, fontSize: 12, fontWeight: 700, color: "#334155" }}>
                       Download Format
@@ -7559,6 +7743,26 @@ export default function WarehouseTradingPage() {
                     <button type="button" onClick={() => downloadProfitLoss(profitLossDownloadType)} style={{ ...btnAction, background: "#0f766e" }}>Download</button>
                   </div>
                 </div>
+              </div>
+            )}
+            {activeReport === "profit-loss" && profitLossMode === "warehouse" && (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 8, marginBottom: 14 }}>
+                {[
+                  { label: "Purchase Bills", value: `${profitLossSummaryTotals.purchaseCount} · Rs.${formatMoney(profitLossSummaryTotals.purchaseAmount)}`, onClick: () => openProfitLossVoucherDetails(null, "purchase"), color: "#155e75" },
+                  { label: "Sale Bills", value: `${profitLossSummaryTotals.saleCount} · Rs.${formatMoney(profitLossSummaryTotals.saleAmount)}`, onClick: () => openProfitLossVoucherDetails(null, "sale"), color: "#166534" },
+                  { label: "Total Add", value: `Rs.${formatMoney(profitLossSummaryTotals.additionalAmount)}`, onClick: () => openProfitLossVoucherDetails(null, "sale"), color: "#0f766e" },
+                  { label: "Total Less", value: `Rs.${formatMoney(profitLossSummaryTotals.totalLess)}`, onClick: () => openProfitLossVoucherDetails(null, "sale"), color: "#b45309" },
+                  { label: "Staff Expense", value: `Rs.${formatMoney(profitLossSummaryTotals.staffExpenses)}`, onClick: () => openProfitLossOverheadDetails(null, "expenses"), color: "#9f1239" },
+                  { label: "Warehouse Rent", value: `Rs.${formatMoney(profitLossSummaryTotals.rent)}`, onClick: () => openProfitLossOverheadDetails(null, "rents"), color: "#6d4c0f" },
+                  { label: "Manual Add", value: `Rs.${formatMoney(profitLossSummaryTotals.manualIncome)}`, onClick: () => openProfitLossOverheadDetails(null, "adjustments"), color: "#166534" },
+                  { label: "Manual Less", value: `Rs.${formatMoney(profitLossSummaryTotals.manualExpense)}`, onClick: () => openProfitLossOverheadDetails(null, "adjustments"), color: "#9f1239" },
+                  { label: "Net Profit / Loss", value: `Rs.${formatMoney(profitLossSummaryTotals.netProfitLoss)}`, onClick: undefined, color: profitLossSummaryTotals.netProfitLoss >= 0 ? "#166534" : "#b91c1c" },
+                ].map((item) => (
+                  <button key={item.label} type="button" onClick={item.onClick} disabled={!item.onClick} style={{ textAlign: "left", padding: "11px 12px", minWidth: 0, border: "1px solid #dbe4ee", borderTop: `3px solid ${item.color}`, borderRadius: 8, background: "#fff", cursor: item.onClick ? "pointer" : "default" }}>
+                    <span style={{ display: "block", color: "#64748b", fontSize: 11, fontWeight: 700, marginBottom: 5 }}>{item.label}</span>
+                    <strong style={{ display: "block", color: item.color, fontSize: 14, overflowWrap: "anywhere" }}>{item.value}</strong>
+                  </button>
+                ))}
               </div>
             )}
             {activeReport === "purchase" && (
@@ -8166,6 +8370,103 @@ export default function WarehouseTradingPage() {
       ) : (
         <div style={{ padding: "28px 20px", border: "1px solid #e2e8f0", borderRadius: 12, background: "#fff", color: "#475569", textAlign: "center" }}>
           Click Vouchers or Reports to load that section.
+        </div>
+      )}
+      {profitLossDetails && (
+        <div style={modalOverlayStyle} onMouseDown={(event) => { if (event.target === event.currentTarget) setProfitLossDetails(null); }}>
+          <section role="dialog" aria-modal="true" aria-label={profitLossDetails.title} style={{ width: "min(1080px, 96vw)", maxHeight: "90vh", overflow: "auto", background: "#fff", borderRadius: 10, border: "1px solid #cbd5e1", boxShadow: "0 24px 70px rgba(15, 23, 42, .28)" }}>
+            <header style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", padding: "16px 18px", borderBottom: "1px solid #e2e8f0", background: "#f8fafc" }}>
+              <div>
+                <h3 style={{ margin: 0, color: "#0f172a", fontSize: 17 }}>{profitLossDetails.title}</h3>
+                <div style={{ marginTop: 4, color: "#64748b", fontSize: 12 }}>{profitLossDetails.total ?? profitLossDetails.rows?.length ?? 0} entries</div>
+              </div>
+              <button type="button" onClick={() => setProfitLossDetails(null)} style={{ ...btnAction, background: "#475569" }}>Close</button>
+            </header>
+            {profitLossDetails.loading ? (
+              <div style={{ padding: 28, textAlign: "center", color: "#64748b" }}>Loading bill details...</div>
+            ) : profitLossDetails.error ? (
+              <div role="alert" style={{ padding: 24, color: "#b91c1c" }}>{profitLossDetails.error}</div>
+            ) : (
+              <div style={{ overflowX: "auto", padding: 14 }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                  <thead>
+                    <tr style={{ background: "#0f766e", color: "#fff", textAlign: "left" }}>
+                      <th style={th}>Date</th>
+                      {profitLossDetails.type === "sale" || profitLossDetails.type === "purchase" ? (
+                        <>
+                          <th style={th}>Bill No</th>
+                          <th style={th}>{profitLossDetails.type === "sale" ? "Buyer" : "Farmer"}</th>
+                          <th style={th}>Product</th>
+                          <th style={th}>Amount</th>
+                          {profitLossDetails.type === "sale" && <><th style={th}>Add</th><th style={th}>Less</th></>}
+                        </>
+                      ) : (
+                        <>
+                          <th style={th}>{profitLossDetails.type === "expenses" ? "Staff / Particulars" : "Particulars"}</th>
+                          {profitLossDetails.type === "adjustments" && <th style={th}>Entry</th>}
+                          <th style={th}>Amount</th>
+                          {profitLossDetails.type === "adjustments" && <th style={th}>Action</th>}
+                        </>
+                      )}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {(profitLossDetails.rows || []).map((row, index) => {
+                      const isVoucher = profitLossDetails.type === "sale" || profitLossDetails.type === "purchase";
+                      const amount = profitLossDetails.type === "sale"
+                        ? toNumber(row.net_amount_payable || row.net_receivable_amount || row.net_amount || row.amount)
+                        : profitLossDetails.type === "purchase"
+                          ? toNumber(row.total_amount || row.net_amount_payable || row.amount)
+                          : toNumber(row.amount);
+                      return (
+                        <tr key={row.id || row._id || `${row.date}-${index}`} style={{ background: index % 2 ? "#f8fafc" : "#fff" }}>
+                          <td style={td}>{formatLedgerDate(row.date || row.rent_month)}</td>
+                          {isVoucher ? (
+                            <>
+                              <td style={td}>{row.voucher_no || row.bill_no || "-"}</td>
+                              <td style={td}>{profitLossDetails.type === "sale" ? row.buyer_name || row.company_name || "-" : row.farmer_name || "-"}</td>
+                              <td style={td}>{row.product_name || "-"}</td>
+                              <td style={{ ...td, fontWeight: 700 }}>{formatMoney(amount)}</td>
+                              {profitLossDetails.type === "sale" && <><td style={td}>{formatMoney(row.additional_amount || 0)}</td><td style={td}>{formatMoney(row.total_deduction || row.total_less || 0)}</td></>}
+                            </>
+                          ) : (
+                            <>
+                              <td style={td}>{[row.employee_name, row.description, row.warehouse_name].filter(Boolean).join(" · ") || "-"}</td>
+                              {profitLossDetails.type === "adjustments" && <td style={td}>{row.entry_type === "income" ? "Add" : "Less"}</td>}
+                              <td style={{ ...td, fontWeight: 700 }}>{formatMoney(amount)}</td>
+                              {profitLossDetails.type === "adjustments" && <td style={td}>{hasPermission(user, "warehouse.trading.manage") && <button type="button" onClick={() => deleteProfitLossManualEntry(row)} style={{ ...btnAction, padding: "5px 8px", background: "#b91c1c" }}>Delete</button>}</td>}
+                            </>
+                          )}
+                        </tr>
+                      );
+                    })}
+                    {!(profitLossDetails.rows || []).length && <tr><td colSpan={profitLossDetails.type === "sale" ? 7 : profitLossDetails.type === "purchase" ? 5 : profitLossDetails.type === "adjustments" ? 4 : 3} style={{ ...td, textAlign: "center", padding: 24, color: "#64748b" }}>No entries found for this period.</td></tr>}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+        </div>
+      )}
+      {showProfitLossManualModal && (
+        <div style={modalOverlayStyle} onMouseDown={(event) => { if (event.target === event.currentTarget) setShowProfitLossManualModal(false); }}>
+          <form onSubmit={saveProfitLossManualEntry} role="dialog" aria-modal="true" aria-label="Manual Profit/Loss entry" style={{ width: "min(560px, 96vw)", background: "#fff", borderRadius: 10, border: "1px solid #cbd5e1", boxShadow: "0 24px 70px rgba(15, 23, 42, .28)", padding: 20 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
+              <h3 style={{ margin: 0, color: "#0f172a" }}>Manual Profit/Loss Entry</h3>
+              <button type="button" onClick={() => setShowProfitLossManualModal(false)} style={{ ...btnAction, background: "#475569" }}>Close</button>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12 }}>
+              <label style={{ display: "grid", gap: 5, fontSize: 12, fontWeight: 700, color: "#334155" }}>Date<input required type="date" value={profitLossManualForm.date} onChange={(event) => setProfitLossManualForm((current) => ({ ...current, date: event.target.value }))} style={inp} /></label>
+              <label style={{ display: "grid", gap: 5, fontSize: 12, fontWeight: 700, color: "#334155" }}>Warehouse<select required value={profitLossManualForm.warehouse_id} onChange={(event) => setProfitLossManualForm((current) => ({ ...current, warehouse_id: event.target.value }))} style={inp}><option value="">Select warehouse</option>{warehouses.map((warehouse) => <option key={warehouse.id || warehouse._id} value={warehouse.id || warehouse._id}>{warehouse.name}</option>)}</select></label>
+              <label style={{ display: "grid", gap: 5, fontSize: 12, fontWeight: 700, color: "#334155" }}>Entry Type<select value={profitLossManualForm.entry_type} onChange={(event) => setProfitLossManualForm((current) => ({ ...current, entry_type: event.target.value }))} style={inp}><option value="expense">Less · Expense</option><option value="income">Add · Income</option></select></label>
+              <label style={{ display: "grid", gap: 5, fontSize: 12, fontWeight: 700, color: "#334155" }}>Amount<input required type="number" min="0.01" step="0.01" value={profitLossManualForm.amount} onChange={(event) => setProfitLossManualForm((current) => ({ ...current, amount: event.target.value }))} style={inp} /></label>
+              <label style={{ display: "grid", gap: 5, gridColumn: "1 / -1", fontSize: 12, fontWeight: 700, color: "#334155" }}>Particulars<input value={profitLossManualForm.description} onChange={(event) => setProfitLossManualForm((current) => ({ ...current, description: event.target.value }))} placeholder="Optional note" style={inp} /></label>
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 18 }}>
+              <button type="button" onClick={() => setShowProfitLossManualModal(false)} style={{ ...btnAction, background: "#64748b" }}>Cancel</button>
+              <button type="submit" disabled={profitLossManualSaving} style={{ ...btnAction, background: "#0f766e", opacity: profitLossManualSaving ? 0.7 : 1 }}>{profitLossManualSaving ? "Saving..." : "Save Entry"}</button>
+            </div>
+          </form>
         </div>
       )}
       {showPaymentAdjustPopup && (
