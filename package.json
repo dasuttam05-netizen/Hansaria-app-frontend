@@ -1,35 +1,42 @@
 {
-  "name": "warehouse-backend",
+  "name": "warehouse-frontend",
   "version": "1.0.0",
+  "private": true,
   "engines": {
     "node": "24.x"
   },
-  "main": "server.js",
-  "scripts": {
-    "start": "node server.js",
-    "start:lan": "node server.js",
-    "benchmark:capacity": "node scripts/benchmark-capacity.js",
-    "access:normalize": "node scripts/normalizeEmployeeAccess.js",
-    "migrate:employee-warehouse-assignments": "node scripts/migrateEmployeeWarehouseAssignments.js",
-    "sync:warehouse-employee-links": "node scripts/syncWarehouseEmployeeLinks.js"
-  },
   "dependencies": {
     "axios": "^1.12.2",
-    "bcrypt": "^6.0.0",
-    "bcryptjs": "^2.4.3",
-    "body-parser": "^2.2.0",
-    "cors": "^2.8.5",
-    "dotenv": "^16.0.3",
-    "express": "^4.21.2",
-    "jsonwebtoken": "^9.0.2",
-    "mongoose": "^7.8.9",
-    "multer": "^2.1.1",
-    "pdfkit": "^0.13.0",
-    "recharts": "^3.2.1",
-    "xlsx": "^0.18.5"
+    "chart.js": "^4.5.0",
+    "framer-motion": "^12.23.24",
+    "jspdf": "^4.2.1",
+    "jspdf-autotable": "^5.0.7",
+    "react": "^19.1.1",
+    "react-chartjs-2": "^5.3.0",
+    "react-dom": "^19.1.1",
+    "react-icons": "^5.5.0",
+    "react-router-dom": "^7.9.1",
+    "react-scripts": "^5.0.1",
+    "react-toastify": "^11.0.5",
+    "recharts": "^3.2.1"
   },
-  "description": "",
-  "keywords": [],
-  "author": "",
-  "license": "ISC"
+  "scripts": {
+    "start": "react-scripts start",
+    "start:lan": "set HOST=0.0.0.0&& set DANGEROUSLY_DISABLE_HOST_CHECK=true&& react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test",
+    "eject": "react-scripts eject"
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  }
 }
