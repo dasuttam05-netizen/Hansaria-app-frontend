@@ -738,6 +738,22 @@ export default function TransportBiltiPage() {
     });
   };
 
+  const handleEditorKeyDown = (event) => {
+    if (event.key !== "Enter") return;
+
+    const current = event.target;
+    if (!(current instanceof HTMLElement) || !current.matches("input, select, textarea")) return;
+
+    const fields = Array.from(
+      event.currentTarget.querySelectorAll("input:not([type='hidden']):not([readonly]):not(:disabled), select:not(:disabled), textarea:not([readonly]):not(:disabled)")
+    );
+    const nextField = fields[fields.indexOf(current) + 1];
+    if (!nextField) return;
+
+    if (current.tagName !== "SELECT") event.preventDefault();
+    window.setTimeout(() => nextField.focus(), 0);
+  };
+
   const saveTransporter = async () => {
     if (!transportForm.name.trim()) return alert("Transport name required");
 
@@ -1431,7 +1447,7 @@ const shareToWhatsApp = async () => {
               </div>
             </div>
 
-            <div style={{ padding: 18 }}>
+            <div style={{ padding: 18 }} onKeyDown={handleEditorKeyDown}>
           <div style={{ ...card, marginBottom: 16, borderRadius: 16, boxShadow: "0 8px 26px rgba(15,23,42,.07)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, marginBottom: 12, flexWrap: "wrap" }}>
               <div>
