@@ -3,6 +3,8 @@ import axios from "axios";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { FaSave, FaEdit, FaTrash, FaWhatsapp, FaTimes, FaFilePdf } from "react-icons/fa";
+import { ToastContainer, toast, Slide } from "react-toastify";
+import "react-toastify/dist/ReactToastify.css";
 import { consigneeHasBuyer } from "../utils/consigneeBuyers";
 
 function SearchableSelect({ name, value, options, onChange, placeholder, style, disabled = false }) {
@@ -931,6 +933,16 @@ export default function TransportBiltiPage() {
     buttons[(currentIndex + direction + buttons.length) % buttons.length].focus();
   };
 
+  const handleActionNavigationKeyDown = (event) => {
+    if (!["ArrowRight", "ArrowDown", "ArrowLeft", "ArrowUp"].includes(event.key)) return;
+    const buttons = Array.from(event.currentTarget.querySelectorAll("[data-action-navigation]"));
+    const currentIndex = buttons.indexOf(event.target);
+    if (currentIndex < 0 || !buttons.length) return;
+    event.preventDefault();
+    const direction = event.key === "ArrowRight" || event.key === "ArrowDown" ? 1 : -1;
+    buttons[(currentIndex + direction + buttons.length) % buttons.length].focus();
+  };
+
   const transportOptions = [
     ...transporters,
     ...(formData.transporter_id &&
@@ -1065,7 +1077,7 @@ export default function TransportBiltiPage() {
   };
 
   const saveBilti = async () => {
-    if (!formData.transporter_id) return alert("Select transport name");
+    if (!formData.transporter_id) return toast.error("Select transport name", { theme: "colored" });
 
     try {
       const res = await axios.post(`${API_BASE}/transport-bilti/save`, {
@@ -1081,18 +1093,19 @@ export default function TransportBiltiPage() {
         sale_id: mode === "sale" ? selectedSaleId : null,
       });
       await loadStaticMasterData();
+      toast.success("Transport Bilti saved successfully", { theme: "colored" });
       await returnAfterEditorSave();
     } catch (err) {
       console.error(err);
-      alert(err?.response?.data?.error || "Bilti save failed");
+      toast.error(err?.response?.data?.error || "Bilti save failed", { theme: "colored" });
     }
   };
 
   const editBilti = async () => {
-    if (!formData.transporter_id) return alert("Select transport name");
+    if (!formData.transporter_id) return toast.error("Select transport name", { theme: "colored" });
     const hasExistingBilti = Boolean(formData.id);
     if (!hasExistingBilti) {
-      return alert("Load an existing bilti first to edit");
+      return toast.error("Load an existing bilti first to edit", { theme: "colored" });
     }
 
     try {
@@ -1109,24 +1122,25 @@ export default function TransportBiltiPage() {
         sale_id: mode === "sale" ? selectedSaleId : null,
       });
       await loadStaticMasterData();
+      toast.success("Transport Bilti updated successfully", { theme: "colored" });
       await returnAfterEditorSave();
     } catch (err) {
       console.error(err);
-      alert(err?.response?.data?.error || "Bilti edit failed");
+      toast.error(err?.response?.data?.error || "Bilti edit failed", { theme: "colored" });
     }
   };
 
   const deleteBilti = async () => {
-    if (!formData.id) return alert("No bilti selected");
+    if (!formData.id) return toast.error("No bilti selected", { theme: "colored" });
     if (!window.confirm("Delete this bilti?")) return;
 
     try {
       await axios.delete(`${API_BASE}/transport-bilti/${formData.id}`);
-      alert("Bilti deleted successfully");
+      toast.success("Bilti deleted successfully", { theme: "colored" });
       resetForm();
     } catch (err) {
       console.error(err);
-      alert(err?.response?.data?.error || "Delete failed");
+      toast.error(err?.response?.data?.error || "Delete failed", { theme: "colored" });
     }
   };
 
@@ -1421,10 +1435,16 @@ const buildTransportPdf = () => {
 };
 
 const downloadPDF = () => {
-  const voucherNo = formData.voucher_no || meta?.outward_voucher_no || meta?.voucher_no || "-";
-  const billNo = meta?.bilti_no || (formData.id ? `BLT-${formData.id}` : "DRAFT");
-  const doc = buildTransportPdf();
-  doc.save(`Transport_Payment_Advice_${voucherNo !== "-" ? voucherNo : billNo}.pdf`);
+  try {
+    const voucherNo = formData.voucher_no || meta?.outward_voucher_no || meta?.voucher_no || "-";
+    const billNo = meta?.bilti_no || (formData.id ? `BLT-${formData.id}` : "DRAFT");
+    const doc = buildTransportPdf();
+    doc.save(`Transport_Payment_Advice_${voucherNo !== "-" ? voucherNo : billNo}.pdf`);
+    toast.success("Transport Bilti PDF downloaded", { theme: "colored" });
+  } catch (err) {
+    console.error("Transport Bilti PDF download failed", err);
+    toast.error("Transport Bilti PDF download failed", { theme: "colored" });
+  }
 };
 
 const shareToWhatsApp = async () => {
@@ -1444,6 +1464,7 @@ const shareToWhatsApp = async () => {
         text: textMessage,
         files: [pdfFile],
       });
+      toast.success("Transport Bilti shared successfully", { theme: "colored" });
       return;
     }
   } catch (err) {
@@ -1451,12 +1472,14 @@ const shareToWhatsApp = async () => {
   }
 
   window.open(`https://wa.me/?text=${encodeURIComponent(textMessage)}`, "_blank");
+  toast.info("WhatsApp share opened", { theme: "colored" });
 };
 
 
 
   return (
     <div style={{ padding: 20, background: "#f8fafc", minHeight: "100vh", fontFamily: "Segoe UI, Arial, sans-serif" }}>
+      <ToastContainer position="top-right" autoClose={2500} hideProgressBar transition={Slide} />
       <div style={{ ...card, marginBottom: 16, display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
         <h2 style={{ margin: 0, color: "#0f172a" }}>Create Transport Bilti</h2>
       </div>
@@ -2048,20 +2071,20 @@ const shareToWhatsApp = async () => {
             <div style={card}><div>Payable Amount</div><div style={{ fontSize: 24, fontWeight: 700 }}>{calculation.payableAmount.toFixed(2)}</div></div>
           </div>
 
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: 10, flexWrap: "wrap" }}>
-            <button onClick={saveBilti} style={{ ...btn, background: "#16a34a", display: "inline-flex", alignItems: "center", gap: 8 }}>
+          <div onKeyDown={handleActionNavigationKeyDown} style={{ display: "flex", justifyContent: "flex-end", gap: 10, flexWrap: "wrap" }}>
+            <button data-action-navigation onClick={saveBilti} style={{ ...btn, background: "#16a34a", display: "inline-flex", alignItems: "center", gap: 8 }}>
               <FaSave /> Save
             </button>
-            <button onClick={editBilti} style={{ ...btn, background: "#2563eb", display: "inline-flex", alignItems: "center", gap: 8 }}>
+            <button data-action-navigation onClick={editBilti} style={{ ...btn, background: "#2563eb", display: "inline-flex", alignItems: "center", gap: 8 }}>
               <FaEdit /> Edit
             </button>
-            <button onClick={deleteBilti} style={{ ...btn, background: "#dc2626", display: "inline-flex", alignItems: "center", gap: 8 }}>
+            <button data-action-navigation onClick={deleteBilti} style={{ ...btn, background: "#dc2626", display: "inline-flex", alignItems: "center", gap: 8 }}>
               <FaTrash /> Delete
             </button>
-            <button onClick={downloadPDF} style={{ ...btn, background: "#475569", display: "inline-flex", alignItems: "center", gap: 8 }}>
+            <button data-action-navigation onClick={downloadPDF} style={{ ...btn, background: "#475569", display: "inline-flex", alignItems: "center", gap: 8 }}>
               <FaFilePdf /> PDF
             </button>
-            <button onClick={shareToWhatsApp} style={{ ...btn, background: "#25D366", display: "inline-flex", alignItems: "center", gap: 8 }}>
+            <button data-action-navigation onClick={shareToWhatsApp} style={{ ...btn, background: "#25D366", display: "inline-flex", alignItems: "center", gap: 8 }}>
               <FaWhatsapp /> WhatsApp
             </button>
           </div>
