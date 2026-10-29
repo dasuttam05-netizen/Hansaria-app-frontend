@@ -4895,7 +4895,9 @@ export default function WarehouseTradingPage() {
       alert("This Sale Bill has no linked Transport Bilti to edit.");
       return;
     }
-    const params = new URLSearchParams({ edit: id, source: "sale", return_to: getProfitLossReturnUrl() });
+    // This is an existing Transport Bilti ID, so do not pass source=sale.
+    // The Bilti GET route interprets source=sale IDs as SaleVoucher IDs.
+    const params = new URLSearchParams({ edit: id, return_to: getProfitLossReturnUrl() });
     navigate(`/transport-bilti?${params.toString()}`);
   };
 
