@@ -2006,7 +2006,7 @@ export default function WarehouseTradingPage() {
         params.company_account_id = filters.sale_company_account_id;
       }
 
-      const serverPagedReport = ["sale", "purchase", "warehouse-stock", "profit-loss"].includes(reportType);
+      const serverPagedReport = ["sale", "purchase", "payment", "warehouse-stock", "fifo-stock", "profit-loss"].includes(reportType);
       if (serverPagedReport) {
         params.page = page;
         params.page_size = PAGE_SIZE;
@@ -5409,7 +5409,7 @@ export default function WarehouseTradingPage() {
     : filteredVoucherList;
 
   const filteredReportDataAll = useMemo(() => {
-    const serverPagedReport = ["sale", "purchase", "warehouse-stock", "profit-loss"].includes(activeReport);
+    const serverPagedReport = ["sale", "purchase", "payment", "warehouse-stock", "fifo-stock", "profit-loss"].includes(activeReport);
     // Sale/Purchase search is already applied in MongoDB before pagination.
     if (serverPagedReport || !normalizedGlobalSearch) return displayReportData;
     return displayReportData.filter((item) =>
@@ -5471,7 +5471,7 @@ export default function WarehouseTradingPage() {
     netProfitLoss: 0,
   }), [filteredReportDataAll, profitLossOverheads]);
   const filteredReportData = useMemo(() => {
-    const serverPagedReport = ["sale", "purchase", "warehouse-stock", "profit-loss"].includes(activeReport);
+    const serverPagedReport = ["sale", "purchase", "payment", "warehouse-stock", "fifo-stock", "profit-loss"].includes(activeReport);
     if (serverPagedReport) return filteredReportDataAll;
     const start = (reportPage - 1) * PAGE_SIZE;
     return filteredReportDataAll.slice(start, start + PAGE_SIZE);
@@ -5486,7 +5486,7 @@ export default function WarehouseTradingPage() {
     setVoucherPage((current) => Math.min(current, Math.max(1, Number(voucherPageInfo.totalPages || 1))));
   }, [voucherPageInfo.totalPages]);
   useEffect(() => {
-    const serverPagedReport = ["sale", "purchase", "warehouse-stock", "profit-loss"].includes(activeReport);
+    const serverPagedReport = ["sale", "purchase", "payment", "warehouse-stock", "fifo-stock", "profit-loss"].includes(activeReport);
     const totalPages = serverPagedReport
       ? Math.max(1, Math.ceil(Number(reportPageInfo.total || 0) / Number(reportPageInfo.pageSize || PAGE_SIZE)))
       : Math.max(1, Math.ceil(filteredReportDataAll.length / PAGE_SIZE));
@@ -5519,7 +5519,7 @@ export default function WarehouseTradingPage() {
     }
   };
   const totalVoucherPages = Math.max(1, Number(voucherPageInfo.totalPages || 1));
-  const totalReportPages = ["sale", "purchase", "warehouse-stock", "profit-loss"].includes(activeReport)
+  const totalReportPages = ["sale", "purchase", "payment", "warehouse-stock", "fifo-stock", "profit-loss"].includes(activeReport)
     ? (reportPageInfo.hasMore ? reportPage + 1 : reportPage)
     : Math.max(1, Math.ceil(filteredReportDataAll.length / PAGE_SIZE));
   const renderPaginationBar = (page, totalPages, onPrev, onNext, totalItems, label = "rows") => {
@@ -8386,7 +8386,7 @@ export default function WarehouseTradingPage() {
               totalReportPages,
               () => setReportPage((prev) => Math.max(1, prev - 1)),
               () => setReportPage((prev) => Math.min(totalReportPages, prev + 1)),
-              (["sale", "purchase", "warehouse-stock", "profit-loss"].includes(activeReport))
+              (["sale", "purchase", "payment", "warehouse-stock", "fifo-stock", "profit-loss"].includes(activeReport))
                 ? Number(reportPageInfo.total || 0)
                 : filteredReportDataAll.length,
               "rows"
