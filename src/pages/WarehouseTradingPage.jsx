@@ -404,8 +404,10 @@ export default function WarehouseTradingPage() {
   const [profitLossFilterOptions, setProfitLossFilterOptions] = useState({ buyers: [], consignees: [], farmers: [], dates: [] });
   const [profitLossOverheads, setProfitLossOverheads] = useState({ expenses: [], rents: [], adjustments: [] });
   const [profitLossDetails, setProfitLossDetails] = useState(null);
+  const profitLossReturnRef = useRef(false);
   const [showProfitLossManualModal, setShowProfitLossManualModal] = useState(false);
   const [profitLossManualSaving, setProfitLossManualSaving] = useState(false);
+  const [profitLossManualEditingId, setProfitLossManualEditingId] = useState("");
   const [profitLossManualForm, setProfitLossManualForm] = useState({
     date: new Date().toISOString().slice(0, 10),
     warehouse_id: "",
@@ -413,6 +415,9 @@ export default function WarehouseTradingPage() {
     amount: "",
     description: "",
   });
+  const [showProfitLossRentModal, setShowProfitLossRentModal] = useState(false);
+  const [profitLossRentEditingId, setProfitLossRentEditingId] = useState("");
+  const [profitLossRentForm, setProfitLossRentForm] = useState({ rent_month: "", booking_date: "", monthly_rent: "", remarks: "" });
   const [warehouseStockReport, setWarehouseStockReport] = useState([]);
   const [reportPageInfo, setReportPageInfo] = useState({ page: 1, pageSize: PAGE_SIZE, hasMore: false });
   const [availableSaleStock, setAvailableSaleStock] = useState(null);
@@ -1228,6 +1233,9 @@ export default function WarehouseTradingPage() {
     const requestedType = searchParams.get("type");
     const requestedTab = searchParams.get("tab");
     const requestedReport = searchParams.get("report");
+    const requestedMode = searchParams.get("mode");
+    const requestedFromDate = searchParams.get("from_date");
+    const requestedToDate = searchParams.get("to_date");
     const validVoucherTypes = allowedVoucherTypes;
     const validReports = allowedReports;
     const hasExplicitSection = Boolean(
@@ -1250,6 +1258,14 @@ export default function WarehouseTradingPage() {
     setActiveTab(hasExplicitSection ? nextTab : null);
     setActiveVoucherType(nextVoucherType);
     setActiveReport(nextReport);
+    if (nextReport === "profit-loss" && ["direct", "warehouse"].includes(requestedMode)) {
+      setReportFilters((current) => ({
+        ...current,
+        profit_loss_mode: requestedMode,
+        profit_from_date: requestedFromDate || "",
+        profit_to_date: requestedToDate || "",
+      }));
+    }
     if (nextTab === "reports") {
       setShowMobileTradingTabs(true);
     }
@@ -2809,6 +2825,13 @@ export default function WarehouseTradingPage() {
       setEditId(null);
       setVoucherPage(1);
       await loadVouchers();
+      if (profitLossReturnRef.current) {
+        profitLossReturnRef.current = false;
+        setActiveTab("reports");
+        setActiveReport("profit-loss");
+        await loadReport("profit-loss", reportPage, reportFilters);
+        return;
+      }
       if (!isEdit) fetchNextVoucherNo(activeVoucherType);
 
       if (activeVoucherType === "purchase") {
@@ -4788,10 +4811,26 @@ export default function WarehouseTradingPage() {
     };
   };
 
-  const openProfitLossVoucherDetails = async (row, type) => {
-    const label = type === "sale" ? "Sale Bills" : "Purchase Bills";
+  const getProfitLossDetailsTotal = (details) => (details?.rows || []).reduce((sum, row) => {
+    const type = details?.type;
+    const metric = details?.metric;
+    if (type === "sale") {
+      const value = metric === "additional_amount" ? row.additional_amount
+        : metric === "round_off" ? row.round_off
+          : metric === "total_less" ? row.total_less
+            : metric === "freight_amount" ? row.transport_charge
+              : row.amount || row.total_amount;
+      return sum + toNumber(value);
+    }
+    if (type === "purchase") return sum + toNumber(row.total_amount || row.net_amount_payable || row.amount);
+    return sum + toNumber(row.amount);
+  }, 0);
+
+  const openProfitLossVoucherDetails = async (row, type, metric = type === "sale" ? "sale_amount" : "purchase_amount") => {
+    const metricLabels = { sale_amount: "Sale Amount", purchase_amount: "Purchase Amount", additional_amount: "Total Add", round_off: "Round Off", total_less: "Total Less", freight_amount: "Freight" };
+    const label = metricLabels[metric] || (type === "sale" ? "Sale Bills" : "Purchase Bills");
     const warehouseLabel = row ? (row.warehouse_name || getWarehouseName(row)) : "All Warehouses";
-    setProfitLossDetails({ title: `${warehouseLabel} · ${label}`, type, rows: [], loading: true });
+    setProfitLossDetails({ title: `${warehouseLabel} · ${label}`, type, metric, metricLabel: label, warehouse_id: row?.warehouse_id || row?.id || "", rows: [], loading: true });
     try {
       const params = { type };
       if (row?.warehouse_id || row?.id) params.warehouse_id = row.warehouse_id || row.id;
@@ -4805,14 +4844,219 @@ export default function WarehouseTradingPage() {
     }
   };
 
-  const openProfitLossOverheadDetails = (row, type) => {
+  const openProfitLossOverheadDetails = (row, type, entryType = "") => {
     const warehouseId = String(row?.warehouse_id || row?.id || "");
     const source = type === "expenses" ? profitLossOverheads.expenses
       : type === "rents" ? profitLossOverheads.rents
         : profitLossOverheads.adjustments;
-    const rows = (Array.isArray(source) ? source : []).filter((entry) => !warehouseId || String(entry.warehouse_id || "") === warehouseId);
-    const labels = { expenses: "Staff Expenses", rents: "Warehouse Rent", adjustments: "Manual Entries" };
-    setProfitLossDetails({ title: `${row ? getWarehouseName(row) : "All Warehouses"} · ${labels[type]}`, type, rows, loading: false });
+    const rows = (Array.isArray(source) ? source : []).filter((entry) =>
+      (!warehouseId || String(entry.warehouse_id || "") === warehouseId) &&
+      (type !== "adjustments" || !entryType || entry.entry_type === entryType)
+    );
+    const labels = { expenses: "Staff Expense", rents: "Rent", adjustments: entryType === "income" ? "Manual Add" : entryType === "expense" ? "Manual Less" : "Manual Entries" };
+    setProfitLossDetails({ title: `${row ? getWarehouseName(row) : "All Warehouses"} · ${labels[type]}`, type, metric: entryType, metricLabel: labels[type], warehouse_id: warehouseId, rows, loading: false });
+  };
+
+  const reloadWarehouseProfitLoss = async () => {
+    reportDataCacheRef.current.clear();
+    const nextFilters = { ...reportFilters, profit_loss_mode: "warehouse" };
+    await loadReport("profit-loss", reportPage, nextFilters);
+    const params = {};
+    if (reportFilters.profit_from_date) params.from_date = reportFilters.profit_from_date;
+    if (reportFilters.profit_to_date) params.to_date = reportFilters.profit_to_date;
+    const response = await API.get("/api/warehouse-trading/profit-loss-overheads", { params });
+    setProfitLossOverheads(response.data || { expenses: [], rents: [], adjustments: [] });
+  };
+
+  const getProfitLossReturnUrl = () => {
+    const params = new URLSearchParams({ tab: "reports", report: "profit-loss", mode: "warehouse" });
+    if (reportFilters.profit_from_date) params.set("from_date", reportFilters.profit_from_date);
+    if (reportFilters.profit_to_date) params.set("to_date", reportFilters.profit_to_date);
+    return `/warehouse-trading?${params.toString()}`;
+  };
+
+  const editProfitLossExpense = (entry) => {
+    if (!hasPermission(user, "expense.edit")) {
+      alert("You do not have permission to edit this expense.");
+      return;
+    }
+    const id = String(entry?.id || entry?._id || "");
+    if (!id) return;
+    navigate(`/expenses?edit=${encodeURIComponent(id)}&return_to=${encodeURIComponent(getProfitLossReturnUrl())}`);
+  };
+
+  const editProfitLossFreight = (entry) => {
+    if (!hasPermission(user, "transport.manage")) {
+      alert("You do not have permission to edit transport bills.");
+      return;
+    }
+    const id = String(entry?.transport_bilti_id || "");
+    if (!id) {
+      alert("This Sale Bill has no linked Transport Bilti to edit.");
+      return;
+    }
+    const params = new URLSearchParams({ edit: id, source: "sale", return_to: getProfitLossReturnUrl() });
+    navigate(`/transport-bilti?${params.toString()}`);
+  };
+
+  const editProfitLossManualEntry = (entry) => {
+    setProfitLossManualEditingId(String(entry?.id || entry?._id || ""));
+    setProfitLossManualForm({
+      date: String(entry?.date || new Date().toISOString().slice(0, 10)).slice(0, 10),
+      warehouse_id: String(entry?.warehouse_id || ""),
+      entry_type: entry?.entry_type === "income" ? "income" : "expense",
+      amount: String(entry?.amount || ""),
+      description: entry?.description || "",
+    });
+    setShowProfitLossManualModal(true);
+  };
+
+  const editProfitLossRent = (entry) => {
+    setProfitLossRentEditingId(String(entry?.id || entry?._id || ""));
+    setProfitLossRentForm({
+      rent_month: String(entry?.rent_month || entry?.date || "").slice(0, 7),
+      booking_date: String(entry?.booking_date || entry?.date || "").slice(0, 10),
+      monthly_rent: String(entry?.amount || ""),
+      remarks: entry?.remarks || entry?.description || "",
+    });
+    setShowProfitLossRentModal(true);
+  };
+
+  const saveProfitLossRent = async (event) => {
+    event.preventDefault();
+    if (!profitLossRentEditingId) return;
+    setProfitLossManualSaving(true);
+    try {
+      await API.put(`/api/warehouse-rent-bookings/${profitLossRentEditingId}`, {
+        ...profitLossRentForm,
+        monthly_rent: Number(profitLossRentForm.monthly_rent),
+      });
+      setShowProfitLossRentModal(false);
+      setProfitLossRentEditingId("");
+      await reloadWarehouseProfitLoss();
+      setProfitLossDetails(null);
+    } catch (error) {
+      alert(error?.response?.data?.error || "Unable to update warehouse rent.");
+    } finally {
+      setProfitLossManualSaving(false);
+    }
+  };
+
+  const editProfitLossVoucher = (row, type) => {
+    const voucherId = row?.id || row?._id;
+    if (!voucherId) return;
+    const editPermission = type === "sale" ? "warehouse.trading.sale.edit" : "warehouse.trading.purchase.edit";
+    if (!hasPermission(user, editPermission)) {
+      alert("You do not have permission to edit this voucher.");
+      return;
+    }
+    profitLossReturnRef.current = true;
+    setProfitLossDetails(null);
+    setActiveTab("vouchers");
+    setActiveVoucherType(type);
+    const nextForm = { ...defaultForm(), ...row, due_date: row.due_date || row.unloading_date || "" };
+    setFormData(nextForm);
+    if (type === "sale") {
+      const links = Array.isArray(row.against_purchase_links) ? row.against_purchase_links : [];
+      setSalePurchaseLinks(links.map((item) => {
+        const quantity = toNumber(item.quantity || item.weight || item.purchase_total_qty || item.total_qty);
+        const rate = toNumber(item.rate);
+        return {
+          purchase_id: String(item.purchase_id || item.id || ""),
+          voucher_no: item.voucher_no || item.purchase_voucher_no || "",
+          farmer_id: String(item.farmer_id || row.against_purchase_farmer_id || ""),
+          farmer_name: item.farmer_name || "",
+          date: item.date || "",
+          lorry_no: item.lorry_no || "",
+          consignee_name: item.consignee_name || "",
+          weight: quantity,
+          quantity,
+          rate,
+          amount: toNumber(item.amount) || Number((quantity * rate).toFixed(2)),
+        };
+      }).filter((item) => item.purchase_id && item.quantity > 0));
+    } else {
+      setPurchaseBaseline({
+        less_bags_weight: nextForm.less_bags_weight || "",
+        moisture: nextForm.moisture || "",
+        dunki: nextForm.dunki || "",
+        fungus: nextForm.fungus || "",
+        discolour: nextForm.discolour || "",
+        others: nextForm.others || "",
+        bags_claim: nextForm.bags_claim || "",
+        labour: nextForm.labour || "",
+        transport_charge: nextForm.transport_charge || "",
+        round_off: nextForm.round_off || "",
+      });
+    }
+    setEditId(voucherId);
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const cancelProfitLossVoucherEdit = () => {
+    profitLossReturnRef.current = false;
+    setEditId(null);
+    setFormData(defaultForm());
+    setPaymentAdjustments([]);
+    setReceiptAdjustments([]);
+    setSalePurchaseLinks([]);
+    setPartyOutstanding(null);
+    setActiveTab("reports");
+    setActiveReport("profit-loss");
+  };
+
+  const downloadProfitLossDetails = async (format) => {
+    if (!profitLossDetails || profitLossDetails.loading) return;
+    const exportType = format === "xlsx" ? "xlsx" : "pdf";
+    const safeName = String(profitLossDetails.metricLabel || profitLossDetails.type).toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    try {
+      if (exportType === "xlsx") {
+        const params = { export: "xlsx", type: profitLossDetails.type };
+        if (profitLossDetails.warehouse_id) params.warehouse_id = profitLossDetails.warehouse_id;
+        if (reportFilters.profit_from_date) params.from_date = reportFilters.profit_from_date;
+        if (reportFilters.profit_to_date) params.to_date = reportFilters.profit_to_date;
+        if (profitLossDetails.type === "adjustments" && profitLossDetails.metric) params.entry_type = profitLossDetails.metric;
+        const endpoint = ["sale", "purchase"].includes(profitLossDetails.type)
+          ? "/api/wh-vouchers/report/profit-loss-details"
+          : "/api/warehouse-trading/profit-loss-overheads";
+        const response = await API.get(endpoint, { params, responseType: "blob" });
+        const url = window.URL.createObjectURL(response.data);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = `profit_loss_${safeName}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+        document.body.appendChild(link);
+        link.click();
+        link.remove();
+        window.URL.revokeObjectURL(url);
+        return;
+      }
+
+      const type = profitLossDetails.type;
+      const columns = type === "sale"
+        ? ["Date", "Sale Bill", "Buyer", "Product", "Sale Amount", "Add", "Round Off", "Less", "Freight"]
+        : type === "purchase"
+          ? ["Date", "Purchase Bill", "Farmer", "Product", "Purchase Amount"]
+          : type === "adjustments"
+            ? ["Date", "Warehouse", "Particulars", "Type", "Amount"]
+            : ["Date", "Warehouse", "Particulars", "Amount"];
+      const body = (profitLossDetails.rows || []).map((row) => type === "sale"
+        ? [row.date || "", row.voucher_no || row.bill_no || "", row.buyer_name || row.company_name || "", row.product_name || "", formatMoney(row.amount || row.total_amount), formatMoney(row.additional_amount), formatMoney(row.round_off), formatMoney(row.total_less), formatMoney(row.transport_charge)]
+        : type === "purchase"
+          ? [row.date || "", row.voucher_no || row.bill_no || "", row.farmer_name || "", row.product_name || "", formatMoney(row.total_amount || row.net_amount_payable || row.amount)]
+          : type === "adjustments"
+            ? [row.date || "", row.warehouse_name || "", row.description || "", row.entry_type === "income" ? "Add" : "Less", formatMoney(row.amount)]
+            : [row.date || "", row.warehouse_name || "", row.description || row.employee_name || "", formatMoney(row.amount)]);
+      const document = new jsPDF({ orientation: "landscape", unit: "pt", format: "a4" });
+      document.setFontSize(14);
+      document.text(profitLossDetails.title, 32, 32);
+      document.setFontSize(10);
+      document.text(`Entries: ${body.length} · ${profitLossDetails.metricLabel || "Amount"} total: Rs.${formatMoney(getProfitLossDetailsTotal(profitLossDetails))}`, 32, 50);
+      autoTable(document, { head: [columns], body, startY: 64, styles: { fontSize: 8, cellPadding: 4 }, headStyles: { fillColor: [15, 118, 110] } });
+      document.save(`profit_loss_${safeName}_${new Date().toISOString().slice(0, 10)}.pdf`);
+    } catch (error) {
+      console.error("Failed to download Profit/Loss details:", error);
+      alert(error?.response?.data?.error || `Unable to download ${exportType.toUpperCase()}`);
+    }
   };
 
   const saveProfitLossManualEntry = async (event) => {
@@ -4821,24 +5065,23 @@ export default function WarehouseTradingPage() {
     if (!selectedWarehouse) return;
     setProfitLossManualSaving(true);
     try {
-      const response = await API.post("/api/warehouse-trading/profit-loss-adjustments", {
+      const payload = {
         ...profitLossManualForm,
         amount: Number(profitLossManualForm.amount),
         warehouse_name: selectedWarehouse.name || "",
-      });
-      setProfitLossOverheads((current) => ({
-        ...current,
-        adjustments: [{
-          ...profitLossManualForm,
-          id: response.data?.id,
-          amount: Number(profitLossManualForm.amount),
-          warehouse_name: selectedWarehouse.name || "",
-        }, ...(current.adjustments || [])],
-      }));
+      };
+      if (profitLossManualEditingId) {
+        await API.put(`/api/warehouse-trading/profit-loss-adjustments/${profitLossManualEditingId}`, payload);
+      } else {
+        await API.post("/api/warehouse-trading/profit-loss-adjustments", payload);
+      }
+      setProfitLossManualEditingId("");
       setProfitLossManualForm((current) => ({ ...current, amount: "", description: "" }));
       setShowProfitLossManualModal(false);
+      await reloadWarehouseProfitLoss();
+      setProfitLossDetails(null);
     } catch (error) {
-      alert(error.response?.data?.error || "Unable to save the manual P/L entry.");
+      alert(error?.response?.data?.error || "Unable to save the manual P/L entry.");
     } finally {
       setProfitLossManualSaving(false);
     }
@@ -5210,37 +5453,38 @@ export default function WarehouseTradingPage() {
     "profit-loss": profitLossMode === "warehouse" ? [
       ["warehouse", "Warehouse", (item) => item.warehouse_name || getWarehouseName(item)],
       ["purchase_count", "Purchase Bills", (item) => (
-        <button type="button" onClick={() => openProfitLossVoucherDetails(item, "purchase")} style={linkButtonStyle}>
+        <button type="button" onClick={() => openProfitLossVoucherDetails(item, "purchase", "purchase_amount")} style={linkButtonStyle}>
           {Number(item.purchase_count || 0)}
         </button>
       )],
       ["purchase_qty", "Purchase Qty", (item) => formatDecimal4(item.purchase_qty || 0)],
       ["purchase_rate", "Purchase Rate", (item) => formatMoney(item.purchase_rate || 0)],
       ["purchase_amount", "Purchase Amount", (item) => (
-        <button type="button" onClick={() => openProfitLossVoucherDetails(item, "purchase")} style={linkButtonStyle}>
+        <button type="button" onClick={() => openProfitLossVoucherDetails(item, "purchase", "purchase_amount")} style={linkButtonStyle}>
           {formatMoney(item.purchase_amount || 0)}
         </button>
       )],
       ["sale_count", "Sale Bills", (item) => (
-        <button type="button" onClick={() => openProfitLossVoucherDetails(item, "sale")} style={linkButtonStyle}>
+        <button type="button" onClick={() => openProfitLossVoucherDetails(item, "sale", "sale_amount")} style={linkButtonStyle}>
           {Number(item.sale_count || 0)}
         </button>
       )],
       ["sale_qty", "Sale Qty", (item) => formatDecimal4(item.sale_qty || 0)],
       ["sale_rate", "Sale Rate", (item) => formatMoney(item.sale_rate || 0)],
       ["gross_amount", "Sale Amount", (item) => (
-        <button type="button" onClick={() => openProfitLossVoucherDetails(item, "sale")} style={linkButtonStyle}>
+        <button type="button" onClick={() => openProfitLossVoucherDetails(item, "sale", "sale_amount")} style={linkButtonStyle}>
           {formatMoney(item.sale_amount || item.gross_amount || 0)}
         </button>
       )],
-      ["additional_amount", "Total Add", (item) => formatMoney(item.additional_amount || 0)],
+      ["additional_amount", "Total Add", (item) => <button type="button" onClick={() => openProfitLossVoucherDetails(item, "sale", "additional_amount")} style={linkButtonStyle}>{formatMoney(item.additional_amount || 0)}</button>],
+      ["round_off", "Round Off", (item) => <button type="button" onClick={() => openProfitLossVoucherDetails(item, "sale", "round_off")} style={linkButtonStyle}>{formatMoney(item.round_off || 0)}</button>],
       ["total_less", "Total Less", (item) => (
-        <button type="button" onClick={() => openProfitLossVoucherDetails(item, "sale")} style={linkButtonStyle}>
+        <button type="button" onClick={() => openProfitLossVoucherDetails(item, "sale", "total_less")} style={linkButtonStyle}>
           {formatMoney(item.total_less ?? item.total_deduction ?? 0)}
         </button>
       )],
       ["freight_amount", "Freight", (item) => (
-        <button type="button" onClick={() => openProfitLossVoucherDetails(item, "sale")} style={linkButtonStyle}>
+        <button type="button" onClick={() => openProfitLossVoucherDetails(item, "sale", "freight_amount")} style={linkButtonStyle}>
           {formatMoney(item.freight_amount || 0)}
         </button>
       )],
@@ -5605,6 +5849,7 @@ export default function WarehouseTradingPage() {
     totals.saleCount += Number(row.sale_count || 0);
     totals.saleAmount += toNumber(row.sale_amount || row.gross_amount);
     totals.additionalAmount += toNumber(row.additional_amount);
+    totals.roundOff += toNumber(row.round_off);
     totals.totalLess += toNumber(row.total_less ?? row.total_deduction);
     totals.freightAmount += toNumber(row.freight_amount);
     totals.staffExpenses += figures.expenses;
@@ -5619,6 +5864,7 @@ export default function WarehouseTradingPage() {
     saleCount: 0,
     saleAmount: 0,
     additionalAmount: 0,
+    roundOff: 0,
     totalLess: 0,
     freightAmount: 0,
     staffExpenses: 0,
@@ -7713,7 +7959,7 @@ export default function WarehouseTradingPage() {
                   {loading ? "Saving..." : editId ? (activeVoucherType === "sale" ? "Save Deductions" : "Update Voucher") : "Save Voucher"}
                 </button>
                 {editId && (
-                  <button type="button" onClick={() => { setEditId(null); setFormData(defaultForm()); setPaymentAdjustments([]); setReceiptAdjustments([]); setSalePurchaseLinks([]); setPartyOutstanding(null); }} style={{ ...btnPrimary, background: "#64748b" }}>Cancel</button>
+                  <button type="button" onClick={() => profitLossReturnRef.current ? cancelProfitLossVoucherEdit() : (setEditId(null), setFormData(defaultForm()), setPaymentAdjustments([]), setReceiptAdjustments([]), setSalePurchaseLinks([]), setPartyOutstanding(null))} style={{ ...btnPrimary, background: "#64748b" }}>Cancel</button>
                 )}
               </div>
             </form>
@@ -7912,7 +8158,7 @@ export default function WarehouseTradingPage() {
                     </>
                   )}
                   {profitLossMode === "warehouse" && hasPermission(user, "warehouse.trading.manage") && (
-                    <button type="button" onClick={() => setShowProfitLossManualModal(true)} style={{ ...btnAction, background: "#0f766e" }}>+ Manual Entry</button>
+                    <button type="button" onClick={() => { setProfitLossManualEditingId(""); setProfitLossManualForm({ date: new Date().toISOString().slice(0, 10), warehouse_id: "", entry_type: "expense", amount: "", description: "" }); setShowProfitLossManualModal(true); }} style={{ ...btnAction, background: "#0f766e" }}>+ Manual Entry</button>
                   )}
                   <button type="button" onClick={() => { setReportFilters((prev) => ({ ...prev, profit_loss_mode: profitLossMode, profit_from_date: "", profit_to_date: "", profit_location_id: "", profit_employee_id: "", profit_farmer_id: "" })); setReportPage(1); }} style={{ ...btnAction, background: "#64748b" }}>Clear Filters</button>
                   <div style={{ display: "flex", gap: 8, alignItems: "end" }}>
@@ -7935,15 +8181,16 @@ export default function WarehouseTradingPage() {
             {activeReport === "profit-loss" && profitLossMode === "warehouse" && (
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 8, marginBottom: 14 }}>
                 {[
-                  { label: "Purchase Bills", value: `${profitLossSummaryTotals.purchaseCount} · Rs.${formatMoney(profitLossSummaryTotals.purchaseAmount)}`, onClick: () => openProfitLossVoucherDetails(null, "purchase"), color: "#155e75" },
-                  { label: "Sale Bills", value: `${profitLossSummaryTotals.saleCount} · Rs.${formatMoney(profitLossSummaryTotals.saleAmount)}`, onClick: () => openProfitLossVoucherDetails(null, "sale"), color: "#166534" },
-                  { label: "Total Add", value: `Rs.${formatMoney(profitLossSummaryTotals.additionalAmount)}`, onClick: () => openProfitLossVoucherDetails(null, "sale"), color: "#0f766e" },
-                  { label: "Total Less", value: `Rs.${formatMoney(profitLossSummaryTotals.totalLess)}`, onClick: () => openProfitLossVoucherDetails(null, "sale"), color: "#b45309" },
-                  { label: "Freight", value: `Rs.${formatMoney(profitLossSummaryTotals.freightAmount)}`, onClick: () => openProfitLossVoucherDetails(null, "sale"), color: "#0369a1" },
+                  { label: "Purchase Bills", value: `${profitLossSummaryTotals.purchaseCount} · Rs.${formatMoney(profitLossSummaryTotals.purchaseAmount)}`, onClick: () => openProfitLossVoucherDetails(null, "purchase", "purchase_amount"), color: "#155e75" },
+                  { label: "Sale Bills", value: `${profitLossSummaryTotals.saleCount} · Rs.${formatMoney(profitLossSummaryTotals.saleAmount)}`, onClick: () => openProfitLossVoucherDetails(null, "sale", "sale_amount"), color: "#166534" },
+                  { label: "Total Add", value: `Rs.${formatMoney(profitLossSummaryTotals.additionalAmount)}`, onClick: () => openProfitLossVoucherDetails(null, "sale", "additional_amount"), color: "#0f766e" },
+                  { label: "Round Off", value: `Rs.${formatMoney(profitLossSummaryTotals.roundOff)}`, onClick: () => openProfitLossVoucherDetails(null, "sale", "round_off"), color: "#0f766e" },
+                  { label: "Total Less", value: `Rs.${formatMoney(profitLossSummaryTotals.totalLess)}`, onClick: () => openProfitLossVoucherDetails(null, "sale", "total_less"), color: "#b45309" },
+                  { label: "Freight", value: `Rs.${formatMoney(profitLossSummaryTotals.freightAmount)}`, onClick: () => openProfitLossVoucherDetails(null, "sale", "freight_amount"), color: "#0369a1" },
                   { label: "Staff Expense", value: `Rs.${formatMoney(profitLossSummaryTotals.staffExpenses)}`, onClick: () => openProfitLossOverheadDetails(null, "expenses"), color: "#9f1239" },
                   { label: "Warehouse Rent", value: `Rs.${formatMoney(profitLossSummaryTotals.rent)}`, onClick: () => openProfitLossOverheadDetails(null, "rents"), color: "#6d4c0f" },
-                  { label: "Manual Add", value: `Rs.${formatMoney(profitLossSummaryTotals.manualIncome)}`, onClick: () => openProfitLossOverheadDetails(null, "adjustments"), color: "#166534" },
-                  { label: "Manual Less", value: `Rs.${formatMoney(profitLossSummaryTotals.manualExpense)}`, onClick: () => openProfitLossOverheadDetails(null, "adjustments"), color: "#9f1239" },
+                  { label: "Manual Add", value: `Rs.${formatMoney(profitLossSummaryTotals.manualIncome)}`, onClick: () => openProfitLossOverheadDetails(null, "adjustments", "income"), color: "#166534" },
+                  { label: "Manual Less", value: `Rs.${formatMoney(profitLossSummaryTotals.manualExpense)}`, onClick: () => openProfitLossOverheadDetails(null, "adjustments", "expense"), color: "#9f1239" },
                   { label: "Net Profit / Loss", value: `Rs.${formatMoney(profitLossSummaryTotals.netProfitLoss)}`, onClick: undefined, color: profitLossSummaryTotals.netProfitLoss >= 0 ? "#166534" : "#b91c1c" },
                 ].map((item) => (
                   <button key={item.label} type="button" onClick={item.onClick} disabled={!item.onClick} style={{ textAlign: "left", padding: "11px 12px", minWidth: 0, border: "1px solid #dbe4ee", borderTop: `3px solid ${item.color}`, borderRadius: 8, background: "#fff", cursor: item.onClick ? "pointer" : "default" }}>
@@ -8566,9 +8813,15 @@ export default function WarehouseTradingPage() {
             <header style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "center", padding: "16px 18px", borderBottom: "1px solid #e2e8f0", background: "#f8fafc" }}>
               <div>
                 <h3 style={{ margin: 0, color: "#0f172a", fontSize: 17 }}>{profitLossDetails.title}</h3>
-                <div style={{ marginTop: 4, color: "#64748b", fontSize: 12 }}>{profitLossDetails.total ?? profitLossDetails.rows?.length ?? 0} entries</div>
+                <div style={{ marginTop: 4, color: "#64748b", fontSize: 12 }}>
+                  {profitLossDetails.total ?? profitLossDetails.rows?.length ?? 0} entries · Total: Rs.{formatMoney(getProfitLossDetailsTotal(profitLossDetails))}
+                </div>
               </div>
-              <button type="button" onClick={() => setProfitLossDetails(null)} style={{ ...btnAction, background: "#475569" }}>Close</button>
+              <div style={{ display: "flex", gap: 7, flexWrap: "wrap", justifyContent: "flex-end" }}>
+                <button type="button" disabled={profitLossDetails.loading} onClick={() => downloadProfitLossDetails("pdf")} style={{ ...btnAction, background: "#b91c1c" }}>PDF</button>
+                <button type="button" disabled={profitLossDetails.loading} onClick={() => downloadProfitLossDetails("xlsx")} style={{ ...btnAction, background: "#0f766e" }}>Excel</button>
+                <button type="button" onClick={() => setProfitLossDetails(null)} style={{ ...btnAction, background: "#475569" }}>Close</button>
+              </div>
             </header>
             {profitLossDetails.loading ? (
               <div style={{ padding: 28, textAlign: "center", color: "#64748b" }}>Loading bill details...</div>
@@ -8586,14 +8839,15 @@ export default function WarehouseTradingPage() {
                           <th style={th}>{profitLossDetails.type === "sale" ? "Buyer" : "Farmer"}</th>
                           <th style={th}>Product</th>
                           <th style={th}>Amount</th>
-                          {profitLossDetails.type === "sale" && <><th style={th}>Add</th><th style={th}>Less</th><th style={th}>Freight</th></>}
+                          {profitLossDetails.type === "sale" && <><th style={th}>Add</th><th style={th}>Round Off</th><th style={th}>Less</th><th style={th}>Freight</th></>}
+                          <th style={th}>Action</th>
                         </>
                       ) : (
                         <>
                           <th style={th}>{profitLossDetails.type === "expenses" ? "Staff / Particulars" : "Particulars"}</th>
                           {profitLossDetails.type === "adjustments" && <th style={th}>Entry</th>}
                           <th style={th}>Amount</th>
-                          {profitLossDetails.type === "adjustments" && <th style={th}>Action</th>}
+                          <th style={th}>Action</th>
                         </>
                       )}
                     </tr>
@@ -8615,20 +8869,31 @@ export default function WarehouseTradingPage() {
                               <td style={td}>{profitLossDetails.type === "sale" ? row.buyer_name || row.company_name || "-" : row.farmer_name || "-"}</td>
                               <td style={td}>{row.product_name || "-"}</td>
                               <td style={{ ...td, fontWeight: 700 }}>{formatMoney(amount)}</td>
-                              {profitLossDetails.type === "sale" && <><td style={td}>{formatMoney(row.additional_amount || 0)}</td><td style={td}>{formatMoney(row.total_less ?? 0)}</td><td style={td}>{formatMoney(row.transport_charge || 0)}</td></>}
+                              {profitLossDetails.type === "sale" && <><td style={td}>{formatMoney(row.additional_amount || 0)}</td><td style={td}>{formatMoney(row.round_off || 0)}</td><td style={td}>{formatMoney(row.total_less ?? 0)}</td><td style={td}>{formatMoney(row.transport_charge || 0)}</td></>}
+                              <td style={td}><div style={{ display: "flex", gap: 5, flexWrap: "wrap" }}>
+                                <button type="button" disabled={!hasPermission(user, profitLossDetails.type === "sale" ? "warehouse.trading.sale.edit" : "warehouse.trading.purchase.edit")} onClick={() => editProfitLossVoucher(row, profitLossDetails.type)} style={{ ...btnAction, padding: "5px 9px", background: "#2563eb" }}>Edit Bill</button>
+                                {profitLossDetails.type === "sale" && row.transport_bilti_id && <button type="button" disabled={!hasPermission(user, "transport.manage")} onClick={() => editProfitLossFreight(row)} style={{ ...btnAction, padding: "5px 9px", background: "#0f766e" }}>Edit Freight</button>}
+                              </div></td>
                             </>
                           ) : (
                             <>
                               <td style={td}>{[row.employee_name, row.description, row.warehouse_name].filter(Boolean).join(" · ") || "-"}</td>
                               {profitLossDetails.type === "adjustments" && <td style={td}>{row.entry_type === "income" ? "Add" : "Less"}</td>}
                               <td style={{ ...td, fontWeight: 700 }}>{formatMoney(amount)}</td>
-                              {profitLossDetails.type === "adjustments" && <td style={td}>{hasPermission(user, "warehouse.trading.manage") && <button type="button" onClick={() => deleteProfitLossManualEntry(row)} style={{ ...btnAction, padding: "5px 8px", background: "#b91c1c" }}>Delete</button>}</td>}
+                              <td style={td}>
+                                {profitLossDetails.type === "expenses" && <button type="button" disabled={!hasPermission(user, "expense.edit")} onClick={() => editProfitLossExpense(row)} style={{ ...btnAction, padding: "5px 8px", background: "#2563eb" }}>Edit</button>}
+                                {profitLossDetails.type === "rents" && <button type="button" disabled={!hasPermission(user, "warehouses.manage") && !hasPermission(user, "all")} onClick={() => editProfitLossRent(row)} style={{ ...btnAction, padding: "5px 8px", background: "#2563eb" }}>Edit</button>}
+                                {profitLossDetails.type === "adjustments" && <div style={{ display: "flex", gap: 5 }}>
+                                  {hasPermission(user, "warehouse.trading.manage") && <button type="button" onClick={() => editProfitLossManualEntry(row)} style={{ ...btnAction, padding: "5px 8px", background: "#2563eb" }}>Edit</button>}
+                                  {hasPermission(user, "warehouse.trading.manage") && <button type="button" onClick={() => deleteProfitLossManualEntry(row)} style={{ ...btnAction, padding: "5px 8px", background: "#b91c1c" }}>Delete</button>}
+                                </div>}
+                              </td>
                             </>
                           )}
                         </tr>
                       );
                     })}
-                    {!(profitLossDetails.rows || []).length && <tr><td colSpan={profitLossDetails.type === "sale" ? 8 : profitLossDetails.type === "purchase" ? 5 : profitLossDetails.type === "adjustments" ? 4 : 3} style={{ ...td, textAlign: "center", padding: 24, color: "#64748b" }}>No entries found for this period.</td></tr>}
+                    {!(profitLossDetails.rows || []).length && <tr><td colSpan={profitLossDetails.type === "sale" ? 10 : profitLossDetails.type === "purchase" ? 6 : profitLossDetails.type === "adjustments" ? 5 : 4} style={{ ...td, textAlign: "center", padding: 24, color: "#64748b" }}>No entries found for this period.</td></tr>}
                   </tbody>
                 </table>
               </div>
@@ -8640,7 +8905,7 @@ export default function WarehouseTradingPage() {
         <div style={modalOverlayStyle} onMouseDown={(event) => { if (event.target === event.currentTarget) setShowProfitLossManualModal(false); }}>
           <form onSubmit={saveProfitLossManualEntry} role="dialog" aria-modal="true" aria-label="Manual Profit/Loss entry" style={{ width: "min(560px, 96vw)", background: "#fff", borderRadius: 10, border: "1px solid #cbd5e1", boxShadow: "0 24px 70px rgba(15, 23, 42, .28)", padding: 20 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
-              <h3 style={{ margin: 0, color: "#0f172a" }}>Manual Profit/Loss Entry</h3>
+              <h3 style={{ margin: 0, color: "#0f172a" }}>{profitLossManualEditingId ? "Edit Manual Profit/Loss Entry" : "Manual Profit/Loss Entry"}</h3>
               <button type="button" onClick={() => setShowProfitLossManualModal(false)} style={{ ...btnAction, background: "#475569" }}>Close</button>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 12 }}>
@@ -8652,7 +8917,27 @@ export default function WarehouseTradingPage() {
             </div>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 18 }}>
               <button type="button" onClick={() => setShowProfitLossManualModal(false)} style={{ ...btnAction, background: "#64748b" }}>Cancel</button>
-              <button type="submit" disabled={profitLossManualSaving} style={{ ...btnAction, background: "#0f766e", opacity: profitLossManualSaving ? 0.7 : 1 }}>{profitLossManualSaving ? "Saving..." : "Save Entry"}</button>
+              <button type="submit" disabled={profitLossManualSaving} style={{ ...btnAction, background: "#0f766e", opacity: profitLossManualSaving ? 0.7 : 1 }}>{profitLossManualSaving ? "Saving..." : profitLossManualEditingId ? "Save Changes" : "Save Entry"}</button>
+            </div>
+          </form>
+        </div>
+      )}
+      {showProfitLossRentModal && (
+        <div style={modalOverlayStyle} onMouseDown={(event) => { if (event.target === event.currentTarget) setShowProfitLossRentModal(false); }}>
+          <form onSubmit={saveProfitLossRent} role="dialog" aria-modal="true" aria-label="Edit warehouse rent" style={{ width: "min(520px, 96vw)", background: "#fff", borderRadius: 10, border: "1px solid #cbd5e1", boxShadow: "0 24px 70px rgba(15, 23, 42, .28)", padding: 20 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
+              <h3 style={{ margin: 0, color: "#0f172a" }}>Edit Warehouse Rent</h3>
+              <button type="button" onClick={() => setShowProfitLossRentModal(false)} style={{ ...btnAction, background: "#475569" }}>Close</button>
+            </div>
+            <div style={{ display: "grid", gap: 12 }}>
+              <label style={{ display: "grid", gap: 5, fontSize: 12, fontWeight: 700, color: "#334155" }}>Rent Month<input required type="month" value={profitLossRentForm.rent_month} onChange={(event) => setProfitLossRentForm((current) => ({ ...current, rent_month: event.target.value }))} style={inp} /></label>
+              <label style={{ display: "grid", gap: 5, fontSize: 12, fontWeight: 700, color: "#334155" }}>Booking Date<input required type="date" value={profitLossRentForm.booking_date} onChange={(event) => setProfitLossRentForm((current) => ({ ...current, booking_date: event.target.value }))} style={inp} /></label>
+              <label style={{ display: "grid", gap: 5, fontSize: 12, fontWeight: 700, color: "#334155" }}>Rent Amount<input required type="number" min="0" step="0.01" value={profitLossRentForm.monthly_rent} onChange={(event) => setProfitLossRentForm((current) => ({ ...current, monthly_rent: event.target.value }))} style={inp} /></label>
+              <label style={{ display: "grid", gap: 5, fontSize: 12, fontWeight: 700, color: "#334155" }}>Remarks<input value={profitLossRentForm.remarks} onChange={(event) => setProfitLossRentForm((current) => ({ ...current, remarks: event.target.value }))} style={inp} /></label>
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 18 }}>
+              <button type="button" onClick={() => setShowProfitLossRentModal(false)} style={{ ...btnAction, background: "#64748b" }}>Cancel</button>
+              <button type="submit" disabled={profitLossManualSaving} style={{ ...btnAction, background: "#0f766e" }}>{profitLossManualSaving ? "Saving..." : "Save Changes"}</button>
             </div>
           </form>
         </div>
