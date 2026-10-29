@@ -1170,10 +1170,37 @@ export default function WarehouseTradingPage() {
     return () => window.clearTimeout(timer);
   }, [activeTab, activeVoucherType]);
 
-  // Profit/Loss filters need these masters even when Reports is opened directly.
+  // Profit/Loss filters need the full Buyer + Consignee + Farmer master lists
+  // even when Reports is opened directly while the voucher type is Purchase.
+  // Keep the normal master loader, then explicitly ensure these four masters
+  // are populated so the dropdowns never depend on the current voucher tab.
   useEffect(() => {
     if (activeTab !== "reports" || activeReport !== "profit-loss") return;
-    loadData();
+    let cancelled = false;
+    (async () => {
+      try {
+        await loadData();
+      } catch {}
+      const results = await Promise.allSettled([
+        API.get("/api/buyer-names"),
+        API.get("/api/companies"),
+        API.get("/api/consignee-names"),
+        API.get("/api/farmers"),
+      ]);
+      if (cancelled) return;
+      const valueOf = (result) => result?.status === "fulfilled" && Array.isArray(result.value?.data)
+        ? result.value.data
+        : [];
+      const buyerRows = valueOf(results[0]);
+      const companyRows = valueOf(results[1]);
+      const consigneeRows = valueOf(results[2]);
+      const farmerRows = valueOf(results[3]);
+      if (buyerRows.length) setBuyerNames(buyerRows);
+      if (companyRows.length) setCompanies(companyRows);
+      if (consigneeRows.length) setConsignees(consigneeRows);
+      if (farmerRows.length) setFarmers(farmerRows);
+    })();
+    return () => { cancelled = true; };
   }, [activeTab, activeReport]);
 
   // Load voucher list when type changes
@@ -1477,12 +1504,12 @@ export default function WarehouseTradingPage() {
     if (!force && masterLoadPromiseRef.current) return masterLoadPromiseRef.current;
 
     const run = (async () => {
-      const masterCacheKey = `warehouseTradingMasterData:v5:${activeTab}:${activeTab === "reports" ? activeReport : activeVoucherType}`;
       // Reuse the master bundle between Trading page mounts. This is intentionally
-      // one in-flight request group so React effects cannot duplicate requests.
+      // one in-flight request group so React effects cannot fire the same 9 calls twice.
       if (!force) {
         try {
-          const cached = JSON.parse(sessionStorage.getItem(masterCacheKey) || "null");
+          const cacheKey = `warehouseTradingMasterData:v5:${activeVoucherType}`;
+          const cached = JSON.parse(sessionStorage.getItem(cacheKey) || "null");
           if (cached?.data && Date.now() - Number(cached.time || 0) < 30 * 60 * 1000) {
             const data = cached.data;
             setWarehouses(Array.isArray(data.warehouses) ? data.warehouses : []);
@@ -1502,42 +1529,32 @@ export default function WarehouseTradingPage() {
 
       const token = ++masterLoadTokenRef.current;
       try {
-        const masterEndpoints = {
-          warehouses: "/api/warehouses",
-          farmers: "/api/farmers",
-          buyerNames: "/api/buyer-names",
-          companies: "/api/companies",
-          companyAccounts: "/api/company-accounts",
-          consignees: "/api/consignee-names",
-          products: "/api/products",
-          employees: "/api/employees",
-          locations: "/api/locations",
+        const masterRequests = {
+          warehouses: API.get("/api/warehouses"),
+          farmers: API.get("/api/farmers"),
+          buyerNames: API.get("/api/buyer-names"),
+          companies: API.get("/api/companies"),
+          companyAccounts: API.get("/api/company-accounts"),
+          consignees: API.get("/api/consignee-names"),
+          products: API.get("/api/products"),
+          employees: API.get("/api/employees"),
+          locations: API.get("/api/locations"),
         };
-        const baseRequiredMasters = activeTab !== "vouchers"
-          ? []
-          : activeVoucherType === "purchase"
-            ? ["warehouses", "farmers", "companyAccounts", "consignees", "products", "employees", "locations"]
-            : activeVoucherType === "sale"
-              ? ["warehouses", "farmers", "buyerNames", "companies", "companyAccounts", "consignees", "products", "employees", "locations"]
-              : activeVoucherType === "payment"
-                ? ["warehouses", "farmers", "companyAccounts", "employees", "locations"]
-                : activeVoucherType === "receipt"
-                  ? ["warehouses", "buyerNames", "companies", "companyAccounts"]
-                  : [];
+        const baseRequiredMasters = activeVoucherType === "purchase"
+          ? ["warehouses", "farmers", "companyAccounts", "consignees", "products", "employees", "locations"]
+          : activeVoucherType === "sale"
+            ? ["warehouses", "farmers", "buyerNames", "companies", "companyAccounts", "consignees", "products", "employees", "locations"]
+            : activeVoucherType === "payment"
+              ? ["warehouses", "farmers", "companyAccounts", "employees", "locations"]
+              : activeVoucherType === "receipt"
+                ? ["warehouses", "buyerNames", "companies", "companyAccounts"]
+                : [];
         // Profit/Loss needs Buyer + Consignee + Farmer lists even when the
         // current voucher type would not normally load all three masters.
         const requiredMasters = activeTab === "reports" && activeReport === "profit-loss"
-          ? ["buyerNames", "companies", "consignees", "farmers"]
+          ? [...new Set([...baseRequiredMasters, "buyerNames", "consignees", "farmers"])]
           : baseRequiredMasters;
-        const masterRequests = Object.fromEntries(
-          requiredMasters.map((key) => [key, API.get(masterEndpoints[key])])
-        );
         const results = await Promise.allSettled(requiredMasters.map((key) => masterRequests[key]));
-        results.forEach((result, index) => {
-          if (result.status === "rejected") {
-            console.error(`Failed to load Warehouse Trading master data: ${requiredMasters[index]}`, result.reason);
-          }
-        });
         const dataOf = (index) => {
           const result = results[index];
           return result?.status === "fulfilled" ? result.value.data : [];
@@ -1545,15 +1562,15 @@ export default function WarehouseTradingPage() {
         const dataByKey = Object.fromEntries(requiredMasters.map((key, index) => [key, dataOf(index)]));
         if (token !== masterLoadTokenRef.current) return;
         const data = {
-          warehouses: Array.isArray(dataByKey.warehouses) ? dataByKey.warehouses : warehouses,
-          farmers: Array.isArray(dataByKey.farmers) ? dataByKey.farmers : farmers,
-          buyerNames: Array.isArray(dataByKey.buyerNames) ? dataByKey.buyerNames : buyerNames,
-          companies: Array.isArray(dataByKey.companies) ? dataByKey.companies : companies,
-          companyAccounts: Array.isArray(dataByKey.companyAccounts) ? dataByKey.companyAccounts : companyAccounts,
-          consignees: Array.isArray(dataByKey.consignees) ? dataByKey.consignees : consignees,
-          products: Array.isArray(dataByKey.products) ? dataByKey.products : products,
-          employees: Array.isArray(dataByKey.employees) ? dataByKey.employees : employees,
-          locations: Array.isArray(dataByKey.locations) ? dataByKey.locations : locations,
+          warehouses: Array.isArray(dataByKey.warehouses) ? dataByKey.warehouses : [],
+          farmers: Array.isArray(dataByKey.farmers) ? dataByKey.farmers : [],
+          buyerNames: Array.isArray(dataByKey.buyerNames) ? dataByKey.buyerNames : [],
+          companies: Array.isArray(dataByKey.companies) ? dataByKey.companies : [],
+          companyAccounts: Array.isArray(dataByKey.companyAccounts) ? dataByKey.companyAccounts : [],
+          consignees: Array.isArray(dataByKey.consignees) ? dataByKey.consignees : [],
+          products: Array.isArray(dataByKey.products) ? dataByKey.products : [],
+          employees: Array.isArray(dataByKey.employees) ? dataByKey.employees : [],
+          locations: Array.isArray(dataByKey.locations) ? dataByKey.locations : [],
         };
         setWarehouses(data.warehouses);
         setFarmers(data.farmers);
@@ -1564,15 +1581,13 @@ export default function WarehouseTradingPage() {
         setProducts(data.products);
         setEmployees(data.employees);
         setLocations(data.locations);
-        masterDataLoadedRef.current = results.every((result) => result.status === "fulfilled");
-        if (masterDataLoadedRef.current) {
-          try {
-            sessionStorage.setItem(masterCacheKey, JSON.stringify({
-              time: Date.now(),
-              data,
-            }));
-          } catch {}
-        }
+        masterDataLoadedRef.current = true;
+        try {
+          sessionStorage.setItem(`warehouseTradingMasterData:v4:${activeVoucherType}`, JSON.stringify({
+            time: Date.now(),
+            data,
+          }));
+        } catch {}
       } catch (err) {
         if (token === masterLoadTokenRef.current) console.error(err);
       }
@@ -5049,8 +5064,16 @@ export default function WarehouseTradingPage() {
         </button>
       )],
       ["additional_amount", "Total Add", (item) => formatMoney(item.additional_amount || 0)],
-      ["total_less", "Total Less", (item) => formatMoney(item.total_less || item.total_deduction || 0)],
-      ["freight_amount", "Freight", (item) => formatMoney(item.freight_amount || 0)],
+      ["total_less", "Total Less", (item) => (
+        <button type="button" onClick={() => openProfitLossVoucherDetails(item, "sale")} style={linkButtonStyle}>
+          {formatMoney(item.total_less || item.total_deduction || 0)}
+        </button>
+      )],
+      ["freight_amount", "Freight", (item) => (
+        <button type="button" onClick={() => openProfitLossVoucherDetails(item, "sale")} style={linkButtonStyle}>
+          {formatMoney(item.freight_amount || 0)}
+        </button>
+      )],
       ["staff_expense", "Staff Expense", (item) => {
         const figures = getWarehouseProfitLossFigures(item);
         return <button type="button" onClick={() => openProfitLossOverheadDetails(item, "expenses")} style={linkButtonStyle}>{formatMoney(figures.expenses)}</button>;
