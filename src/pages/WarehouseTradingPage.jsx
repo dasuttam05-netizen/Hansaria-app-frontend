@@ -3780,17 +3780,15 @@ export default function WarehouseTradingPage() {
       fungus: voucher.fungus || "",
       discolour: voucher.discolour || "",
       others: voucher.others || "",
+      // F2 stores shortage and claim as separate values. Never copy one into
+      // the other when reopening a passed Sale bill.
       claim_amount: voucher.claim_amount !== undefined && voucher.claim_amount !== null && String(voucher.claim_amount).trim() !== ""
         ? voucher.claim_amount
-        : voucher.shortage_amount !== undefined && voucher.shortage_amount !== null && String(voucher.shortage_amount).trim() !== ""
-          ? voucher.shortage_amount
-          : "",
+        : "",
       additional_amount: voucher.additional_amount !== undefined && voucher.additional_amount !== null ? voucher.additional_amount : "",
       other_deduction: voucher.other_deduction !== undefined && voucher.other_deduction !== null && String(voucher.other_deduction).trim() !== ""
         ? voucher.other_deduction
-        : voucher.adjustment_amount !== undefined && voucher.adjustment_amount !== null && String(voucher.adjustment_amount).trim() !== ""
-          ? voucher.adjustment_amount
-          : "",
+        : "",
       cd_percent: cdPercent,
       cd_amount: cdAmount,
       tds_amount: voucher.tds_amount !== undefined && voucher.tds_amount !== null && String(voucher.tds_amount).trim() !== "" ? voucher.tds_amount : "",
@@ -8456,7 +8454,7 @@ export default function WarehouseTradingPage() {
                               <td style={td}>{profitLossDetails.type === "sale" ? row.buyer_name || row.company_name || "-" : row.farmer_name || "-"}</td>
                               <td style={td}>{row.product_name || "-"}</td>
                               <td style={{ ...td, fontWeight: 700 }}>{formatMoney(amount)}</td>
-                              {profitLossDetails.type === "sale" && <><td style={td}>{formatMoney(row.additional_amount || 0)}</td><td style={td}>{formatMoney(row.total_deduction || row.total_less || 0)}</td><td style={td}>{formatMoney(row.transport_charge || 0)}</td></>}
+                              {profitLossDetails.type === "sale" && <><td style={td}>{formatMoney(row.additional_amount || 0)}</td><td style={td}>{formatMoney(row.total_less ?? 0)}</td><td style={td}>{formatMoney(row.transport_charge || 0)}</td></>}
                             </>
                           ) : (
                             <>
