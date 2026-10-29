@@ -563,6 +563,7 @@ button {
   }
 
   .trading-tabs-toggle {
+    display: block !important;
     margin-bottom: 0 !important;
   }
 
