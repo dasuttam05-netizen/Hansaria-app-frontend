@@ -369,6 +369,7 @@ export default function WarehouseTradingPage() {
   const [activeTab, setActiveTab] = useState(null);
   const [activeVoucherType, setActiveVoucherType] = useState("purchase");
   const [activeReport, setActiveReport] = useState("sale");
+  const [profitLossMode, setProfitLossMode] = useState("direct");
   const [profitLossDownloadType, setProfitLossDownloadType] = useState("xlsx");
 
   const [warehouses, setWarehouses] = useState([]);
@@ -426,7 +427,6 @@ export default function WarehouseTradingPage() {
     showPurchaseBillWise,
     showSaleBillWise,
   } = reportUiState;
-  const profitLossMode = reportFilters.profit_loss_mode || "direct";
   const setReportPage = (value) => reportUiDispatch({ type: "set_report_page", value: typeof value === "function" ? value(reportUiState.reportPage) : value });
   const setReportFilters = (value) => reportUiDispatch({ type: "set_report_filters", value: typeof value === "function" ? value(reportUiState.reportFilters) : value });
   const setSaleFollowupFilter = (value) => reportUiDispatch({ type: "set_sale_followup_filter", value: typeof value === "function" ? value(reportUiState.saleFollowupFilter) : value });
@@ -1989,7 +1989,7 @@ export default function WarehouseTradingPage() {
         params.search = normalizedSearch;
       }
       if (reportType === "profit-loss") {
-        params.mode = filters.profit_loss_mode || "direct";
+        params.mode = filters.profit_loss_mode || profitLossMode || "direct";
         if (filters.profit_from_date) params.from_date = filters.profit_from_date;
         if (filters.profit_to_date) params.to_date = filters.profit_to_date;
         if (filters.profit_location_id) params.buyer_id = filters.profit_location_id;
@@ -5064,16 +5064,7 @@ export default function WarehouseTradingPage() {
         </button>
       )],
       ["additional_amount", "Total Add", (item) => formatMoney(item.additional_amount || 0)],
-      ["total_less", "Total Less", (item) => (
-        <button type="button" onClick={() => openProfitLossVoucherDetails(item, "sale")} style={linkButtonStyle}>
-          {formatMoney(item.total_less || item.total_deduction || 0)}
-        </button>
-      )],
-      ["freight_amount", "Freight", (item) => (
-        <button type="button" onClick={() => openProfitLossVoucherDetails(item, "sale")} style={linkButtonStyle}>
-          {formatMoney(item.freight_amount || 0)}
-        </button>
-      )],
+      ["total_less", "Total Less", (item) => formatMoney(item.total_less || item.total_deduction || 0)],
       ["staff_expense", "Staff Expense", (item) => {
         const figures = getWarehouseProfitLossFigures(item);
         return <button type="button" onClick={() => openProfitLossOverheadDetails(item, "expenses")} style={linkButtonStyle}>{formatMoney(figures.expenses)}</button>;
@@ -5436,7 +5427,6 @@ export default function WarehouseTradingPage() {
     totals.saleAmount += toNumber(row.sale_amount || row.gross_amount);
     totals.additionalAmount += toNumber(row.additional_amount);
     totals.totalLess += toNumber(row.total_less || row.total_deduction);
-    totals.freightAmount += toNumber(row.freight_amount);
     totals.staffExpenses += figures.expenses;
     totals.rent += figures.rent;
     totals.manualIncome += figures.manualIncome;
@@ -5450,7 +5440,6 @@ export default function WarehouseTradingPage() {
     saleAmount: 0,
     additionalAmount: 0,
     totalLess: 0,
-    freightAmount: 0,
     staffExpenses: 0,
     rent: 0,
     manualIncome: 0,
@@ -5882,7 +5871,7 @@ export default function WarehouseTradingPage() {
     const exportType = format === "pdf" ? "pdf" : "xlsx";
     try {
       const params = {
-        mode: reportFilters.profit_loss_mode || "direct",
+        mode: reportFilters.profit_loss_mode || profitLossMode || "direct",
         export: exportType,
       };
       if (reportFilters.profit_from_date) params.from_date = reportFilters.profit_from_date;
@@ -7716,8 +7705,7 @@ export default function WarehouseTradingPage() {
                       value={profitLossMode}
                       onChange={(e) => {
                         const value = e.target.value === "warehouse" ? "warehouse" : "direct";
-                        setReportData([]);
-                        setReportPageInfo({ page: 1, pageSize: PAGE_SIZE, total: 0, hasMore: false });
+                        setProfitLossMode(value);
                         setReportFilters((prev) => ({ ...prev, profit_loss_mode: value, profit_location_id: "", profit_employee_id: "", profit_farmer_id: "" }));
                         setReportPage(1);
                       }}
@@ -7764,7 +7752,6 @@ export default function WarehouseTradingPage() {
                   { label: "Sale Bills", value: `${profitLossSummaryTotals.saleCount} · Rs.${formatMoney(profitLossSummaryTotals.saleAmount)}`, onClick: () => openProfitLossVoucherDetails(null, "sale"), color: "#166534" },
                   { label: "Total Add", value: `Rs.${formatMoney(profitLossSummaryTotals.additionalAmount)}`, onClick: () => openProfitLossVoucherDetails(null, "sale"), color: "#0f766e" },
                   { label: "Total Less", value: `Rs.${formatMoney(profitLossSummaryTotals.totalLess)}`, onClick: () => openProfitLossVoucherDetails(null, "sale"), color: "#b45309" },
-                  { label: "Freight", value: `Rs.${formatMoney(profitLossSummaryTotals.freightAmount)}`, onClick: () => openProfitLossVoucherDetails(null, "sale"), color: "#0369a1" },
                   { label: "Staff Expense", value: `Rs.${formatMoney(profitLossSummaryTotals.staffExpenses)}`, onClick: () => openProfitLossOverheadDetails(null, "expenses"), color: "#9f1239" },
                   { label: "Warehouse Rent", value: `Rs.${formatMoney(profitLossSummaryTotals.rent)}`, onClick: () => openProfitLossOverheadDetails(null, "rents"), color: "#6d4c0f" },
                   { label: "Manual Add", value: `Rs.${formatMoney(profitLossSummaryTotals.manualIncome)}`, onClick: () => openProfitLossOverheadDetails(null, "adjustments"), color: "#166534" },
@@ -8411,7 +8398,7 @@ export default function WarehouseTradingPage() {
                           <th style={th}>{profitLossDetails.type === "sale" ? "Buyer" : "Farmer"}</th>
                           <th style={th}>Product</th>
                           <th style={th}>Amount</th>
-                          {profitLossDetails.type === "sale" && <><th style={th}>Add</th><th style={th}>Less</th><th style={th}>Freight</th></>}
+                          {profitLossDetails.type === "sale" && <><th style={th}>Add</th><th style={th}>Less</th></>}
                         </>
                       ) : (
                         <>
@@ -8440,7 +8427,7 @@ export default function WarehouseTradingPage() {
                               <td style={td}>{profitLossDetails.type === "sale" ? row.buyer_name || row.company_name || "-" : row.farmer_name || "-"}</td>
                               <td style={td}>{row.product_name || "-"}</td>
                               <td style={{ ...td, fontWeight: 700 }}>{formatMoney(amount)}</td>
-                              {profitLossDetails.type === "sale" && <><td style={td}>{formatMoney(row.additional_amount || 0)}</td><td style={td}>{formatMoney(row.total_deduction || row.total_less || 0)}</td><td style={td}>{formatMoney(row.transport_charge || 0)}</td></>}
+                              {profitLossDetails.type === "sale" && <><td style={td}>{formatMoney(row.additional_amount || 0)}</td><td style={td}>{formatMoney(row.total_deduction || row.total_less || 0)}</td></>}
                             </>
                           ) : (
                             <>
@@ -8453,7 +8440,7 @@ export default function WarehouseTradingPage() {
                         </tr>
                       );
                     })}
-                    {!(profitLossDetails.rows || []).length && <tr><td colSpan={profitLossDetails.type === "sale" ? 8 : profitLossDetails.type === "purchase" ? 5 : profitLossDetails.type === "adjustments" ? 4 : 3} style={{ ...td, textAlign: "center", padding: 24, color: "#64748b" }}>No entries found for this period.</td></tr>}
+                    {!(profitLossDetails.rows || []).length && <tr><td colSpan={profitLossDetails.type === "sale" ? 7 : profitLossDetails.type === "purchase" ? 5 : profitLossDetails.type === "adjustments" ? 4 : 3} style={{ ...td, textAlign: "center", padding: 24, color: "#64748b" }}>No entries found for this period.</td></tr>}
                   </tbody>
                 </table>
               </div>
