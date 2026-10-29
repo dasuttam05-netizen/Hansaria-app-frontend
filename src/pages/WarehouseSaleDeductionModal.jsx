@@ -13,6 +13,7 @@ export default function WarehouseSaleDeductionModal({
   saleDispatchQty,
   saleUnloadingQty,
   saleVoucherPassBills = [],
+  salePassBillsLoading = false,
   saleBillSearch,
   setSaleBillSearch,
   editId,
@@ -113,7 +114,7 @@ export default function WarehouseSaleDeductionModal({
                   </button>
                 );
               })}
-              {!filteredBills.length && <div style={{ padding: 12, color: "#64748b", fontSize: 12 }}>No sale bill found.</div>}
+              {!filteredBills.length && <div style={{ padding: 12, color: "#64748b", fontSize: 12 }}>{salePassBillsLoading ? "Searching pending-unloading bills..." : "No pending-unloading sale bill found."}</div>}
             </div>
           </div>
 
