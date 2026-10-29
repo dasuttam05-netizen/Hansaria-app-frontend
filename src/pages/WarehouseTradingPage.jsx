@@ -622,10 +622,37 @@ export default function WarehouseTradingPage() {
     if (!buyerId) return consignees;
     return consignees.filter((c) => consigneeHasBuyer(c, buyerId));
   }, [consignees, formData.buyer_id, formData.company_id]);
-  const openStockDrilldown = (item, mode) => {
+  const openStockDrilldown = async (item, mode) => {
     setStockDrilldownFromDate("");
     setStockDrilldownToDate("");
-    setStockDrilldown({ item, mode });
+    const rowKey = [item.warehouse_id, item.company_account_id, item.product_id].map((value) => String(value || "")).join("::");
+    setStockDrilldown({ item: { ...item, purchase_details: [], sale_details: [] }, mode, loading: true });
+    try {
+      const response = await API.get("/api/wh-vouchers/report/warehouse-stock", {
+        params: {
+          view: "details",
+          warehouse_id: item.warehouse_id,
+          company_account_id: item.company_account_id || "",
+          product_id: item.product_id,
+        },
+      });
+      setStockDrilldown((current) => {
+        if (!current) return current;
+        const currentKey = [current.item.warehouse_id, current.item.company_account_id, current.item.product_id]
+          .map((value) => String(value || "")).join("::");
+        return currentKey === rowKey
+          ? { ...current, item: response.data || current.item, loading: false }
+          : current;
+      });
+    } catch (error) {
+      console.error("Failed to load warehouse stock details:", error);
+      setStockDrilldown((current) => {
+        if (!current) return current;
+        const currentKey = [current.item.warehouse_id, current.item.company_account_id, current.item.product_id]
+          .map((value) => String(value || "")).join("::");
+        return currentKey === rowKey ? { ...current, loading: false } : current;
+      });
+    }
   };
   const openSaleJourneyReport = () => {
     setReportFilters((prev) => ({
@@ -2028,7 +2055,12 @@ export default function WarehouseTradingPage() {
           total: pagination?.total ?? rows.length,
           hasMore: Boolean(pagination?.hasMore),
         };
-        reportDataCacheRef.current.set(reportCacheKey, { time: Date.now(), rows, pageInfo: nextPageInfo });
+        if (rows.length <= PAGE_SIZE) {
+          if (reportDataCacheRef.current.size >= 4 && !reportDataCacheRef.current.has(reportCacheKey)) {
+            reportDataCacheRef.current.delete(reportDataCacheRef.current.keys().next().value);
+          }
+          reportDataCacheRef.current.set(reportCacheKey, { time: Date.now(), rows, pageInfo: nextPageInfo });
+        }
         setWarehouseStockReport(rows);
         setReportData(rows);
         setReportPageInfo(nextPageInfo);
@@ -2054,7 +2086,15 @@ export default function WarehouseTradingPage() {
           hasMore: false,
         };
       }
-      reportDataCacheRef.current.set(reportCacheKey, { time: Date.now(), rows, pageInfo: nextPageInfo });
+      // Keep only small report pages in memory. Unpaged ledgers/follow-up
+      // reports can contain many thousands of rows and should not accumulate
+      // in this per-mount cache as users switch reports.
+      if (serverPagedReport && rows.length <= PAGE_SIZE) {
+        if (reportDataCacheRef.current.size >= 4 && !reportDataCacheRef.current.has(reportCacheKey)) {
+          reportDataCacheRef.current.delete(reportDataCacheRef.current.keys().next().value);
+        }
+        reportDataCacheRef.current.set(reportCacheKey, { time: Date.now(), rows, pageInfo: nextPageInfo });
+      }
       setReportData(rows);
       setReportPageInfo(nextPageInfo);
     } catch (err) {
@@ -8839,6 +8879,12 @@ export default function WarehouseTradingPage() {
                 Reset Filter
               </button>
             </div>
+
+            {stockDrilldown.loading && (
+              <div role="status" style={{ marginTop: 12, padding: 10, color: "#475569", background: "#f8fafc", borderRadius: 8 }}>
+                Loading stock details…
+              </div>
+            )}
 
             <div style={{ ...tableCard, maxHeight: "66vh", marginTop: 14 }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
