@@ -8150,6 +8150,16 @@ export default function WarehouseTradingPage() {
                       <option value="warehouse">Warehouse Wise</option>
                     </select>
                   </label>
+                  <label style={{ display: "flex", flexDirection: "column", gap: 7, minWidth: 0, fontSize: 12, fontWeight: 700, color: "#334155" }}>
+                    Search
+                    <input
+                      type="search"
+                      value={globalSearch}
+                      onChange={(event) => setGlobalSearch(event.target.value)}
+                      placeholder={profitLossMode === "warehouse" ? "Warehouse name" : "Bill, buyer, consignee..."}
+                      style={{ ...inp, width: "100%", minHeight: 42, boxSizing: "border-box", borderRadius: 8, borderColor: "#cbd5e1", background: "#fff" }}
+                    />
+                  </label>
                   <label style={{ display: "flex", flexDirection: "column", gap: 7, minWidth: 0, fontSize: 12, fontWeight: 700, color: "#334155" }}>From Date<input type="date" value={reportFilters.profit_from_date} onChange={(e) => updateReportFilter("profit_from_date", e.target.value)} style={{ ...inp, width: "100%", minHeight: 42, boxSizing: "border-box", borderRadius: 8, borderColor: "#cbd5e1", background: "#fff" }} /></label>
                   <label style={{ display: "flex", flexDirection: "column", gap: 7, minWidth: 0, fontSize: 12, fontWeight: 700, color: "#334155" }}>To Date<input type="date" value={reportFilters.profit_to_date} onChange={(e) => updateReportFilter("profit_to_date", e.target.value)} style={{ ...inp, width: "100%", minHeight: 42, boxSizing: "border-box", borderRadius: 8, borderColor: "#cbd5e1", background: "#fff" }} /></label>
                   {profitLossMode === "direct" && (
@@ -8162,7 +8172,7 @@ export default function WarehouseTradingPage() {
                   {profitLossMode === "warehouse" && hasPermission(user, "warehouse.trading.manage") && (
                     <button type="button" onClick={() => { setProfitLossManualEditingId(""); setProfitLossManualForm({ date: new Date().toISOString().slice(0, 10), warehouse_id: "", entry_type: "expense", amount: "", description: "" }); setShowProfitLossManualModal(true); }} style={{ ...btnAction, width: "100%", height: 42, boxSizing: "border-box", borderRadius: 8, background: "#0f766e", fontWeight: 700 }}>+ Manual Entry</button>
                   )}
-                  <button type="button" onClick={() => { setReportFilters((prev) => ({ ...prev, profit_loss_mode: profitLossMode, profit_from_date: "", profit_to_date: "", profit_location_id: "", profit_employee_id: "", profit_farmer_id: "" })); setReportPage(1); }} style={{ ...btnAction, width: "100%", height: 42, boxSizing: "border-box", borderRadius: 8, background: "#64748b", fontWeight: 700 }}>Clear Filters</button>
+                  <button type="button" onClick={() => { setGlobalSearch(""); setReportFilters((prev) => ({ ...prev, profit_loss_mode: profitLossMode, profit_from_date: "", profit_to_date: "", profit_location_id: "", profit_employee_id: "", profit_farmer_id: "" })); setReportPage(1); }} style={{ ...btnAction, width: "100%", height: 42, boxSizing: "border-box", borderRadius: 8, background: "#64748b", fontWeight: 700 }}>Clear Filters</button>
                   <label style={{ display: "flex", flexDirection: "column", gap: 7, minWidth: 0, fontSize: 12, fontWeight: 700, color: "#334155" }}>
                     Download Format
                     <select
