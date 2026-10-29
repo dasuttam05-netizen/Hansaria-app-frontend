@@ -1231,7 +1231,10 @@ export default function WarehouseTradingPage() {
   useEffect(() => {
     if (activeTab !== "vouchers" || activeVoucherType !== "sale") return;
 
-    const shouldLoadPurchaseRows = formData.sale_type === "direct" || formData.against_purchase_enabled;
+    // Direct Sale's purchase links are loaded only when the user opens the
+    // tagging flow. Fetching 100 decorated purchase rows on every Sale tab
+    // visit was unnecessary and added avoidable memory pressure at startup.
+    const shouldLoadPurchaseRows = formData.sale_type !== "direct" && formData.against_purchase_enabled;
     if (!shouldLoadPurchaseRows) {
       setSalePurchaseRows([]);
       return;
