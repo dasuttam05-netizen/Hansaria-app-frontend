@@ -398,10 +398,8 @@ export default function ExpenseManagementPage() {
   const editParam = searchParams.get("edit");
 
   useEffect(() => {
-    const editExpenseId = Number(editParam);
-    if (!Number.isFinite(editExpenseId) || editExpenseId <= 0) {
-      return;
-    }
+    const editExpenseId = String(editParam || "").trim();
+    if (!editExpenseId) return;
 
     openExpenseById(editExpenseId);
   }, [editParam]);
@@ -802,6 +800,8 @@ export default function ExpenseManagementPage() {
 
       resetForm();
       loadExpensesWithApprovals();
+      const returnTo = String(searchParams.get("return_to") || "");
+      if (returnTo.startsWith("/warehouse-trading?")) navigate(returnTo);
     } catch (error) {
       console.error(error);
       toast.error(error?.response?.data?.error || "Failed to save expense", {
