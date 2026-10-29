@@ -475,6 +475,9 @@ export default function WarehouseTradingPage() {
   const [voucherNumberLoading, setVoucherNumberLoading] = useState(false);
   const [showSaleDeductionModal, setShowSaleDeductionModal] = useState(false);
   const [saleBillSearch, setSaleBillSearch] = useState("");
+  const [salePassBillRows, setSalePassBillRows] = useState([]);
+  const [salePassBillsLoading, setSalePassBillsLoading] = useState(false);
+  const salePassBillLoadTokenRef = useRef(0);
   const [journeyTemplateId, setJourneyTemplateId] = useState("");
   const [showSaleAdjustedModal, setShowSaleAdjustedModal] = useState(false);
   const [showSalePurchaseTagModal, setShowSalePurchaseTagModal] = useState(false);
@@ -1073,14 +1076,15 @@ export default function WarehouseTradingPage() {
       ].some((value) => String(value || "").toLowerCase().includes(query));
     });
   }, [directSaleAvailablePurchaseRows, formData.against_purchase_farmer_id, formData.farmer_id, salePurchaseLinks, salePurchaseTagSearch, showTaggedSalePurchases]);
-  const saleVoucherPassBills = list.filter((item) => {
-    const sameWarehouse = !formData.warehouse_id || String(item.warehouse_id || "") === String(formData.warehouse_id);
-    const sameAccount = !formData.company_account_id || String(item.company_account_id || "") === String(formData.company_account_id);
+  const saleVoucherPassBills = salePassBillRows.filter((item) => {
     const search = saleBillSearch.trim().toLowerCase();
     const searchable = [
       item.voucher_no,
+      item.bill_no,
       item.lorry_no,
       item.reference_id,
+      item.buyer_name,
+      item.company_name,
       getBuyerName(item),
       item.consignee_name,
       getProductName(item),
@@ -1088,9 +1092,12 @@ export default function WarehouseTradingPage() {
     // Ensure we only show sale vouchers here. Prefer explicit `voucher_type` when available,
     // otherwise fall back to presence of buyer/company fields which indicate sale.
     const isSaleType = String(item.voucher_type || "").toLowerCase() === "sale" || Boolean(item.buyer_id || item.company_id);
-    return isSaleType && sameWarehouse && sameAccount && (!search || searchable.includes(search));
+    const dispatchQty = saleDispatchQtyFromData(item);
+    const unloadingQty = toNumber(item.unloading_qty);
+    return isSaleType && dispatchQty > unloadingQty + 0.0001 && (!search || searchable.includes(search));
   });
   const selectedSalePassBill =
+    salePassBillRows.find((row) => String(row.id || row._id) === String(editId)) ||
     list.find((row) => String(row.id || row._id) === String(editId)) ||
     saleVoucherPassBills.find((row) => String(row.id || row._id) === String(editId)) ||
     null;
@@ -1129,6 +1136,38 @@ export default function WarehouseTradingPage() {
       selectSaleVoucherForPass(autoSelected.id || autoSelected._id);
     }
   }, [activeTab, activeVoucherType, showSaleDeductionModal, editId, selectedSalePassBill, saleVoucherPassBills, formData.lorry_no, formData.journey_token]);
+
+  useEffect(() => {
+    if (!showSaleDeductionModal || activeVoucherType !== "sale") return;
+    const token = ++salePassBillLoadTokenRef.current;
+    const timer = window.setTimeout(async () => {
+      setSalePassBillsLoading(true);
+      try {
+        const response = await API.get("/api/wh-vouchers/sale", {
+          params: {
+            page: 1,
+            limit: 100,
+            order: "desc",
+            pending_unloading: 1,
+            search: String(saleBillSearch || "").trim() || undefined,
+          },
+        });
+        if (token !== salePassBillLoadTokenRef.current) return;
+        const payload = response.data || {};
+        setSalePassBillRows(Array.isArray(payload) ? payload : (Array.isArray(payload.data) ? payload.data : []));
+      } catch (error) {
+        if (token !== salePassBillLoadTokenRef.current) return;
+        console.error("Failed to search pending-unloading sale bills:", error);
+        setSalePassBillRows([]);
+      } finally {
+        if (token === salePassBillLoadTokenRef.current) setSalePassBillsLoading(false);
+      }
+    }, 250);
+    return () => {
+      window.clearTimeout(timer);
+      salePassBillLoadTokenRef.current += 1;
+    };
+  }, [showSaleDeductionModal, activeVoucherType, saleBillSearch]);
 
   const saleAdjustedBills = list.filter((item) => {
     const sameWarehouse = !formData.warehouse_id || String(item.warehouse_id || "") === String(formData.warehouse_id);
@@ -3725,7 +3764,8 @@ export default function WarehouseTradingPage() {
   };
 
   const selectSaleVoucherForPass = (voucherId) => {
-    const voucher = list.find((item) => String(item.id || item._id) === String(voucherId));
+    const voucher = salePassBillRows.find((item) => String(item.id || item._id) === String(voucherId)) ||
+      list.find((item) => String(item.id || item._id) === String(voucherId));
     if (!voucher) return;
 
     const billDate = voucher.bill_date || voucher.date || "";
@@ -8713,6 +8753,7 @@ export default function WarehouseTradingPage() {
           selectedSalePassJourneyRows={selectedSalePassJourneyRows}
           selectedSalePassJourneyRemainingQty={selectedSalePassJourneyRemainingQty}
           saleVoucherPassBills={saleVoucherPassBills}
+          salePassBillsLoading={salePassBillsLoading}
           saleBillSearch={saleBillSearch}
           setSaleBillSearch={setSaleBillSearch}
           journeyTemplateId={journeyTemplateId}
