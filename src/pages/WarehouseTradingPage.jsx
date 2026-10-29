@@ -5082,7 +5082,7 @@ export default function WarehouseTradingPage() {
       ["additional_amount", "Total Add", (item) => formatMoney(item.additional_amount || 0)],
       ["total_less", "Total Less", (item) => (
         <button type="button" onClick={() => openProfitLossVoucherDetails(item, "sale")} style={linkButtonStyle}>
-          {formatMoney(item.total_less || item.total_deduction || 0)}
+          {formatMoney(item.total_less ?? item.total_deduction ?? 0)}
         </button>
       )],
       ["freight_amount", "Freight", (item) => (
@@ -5451,7 +5451,7 @@ export default function WarehouseTradingPage() {
     totals.saleCount += Number(row.sale_count || 0);
     totals.saleAmount += toNumber(row.sale_amount || row.gross_amount);
     totals.additionalAmount += toNumber(row.additional_amount);
-    totals.totalLess += toNumber(row.total_less || row.total_deduction);
+    totals.totalLess += toNumber(row.total_less ?? row.total_deduction);
     totals.freightAmount += toNumber(row.freight_amount);
     totals.staffExpenses += figures.expenses;
     totals.rent += figures.rent;
