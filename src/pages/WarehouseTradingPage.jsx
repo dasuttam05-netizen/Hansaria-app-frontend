@@ -2701,6 +2701,11 @@ export default function WarehouseTradingPage() {
       const res = isEdit
         ? await API.put(url, payload, { headers: requestHeaders })
         : await API.post(url, payload, { headers: requestHeaders });
+
+      // A saved voucher may change the values shown by a report that was
+      // cached earlier in this page session. Force the next report visit to
+      // fetch the updated server row.
+      reportDataCacheRef.current.clear();
       
       alert(`Voucher ${isEdit ? "updated" : "saved"} successfully`);
       if (res.data?.stats) {
