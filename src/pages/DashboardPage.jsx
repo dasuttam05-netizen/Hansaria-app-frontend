@@ -1,4 +1,4 @@
-import React, { Component, useState, useEffect, useRef, lazy, Suspense, useCallback } from "react";
+import React, { Component, useState, useEffect, useRef, lazy, Suspense } from "react";
 import API from "./axiosInstance";
 import { useNavigate } from "react-router-dom";
 import logo from "./logo.png";
@@ -60,6 +60,8 @@ function DashboardModalFallback() {
 
 export default function DashboardPage() {
   const navigate = useNavigate();
+  const navigateRef = useRef(navigate);
+  navigateRef.current = navigate;
   const topbarMenusRef = useRef(null);
   const [active, setActive] = useState("Dashboard");
   const [username, setUsername] = useState("");
@@ -383,18 +385,6 @@ export default function DashboardPage() {
     }
   };
 
-  const refreshDashboard = useCallback(async () => {
-    const { user: sessionUser } = loadSession();
-    if (!sessionUser) {
-      navigate("/");
-      return;
-    }
-
-    setUser(sessionUser);
-    setUsername(sessionUser.name || sessionUser.username || "User");
-    await fetchData(sessionUser, () => true);
-  }, [navigate]);
-
   useEffect(() => {
     let alive = true;
 
@@ -402,7 +392,7 @@ export default function DashboardPage() {
       try {
         const { user: sessionUser } = loadSession();
         if (!sessionUser) {
-          navigate("/");
+          navigateRef.current("/");
           return;
         }
 
@@ -425,7 +415,7 @@ export default function DashboardPage() {
     return () => {
       alive = false;
     };
-  }, [navigate, refreshDashboard]);
+  }, []);
 
   const canViewFullCashBook = hasAnyPermission(user, [
     "cash.view",
