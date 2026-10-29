@@ -900,8 +900,12 @@ export default function WarehouseTradingPage() {
     .slice()
     .sort((a, b) => String(a.date || "").localeCompare(String(b.date || "")));
   const againstPurchaseLinkMap = new Map(salePurchaseLinks.map((item) => [String(item.purchase_id), item]));
-  const againstPurchaseTotalQty = salePurchaseLinks.reduce((sum, item) => sum + toNumber(item.quantity), 0);
-  const againstPurchaseTotalAmount = salePurchaseLinks.reduce((sum, item) => sum + toNumber(item.amount), 0);
+  const linkedPurchaseQty = salePurchaseLinks.reduce((sum, item) => sum + toNumber(item.quantity || item.weight), 0);
+  const linkedPurchaseAmount = salePurchaseLinks.reduce((sum, item) => sum + toNumber(item.amount || (toNumber(item.quantity || item.weight) * toNumber(item.rate))), 0);
+  const directPurchaseQty = formData.sale_type === "direct" ? saleDispatchQtyFromData(formData) : 0;
+  const directPurchaseAmount = directPurchaseQty * toNumber(formData.direct_purchase_rate);
+  const againstPurchaseTotalQty = formData.sale_type === "direct" ? directPurchaseQty : linkedPurchaseQty;
+  const againstPurchaseTotalAmount = formData.sale_type === "direct" ? directPurchaseAmount : linkedPurchaseAmount;
   const purchaseTaggedDeductionDetails = salePurchaseLinks.map((item) => {
     const qty = toNumber(item.quantity || item.weight);
     const fullQty = toNumber(item.purchase_total_qty || item.total_qty || item.purchase_quantity || qty);
@@ -2855,7 +2859,10 @@ export default function WarehouseTradingPage() {
         });
         if (activeVoucherType === "sale") {
           const existingLinks = Array.isArray(voucher.against_purchase_links)
-            ? voucher.against_purchase_links.map((item) => ({
+            ? voucher.against_purchase_links.map((item) => {
+                const quantity = toNumber(item.quantity || item.weight || item.purchase_total_qty || item.total_qty);
+                const rate = toNumber(item.rate);
+                return ({
                 purchase_id: String(item.purchase_id || item.id || ""),
                 voucher_no: item.voucher_no || item.purchase_voucher_no || "",
                 farmer_id: String(item.farmer_id || voucher.against_purchase_farmer_id || ""),
@@ -2863,11 +2870,11 @@ export default function WarehouseTradingPage() {
                 date: item.date || "",
                 lorry_no: item.lorry_no || "",
                 consignee_name: item.consignee_name || "",
-                weight: toNumber(item.weight),
-                quantity: toNumber(item.quantity),
-                rate: toNumber(item.rate),
-                amount: toNumber(item.amount),
-              })).filter((item) => item.purchase_id && item.quantity > 0)
+                weight: quantity,
+                quantity,
+                rate,
+                amount: toNumber(item.amount) || Number((quantity * rate).toFixed(2)),
+              }); }).filter((item) => item.purchase_id && item.quantity > 0)
             : [];
           setSalePurchaseLinks(existingLinks);
         }
