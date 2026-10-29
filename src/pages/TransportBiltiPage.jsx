@@ -4,6 +4,7 @@ import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { FaSave, FaEdit, FaTrash, FaWhatsapp, FaTimes, FaFilePdf } from "react-icons/fa";
 import { ToastContainer, toast, Slide } from "react-toastify";
+import { useNavigate } from "react-router-dom";
 import "react-toastify/dist/ReactToastify.css";
 import { consigneeHasBuyer } from "../utils/consigneeBuyers";
 
@@ -128,6 +129,7 @@ function SearchableSelect({ name, value, options, onChange, placeholder, style, 
 export default function TransportBiltiPage() {
   const API_BASE = "/api";
   const KG_PER_MT = 1000;
+  const navigate = useNavigate();
 
   const [mode, setMode] = useState("outward");
   const [outwardList, setOutwardList] = useState([]);
@@ -434,7 +436,7 @@ export default function TransportBiltiPage() {
     const editId = params.get("edit");
     if (!editId) return;
 
-    loadBilti(editId);
+    loadBilti(editId, params.get("source") || "");
   }, []);
 
   useEffect(() => {
@@ -484,11 +486,13 @@ export default function TransportBiltiPage() {
   const returnAfterEditorSave = async () => {
     const params = new URLSearchParams(window.location.search);
     const isReportEdit = Boolean(params.get("edit"));
+    const returnTo = String(params.get("return_to") || "");
 
     // Return immediately; refresh the source list in the background so the
     // editor does not remain open while waiting for master/source requests.
     if (isReportEdit) {
-      window.history.back();
+      if (returnTo.startsWith("/warehouse-trading?")) navigate(returnTo);
+      else window.history.back();
     } else {
       closeEditorPopup();
     }
