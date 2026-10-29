@@ -2218,6 +2218,18 @@ export default function WarehouseTradingPage() {
 
     setFormData((prev) => {
       const next = { ...prev, [name]: fieldValue };
+      // The Sale form's Quantity field is the editable source. Keep the
+      // dispatch value in sync because saleDispatchQtyFromData prefers it.
+      if (activeVoucherType === "sale" && name === "quantity") {
+        next.dispatch_qty = fieldValue;
+      }
+      if (activeVoucherType === "sale" && ["gross_weight", "tare_weight"].includes(name)) {
+        const netWeight = Math.max(toNumber(next.gross_weight) - toNumber(next.tare_weight), 0);
+        if (netWeight > 0) {
+          next.dispatch_qty = formatDecimal4(netWeight);
+          next.quantity = formatDecimal4(netWeight);
+        }
+      }
       if (name === "warehouse_id") {
         const warehouse = warehouses.find((w) => String(w.id || w._id) === String(value));
         next.location_id = getRecordId(warehouse?.location_id);
