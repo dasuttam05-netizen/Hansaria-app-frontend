@@ -474,6 +474,12 @@ export default function WarehouseTradingPage() {
   const [importingReceipt, setImportingReceipt] = useState(false);
   const [voucherNumberLoading, setVoucherNumberLoading] = useState(false);
   const [showSaleDeductionModal, setShowSaleDeductionModal] = useState(false);
+  const [showWarehouseLoadingModal, setShowWarehouseLoadingModal] = useState(false);
+  const [warehouseLoadingForm, setWarehouseLoadingForm] = useState({ date: new Date().toISOString().slice(0, 10), warehouse_id: "", product_id: "", lorry_no: "", loading_qty: "", description: "" });
+  const [warehouseLoadingBillSearch, setWarehouseLoadingBillSearch] = useState("");
+  const [warehouseLoadingBills, setWarehouseLoadingBills] = useState([]);
+  const [warehouseLoadingAllocations, setWarehouseLoadingAllocations] = useState([]);
+  const [warehouseLoadingSaving, setWarehouseLoadingSaving] = useState(false);
   const [saleBillSearch, setSaleBillSearch] = useState("");
   const [salePassBillRows, setSalePassBillRows] = useState([]);
   const [salePassBillsLoading, setSalePassBillsLoading] = useState(false);
@@ -809,6 +815,7 @@ export default function WarehouseTradingPage() {
   const canUseTrading = hasPermission(user, "warehouse.trading.view");
   const canUsePurchase = hasPermission(user, "warehouse.trading.purchase.view") || hasPermission(user, "warehouse.trading.purchase.create") || hasPermission(user, "warehouse.trading.purchase.edit") || hasPermission(user, "warehouse.trading.purchase.delete");
   const canUseSale = hasPermission(user, "warehouse.trading.sale.view") || hasPermission(user, "warehouse.trading.sale.create") || hasPermission(user, "warehouse.trading.sale.edit") || hasPermission(user, "warehouse.trading.sale.delete");
+  const canCreateWarehouseLoading = hasPermission(user, "warehouse.trading.sale.create") || hasPermission(user, "warehouse.trading.sale.edit");
   const canUsePayment = hasPermission(user, "warehouse.trading.payment.view") || hasPermission(user, "warehouse.trading.payment.create") || hasPermission(user, "warehouse.trading.payment.edit") || hasPermission(user, "warehouse.trading.payment.delete");
   const canUseReceipt = hasPermission(user, "warehouse.trading.receipt.view") || hasPermission(user, "warehouse.trading.receipt.create") || hasPermission(user, "warehouse.trading.receipt.edit") || hasPermission(user, "warehouse.trading.receipt.delete");
   const canUseJournal = hasPermission(user, "warehouse.trading.journal.view") || hasPermission(user, "warehouse.trading.journal.create") || hasPermission(user, "warehouse.trading.journal.edit") || hasPermission(user, "warehouse.trading.journal.delete");
@@ -1172,6 +1179,26 @@ export default function WarehouseTradingPage() {
       salePassBillLoadTokenRef.current += 1;
     };
   }, [showSaleDeductionModal, activeVoucherType, saleBillSearch]);
+
+  useEffect(() => {
+    if (!showWarehouseLoadingModal) return;
+    let active = true;
+    const timer = window.setTimeout(async () => {
+      try {
+        const response = await API.get("/api/wh-vouchers/sale", { params: {
+          page: 1, limit: 100, order: "desc", search: String(warehouseLoadingBillSearch || "").trim() || undefined,
+        } });
+        if (!active) return;
+        const payload = response.data || {};
+        const rows = Array.isArray(payload) ? payload : (Array.isArray(payload.data) ? payload.data : []);
+        setWarehouseLoadingBills(rows.filter((row) => !row.warehouse_loading_id));
+      } catch (error) {
+        if (active) setWarehouseLoadingBills([]);
+        console.error("Failed to search Sale Bills for warehouse loading:", error);
+      }
+    }, 250);
+    return () => { active = false; window.clearTimeout(timer); };
+  }, [showWarehouseLoadingModal, warehouseLoadingBillSearch]);
 
   const saleAdjustedBills = list.filter((item) => {
     const sameWarehouse = !formData.warehouse_id || String(item.warehouse_id || "") === String(formData.warehouse_id);
@@ -1849,6 +1876,67 @@ export default function WarehouseTradingPage() {
       console.error(err);
       setList([]);
       setVoucherPageInfo({ page: voucherPage, pageSize: PAGE_SIZE, total: 0, totalPages: 1, hasMore: false });
+    }
+  };
+
+  const addWarehouseLoadingBill = (row) => {
+    const saleId = String(row?.id || row?._id || "");
+    if (!saleId || warehouseLoadingAllocations.some((item) => item.sale_id === saleId)) return;
+    if (warehouseLoadingForm.warehouse_id && String(row.warehouse_id || "") !== String(warehouseLoadingForm.warehouse_id)) {
+      alert("Select a Sale Bill from the same warehouse");
+      return;
+    }
+    if (warehouseLoadingForm.product_id && String(row.product_id || "") !== String(warehouseLoadingForm.product_id)) {
+      alert("Select a Sale Bill with the same product");
+      return;
+    }
+    setWarehouseLoadingAllocations((current) => [...current, {
+      sale_id: saleId,
+      voucher_no: row.voucher_no || row.bill_no || "",
+      buyer_name: row.buyer_name || row.company_name || "",
+      product_id: String(row.product_id || ""),
+      warehouse_id: String(row.warehouse_id || ""),
+      quantity: String(toNumber(row.quantity || row.total_quantity || 0)),
+    }]);
+    setWarehouseLoadingForm((current) => ({
+      ...current,
+      warehouse_id: current.warehouse_id || String(row.warehouse_id || ""),
+      product_id: current.product_id || String(row.product_id || ""),
+    }));
+  };
+
+  const saveWarehouseLoading = async () => {
+    const loadingQty = toNumber(warehouseLoadingForm.loading_qty);
+    const allocatedQty = warehouseLoadingAllocations.reduce((sum, item) => sum + toNumber(item.quantity), 0);
+    if (!warehouseLoadingForm.warehouse_id || !warehouseLoadingForm.product_id || !warehouseLoadingForm.lorry_no.trim() || loadingQty <= 0) {
+      alert("Enter warehouse, product, lorry number and loading quantity");
+      return;
+    }
+    if (!warehouseLoadingAllocations.length || Math.abs(allocatedQty - loadingQty) > 0.0001) {
+      alert(`Tagged Sale Bill quantities must total ${formatDecimal4(loadingQty)}`);
+      return;
+    }
+    setWarehouseLoadingSaving(true);
+    try {
+      const response = await API.post("/api/wh-vouchers/warehouse-loading", {
+        ...warehouseLoadingForm,
+        loading_qty: loadingQty,
+        allocations: warehouseLoadingAllocations.map((item) => ({ sale_id: item.sale_id, quantity: toNumber(item.quantity) })),
+      });
+      reportDataCacheRef.current.clear();
+      alert(`Warehouse loading ${response.data?.voucher_no || ""} saved. Stock issued once: ${formatDecimal4(loadingQty)}.`);
+      setShowWarehouseLoadingModal(false);
+      setWarehouseLoadingAllocations([]);
+      setWarehouseLoadingForm({ date: new Date().toISOString().slice(0, 10), warehouse_id: "", product_id: "", lorry_no: "", loading_qty: "", description: "" });
+      await loadVouchers();
+      if (activeTab === "reports") {
+        setActiveReport("warehouse-stock");
+        await loadReport("warehouse-stock", 1);
+      }
+    } catch (error) {
+      alert(error?.response?.data?.error || "Failed to save warehouse loading");
+    } finally {
+      setWarehouseLoadingSaving(false);
     }
   };
 
@@ -3957,7 +4045,6 @@ export default function WarehouseTradingPage() {
     try {
       await API.put(`/api/wh-vouchers/sale/${editId}`, payload);
       alert("Sale voucher pass saved successfully");
-      const remainingQtyAfterSave = Math.max(saleDispatchQty - saleUnloadingQty, 0);
       const nextVoucherNo = await API
         .get(`/api/wh-vouchers/next-voucher-no`, { params: { type: "sale" } })
         .then((res) => res.data?.voucher_no || "")
@@ -3975,7 +4062,9 @@ export default function WarehouseTradingPage() {
         voucher_no: nextVoucherNo || "",
         bill_date: new Date().toISOString().slice(0, 10),
         date: new Date().toISOString().slice(0, 10),
-      dispatch_qty: remainingQtyAfterSave > 0 ? remainingQtyAfterSave.toFixed(4) : "",
+      // Passing another consignee adds unloading to the same loading bill;
+      // do not prefill the remaining weight as a new warehouse sale issue.
+      dispatch_qty: "",
       add_qty: "",
       unloading_qty: "",
         company_id: "",
@@ -4692,7 +4781,10 @@ export default function WarehouseTradingPage() {
       rent,
       manualIncome,
       manualExpense,
-      netProfitLoss: toNumber(row?.profit_loss) - expenses - rent - manualExpense + manualIncome,
+      // Warehouse P/L is finalized by the API with overheads already applied.
+      // Subtracting these here again made the displayed total disagree with
+      // the row values and counted staff/rent/manual entries twice.
+      netProfitLoss: toNumber(row?.profit_loss),
     };
   };
 
@@ -6087,7 +6179,7 @@ export default function WarehouseTradingPage() {
       })),
       ...stockSaleRows.map((row) => ({
         ...row,
-        type: "Sale",
+        type: row.movement_type || "Sale",
         inward_qty: 0,
         outward_qty: toNumber(row.qty),
         inward_rate: 0,
@@ -7635,9 +7727,14 @@ export default function WarehouseTradingPage() {
                   {voucherSortAsc ? "Oldest First" : "Newest First"}
                 </button>
                 {activeVoucherType === "sale" && (
-                  <button type="button" onClick={() => setShowSaleAdjustedModal(true)} style={{ ...btnAction, background: "#0f766e" }}>
-                    F5 Adjusted Sales
-                  </button>
+                  <>
+                    {canCreateWarehouseLoading && <button type="button" onClick={() => { setWarehouseLoadingForm({ date: new Date().toISOString().slice(0, 10), warehouse_id: "", product_id: "", lorry_no: "", loading_qty: "", description: "" }); setWarehouseLoadingAllocations([]); setWarehouseLoadingBillSearch(""); setShowWarehouseLoadingModal(true); }} style={{ ...btnAction, background: "#1d4ed8" }}>
+                      Warehouse Loading Entry
+                    </button>}
+                    <button type="button" onClick={() => setShowSaleAdjustedModal(true)} style={{ ...btnAction, background: "#0f766e" }}>
+                      F5 Adjusted Sales
+                    </button>
+                  </>
                 )}
               </div>
             </div>
@@ -8505,7 +8602,7 @@ export default function WarehouseTradingPage() {
                     {(profitLossDetails.rows || []).map((row, index) => {
                       const isVoucher = profitLossDetails.type === "sale" || profitLossDetails.type === "purchase";
                       const amount = profitLossDetails.type === "sale"
-                        ? toNumber(row.net_amount_payable || row.net_receivable_amount || row.net_amount || row.amount)
+                        ? toNumber(row.amount || row.total_amount)
                         : profitLossDetails.type === "purchase"
                           ? toNumber(row.total_amount || row.net_amount_payable || row.amount)
                           : toNumber(row.amount);
@@ -8751,6 +8848,46 @@ export default function WarehouseTradingPage() {
                 </tbody>
               </table>
             </div>
+          </div>
+        </div>
+      )}
+      {showWarehouseLoadingModal && (
+        <div style={modalOverlayStyle}>
+          <div style={{ ...paymentAdjustModalStyle, width: "min(1120px, 96vw)", maxHeight: "92vh", overflowY: "auto" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 14 }}>
+              <div><h3 style={{ margin: 0 }}>Warehouse Loading Entry</h3><div style={{ color: "#64748b", fontSize: 12, marginTop: 4 }}>Record one physical loading and tag the existing Sale Bills for each buyer.</div></div>
+              <button type="button" onClick={() => setShowWarehouseLoadingModal(false)} style={{ ...btnAction, background: "#64748b" }}>Close</button>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(190px, 1fr))", gap: 10 }}>
+              <label style={{ fontSize: 12, fontWeight: 700 }}>Date<input type="date" value={warehouseLoadingForm.date} onChange={(e) => setWarehouseLoadingForm((p) => ({ ...p, date: e.target.value }))} style={inp} /></label>
+              <label style={{ fontSize: 12, fontWeight: 700 }}>Warehouse<select value={warehouseLoadingForm.warehouse_id} onChange={(e) => setWarehouseLoadingForm((p) => ({ ...p, warehouse_id: e.target.value }))} style={inp}><option value="">Select Warehouse</option>{warehouses.map((item) => <option key={item.id || item._id} value={item.id || item._id}>{item.name}</option>)}</select></label>
+              <label style={{ fontSize: 12, fontWeight: 700 }}>Product<select value={warehouseLoadingForm.product_id} onChange={(e) => setWarehouseLoadingForm((p) => ({ ...p, product_id: e.target.value }))} style={inp}><option value="">Select Product</option>{products.map((item) => <option key={item.id || item._id} value={item.id || item._id}>{item.name}</option>)}</select></label>
+              <label style={{ fontSize: 12, fontWeight: 700 }}>Lorry No<input value={warehouseLoadingForm.lorry_no} onChange={(e) => setWarehouseLoadingForm((p) => ({ ...p, lorry_no: e.target.value }))} style={inp} /></label>
+              <label style={{ fontSize: 12, fontWeight: 700 }}>Loading Qty<input type="number" min="0" step="0.0001" value={warehouseLoadingForm.loading_qty} onChange={(e) => setWarehouseLoadingForm((p) => ({ ...p, loading_qty: e.target.value }))} style={inp} /></label>
+              <label style={{ fontSize: 12, fontWeight: 700 }}>Narration<input value={warehouseLoadingForm.description} onChange={(e) => setWarehouseLoadingForm((p) => ({ ...p, description: e.target.value }))} style={inp} /></label>
+            </div>
+            <div style={{ marginTop: 16, display: "grid", gridTemplateColumns: "minmax(280px, 1fr) minmax(320px, 1.2fr)", gap: 14 }}>
+              <div style={{ border: "1px solid #dbe4ef", borderRadius: 9, padding: 12 }}>
+                <strong>Search existing Sale Bills</strong>
+                <input value={warehouseLoadingBillSearch} onChange={(e) => setWarehouseLoadingBillSearch(e.target.value)} placeholder="Bill number / buyer / lorry" style={{ ...inp, marginTop: 8 }} />
+                <div style={{ maxHeight: 320, overflowY: "auto", marginTop: 8 }}>
+                  {warehouseLoadingBills.filter((row) => (!warehouseLoadingForm.warehouse_id || String(row.warehouse_id || "") === String(warehouseLoadingForm.warehouse_id)) && (!warehouseLoadingForm.product_id || String(row.product_id || "") === String(warehouseLoadingForm.product_id))).map((row) => {
+                    const id = String(row.id || row._id || "");
+                    const added = warehouseLoadingAllocations.some((item) => item.sale_id === id);
+                    return <div key={id} style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "center", borderBottom: "1px solid #edf2f7", padding: "8px 0", fontSize: 12 }}><span><strong>{row.voucher_no || row.bill_no || "-"}</strong> · {row.buyer_name || row.company_name || "Buyer"}<br />Qty {formatDecimal4(row.quantity || row.total_quantity || 0)}</span><button type="button" disabled={added} onClick={() => addWarehouseLoadingBill(row)} style={{ ...btnAction, padding: "4px 8px", background: added ? "#94a3b8" : "#1d4ed8" }}>{added ? "Added" : "Tag"}</button></div>;
+                  })}
+                  {!warehouseLoadingBills.length && <div style={{ color: "#64748b", padding: 10 }}>No untagged Sale Bills found.</div>}
+                </div>
+              </div>
+              <div style={{ border: "1px solid #dbe4ef", borderRadius: 9, padding: 12 }}>
+                <strong>Tagged Bills · Allocation Qty total {formatDecimal4(warehouseLoadingAllocations.reduce((sum, item) => sum + toNumber(item.quantity), 0))}</strong>
+                <div style={{ overflowX: "auto", marginTop: 8 }}><table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}><thead><tr><th style={th}>Bill</th><th style={th}>Buyer</th><th style={th}>Qty</th><th style={th}></th></tr></thead><tbody>
+                  {warehouseLoadingAllocations.map((item) => <tr key={item.sale_id}><td style={td}>{item.voucher_no}</td><td style={td}>{item.buyer_name}</td><td style={td}>{formatDecimal4(item.quantity)}</td><td style={td}><button type="button" onClick={() => setWarehouseLoadingAllocations((current) => current.filter((row) => row.sale_id !== item.sale_id))} style={{ ...btnAction, background: "#dc2626", padding: "4px 7px" }}>Remove</button></td></tr>)}
+                  {!warehouseLoadingAllocations.length && <tr><td style={td} colSpan={4}>Tag existing bills from the list.</td></tr>}
+                </tbody></table></div>
+              </div>
+            </div>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 16 }}><button type="button" disabled={warehouseLoadingSaving} onClick={saveWarehouseLoading} style={btnPrimary}>{warehouseLoadingSaving ? "Saving..." : "Save Loading Entry"}</button></div>
           </div>
         </div>
       )}
