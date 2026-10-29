@@ -369,7 +369,6 @@ export default function WarehouseTradingPage() {
   const [activeTab, setActiveTab] = useState(null);
   const [activeVoucherType, setActiveVoucherType] = useState("purchase");
   const [activeReport, setActiveReport] = useState("sale");
-  const [profitLossMode, setProfitLossMode] = useState("direct");
   const [profitLossDownloadType, setProfitLossDownloadType] = useState("xlsx");
 
   const [warehouses, setWarehouses] = useState([]);
@@ -427,6 +426,7 @@ export default function WarehouseTradingPage() {
     showPurchaseBillWise,
     showSaleBillWise,
   } = reportUiState;
+  const profitLossMode = reportFilters.profit_loss_mode || "direct";
   const setReportPage = (value) => reportUiDispatch({ type: "set_report_page", value: typeof value === "function" ? value(reportUiState.reportPage) : value });
   const setReportFilters = (value) => reportUiDispatch({ type: "set_report_filters", value: typeof value === "function" ? value(reportUiState.reportFilters) : value });
   const setSaleFollowupFilter = (value) => reportUiDispatch({ type: "set_sale_followup_filter", value: typeof value === "function" ? value(reportUiState.saleFollowupFilter) : value });
@@ -1170,37 +1170,11 @@ export default function WarehouseTradingPage() {
     return () => window.clearTimeout(timer);
   }, [activeTab, activeVoucherType]);
 
-  // Profit/Loss filters need the full Buyer + Consignee + Farmer master lists
-  // even when Reports is opened directly while the voucher type is Purchase.
-  // Keep the normal master loader, then explicitly ensure these four masters
-  // are populated so the dropdowns never depend on the current voucher tab.
+  // Profit/Loss filters need the full party master lists even when Reports is
+  // opened while the selected voucher type would normally load fewer lists.
   useEffect(() => {
     if (activeTab !== "reports" || activeReport !== "profit-loss") return;
-    let cancelled = false;
-    (async () => {
-      try {
-        await loadData();
-      } catch {}
-      const results = await Promise.allSettled([
-        API.get("/api/buyer-names"),
-        API.get("/api/companies"),
-        API.get("/api/consignee-names"),
-        API.get("/api/farmers"),
-      ]);
-      if (cancelled) return;
-      const valueOf = (result) => result?.status === "fulfilled" && Array.isArray(result.value?.data)
-        ? result.value.data
-        : [];
-      const buyerRows = valueOf(results[0]);
-      const companyRows = valueOf(results[1]);
-      const consigneeRows = valueOf(results[2]);
-      const farmerRows = valueOf(results[3]);
-      if (buyerRows.length) setBuyerNames(buyerRows);
-      if (companyRows.length) setCompanies(companyRows);
-      if (consigneeRows.length) setConsignees(consigneeRows);
-      if (farmerRows.length) setFarmers(farmerRows);
-    })();
-    return () => { cancelled = true; };
+    loadData({ force: true });
   }, [activeTab, activeReport]);
 
   // Load voucher list when type changes
@@ -1504,11 +1478,24 @@ export default function WarehouseTradingPage() {
     if (!force && masterLoadPromiseRef.current) return masterLoadPromiseRef.current;
 
     const run = (async () => {
-      // Reuse the master bundle between Trading page mounts. This is intentionally
-      // one in-flight request group so React effects cannot fire the same 9 calls twice.
+      const baseRequiredMasters = activeVoucherType === "purchase"
+        ? ["warehouses", "farmers", "companyAccounts", "consignees", "products", "employees", "locations"]
+        : activeVoucherType === "sale"
+          ? ["warehouses", "farmers", "buyerNames", "companies", "companyAccounts", "consignees", "products", "employees", "locations"]
+          : activeVoucherType === "payment"
+            ? ["warehouses", "farmers", "companyAccounts", "employees", "locations"]
+            : activeVoucherType === "receipt"
+              ? ["warehouses", "buyerNames", "companies", "companyAccounts"]
+              : [];
+      // Profit/Loss needs the full party lists regardless of the selected voucher type.
+      const requiredMasters = activeTab === "reports" && activeReport === "profit-loss"
+        ? [...new Set([...baseRequiredMasters, "buyerNames", "companies", "consignees", "farmers"])]
+        : baseRequiredMasters;
+      const cacheKey = `warehouseTradingMasterData:v6:${activeVoucherType}:${activeTab === "reports" && activeReport === "profit-loss" ? "profit-loss" : "vouchers"}`;
+
+      // Reuse only the data bundle required by the currently visible section.
       if (!force) {
         try {
-          const cacheKey = `warehouseTradingMasterData:v5:${activeVoucherType}`;
           const cached = JSON.parse(sessionStorage.getItem(cacheKey) || "null");
           if (cached?.data && Date.now() - Number(cached.time || 0) < 30 * 60 * 1000) {
             const data = cached.data;
@@ -1529,32 +1516,18 @@ export default function WarehouseTradingPage() {
 
       const token = ++masterLoadTokenRef.current;
       try {
-        const masterRequests = {
-          warehouses: API.get("/api/warehouses"),
-          farmers: API.get("/api/farmers"),
-          buyerNames: API.get("/api/buyer-names"),
-          companies: API.get("/api/companies"),
-          companyAccounts: API.get("/api/company-accounts"),
-          consignees: API.get("/api/consignee-names"),
-          products: API.get("/api/products"),
-          employees: API.get("/api/employees"),
-          locations: API.get("/api/locations"),
+        const masterEndpoints = {
+          warehouses: "/api/warehouses",
+          farmers: "/api/farmers",
+          buyerNames: "/api/buyer-names",
+          companies: "/api/companies",
+          companyAccounts: "/api/company-accounts",
+          consignees: "/api/consignee-names",
+          products: "/api/products",
+          employees: "/api/employees",
+          locations: "/api/locations",
         };
-        const baseRequiredMasters = activeVoucherType === "purchase"
-          ? ["warehouses", "farmers", "companyAccounts", "consignees", "products", "employees", "locations"]
-          : activeVoucherType === "sale"
-            ? ["warehouses", "farmers", "buyerNames", "companies", "companyAccounts", "consignees", "products", "employees", "locations"]
-            : activeVoucherType === "payment"
-              ? ["warehouses", "farmers", "companyAccounts", "employees", "locations"]
-              : activeVoucherType === "receipt"
-                ? ["warehouses", "buyerNames", "companies", "companyAccounts"]
-                : [];
-        // Profit/Loss needs Buyer + Consignee + Farmer lists even when the
-        // current voucher type would not normally load all three masters.
-        const requiredMasters = activeTab === "reports" && activeReport === "profit-loss"
-          ? [...new Set([...baseRequiredMasters, "buyerNames", "consignees", "farmers"])]
-          : baseRequiredMasters;
-        const results = await Promise.allSettled(requiredMasters.map((key) => masterRequests[key]));
+        const results = await Promise.allSettled(requiredMasters.map((key) => API.get(masterEndpoints[key])));
         const dataOf = (index) => {
           const result = results[index];
           return result?.status === "fulfilled" ? result.value.data : [];
@@ -1583,7 +1556,7 @@ export default function WarehouseTradingPage() {
         setLocations(data.locations);
         masterDataLoadedRef.current = true;
         try {
-          sessionStorage.setItem(`warehouseTradingMasterData:v4:${activeVoucherType}`, JSON.stringify({
+          sessionStorage.setItem(cacheKey, JSON.stringify({
             time: Date.now(),
             data,
           }));
@@ -1989,7 +1962,7 @@ export default function WarehouseTradingPage() {
         params.search = normalizedSearch;
       }
       if (reportType === "profit-loss") {
-        params.mode = filters.profit_loss_mode || profitLossMode || "direct";
+        params.mode = filters.profit_loss_mode || "direct";
         if (filters.profit_from_date) params.from_date = filters.profit_from_date;
         if (filters.profit_to_date) params.to_date = filters.profit_to_date;
         if (filters.profit_location_id) params.buyer_id = filters.profit_location_id;
@@ -5064,7 +5037,16 @@ export default function WarehouseTradingPage() {
         </button>
       )],
       ["additional_amount", "Total Add", (item) => formatMoney(item.additional_amount || 0)],
-      ["total_less", "Total Less", (item) => formatMoney(item.total_less || item.total_deduction || 0)],
+      ["total_less", "Total Less", (item) => (
+        <button type="button" onClick={() => openProfitLossVoucherDetails(item, "sale")} style={linkButtonStyle}>
+          {formatMoney(item.total_less || item.total_deduction || 0)}
+        </button>
+      )],
+      ["freight_amount", "Freight", (item) => (
+        <button type="button" onClick={() => openProfitLossVoucherDetails(item, "sale")} style={linkButtonStyle}>
+          {formatMoney(item.freight_amount || 0)}
+        </button>
+      )],
       ["staff_expense", "Staff Expense", (item) => {
         const figures = getWarehouseProfitLossFigures(item);
         return <button type="button" onClick={() => openProfitLossOverheadDetails(item, "expenses")} style={linkButtonStyle}>{formatMoney(figures.expenses)}</button>;
@@ -5427,6 +5409,7 @@ export default function WarehouseTradingPage() {
     totals.saleAmount += toNumber(row.sale_amount || row.gross_amount);
     totals.additionalAmount += toNumber(row.additional_amount);
     totals.totalLess += toNumber(row.total_less || row.total_deduction);
+    totals.freightAmount += toNumber(row.freight_amount);
     totals.staffExpenses += figures.expenses;
     totals.rent += figures.rent;
     totals.manualIncome += figures.manualIncome;
@@ -5440,6 +5423,7 @@ export default function WarehouseTradingPage() {
     saleAmount: 0,
     additionalAmount: 0,
     totalLess: 0,
+    freightAmount: 0,
     staffExpenses: 0,
     rent: 0,
     manualIncome: 0,
@@ -5871,7 +5855,7 @@ export default function WarehouseTradingPage() {
     const exportType = format === "pdf" ? "pdf" : "xlsx";
     try {
       const params = {
-        mode: reportFilters.profit_loss_mode || profitLossMode || "direct",
+        mode: reportFilters.profit_loss_mode || "direct",
         export: exportType,
       };
       if (reportFilters.profit_from_date) params.from_date = reportFilters.profit_from_date;
@@ -7705,7 +7689,8 @@ export default function WarehouseTradingPage() {
                       value={profitLossMode}
                       onChange={(e) => {
                         const value = e.target.value === "warehouse" ? "warehouse" : "direct";
-                        setProfitLossMode(value);
+                        setReportData([]);
+                        setReportPageInfo({ page: 1, pageSize: PAGE_SIZE, total: 0, hasMore: false });
                         setReportFilters((prev) => ({ ...prev, profit_loss_mode: value, profit_location_id: "", profit_employee_id: "", profit_farmer_id: "" }));
                         setReportPage(1);
                       }}
@@ -7752,6 +7737,7 @@ export default function WarehouseTradingPage() {
                   { label: "Sale Bills", value: `${profitLossSummaryTotals.saleCount} · Rs.${formatMoney(profitLossSummaryTotals.saleAmount)}`, onClick: () => openProfitLossVoucherDetails(null, "sale"), color: "#166534" },
                   { label: "Total Add", value: `Rs.${formatMoney(profitLossSummaryTotals.additionalAmount)}`, onClick: () => openProfitLossVoucherDetails(null, "sale"), color: "#0f766e" },
                   { label: "Total Less", value: `Rs.${formatMoney(profitLossSummaryTotals.totalLess)}`, onClick: () => openProfitLossVoucherDetails(null, "sale"), color: "#b45309" },
+                  { label: "Freight", value: `Rs.${formatMoney(profitLossSummaryTotals.freightAmount)}`, onClick: () => openProfitLossVoucherDetails(null, "sale"), color: "#0369a1" },
                   { label: "Staff Expense", value: `Rs.${formatMoney(profitLossSummaryTotals.staffExpenses)}`, onClick: () => openProfitLossOverheadDetails(null, "expenses"), color: "#9f1239" },
                   { label: "Warehouse Rent", value: `Rs.${formatMoney(profitLossSummaryTotals.rent)}`, onClick: () => openProfitLossOverheadDetails(null, "rents"), color: "#6d4c0f" },
                   { label: "Manual Add", value: `Rs.${formatMoney(profitLossSummaryTotals.manualIncome)}`, onClick: () => openProfitLossOverheadDetails(null, "adjustments"), color: "#166534" },
@@ -8398,7 +8384,7 @@ export default function WarehouseTradingPage() {
                           <th style={th}>{profitLossDetails.type === "sale" ? "Buyer" : "Farmer"}</th>
                           <th style={th}>Product</th>
                           <th style={th}>Amount</th>
-                          {profitLossDetails.type === "sale" && <><th style={th}>Add</th><th style={th}>Less</th></>}
+                          {profitLossDetails.type === "sale" && <><th style={th}>Add</th><th style={th}>Less</th><th style={th}>Freight</th></>}
                         </>
                       ) : (
                         <>
@@ -8427,7 +8413,7 @@ export default function WarehouseTradingPage() {
                               <td style={td}>{profitLossDetails.type === "sale" ? row.buyer_name || row.company_name || "-" : row.farmer_name || "-"}</td>
                               <td style={td}>{row.product_name || "-"}</td>
                               <td style={{ ...td, fontWeight: 700 }}>{formatMoney(amount)}</td>
-                              {profitLossDetails.type === "sale" && <><td style={td}>{formatMoney(row.additional_amount || 0)}</td><td style={td}>{formatMoney(row.total_deduction || row.total_less || 0)}</td></>}
+                              {profitLossDetails.type === "sale" && <><td style={td}>{formatMoney(row.additional_amount || 0)}</td><td style={td}>{formatMoney(row.total_deduction || row.total_less || 0)}</td><td style={td}>{formatMoney(row.transport_charge || 0)}</td></>}
                             </>
                           ) : (
                             <>
@@ -8440,7 +8426,7 @@ export default function WarehouseTradingPage() {
                         </tr>
                       );
                     })}
-                    {!(profitLossDetails.rows || []).length && <tr><td colSpan={profitLossDetails.type === "sale" ? 7 : profitLossDetails.type === "purchase" ? 5 : profitLossDetails.type === "adjustments" ? 4 : 3} style={{ ...td, textAlign: "center", padding: 24, color: "#64748b" }}>No entries found for this period.</td></tr>}
+                    {!(profitLossDetails.rows || []).length && <tr><td colSpan={profitLossDetails.type === "sale" ? 8 : profitLossDetails.type === "purchase" ? 5 : profitLossDetails.type === "adjustments" ? 4 : 3} style={{ ...td, textAlign: "center", padding: 24, color: "#64748b" }}>No entries found for this period.</td></tr>}
                   </tbody>
                 </table>
               </div>
