@@ -8131,9 +8131,9 @@ export default function WarehouseTradingPage() {
             onShareSaleLedgerWhatsapp={shareSaleLedgerWhatsapp}
           >
             {activeReport === "profit-loss" && (
-              <div style={{ marginBottom: 14, padding: 14, border: "1px solid #dbe4ee", borderRadius: 12, background: "#f8fafc" }}>
-                <div style={{ display: "flex", gap: 10, alignItems: "end", flexWrap: "wrap" }}>
-                  <label style={{ display: "flex", flexDirection: "column", gap: 5, minWidth: 190, fontSize: 12, fontWeight: 800, color: "#334155" }}>
+              <div style={{ marginBottom: 14, padding: 18, border: "1px solid #cbdde8", borderRadius: 14, background: "linear-gradient(135deg, #f0fdfa 0%, #f8fafc 55%, #eff6ff 100%)", boxShadow: "0 4px 14px rgba(15, 23, 42, .06)" }}>
+                <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))", gap: 12, alignItems: "end" }}>
+                  <label style={{ display: "flex", flexDirection: "column", gap: 7, minWidth: 0, fontSize: 12, fontWeight: 800, color: "#334155" }}>
                     Report Type
                     <select
                       value={profitLossMode}
@@ -8144,14 +8144,14 @@ export default function WarehouseTradingPage() {
                         setReportFilters((prev) => ({ ...prev, profit_loss_mode: value, profit_location_id: "", profit_employee_id: "", profit_farmer_id: "" }));
                         setReportPage(1);
                       }}
-                      style={{ ...inp, minHeight: 40 }}
+                      style={{ ...inp, width: "100%", minHeight: 42, boxSizing: "border-box", borderRadius: 8, borderColor: "#cbd5e1", background: "#fff" }}
                     >
                       <option value="direct">Direct Loading</option>
                       <option value="warehouse">Warehouse Wise</option>
                     </select>
                   </label>
-                  <label style={{ display: "flex", flexDirection: "column", gap: 5, minWidth: 145, fontSize: 12, fontWeight: 700, color: "#334155" }}>From Date<input type="date" value={reportFilters.profit_from_date} onChange={(e) => updateReportFilter("profit_from_date", e.target.value)} style={inp} /></label>
-                  <label style={{ display: "flex", flexDirection: "column", gap: 5, minWidth: 145, fontSize: 12, fontWeight: 700, color: "#334155" }}>To Date<input type="date" value={reportFilters.profit_to_date} onChange={(e) => updateReportFilter("profit_to_date", e.target.value)} style={inp} /></label>
+                  <label style={{ display: "flex", flexDirection: "column", gap: 7, minWidth: 0, fontSize: 12, fontWeight: 700, color: "#334155" }}>From Date<input type="date" value={reportFilters.profit_from_date} onChange={(e) => updateReportFilter("profit_from_date", e.target.value)} style={{ ...inp, width: "100%", minHeight: 42, boxSizing: "border-box", borderRadius: 8, borderColor: "#cbd5e1", background: "#fff" }} /></label>
+                  <label style={{ display: "flex", flexDirection: "column", gap: 7, minWidth: 0, fontSize: 12, fontWeight: 700, color: "#334155" }}>To Date<input type="date" value={reportFilters.profit_to_date} onChange={(e) => updateReportFilter("profit_to_date", e.target.value)} style={{ ...inp, width: "100%", minHeight: 42, boxSizing: "border-box", borderRadius: 8, borderColor: "#cbd5e1", background: "#fff" }} /></label>
                   {profitLossMode === "direct" && (
                     <>
                       <SearchableSelect label="Buyer" value={reportFilters.profit_location_id} options={profitLossBuyerOptions.map((x) => ({ value: x.id, label: x.name }))} onChange={(v) => updateReportFilter("profit_location_id", v)} placeholder="All Buyers" />
@@ -8160,23 +8160,21 @@ export default function WarehouseTradingPage() {
                     </>
                   )}
                   {profitLossMode === "warehouse" && hasPermission(user, "warehouse.trading.manage") && (
-                    <button type="button" onClick={() => { setProfitLossManualEditingId(""); setProfitLossManualForm({ date: new Date().toISOString().slice(0, 10), warehouse_id: "", entry_type: "expense", amount: "", description: "" }); setShowProfitLossManualModal(true); }} style={{ ...btnAction, background: "#0f766e" }}>+ Manual Entry</button>
+                    <button type="button" onClick={() => { setProfitLossManualEditingId(""); setProfitLossManualForm({ date: new Date().toISOString().slice(0, 10), warehouse_id: "", entry_type: "expense", amount: "", description: "" }); setShowProfitLossManualModal(true); }} style={{ ...btnAction, width: "100%", height: 42, boxSizing: "border-box", borderRadius: 8, background: "#0f766e", fontWeight: 700 }}>+ Manual Entry</button>
                   )}
-                  <button type="button" onClick={() => { setReportFilters((prev) => ({ ...prev, profit_loss_mode: profitLossMode, profit_from_date: "", profit_to_date: "", profit_location_id: "", profit_employee_id: "", profit_farmer_id: "" })); setReportPage(1); }} style={{ ...btnAction, background: "#64748b" }}>Clear Filters</button>
-                  <div style={{ display: "flex", gap: 8, alignItems: "end" }}>
-                    <label style={{ display: "flex", flexDirection: "column", gap: 5, minWidth: 135, fontSize: 12, fontWeight: 700, color: "#334155" }}>
-                      Download Format
-                      <select
-                        value={profitLossDownloadType}
-                        onChange={(e) => setProfitLossDownloadType(e.target.value === "pdf" ? "pdf" : "xlsx")}
-                        style={{ ...inp, minHeight: 40 }}
-                      >
-                        <option value="xlsx">Excel</option>
-                        <option value="pdf">PDF</option>
-                      </select>
-                    </label>
-                    <button type="button" onClick={() => downloadProfitLoss(profitLossDownloadType)} style={{ ...btnAction, background: "#0f766e" }}>Download</button>
-                  </div>
+                  <button type="button" onClick={() => { setReportFilters((prev) => ({ ...prev, profit_loss_mode: profitLossMode, profit_from_date: "", profit_to_date: "", profit_location_id: "", profit_employee_id: "", profit_farmer_id: "" })); setReportPage(1); }} style={{ ...btnAction, width: "100%", height: 42, boxSizing: "border-box", borderRadius: 8, background: "#64748b", fontWeight: 700 }}>Clear Filters</button>
+                  <label style={{ display: "flex", flexDirection: "column", gap: 7, minWidth: 0, fontSize: 12, fontWeight: 700, color: "#334155" }}>
+                    Download Format
+                    <select
+                      value={profitLossDownloadType}
+                      onChange={(e) => setProfitLossDownloadType(e.target.value === "pdf" ? "pdf" : "xlsx")}
+                      style={{ ...inp, width: "100%", minHeight: 42, boxSizing: "border-box", borderRadius: 8, borderColor: "#cbd5e1", background: "#fff" }}
+                    >
+                      <option value="xlsx">Excel</option>
+                      <option value="pdf">PDF</option>
+                    </select>
+                  </label>
+                  <button type="button" onClick={() => downloadProfitLoss(profitLossDownloadType)} style={{ ...btnAction, width: "100%", height: 42, boxSizing: "border-box", borderRadius: 8, background: "#0f766e", fontWeight: 700 }}>Download</button>
                 </div>
               </div>
             )}
