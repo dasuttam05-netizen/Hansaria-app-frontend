@@ -2,7 +2,10 @@ import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { formatDisplayDate } from "../utils/date";
+import { getApiUrl } from "../utils/api";
 import PageBackCloseActions from "../components/PageBackCloseActions";
+
+const API_BASE = getApiUrl("/api");
 
 const panel = { background: "#fff", border: "1px solid #d1d5db", borderRadius: 8, padding: 16, marginBottom: 14 };
 const input = { width: "100%", boxSizing: "border-box", padding: "9px 10px", border: "1px solid #cbd5e1", borderRadius: 5, background: "#fff" };
@@ -26,13 +29,13 @@ export default function AccountingLedgersPage() {
   const [busy, setBusy] = useState(false);
 
   const loadMasters = async () => {
-    const res = await axios.get("/api/account-ledgers");
+    const res = await axios.get(`${API_BASE}/account-ledgers`);
     const nextGroups = Array.isArray(res.data?.groups) ? res.data.groups : [];
     const nextLedgers = Array.isArray(res.data?.ledgers) ? res.data.ledgers : [];
     setGroups(nextGroups);
     setLedgers(nextLedgers);
     try {
-      const employeeRes = await axios.get("/api/employees");
+      const employeeRes = await axios.get(`${API_BASE}/employees`);
       setEmployees(Array.isArray(employeeRes.data) ? employeeRes.data : []);
     } catch (_) { setEmployees([]); }
     if (!newLedger.group_id && nextGroups.length) setNewLedger((prev) => ({ ...prev, group_id: String(nextGroups[0]._id) }));
@@ -48,7 +51,7 @@ export default function AccountingLedgersPage() {
     const [year, mon] = month.split("-").map(Number);
     const from = `${month}-01`;
     const to = new Date(Date.UTC(year, mon, 0)).toISOString().slice(0, 10);
-    axios.get(`/api/account-ledgers/report/${selectedLedger}`, { params: { from_date: from, to_date: to, ...(selectedEmployee ? { employee_id: selectedEmployee } : {}) } })
+    axios.get(`${API_BASE}/account-ledgers/report/${selectedLedger}`, { params: { from_date: from, to_date: to, ...(selectedEmployee ? { employee_id: selectedEmployee } : {}) } })
       .then((res) => setReport(res.data || { entries: [], total: 0 }))
       .catch((err) => setError(err.response?.data?.error || err.message));
   }, [selectedLedger, month, selectedEmployee]);
@@ -79,7 +82,7 @@ export default function AccountingLedgersPage() {
   const createGroup = async (event) => {
     event.preventDefault(); setBusy(true); setError("");
     try {
-      await axios.post("/api/account-ledgers/groups", newGroup);
+      await axios.post(`${API_BASE}/account-ledgers/groups`, newGroup);
       setNewGroup({ name: "", nature: "expense" }); await loadMasters();
     } catch (err) { setError(err.response?.data?.error || err.message); }
     finally { setBusy(false); }
@@ -88,7 +91,7 @@ export default function AccountingLedgersPage() {
   const createLedger = async (event) => {
     event.preventDefault(); setBusy(true); setError("");
     try {
-      const res = await axios.post("/api/account-ledgers/ledgers", newLedger);
+      const res = await axios.post(`${API_BASE}/account-ledgers/ledgers`, newLedger);
       setNewLedger((prev) => ({ ...prev, name: "", opening_balance: "0" }));
       await loadMasters(); setSelectedLedger(String(res.data?._id || ""));
     } catch (err) { setError(err.response?.data?.error || err.message); }
