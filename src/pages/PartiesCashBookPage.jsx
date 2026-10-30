@@ -55,6 +55,7 @@ const td = {
 const getWarehouseLabel = (w) => w?.name || w?.warehouse_name || w?.title || (w?.id ? `Warehouse ${w.id}` : "Unknown Warehouse");
 const getCompanyLabel = (c) => c?.name || c?.company_name || c?.company || (c?.id ? `Party ${c.id}` : "Unknown Party");
 const getRecordId = (row) => row?.id || row?._id || "";
+const getEmployeeLabel = (e) => e?.name || e?.employee_name || e?.full_name || (getRecordId(e) ? `Employee ${getRecordId(e)}` : "Unknown Employee");
 const getEntryAmounts = (entry) => {
   const amount = Number(entry?.amount || 0);
   const isIncome = String(entry?.entry_type || "").toLowerCase() === "income";
@@ -75,7 +76,10 @@ const getVoucherBaseKey = (entry) => {
 const isEmployeeCompanionEntry = (entry) => String(entry?.fund_source || "").toLowerCase() === "employee_cash";
 const isPartyLedgerEntry = (entry) => {
   const source = String(entry?.fund_source || "main_cash");
-  return !isEmployeeCompanionEntry(entry) && (source === "party_cash" || !!entry?.company_id);
+  // A Main Cash Book voucher with an employee selected is also the employee's
+  // party-account movement. Exclude the linked employee_cash companion row so
+  // the same voucher is represented only once in this ledger.
+  return !isEmployeeCompanionEntry(entry) && (source === "party_cash" || !!entry?.company_id || (source === "main_cash" && !!entry?.employee_id));
 };
 const getDescriptionDetails = (entry) =>
   [entry.description || "-", entry.adjustment_details ? `Adjustment: ${entry.adjustment_details}` : ""]
@@ -106,6 +110,7 @@ const PartiesCashBookPage = () => {
   const [filters, setFilters] = useState({
     warehouse_id: "",
     company_id: "",
+    employee_id: "",
     start_date: "",
     end_date: "",
   });
@@ -164,11 +169,12 @@ const PartiesCashBookPage = () => {
 
   const filteredRows = useMemo(() => {
     const rows = entries
-      .filter((e) => e.company_id)
       .filter(isPartyLedgerEntry)
+      .filter((e) => e.company_id || (String(e.fund_source || "main_cash") === "main_cash" && e.employee_id))
       .filter((e) => (showDeleted ? String(e.status || "").toLowerCase() === "cancelled" : isActiveLedgerStatus(e)))
       .filter((e) => !appliedFilters.warehouse_id || String(e.warehouse_id || "") === String(appliedFilters.warehouse_id))
-      .filter((e) => matchesCompanyFilter(e, appliedFilters.company_id, companies))
+      .filter((e) => !appliedFilters.company_id || (!!e.company_id && matchesCompanyFilter(e, appliedFilters.company_id, companies)))
+      .filter((e) => !appliedFilters.employee_id || String(e.employee_id || "") === String(appliedFilters.employee_id))
       .filter((e) => {
         const d = e.entry_date ? new Date(e.entry_date) : null;
         if (appliedFilters.start_date && d && d < new Date(appliedFilters.start_date)) return false;
@@ -212,24 +218,30 @@ const PartiesCashBookPage = () => {
             String(getRecordId(c)) === String(appliedFilters.company_id) ||
             getCompanyLabel(c) === selectedCompanyEntry?.company_name
         )
-      : companies;
-    const masterOpening = selectedCompanies.reduce((sum, c) => sum + getSignedOpening(c), 0);
+      : appliedFilters.employee_id ? [] : companies;
+    const masterOpening = selectedCompanies.reduce((sum, c) => sum + getSignedOpening(c), 0) +
+      (appliedFilters.employee_id
+        ? employees.filter((employee) => String(getRecordId(employee)) === String(appliedFilters.employee_id)).reduce((sum, employee) => sum + getSignedOpening(employee), 0)
+        : appliedFilters.company_id
+          ? 0
+          : employees.reduce((sum, employee) => sum + getSignedOpening(employee), 0));
 
     if (!appliedFilters.start_date) return masterOpening;
     const from = new Date(appliedFilters.start_date);
     const entryOpening = entries
-      .filter((e) => e.company_id)
       .filter(isPartyLedgerEntry)
+      .filter((e) => e.company_id || (String(e.fund_source || "main_cash") === "main_cash" && e.employee_id))
       .filter(isActiveLedgerStatus)
       .filter((e) => !appliedFilters.warehouse_id || String(e.warehouse_id || "") === String(appliedFilters.warehouse_id))
-      .filter((e) => matchesCompanyFilter(e, appliedFilters.company_id, companies))
+      .filter((e) => !appliedFilters.company_id || (!!e.company_id && matchesCompanyFilter(e, appliedFilters.company_id, companies)))
+      .filter((e) => !appliedFilters.employee_id || String(e.employee_id || "") === String(appliedFilters.employee_id))
       .filter((e) => {
         const d = e.entry_date ? new Date(e.entry_date) : null;
         return d && d < from;
       })
       .reduce((sum, e) => sum + getEntryAmounts(e).signed, 0);
     return masterOpening + entryOpening;
-  }, [entries, companies, appliedFilters]);
+  }, [entries, companies, employees, appliedFilters]);
 
   const handleView = (entry) => {
     const details = [
@@ -238,7 +250,7 @@ const PartiesCashBookPage = () => {
       `Type: ${entry.entry_type || "-"}`,
       `Warehouse: ${entry.warehouse_name || "-"}`,
       `Employee: ${entry.employee_name || "-"}`,
-      `Party: ${entry.company_name || "-"}`,
+      `Party / Account: ${entry.company_name || entry.employee_name || "-"}`,
       `Description: ${getDescriptionDetails(entry)}`,
       `Ref No: ${entry.reference_no || "-"}`,
       `Payment Mode: ${entry.payment_method || "-"}`,
@@ -288,11 +300,26 @@ const PartiesCashBookPage = () => {
     return Array.from(map.entries()).map(([value, label]) => ({ value, label }));
   }, [companies, entries]);
 
+  const employeeOptions = useMemo(() => {
+    const map = new Map();
+    employees.forEach((employee) => {
+      const id = getRecordId(employee);
+      if (id) map.set(String(id), getEmployeeLabel(employee));
+    });
+    entries.forEach((entry) => {
+      if (!entry?.employee_id) return;
+      const key = String(entry.employee_id);
+      if (!map.has(key)) map.set(key, entry.employee_name || `Employee ${key}`);
+    });
+    return Array.from(map.entries()).map(([value, label]) => ({ value, label }));
+  }, [employees, entries]);
+
   const ledgerTitle = useMemo(() => {
     const wh = warehouseOptions.find((w) => String(w.value) === String(appliedFilters.warehouse_id));
     const co = companyOptions.find((c) => String(c.value) === String(appliedFilters.company_id));
-    return [wh ? `Warehouse: ${wh.label}` : null, co ? `Party: ${co.label}` : null].filter(Boolean).join(" | ") || "All Parties";
-  }, [appliedFilters, warehouseOptions, companyOptions]);
+    const employee = employeeOptions.find((e) => String(e.value) === String(appliedFilters.employee_id));
+    return [wh ? `Warehouse: ${wh.label}` : null, co ? `Party: ${co.label}` : null, employee ? `Employee Account: ${employee.label}` : null].filter(Boolean).join(" | ") || "All Parties";
+  }, [appliedFilters, warehouseOptions, companyOptions, employeeOptions]);
 
   const loadAgingForCompany = useCallback(
     async ({ companyId, entryType, sourceEntryId, existingAdjustments = {} }) => {
@@ -343,7 +370,7 @@ const PartiesCashBookPage = () => {
         warehouse_id: detail.warehouse_id ? String(detail.warehouse_id) : "",
         warehouse_name: detail.warehouse_name || "",
         company_id: detail.company_id ? String(detail.company_id) : "",
-        company_name: detail.company_name || "",
+        company_name: detail.company_name || detail.employee_name || "",
         employee_id: detail.employee_id ? String(detail.employee_id) : "",
         employee_name: detail.employee_name || "",
         company_account_id: detail.company_account_id ? String(detail.company_account_id) : "",
@@ -374,7 +401,7 @@ const PartiesCashBookPage = () => {
         warehouse_id: detail.warehouse_id ? String(detail.warehouse_id) : "",
         warehouse_name: detail.warehouse_name || "",
         company_id: detail.company_id ? String(detail.company_id) : "",
-        company_name: detail.company_name || "",
+        company_name: detail.company_name || detail.employee_name || "",
         employee_id: detail.employee_id ? String(detail.employee_id) : "",
         employee_name: detail.employee_name || "",
         company_account_id: detail.company_account_id ? String(detail.company_account_id) : "",
@@ -446,7 +473,7 @@ const PartiesCashBookPage = () => {
 
   const applyFilters = () => setAppliedFilters(filters);
   const clearFilters = () => {
-    const reset = { warehouse_id: "", company_id: "", start_date: "", end_date: "" };
+    const reset = { warehouse_id: "", company_id: "", employee_id: "", start_date: "", end_date: "" };
     setFilters(reset);
     setAppliedFilters(reset);
   };
@@ -473,7 +500,7 @@ const PartiesCashBookPage = () => {
         entry.entry_type || "-",
         entry.warehouse_name || "-",
         entry.employee_name || "-",
-        entry.company_name || "-",
+        entry.company_name || entry.employee_name || "-",
         getDescriptionDetails(entry),
         entry.reference_no || "-",
         entry.payment_method || "-",
@@ -523,7 +550,7 @@ const PartiesCashBookPage = () => {
       </div>
 
       <div style={panel}>
-        <div style={{ display: "grid", gridTemplateColumns: "2fr 2fr 1fr 1fr", gap: 12 }}>
+        <div style={{ display: "grid", gridTemplateColumns: "2fr 2fr 2fr 1fr 1fr", gap: 12 }}>
           <div>
             <label style={label}>Warehouse</label>
             <select value={filters.warehouse_id} onChange={(e) => setFilters((p) => ({ ...p, warehouse_id: e.target.value }))} style={input}>
@@ -543,6 +570,15 @@ const PartiesCashBookPage = () => {
                 <option key={c.value} value={c.value}>
                   {c.label}
                 </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label style={label}>Employee Account</label>
+            <select value={filters.employee_id} onChange={(e) => setFilters((p) => ({ ...p, employee_id: e.target.value }))} style={input}>
+              <option value="">All Employees</option>
+              {employeeOptions.map((employee) => (
+                <option key={employee.value} value={employee.value}>{employee.label}</option>
               ))}
             </select>
           </div>
@@ -640,7 +676,7 @@ const PartiesCashBookPage = () => {
                       <td style={td}>{entry.entry_type || "-"}</td>
                       <td style={td}>{entry.warehouse_name || "-"}</td>
                       <td style={td}>{entry.employee_name || "-"}</td>
-                      <td style={td}>{entry.company_name || "-"}</td>
+                  <td style={td}>{entry.company_name || entry.employee_name || "-"}</td>
                       <td style={td}>{getDescriptionDetails(entry)}</td>
                       <td style={td}>{entry.reference_no || "-"}</td>
                       <td style={td}>{entry.payment_method || "-"}</td>
