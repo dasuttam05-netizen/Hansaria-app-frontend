@@ -768,6 +768,22 @@ export default function CashEntryForm({
                   />
                 </div>
 
+                {!isJournal && selectedMode === "payment" && isExpense && formData.warehouse_id ? (
+                  <div style={{ marginTop: 8, display: "flex", alignItems: "flex-start", gap: 8, padding: 9, border: "1px solid #bae6fd", borderRadius: 7, background: "#f0f9ff" }}>
+                    <input
+                      type="checkbox"
+                      id="allocate_warehouse_pl"
+                      name="allocate_warehouse_pl"
+                      checked={Boolean(formData.allocate_warehouse_pl)}
+                      onChange={(e) => setFieldValue("allocate_warehouse_pl", e.target.checked)}
+                      style={{ cursor: "pointer", width: 16, height: 16, marginTop: 1 }}
+                    />
+                    <label htmlFor="allocate_warehouse_pl" style={{ ...labelStyle, marginBottom: 0, cursor: "pointer", fontSize: 12, fontWeight: 600 }}>
+                      Allocate this warehouse expense across this month’s loading quantity in Profit/Loss
+                    </label>
+                  </div>
+                ) : null}
+
                 {!isJournal && formData.employee_id ? (
                   <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 8 }}>
                     <input
