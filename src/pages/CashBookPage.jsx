@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import axios from "axios";
 import { useNavigate } from "react-router-dom";
 import { formatDisplayDate } from "../utils/date";
@@ -143,6 +143,7 @@ const getSignedOpening = (row) => {
 
 const MainCashBookPage = () => {
   const navigate = useNavigate();
+  const automaticEditRef = useRef("");
   const { user: currentUser } = loadSession();
   const canEditMainOpening = hasPermission(currentUser, "all");
 
@@ -184,6 +185,7 @@ const MainCashBookPage = () => {
     reference_no: "",
     narration: "",
     employee_id: "",
+    allocate_warehouse_pl: false,
     journal_debit_employee_id: "",
     journal_credit_employee_id: "",
     status: "posted",
@@ -448,6 +450,7 @@ const MainCashBookPage = () => {
         narration: detail.narration || "",
         employee_id: detail.employee_id ? String(detail.employee_id) : "",
         employee_name: detail.employee_name || "",
+        allocate_warehouse_pl: Boolean(detail.allocate_warehouse_pl),
         journal_debit_employee_id: detail.journal_debit_employee_id ? String(detail.journal_debit_employee_id) : "",
         journal_credit_employee_id: detail.journal_credit_employee_id ? String(detail.journal_credit_employee_id) : "",
         status: detail.status || "posted",
@@ -481,11 +484,22 @@ const MainCashBookPage = () => {
         narration: detail.narration || "",
         employee_id: detail.employee_id ? String(detail.employee_id) : "",
         employee_name: detail.employee_name || "",
+        allocate_warehouse_pl: Boolean(detail.allocate_warehouse_pl),
         status: detail.status || "posted",
       });
       setShowForm(true);
     }
   };
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const editId = String(params.get("edit") || "");
+    if (!editId || automaticEditRef.current === editId || !entries.length) return;
+    const row = entries.find((entry) => String(entry.id || entry._id || "") === editId);
+    if (!row) return;
+    automaticEditRef.current = editId;
+    handleEdit(row);
+  }, [entries, handleEdit]);
 
   const handleFormChange = async (e) => {
     const { name, value } = e.target;
@@ -522,6 +536,8 @@ const MainCashBookPage = () => {
       await axios.put(`${API_BASE}/cash-entries/${editingId}`, { ...formData, adjustments: adjustmentRows });
       closeForm();
       fetchData();
+      const returnTo = String(new URLSearchParams(window.location.search).get("return_to") || "");
+      if (returnTo.startsWith("/warehouse-trading?")) navigate(returnTo);
     } catch (err) {
       alert("Error updating entry: " + (err.response?.data?.error || err.message));
     } finally {

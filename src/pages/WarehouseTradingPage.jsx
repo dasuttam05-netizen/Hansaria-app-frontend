@@ -4876,6 +4876,15 @@ export default function WarehouseTradingPage() {
   };
 
   const editProfitLossExpense = (entry) => {
+    if (entry?.source_type === "cashbook") {
+      if (!hasPermission(user, "cash.edit")) {
+        alert("You do not have permission to edit cash book entries.");
+        return;
+      }
+      const id = String(entry?.id || entry?._id || "");
+      if (id) navigate(`/cash-book?edit=${encodeURIComponent(id)}&return_to=${encodeURIComponent(getProfitLossReturnUrl())}`);
+      return;
+    }
     if (!hasPermission(user, "expense.edit")) {
       alert("You do not have permission to edit this expense.");
       return;
@@ -5518,6 +5527,7 @@ export default function WarehouseTradingPage() {
       ["buyer_name", "Buyer", (item) => item.buyer_name || getBuyerName(item) || "-"],
       ["consignee_name", "Consignee", (item) => item.consignee_name || "-"],
       ["purchase_amount", "P.Amount", (item) => formatMoney(item.purchase_amount || item.direct_purchase_amount || 0)],
+      ["allocated_warehouse_expense", "Allocated Warehouse Expense", (item) => formatMoney(item.allocated_warehouse_expense || 0)],
       ["gross_amount", "S.Amount", (item) => formatMoney(item.gross_amount || item.amount || item.sale_amount || 0)],
       ["additional_amount", "Add", (item) => formatMoney(item.additional_amount || 0)],
       ["total_less", "Less", (item) => formatMoney(item.total_less || item.total_deduction || 0)],

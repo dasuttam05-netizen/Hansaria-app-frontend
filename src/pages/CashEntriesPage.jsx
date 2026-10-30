@@ -23,6 +23,7 @@ const emptyForm = () => ({
   reference_no: "",
   narration: "",
   employee_id: "",
+  allocate_warehouse_pl: false,
   journal_transfer_kind: "",
   journal_debit_name: "",
   journal_credit_name: "",

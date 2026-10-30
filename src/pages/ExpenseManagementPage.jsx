@@ -215,6 +215,7 @@ const createEmptyForm = (user) => ({
   receive_cash_from_driver: "",
   grand_total: 0,
   total_expense_amount: 0,
+  allocate_warehouse_pl: false,
   narration: "",
   items: defaultItems.map((name, index) =>
     createExpenseItem(
@@ -777,6 +778,7 @@ export default function ExpenseManagementPage() {
       receive_cash_from_driver: Number(formData.receive_cash_from_driver) || 0,
       grand_total: Number(formData.grand_total) || 0,
       total_expense_amount: Number(formData.total_expense_amount) || 0,
+      allocate_warehouse_pl: Boolean(formData.allocate_warehouse_pl),
       narration: formData.narration,
       items: formData.items
         .filter((item) => item.particular_name)
@@ -878,6 +880,7 @@ export default function ExpenseManagementPage() {
       receive_cash_from_driver: row.receive_cash_from_driver || "",
       grand_total: Number(row.grand_total || 0),
       total_expense_amount: Number(row.total_expense_amount || 0),
+      allocate_warehouse_pl: Boolean(row.allocate_warehouse_pl),
       narration: row.narration || "",
       items: normalizeExpenseItemsForForm(existingItems, user),
     });
@@ -1367,6 +1370,18 @@ export default function ExpenseManagementPage() {
                     readOnly
                     style={{ ...inputStyle, background: "#f8fafc", fontWeight: 700 }}
                   />
+                </Field>
+                <Field label="Warehouse Profit/Loss Allocation">
+                  <label style={{ display: "flex", alignItems: "flex-start", gap: 8, padding: 10, border: "1px solid #bae6fd", borderRadius: 7, background: "#f0f9ff", cursor: "pointer", fontSize: 12, lineHeight: 1.4 }}>
+                    <input
+                      type="checkbox"
+                      name="allocate_warehouse_pl"
+                      checked={Boolean(formData.allocate_warehouse_pl)}
+                      onChange={(event) => setFormData((current) => ({ ...current, allocate_warehouse_pl: event.target.checked }))}
+                      style={{ marginTop: 2 }}
+                    />
+                    Allocate this expense across this month’s warehouse loading quantity
+                  </label>
                 </Field>
               </div>
 
