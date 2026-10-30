@@ -15,6 +15,10 @@ const emptyForm = () => ({
   warehouse_id: "",
   company_id: "",
   company_account_id: "",
+  account_ledger_id: "",
+  account_ledger_name: "",
+  account_group_id: "",
+  account_group_name: "",
   description: "",
   amount: "",
   payment_method: "Cash",
@@ -51,6 +55,7 @@ export default function CashEntriesPage() {
   const [warehouses, setWarehouses] = useState([]);
   const [companies, setCompanies] = useState([]);
   const [employees, setEmployees] = useState([]);
+  const [accountLedgers, setAccountLedgers] = useState([]);
   const [agingRows, setAgingRows] = useState([]);
   const [adjustments, setAdjustments] = useState({});
   const [formLoading, setFormLoading] = useState(false);
@@ -66,15 +71,17 @@ export default function CashEntriesPage() {
 
   const fetchData = useCallback(async () => {
     try {
-      const [warehousesRes, companiesRes, employeesRes] = await Promise.all([
+      const [warehousesRes, companiesRes, employeesRes, ledgersRes] = await Promise.all([
         axios.get(`${API_BASE}/warehouses`),
         axios.get(`${API_BASE}/companies`),
         axios.get(`${API_BASE}/employees`),
+        axios.get(`${API_BASE}/account-ledgers`),
       ]);
 
       setWarehouses(warehousesRes.data || []);
       setCompanies(companiesRes.data || []);
       setEmployees(employeesRes.data || []);
+      setAccountLedgers(Array.isArray(ledgersRes.data?.ledgers) ? ledgersRes.data.ledgers : []);
     } catch (err) {
       console.error("Error fetching data:", err);
     }
@@ -108,6 +115,18 @@ export default function CashEntriesPage() {
 
   const handleFormChange = (e) => {
     const { name, value } = e.target;
+    if (name === "account_ledger_id") {
+      const ledger = accountLedgers.find((row) => String(row._id || row.id) === String(value));
+      const group = ledger?.group_id && typeof ledger.group_id === "object" ? ledger.group_id : null;
+      setFormData((prev) => ({
+        ...prev,
+        account_ledger_id: value,
+        account_ledger_name: ledger?.name || "",
+        account_group_id: group?._id || ledger?.group_id || "",
+        account_group_name: group?.name || ledger?.group_name || "",
+      }));
+      return;
+    }
     setFormData((prev) => ({ ...prev, [name]: value }));
   };
 
@@ -279,6 +298,7 @@ export default function CashEntriesPage() {
           warehouses={warehouses}
           companies={companies}
           employees={employees}
+          accountLedgers={accountLedgers}
           agingRows={agingRows}
           adjustments={adjustments}
           onAdjustmentChange={setAdjustments}
