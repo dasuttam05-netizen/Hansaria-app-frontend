@@ -361,6 +361,31 @@ export default function CashEntryForm({
     }));
   };
 
+  const moveEntryFocus = (currentTarget, direction = 1) => {
+    const form = currentTarget?.closest?.("form");
+    if (!form) return;
+    const fields = Array.from(form.querySelectorAll("input:not([type='hidden']):not([type='submit']):not([type='button']), select, textarea"))
+      .filter((field) => !field.disabled && !field.readOnly && field.getClientRects().length > 0 && field.type !== "checkbox" && field.type !== "radio");
+    const next = fields[fields.indexOf(currentTarget) + direction];
+    if (next) {
+      next.focus();
+      if (typeof next.select === "function" && next.tagName === "INPUT" && next.type !== "date") next.select();
+    } else if (direction > 0) {
+      form.querySelector("button[type='submit']")?.focus();
+    }
+  };
+
+  const handleEntryKeyDown = (event) => {
+    if (event.key !== "Enter" || event.target.tagName === "TEXTAREA" || event.target.tagName === "SELECT" || event.target.tagName === "BUTTON" || event.target.disabled || event.target.readOnly || ["checkbox", "radio", "button", "submit", "hidden"].includes(event.target.type)) return;
+    event.preventDefault();
+    moveEntryFocus(event.target, event.shiftKey ? -1 : 1);
+  };
+
+  const handleEntryKeyUp = (event) => {
+    if (event.key !== "Enter" || event.target.tagName !== "SELECT" || event.target.disabled) return;
+    window.setTimeout(() => moveEntryFocus(event.target, event.shiftKey ? -1 : 1), 0);
+  };
+
   return (
     <ModalWrapper onClose={onClose} width="70%">
       <div style={shellStyle}>
@@ -384,7 +409,7 @@ export default function CashEntryForm({
           </div>
         </div>
 
-        <form onSubmit={onSubmit}>
+        <form onSubmit={onSubmit} onKeyDown={handleEntryKeyDown} onKeyUp={handleEntryKeyUp}>
           <div style={topControlRowStyle}>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               {ENTRY_MODES.map((mode) => (
@@ -432,6 +457,9 @@ export default function CashEntryForm({
             >
               Employee To Employee Transfer
             </button>
+          </div>
+          <div style={{ padding: "5px 12px", color: "#64748b", fontSize: 11, background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
+            Keyboard: type in a dropdown to search, use ↑ / ↓ to choose, Enter for next field, Shift + Enter for previous.
           </div>
 
           <div style={{ ...sectionStyle, borderTop: "none" }}>
