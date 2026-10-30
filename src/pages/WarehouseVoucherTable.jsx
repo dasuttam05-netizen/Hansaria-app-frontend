@@ -122,7 +122,11 @@ function WarehouseVoucherTable({
                 {(activeVoucherType === "purchase" || activeVoucherType === "sale") && (
                   <>
                     <td style={td}>{getProductName(item)}</td>
-                    <td style={td}>{formatDecimal4(activeVoucherType === "purchase" ? item.total_qty || item.net_weight || item.quantity || 0 : item.quantity || item.total_quantity || 0)}</td>
+                    <td style={td}>{formatDecimal4(activeVoucherType === "purchase"
+                      ? item.total_qty || item.net_weight || item.quantity || 0
+                      : (Number(item.gross_weight || 0) - Number(item.tare_weight || 0)) > 0
+                        ? Number(item.gross_weight || 0) - Number(item.tare_weight || 0)
+                        : item.quantity || item.total_quantity || 0)}</td>
                     {activeVoucherType === "sale" && <td style={td}>{formatLedgerDate(item.unloading_date)}</td>}
                     {activeVoucherType === "sale" && <td style={td}>{formatDecimal4(item.unloading_qty || 0)}</td>}
                     <td style={td}>{item.rate || 0}</td>
