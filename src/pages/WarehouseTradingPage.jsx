@@ -4851,11 +4851,13 @@ export default function WarehouseTradingPage() {
 
   const openProfitLossOverheadDetails = (row, type, entryType = "") => {
     const warehouseId = String(row?.warehouse_id || row?.id || "");
+    const normalizeName = (value) => String(value || "").trim().toLowerCase().replace(/[^a-z0-9]+/g, "");
+    const warehouseName = normalizeName(row?.warehouse_name || getWarehouseName(row));
     const source = type === "expenses" ? profitLossOverheads.expenses
       : type === "rents" ? profitLossOverheads.rents
         : profitLossOverheads.adjustments;
     const rows = (Array.isArray(source) ? source : []).filter((entry) =>
-      (!warehouseId || String(entry.warehouse_id || "") === warehouseId) &&
+      (!warehouseId || String(entry.warehouse_id || "") === warehouseId || (warehouseName && normalizeName(entry.warehouse_name) === warehouseName)) &&
       (type !== "adjustments" || !entryType || entry.entry_type === entryType)
     );
     const labels = { expenses: "Staff Expense", rents: "Rent", adjustments: entryType === "income" ? "Manual Add" : entryType === "expense" ? "Manual Less" : "Manual Entries" };
