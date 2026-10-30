@@ -114,6 +114,7 @@ const MainCashBookPage = () => {
   const [warehouses, setWarehouses] = useState([]);
   const [companies, setCompanies] = useState([]);
   const [employees, setEmployees] = useState([]);
+  const [accountLedgers, setAccountLedgers] = useState([]);
   const [mainOpening, setMainOpening] = useState(() => normalizeMainOpening());
   const [mainOpeningForm, setMainOpeningForm] = useState({ main_opening_balance: "0", main_opening_type: "dr" });
   const [mainOpeningSaving, setMainOpeningSaving] = useState(false);
@@ -141,6 +142,10 @@ const MainCashBookPage = () => {
     warehouse_id: "",
     company_id: "",
     company_account_id: "",
+    account_ledger_id: "",
+    account_ledger_name: "",
+    account_group_id: "",
+    account_group_name: "",
     description: "",
     amount: "",
     payment_method: "Cash",
@@ -159,17 +164,19 @@ const MainCashBookPage = () => {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const [entriesRes, warehousesRes, companiesRes, employeesRes, mainOpeningRes] = await Promise.allSettled([
+      const [entriesRes, warehousesRes, companiesRes, employeesRes, mainOpeningRes, accountLedgersRes] = await Promise.allSettled([
         axios.get(`${API_BASE}/cash-entries`),
         axios.get(`${API_BASE}/warehouses`),
         axios.get(`${API_BASE}/companies`),
         axios.get(`${API_BASE}/employees`),
         axios.get(`${API_BASE}/cash-entries/opening/main`),
+        axios.get(`${API_BASE}/account-ledgers`),
       ]);
       if (entriesRes.status === "fulfilled") setEntries(Array.isArray(entriesRes.value.data) ? entriesRes.value.data : []);
       if (warehousesRes.status === "fulfilled") setWarehouses(Array.isArray(warehousesRes.value.data) ? warehousesRes.value.data : []);
       if (companiesRes.status === "fulfilled") setCompanies(Array.isArray(companiesRes.value.data) ? companiesRes.value.data : []);
       if (employeesRes.status === "fulfilled") setEmployees(Array.isArray(employeesRes.value.data) ? employeesRes.value.data : []);
+      if (accountLedgersRes.status === "fulfilled") setAccountLedgers(Array.isArray(accountLedgersRes.value.data?.ledgers) ? accountLedgersRes.value.data.ledgers : []);
       if (mainOpeningRes.status === "fulfilled") {
         const safeMainOpening = normalizeMainOpening(mainOpeningRes.value?.data);
         setMainOpening(safeMainOpening);
@@ -268,6 +275,7 @@ const MainCashBookPage = () => {
       `Description: ${getDescriptionDetails(entry)}`,
       `Ref No: ${entry.reference_no || "-"}`,
       `Payment Mode: ${entry.payment_method || "-"}`,
+      `Account Ledger: ${entry.account_ledger_name || "-"}`,
       `Amount: ${Number(entry.amount || 0).toFixed(2)}`,
     ];
     alert(details.join("\n"));
@@ -392,6 +400,10 @@ const MainCashBookPage = () => {
         company_id: detail.company_id ? String(detail.company_id) : "",
         company_name: detail.company_name || "",
         company_account_id: detail.company_account_id ? String(detail.company_account_id) : "",
+        account_ledger_id: detail.account_ledger_id ? String(detail.account_ledger_id) : "",
+        account_ledger_name: detail.account_ledger_name || "",
+        account_group_id: detail.account_group_id ? String(detail.account_group_id) : "",
+        account_group_name: detail.account_group_name || "",
         description: detail.description || "",
         amount: detail.amount || "",
         payment_method: detail.payment_method || "Cash",
@@ -427,6 +439,10 @@ const MainCashBookPage = () => {
         company_id: detail.company_id ? String(detail.company_id) : "",
         company_name: detail.company_name || "",
         company_account_id: detail.company_account_id ? String(detail.company_account_id) : "",
+        account_ledger_id: detail.account_ledger_id ? String(detail.account_ledger_id) : "",
+        account_ledger_name: detail.account_ledger_name || "",
+        account_group_id: detail.account_group_id ? String(detail.account_group_id) : "",
+        account_group_name: detail.account_group_name || "",
         description: detail.description || "",
         amount: detail.amount || "",
         payment_method: detail.payment_method || "Cash",
@@ -445,6 +461,18 @@ const MainCashBookPage = () => {
 
   const handleFormChange = async (e) => {
     const { name, value } = e.target;
+    if (name === "account_ledger_id") {
+      const ledger = accountLedgers.find((row) => String(row._id || row.id) === String(value));
+      const group = ledger?.group_id && typeof ledger.group_id === "object" ? ledger.group_id : null;
+      setFormData((prev) => ({
+        ...prev,
+        account_ledger_id: value,
+        account_ledger_name: ledger?.name || "",
+        account_group_id: group?._id || ledger?.group_id || "",
+        account_group_name: group?.name || ledger?.group_name || "",
+      }));
+      return;
+    }
     setFormData((prev) => ({ ...prev, [name]: value }));
 
     if (name === "company_id" || name === "entry_type") {
@@ -520,6 +548,7 @@ const MainCashBookPage = () => {
     "Date",
     "Voucher",
     "Type",
+    "Account Ledger",
     "Name",
     "Employee",
     "Party",
@@ -536,6 +565,7 @@ const MainCashBookPage = () => {
         formatDisplayDate(entry.entry_date),
         entry.journal_group_no || entry.voucher_no || "-",
         entry.entry_type || "-",
+        entry.account_ledger_name || "-",
         getFundSourceLabel(entry.fund_source),
         entry.employee_name || "-",
         entry.company_name || "-",
@@ -550,8 +580,8 @@ const MainCashBookPage = () => {
 
   const handleExportExcel = () => {
     exportLedgerExcel({
-      title: "Main Cash Book Ledger",
-      fileName: `main-cash-book-ledger-${showDeleted ? "deleted" : "active"}.xls`,
+      title: "Cash / Bank Book Ledger",
+      fileName: `cash-bank-book-ledger-${showDeleted ? "deleted" : "active"}.xls`,
       ledgerTitle,
       dateFrom: appliedFilters.start_date,
       dateTo: appliedFilters.end_date,
@@ -566,8 +596,8 @@ const MainCashBookPage = () => {
 
   const handleExportPDF = () => {
     exportLedgerPDF({
-      title: "Main Cash Book Ledger",
-      fileName: `main-cash-book-ledger-${showDeleted ? "deleted" : "active"}.pdf`,
+      title: "Cash / Bank Book Ledger",
+      fileName: `cash-bank-book-ledger-${showDeleted ? "deleted" : "active"}.pdf`,
       ledgerTitle,
       dateFrom: appliedFilters.start_date,
       dateTo: appliedFilters.end_date,
@@ -658,11 +688,12 @@ const MainCashBookPage = () => {
       <div style={{ ...panel, marginBottom: 14 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
           <div>
-            <h1 style={{ margin: "0 0 6px", fontSize: 44, color: "#0f172a", fontWeight: 700 }}>Unified Cash Book</h1>
+            <h1 style={{ margin: "0 0 6px", fontSize: 44, color: "#0f172a", fontWeight: 700 }}>Cash / Bank Book</h1>
             <p style={{ margin: 0, color: "#475569", fontSize: 18 }}>
-              Main cash book, employee cash book, party cash book and all cash book in one report.
+              Main cash and bank receipts, payments, opening balance and running balance.
             </p>
           </div>
+          <button type="button" onClick={() => navigate("/accounting-ledgers")} style={{ border: 0, borderRadius: 6, padding: "10px 14px", background: "#0f766e", color: "white", fontWeight: 700, cursor: "pointer" }}>Groups & Ledgers</button>
           <PageBackCloseActions navigate={navigate} />
         </div>
       </div>
@@ -689,9 +720,9 @@ const MainCashBookPage = () => {
       <div style={{ ...panel, marginBottom: 14 }}>
         <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 12, marginBottom: 10 }}>
           <div>
-            <div style={{ fontSize: 18, fontWeight: 700, color: "#1f2937" }}>Main Cash Opening</div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: "#1f2937" }}>Cash / Bank Opening Balance</div>
             <div style={{ color: "#475569", fontSize: 14, marginTop: 4 }}>
-              Opening balance is now separated from the ledger entries. Use the button to show or hide the opening settings.
+              Shared opening balance for this Cash / Bank Book. Use the button to show or hide its settings.
             </div>
           </div>
           {canEditMainOpening ? (
@@ -911,6 +942,7 @@ const MainCashBookPage = () => {
                   <th style={th}>Date</th>
                   <th style={th}>Voucher</th>
                   <th style={th}>Type</th>
+                  <th style={th}>Account Ledger</th>
                   <th style={th}>Name</th>
                   <th style={th}>Employee</th>
                   <th style={th}>Party</th>
@@ -924,7 +956,7 @@ const MainCashBookPage = () => {
               </thead>
               <tbody>
                 <tr style={{ background: "#f9fafb" }}>
-                  <td style={{ ...td, fontWeight: 700 }} colSpan={9}>Current opening balance</td>
+                  <td style={{ ...td, fontWeight: 700 }} colSpan={10}>Current opening balance</td>
                   <td style={{ ...td, textAlign: "right" }}>{openingBalance > 0 ? `Rs. ${openingBalance.toFixed(2)}` : "-"}</td>
                   <td style={{ ...td, textAlign: "right" }}>{openingBalance < 0 ? `Rs. ${Math.abs(openingBalance).toFixed(2)}` : "-"}</td>
                   <td style={td}>-</td>
@@ -932,7 +964,7 @@ const MainCashBookPage = () => {
 
                 {ledgerRows.length === 0 ? (
                   <tr>
-                    <td colSpan="12" style={{ ...td, textAlign: "center" }}>
+                    <td colSpan="13" style={{ ...td, textAlign: "center" }}>
                       No ledger entries found.
                     </td>
                   </tr>
@@ -942,6 +974,7 @@ const MainCashBookPage = () => {
                       <td style={td}>{formatDisplayDate(entry.entry_date)}</td>
                       <td style={td}>{entry.journal_group_no || entry.voucher_no || "-"}</td>
                       <td style={td}>{entry.entry_type || "-"}</td>
+                      <td style={td}>{entry.account_ledger_name || "-"}</td>
                       <td style={td}>{getFundSourceLabel(entry.fund_source)}</td>
                       <td style={td}>{entry.employee_name || "-"}</td>
                       <td style={td}>{entry.company_name || "-"}</td>
@@ -989,6 +1022,7 @@ const MainCashBookPage = () => {
         warehouses={warehouses}
         companies={companies}
         employees={employees}
+        accountLedgers={accountLedgers}
         agingRows={agingRows}
         adjustments={adjustments}
         onAdjustmentChange={setAdjustments}
