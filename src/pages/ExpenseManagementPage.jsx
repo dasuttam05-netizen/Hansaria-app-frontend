@@ -971,13 +971,13 @@ export default function ExpenseManagementPage() {
       toast.error("Approve is not allowed for this user.", { theme: "colored" });
       return;
     }
-    if (!window.confirm("Approve this expense and add to Cash Book?")) return;
+    if (!window.confirm("Approve this expense and add it to Cash Bank Book pending entries?")) return;
     try {
       const res = await axios.post(`${API_BASE}/expenses/${expense.id}/approve-cash-book`);
       setExpenses(prev => prev.filter(e => e.id !== expense.id));
       setSelectedExpenseId((currentId) => (String(currentId) === String(expense.id) ? null : currentId));
       setApprovedExpenseIds(prev => [...prev, expense.id]);
-      toast.success(res?.data?.message || "Expense approved and moved to Cash Book pending list!", { theme: "colored" });
+      toast.success(res?.data?.message || "Expense approved and moved to Cash Bank Book pending entries!", { theme: "colored" });
       await loadExpensesWithApprovals();
     } catch (error) {
       console.error(error);
