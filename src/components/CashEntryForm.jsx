@@ -804,7 +804,7 @@ export default function CashEntryForm({
                               setFieldValue("allocate_warehouse_pl", true);
                             }}
                           />
-                          Location-wise by monthly Direct Loading quantity
+                          Location-wise by monthly Direct Loading + Warehouse Loading quantity
                         </label>
                         <label style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 12, fontWeight: 600, color: "#0f172a", cursor: "pointer" }}>
                           <input
