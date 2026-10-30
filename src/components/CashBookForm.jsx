@@ -11,10 +11,11 @@ const ENTRY_MODES = [
 ];
 
 const shellStyle = {
-  border: "1px solid #d7dce4",
-  borderRadius: 10,
-  background: "#f8fafc",
+  border: "1px solid #cbd5e1",
+  borderRadius: 14,
+  background: "#ffffff",
   overflow: "hidden",
+  boxShadow: "0 18px 46px rgba(15, 23, 42, 0.12)",
 };
 
 const topBarStyle = {
@@ -22,9 +23,9 @@ const topBarStyle = {
   justifyContent: "space-between",
   alignItems: "flex-start",
   gap: 10,
-  padding: "8px 12px",
-  borderBottom: "1px solid #d7dce4",
-  background: "#ffffff",
+  padding: "14px 16px",
+  borderBottom: "1px solid #dbe4ee",
+  background: "linear-gradient(120deg, #ffffff 0%, #f0fdfa 100%)",
   flexWrap: "wrap",
 };
 
@@ -41,12 +42,12 @@ const tabButtonStyle = (active) => ({
 
 const titleStyle = {
   margin: 0,
-  fontSize: 22,
+  fontSize: 24,
   lineHeight: 1,
-  color: "#446b24",
-  fontWeight: 700,
-  letterSpacing: 0.3,
-  fontFamily: "Georgia, Times New Roman, serif",
+  color: "#123b50",
+  fontWeight: 800,
+  letterSpacing: -0.25,
+  fontFamily: "Segoe UI, Arial, sans-serif",
 };
 
 const topMetaStyle = {
@@ -59,8 +60,8 @@ const topMetaStyle = {
 };
 
 const sectionStyle = {
-  borderTop: "1px solid #d7dce4",
-  padding: 10,
+  borderTop: "1px solid #dbe4ee",
+  padding: 14,
   background: "#ffffff",
 };
 const topControlRowStyle = {
@@ -68,23 +69,23 @@ const topControlRowStyle = {
   justifyContent: "flex-start",
   alignItems: "center",
   gap: 10,
-  padding: "8px 12px",
-  background: "#f8fafc",
-  borderBottom: "1px solid #d7dce4",
+  padding: "10px 14px",
+  background: "#eff8f7",
+  borderBottom: "1px solid #dbe4ee",
   flexWrap: "wrap",
 };
 
 const cardGridStyle = {
   display: "grid",
-  gridTemplateColumns: "minmax(380px, 1fr) minmax(280px, 0.7fr)",
-  gap: 10,
+  gridTemplateColumns: "minmax(0, 1.35fr) minmax(260px, 0.9fr)",
+  gap: 14,
 };
 
 const cardStyle = {
-  border: "1px solid #d7dce4",
-  borderRadius: 8,
-  padding: 10,
-  background: "#f8fafc",
+  border: "1px solid #d5e1e8",
+  borderRadius: 11,
+  padding: 14,
+  background: "linear-gradient(180deg, #fbfdff 0%, #f7fbfc 100%)",
 };
 
 const rowStyle = {
@@ -109,16 +110,16 @@ const detailsGridStyle = {
 };
 
 const receivedBoxWrapStyle = {
-  border: "1px solid #d7dce4",
-  borderRadius: 8,
-  background: "#ffffff",
-  padding: 10,
+  border: "1px solid #b9e1d9",
+  borderRadius: 11,
+  background: "linear-gradient(135deg, #f0fdfa 0%, #ffffff 100%)",
+  padding: 14,
 };
 
 const receivedAmountStyle = {
-  border: "1px solid #d7dce4",
+  border: "1px solid #b9e1d9",
   borderRadius: 8,
-  background: "#f8fafc",
+  background: "#ecfeff",
   textAlign: "right",
   fontSize: 28,
   fontWeight: 700,
@@ -130,10 +131,10 @@ const receivedAmountStyle = {
 
 const inputStyle = {
   width: "100%",
-  padding: "6px 8px",
-  border: "1px solid #cbd5e1",
-  borderRadius: 4,
-  fontSize: 12,
+  padding: "8px 10px",
+  border: "1px solid #c3d0dc",
+  borderRadius: 6,
+  fontSize: 13,
   marginBottom: 4,
   fontFamily: "inherit",
   background: "#ffffff",
@@ -141,10 +142,10 @@ const inputStyle = {
 
 const labelStyle = {
   display: "block",
-  fontSize: 11,
-  fontWeight: 600,
-  marginBottom: 2,
-  color: "#334155",
+  fontSize: 12,
+  fontWeight: 700,
+  marginBottom: 4,
+  color: "#27445b",
 };
 
 const buttonRowStyle = {
@@ -156,11 +157,11 @@ const buttonRowStyle = {
 const submitButtonStyle = (loading) => ({
   flex: 1,
   padding: "8px 10px",
-  background: "#117a1e",
+  background: "linear-gradient(135deg, #0f766e, #0d9488)",
   color: "#fff",
   border: "none",
-  borderRadius: 4,
-  fontWeight: 600,
+  borderRadius: 7,
+  fontWeight: 700,
   cursor: "pointer",
   fontSize: 13,
   opacity: loading ? 0.6 : 1,
@@ -208,6 +209,7 @@ export default function CashEntryForm({
   const journalNameOptions = [
     ...companies.map((c) => ({ value: `party:${getRecordId(c)}`, label: `Party: ${c.name}` })),
     ...employees.map((e) => ({ value: `employee:${getRecordId(e)}`, label: `Employee: ${e.name}` })),
+    ...accountLedgers.map((ledger) => ({ value: `ledger:${getRecordId(ledger)}`, label: `Ledger: ${ledger.name} · ${ledger.group_id?.name || ledger.group_name || "Ungrouped"}` })),
   ];
 
   const selectedMode = formData.transaction_mode || "receipt";
@@ -222,7 +224,7 @@ export default function CashEntryForm({
     selectedMode === "journal"
       ? { borderColor: "#0f766e", background: "#ecfeff" }
       : selectedMode === "payment"
-      ? { borderColor: "#b45309", background: "#fff7ed" }
+      ? { borderColor: "#0f766e", background: "#f0fdfa" }
       : { borderColor: "#15803d", background: "#ecfdf5" };
   const employeePillStyle = {
     ...tabButtonStyle(Boolean(formData.employee_id)),
@@ -383,7 +385,9 @@ export default function CashEntryForm({
 
   const handleEntryKeyUp = (event) => {
     if (event.key !== "Enter" || event.target.tagName !== "SELECT" || event.target.disabled) return;
-    window.setTimeout(() => moveEntryFocus(event.target, event.shiftKey ? -1 : 1), 0);
+    const target = event.target;
+    const direction = event.shiftKey ? -1 : 1;
+    window.setTimeout(() => moveEntryFocus(target, direction), 0);
   };
 
   return (
@@ -409,7 +413,17 @@ export default function CashEntryForm({
           </div>
         </div>
 
-        <form onSubmit={onSubmit} onKeyDown={handleEntryKeyDown} onKeyUp={handleEntryKeyUp}>
+        <form className="cash-entry-keyboard-form" onSubmit={onSubmit} onKeyDown={handleEntryKeyDown} onKeyUp={handleEntryKeyUp}>
+          <style>{`
+            .cash-entry-keyboard-form input:not([type=checkbox]):not([type=radio]),
+            .cash-entry-keyboard-form select,
+            .cash-entry-keyboard-form textarea { transition: border-color .15s ease, box-shadow .15s ease, background-color .15s ease; }
+            .cash-entry-keyboard-form input:focus-visible,
+            .cash-entry-keyboard-form select:focus-visible,
+            .cash-entry-keyboard-form textarea:focus-visible { outline: 3px solid rgba(13,148,136,.2) !important; outline-offset: 1px; border-color: #0f766e !important; box-shadow: 0 0 0 1px #0f766e !important; background-color: #fbfffe !important; }
+            .cash-entry-keyboard-form button:focus-visible { outline: 3px solid rgba(13,148,136,.25); outline-offset: 2px; }
+            .cash-entry-keyboard-form select { cursor: pointer; }
+          `}</style>
           <div style={topControlRowStyle}>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
               {ENTRY_MODES.map((mode) => (
@@ -429,6 +443,7 @@ export default function CashEntryForm({
               </span>
               <select
                 name="employee_id"
+                autoFocus
                 value={formData.employee_id || ""}
                 onChange={onFormChange}
                 style={{
@@ -459,8 +474,9 @@ export default function CashEntryForm({
             </button>
           </div>
           <div style={{ padding: "5px 12px", color: "#64748b", fontSize: 11, background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
-            Keyboard: type in a dropdown to search, use ↑ / ↓ to choose, Enter for next field, Shift + Enter for previous.
+            Keyboard: dropdown-এ লিখে search · ↑ / ↓ দিয়ে select · Enter পরের field · Shift + Enter আগের field
           </div>
+          {isJournal && <div style={{ padding: "8px 12px", color: "#115e59", fontSize: 12, fontWeight: 700, background: "#f0fdfa", borderBottom: "1px solid #ccfbf1" }}>Salary booking: Debit-এ Salary ledger, Credit-এ Cash বা Bank ledger বাছুন।</div>}
 
           <div style={{ ...sectionStyle, borderTop: "none" }}>
             <div style={cardGridStyle}>
@@ -495,7 +511,7 @@ export default function CashEntryForm({
                     <div style={rowStyle}>
                       <div>
                         <label style={labelStyle}>
-                          {isEmployeeTransfer ? "Debit Employee (Dr)" : "Debit Name (Dr)"}
+                          {isEmployeeTransfer ? "Debit Employee (Dr)" : "Debit Ledger / Party (Dr)"}
                         </label>
                         <select
                           name="journal_debit_name"
@@ -503,7 +519,7 @@ export default function CashEntryForm({
                           onChange={onFormChange}
                           style={inputStyle}
                         >
-                          <option value="">{isEmployeeTransfer ? "Select Employee" : "Select Party / Employee"}</option>
+                          <option value="">{isEmployeeTransfer ? "Select Employee" : "Select Ledger / Party / Employee"}</option>
                           {effectiveJournalOptions.map((opt) => (
                             <option key={opt.value} value={opt.value}>
                               {opt.label}
@@ -513,7 +529,7 @@ export default function CashEntryForm({
                       </div>
                       <div>
                         <label style={labelStyle}>
-                          {isEmployeeTransfer ? "Credit Employee (Cr)" : "Credit Name (Cr)"}
+                          {isEmployeeTransfer ? "Credit Employee (Cr)" : "Credit Ledger / Party (Cr)"}
                         </label>
                         <select
                           name="journal_credit_name"
@@ -521,7 +537,7 @@ export default function CashEntryForm({
                           onChange={onFormChange}
                           style={inputStyle}
                         >
-                          <option value="">{isEmployeeTransfer ? "Select Employee" : "Select Party / Employee"}</option>
+                          <option value="">{isEmployeeTransfer ? "Select Employee" : "Select Ledger / Party / Employee"}</option>
                           {effectiveJournalOptions.map((opt) => (
                             <option key={opt.value} value={opt.value}>
                               {opt.label}
