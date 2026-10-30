@@ -512,9 +512,9 @@ export default function CashEntryForm({
             </button>
           </div>
           <div style={{ padding: "5px 12px", color: "#64748b", fontSize: 11, background: "#f8fafc", borderBottom: "1px solid #e2e8f0" }}>
-            Keyboard: dropdown-এ লিখে search · ↑ / ↓ দিয়ে select · Enter পরের field · Shift + Enter আগের field
+            Keyboard: type in a dropdown to search · use ↑ / ↓ to select · Enter for next field · Shift + Enter for previous field
           </div>
-          {isJournal && <div style={{ padding: "8px 12px", color: "#115e59", fontSize: 12, fontWeight: 700, background: "#f0fdfa", borderBottom: "1px solid #ccfbf1" }}>Salary booking: Debit-এ Salary ledger, Credit-এ Cash বা Bank ledger বাছুন।</div>}
+          {isJournal && <div style={{ padding: "8px 12px", color: "#115e59", fontSize: 12, fontWeight: 700, background: "#f0fdfa", borderBottom: "1px solid #ccfbf1" }}>Salary booking: Select the Salary ledger for Debit and the Cash or Bank ledger for Credit.</div>}
 
           <div style={{ ...sectionStyle, borderTop: "none" }}>
             <div style={cardGridStyle}>
