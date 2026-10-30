@@ -38,6 +38,7 @@ const SelfLoadingPage = lazy(() => import("./pages/SelfLoadingPage"));
 const LocalSalePage = lazy(() => import("./pages/LocalSalePage"));
 const CashEntriesPage = lazy(() => import("./pages/CashEntriesPage"));
 const MainCashBookPage = lazy(() => import("./pages/MainCashBookPage"));
+const AccountingLedgersPage = lazy(() => import("./pages/AccountingLedgersPage"));
 const PartiesCashBookPage = lazy(() => import("./pages/PartiesCashBookPage"));
 const EmployeeCashBookPage = lazy(() => import("./pages/EmployeeCashBookPage"));
 const FarmerManagementPage = lazy(() => import("./pages/FarmerManagementPage"));
@@ -518,6 +519,15 @@ function AppRoutes() {
       element: (
         <ProtectedRoute permission="cash.mainBook.view">
           <MainCashBookPage />
+        </ProtectedRoute>
+      ),
+    },
+
+    {
+      path: "/accounting-ledgers",
+      element: (
+        <ProtectedRoute permission="cash.mainBook.view">
+          <AccountingLedgersPage />
         </ProtectedRoute>
       ),
     },
