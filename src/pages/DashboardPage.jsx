@@ -704,6 +704,7 @@ export default function DashboardPage() {
     },
     {
       title: "Cash Book",
+      title: "Cash Bank Book",
       permission: [
         "cash.view",
         "cash.create",
@@ -737,6 +738,7 @@ export default function DashboardPage() {
             },
             {
               label: "Main Cash Book Report",
+              label: "Cash Bank Book Report",
               permission: "cash.mainBook.view",
               action: () => navigate("/cash-book"),
             },
