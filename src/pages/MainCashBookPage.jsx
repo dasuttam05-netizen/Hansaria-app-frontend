@@ -76,10 +76,8 @@ const getSignedOpening = (row) => {
   return type === "cr" ? -Math.abs(amount) : Math.abs(amount);
 };
 const isMainCashLedgerEntry = (entry) => {
-  const isExpenseFromExpenseModule =
-    Number(entry?.source_expense_id || 0) > 0 &&
-    String(entry?.entry_type || "").toLowerCase() === "expense";
-  return String(entry?.fund_source || "main_cash") === "main_cash" && !isExpenseFromExpenseModule;
+  const isPendingExpense = Boolean(entry?.source_expense_id) && String(entry?.status || "").toLowerCase() === "pending";
+  return String(entry?.fund_source || "main_cash") === "main_cash" && !isPendingExpense;
 };
 const isActiveLedgerStatus = (entry) =>
   String(entry?.status || "posted").toLowerCase() !== "cancelled";
@@ -580,7 +578,7 @@ const MainCashBookPage = () => {
 
   const handleExportExcel = () => {
     exportLedgerExcel({
-      title: "Cash / Bank Book Ledger",
+      title: "Cash Bank Book Ledger",
       fileName: `cash-bank-book-ledger-${showDeleted ? "deleted" : "active"}.xls`,
       ledgerTitle,
       dateFrom: appliedFilters.start_date,
@@ -596,7 +594,7 @@ const MainCashBookPage = () => {
 
   const handleExportPDF = () => {
     exportLedgerPDF({
-      title: "Cash / Bank Book Ledger",
+      title: "Cash Bank Book Ledger",
       fileName: `cash-bank-book-ledger-${showDeleted ? "deleted" : "active"}.pdf`,
       ledgerTitle,
       dateFrom: appliedFilters.start_date,
@@ -688,7 +686,7 @@ const MainCashBookPage = () => {
       <div style={{ ...panel, marginBottom: 14 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap" }}>
           <div>
-            <h1 style={{ margin: "0 0 6px", fontSize: 44, color: "#0f172a", fontWeight: 700 }}>Cash / Bank Book</h1>
+            <h1 style={{ margin: "0 0 6px", fontSize: 44, color: "#0f172a", fontWeight: 700 }}>Cash Bank Book</h1>
             <p style={{ margin: 0, color: "#475569", fontSize: 18 }}>
               Main cash and bank receipts, payments, opening balance and running balance.
             </p>
@@ -720,7 +718,7 @@ const MainCashBookPage = () => {
       <div style={{ ...panel, marginBottom: 14 }}>
         <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 12, marginBottom: 10 }}>
           <div>
-            <div style={{ fontSize: 18, fontWeight: 700, color: "#1f2937" }}>Cash / Bank Opening Balance</div>
+            <div style={{ fontSize: 18, fontWeight: 700, color: "#1f2937" }}>Cash Bank Opening Balance</div>
             <div style={{ color: "#475569", fontSize: 14, marginTop: 4 }}>
               Shared opening balance for this Cash / Bank Book. Use the button to show or hide its settings.
             </div>
