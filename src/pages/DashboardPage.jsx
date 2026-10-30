@@ -741,6 +741,11 @@ export default function DashboardPage() {
               action: () => navigate("/cash-book"),
             },
             {
+              label: "Groups & Ledgers",
+              permission: "cash.mainBook.view",
+              action: () => navigate("/accounting-ledgers"),
+            },
+            {
               label: "Parties Cash Book Report",
               permission: "cash.partiesBook.view",
               action: () => navigate("/parties-cash-book"),
