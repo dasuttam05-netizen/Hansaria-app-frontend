@@ -182,11 +182,30 @@ export default function CashEntriesPage() {
           if (!id) return { company_id: null, employee_id: null };
           if (kind === "party") return { company_id: id, employee_id: null };
           if (kind === "employee") return { company_id: null, employee_id: id };
+          if (kind === "ledger") {
+            const ledger = accountLedgers.find((row) => String(row._id || row.id) === id);
+            const group = ledger?.group_id && typeof ledger.group_id === "object" ? ledger.group_id : null;
+            return {
+              company_id: null,
+              employee_id: null,
+              account_ledger_id: id,
+              account_ledger_name: ledger?.name || "",
+              account_group_id: group?._id || ledger?.group_id || "",
+              account_group_name: group?.name || ledger?.group_name || "",
+              is_cash_bank_ledger: ["cash", "bank"].includes(String(ledger?.name || "").trim().toLowerCase()),
+              ledger_name: ledger?.name || "",
+            };
+          }
           return { company_id: null, employee_id: null };
         };
         const debitTarget = parseJournalName(formData.journal_debit_name);
         const creditTarget = parseJournalName(formData.journal_credit_name);
         const isEmployeeTransfer = formData.journal_transfer_kind === "employee_to_employee";
+        if (!isEmployeeTransfer && String(formData.journal_debit_name) === String(formData.journal_credit_name)) {
+          alert("Debit and credit ledgers must be different.");
+          setFormLoading(false);
+          return;
+        }
         if (isEmployeeTransfer && (!debitTarget.employee_id || !creditTarget.employee_id)) {
           alert("Please select both debit and credit employees for an Employee to Employee transfer.");
           setFormLoading(false);
@@ -204,6 +223,11 @@ export default function CashEntriesPage() {
         const journalGroupNo =
           String(formData.voucher_no || "").trim() ||
           `JV${new Date().toISOString().replace(/[-:TZ.]/g, "").slice(0, 14)}`;
+        const journalCashLedger = [debitTarget, creditTarget].find((target) => target.is_cash_bank_ledger);
+        const journalHasLedgerAccount = Boolean(debitTarget.account_ledger_id || creditTarget.account_ledger_id);
+        const journalPaymentMethod = journalCashLedger
+          ? (journalCashLedger.ledger_name.toLowerCase() === "bank" ? "Bank" : "Cash")
+          : formData.payment_method || "Cash";
 
         const basePayload = {
           voucher_no: null,
@@ -223,20 +247,30 @@ export default function CashEntriesPage() {
           adjustments: [],
         };
 
-        const drPayload = {
-          ...basePayload,
-          entry_type: "expense",
-          company_id: isEmployeeTransfer ? null : debitTarget.company_id || formData.company_id || null,
-          employee_id: debitTarget.employee_id || null,
-          description: `${formData.description} | Journal DR`,
+        const makeJournalLeg = (target, side) => {
+          const isLedger = Boolean(target.account_ledger_id);
+          const isCashBank = isLedger && target.is_cash_bank_ledger;
+          return {
+            ...basePayload,
+            entry_type: isLedger
+              ? side === "debit" ? "income" : "expense"
+              : side === "debit" ? "expense" : "income",
+            ledger_side: side,
+            fund_source: isLedger
+              ? (isCashBank ? "main_cash" : "ledger")
+              : journalHasLedgerAccount ? "ledger" : basePayload.fund_source,
+            payment_method: journalPaymentMethod,
+            account_ledger_id: target.account_ledger_id || null,
+            account_ledger_name: target.account_ledger_name || null,
+            account_group_id: target.account_group_id || null,
+            account_group_name: target.account_group_name || null,
+            company_id: isEmployeeTransfer ? null : target.company_id || formData.company_id || null,
+            employee_id: target.employee_id || null,
+            description: `${formData.description} | Journal ${side === "debit" ? "DR" : "CR"}`,
+          };
         };
-        const crPayload = {
-          ...basePayload,
-          entry_type: "income",
-          company_id: isEmployeeTransfer ? null : creditTarget.company_id || formData.company_id || null,
-          employee_id: creditTarget.employee_id || null,
-          description: `${formData.description} | Journal CR`,
-        };
+        const drPayload = makeJournalLeg(debitTarget, "debit");
+        const crPayload = makeJournalLeg(creditTarget, "credit");
 
         await axios.post(`${API_BASE}/cash-entries`, drPayload);
         await axios.post(`${API_BASE}/cash-entries`, crPayload);
