@@ -914,7 +914,7 @@ export default function WarehouseTradingPage() {
   const againstPurchaseLinkMap = new Map(salePurchaseLinks.map((item) => [String(item.purchase_id), item]));
   const linkedPurchaseQty = salePurchaseLinks.reduce((sum, item) => sum + toNumber(item.quantity || item.weight), 0);
   const linkedPurchaseAmount = salePurchaseLinks.reduce((sum, item) => sum + toNumber(item.amount || (toNumber(item.quantity || item.weight) * toNumber(item.rate))), 0);
-  const directPurchaseQty = formData.sale_type === "direct" ? saleDispatchQtyFromData(formData) : 0;
+  const directPurchaseQty = formData.sale_type === "direct" ? saleQtyFromData(formData) : 0;
   const directPurchaseAmount = directPurchaseQty * toNumber(formData.direct_purchase_rate);
   const againstPurchaseTotalQty = formData.sale_type === "direct" ? directPurchaseQty : linkedPurchaseQty;
   const againstPurchaseTotalAmount = formData.sale_type === "direct" ? directPurchaseAmount : linkedPurchaseAmount;
@@ -2753,7 +2753,7 @@ export default function WarehouseTradingPage() {
         payload.fifo_amount = grossAmount;
         payload.sale_type = formData.sale_type === "direct" ? "direct" : "warehouse";
         payload.direct_purchase_amount = payload.sale_type === "direct"
-          ? Number((payload.quantity * toNumber(formData.direct_purchase_rate)).toFixed(2))
+          ? Number((saleQtyFromData(formData) * toNumber(formData.direct_purchase_rate)).toFixed(2))
           : 0;
         payload.against_purchase_enabled = Boolean((payload.sale_type === "direct" || formData.against_purchase_enabled) && salePurchaseLinks.length);
         payload.against_purchase_farmer_id = payload.sale_type === "direct" ? formData.farmer_id : (formData.against_purchase_farmer_id || "");
@@ -6986,7 +6986,7 @@ export default function WarehouseTradingPage() {
                           </div>
                           <div style={erpRow}>
                             <label style={erpLabel}>Purchase Amount</label>
-                            <input value={formatMoney(saleDispatchQtyFromData(formData) * toNumber(formData.direct_purchase_rate))} readOnly style={erpInput} />
+                            <input value={formatMoney(directPurchaseQty * toNumber(formData.direct_purchase_rate))} readOnly style={erpInput} />
                           </div>
                           <div style={{ ...erpRow, display: "block" }}>
                             <button type="button" onClick={() => { void openSalePurchaseTagging(formData); }} style={{ ...btnAction, background: "#0f766e" }}>
@@ -7566,7 +7566,7 @@ export default function WarehouseTradingPage() {
                       <input name="direct_purchase_rate" type="number" step="0.0001" value={formData.direct_purchase_rate} onChange={handleChange} style={inp} />
                     </Field>
                     <Field label="Purchase Amount">
-                      <input value={formatMoney(saleDispatchQtyFromData(formData) * toNumber(formData.direct_purchase_rate))} readOnly style={readOnlyInp} />
+                      <input value={formatMoney(directPurchaseQty * toNumber(formData.direct_purchase_rate))} readOnly style={readOnlyInp} />
                     </Field>
                   </>
                 )}
