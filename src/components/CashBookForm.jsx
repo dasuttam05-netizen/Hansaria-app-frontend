@@ -194,6 +194,7 @@ export default function CashEntryForm({
   warehouses = [],
   companies = [],
   employees = [],
+  accountLedgers = [],
   agingRows = [],
   adjustments = {},
   onAdjustmentChange = () => {},
@@ -617,6 +618,20 @@ export default function CashEntryForm({
                         style={{ ...inputStyle, background: "#f1f5f9", fontWeight: 600 }}
                       />
                     </div>
+                  </div>
+                )}
+
+                {!isJournal && (
+                  <div style={{ marginTop: 8 }}>
+                    <label style={labelStyle}>Account Ledger</label>
+                    <select name="account_ledger_id" value={formData.account_ledger_id || ""} onChange={onFormChange} style={inputStyle}>
+                      <option value="">Select Ledger</option>
+                      {accountLedgers.map((ledger) => (
+                        <option key={getRecordId(ledger)} value={getRecordId(ledger)}>
+                          {ledger.name} · {ledger.group_id?.name || ledger.group_name || "Ungrouped"}
+                        </option>
+                      ))}
+                    </select>
                   </div>
                 )}
               </div>
