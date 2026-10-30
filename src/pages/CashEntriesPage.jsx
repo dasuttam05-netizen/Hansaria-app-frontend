@@ -241,7 +241,7 @@ export default function CashEntriesPage() {
           fund_source: isEmployeeTransfer ? "employee_cash" : formData.fund_source || "main_cash",
           reference_no: formData.reference_no || null,
           narration: formData.narration || null,
-          employee_id: null,
+          employee_id: formData.employee_id || null,
           status: formData.status || "posted",
           auto_staff_entry: false,
           adjustments: [],
