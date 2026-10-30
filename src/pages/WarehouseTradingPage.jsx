@@ -4794,7 +4794,12 @@ export default function WarehouseTradingPage() {
     const sumForWarehouse = (rows) => (Array.isArray(rows) ? rows : [])
       .filter((entry) => String(entry.warehouse_id || "") === warehouseId)
       .reduce((sum, entry) => sum + toNumber(entry.amount), 0);
-    const expenses = sumForWarehouse(profitLossOverheads.expenses);
+    // The warehouse P/L endpoint is the source of truth for the Staff Expense
+    // column (including Cash Book employee payments). The overhead detail
+    // endpoint remains a fallback for older API responses.
+    const expenses = row?.staff_expense !== undefined && row?.staff_expense !== null
+      ? toNumber(row.staff_expense)
+      : sumForWarehouse(profitLossOverheads.expenses);
     const rent = sumForWarehouse(profitLossOverheads.rents);
     const manualRows = (profitLossOverheads.adjustments || []).filter((entry) => String(entry.warehouse_id || "") === warehouseId);
     const manualIncome = manualRows.filter((entry) => entry.entry_type === "income").reduce((sum, entry) => sum + toNumber(entry.amount), 0);
