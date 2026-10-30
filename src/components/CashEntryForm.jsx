@@ -1,8 +1,9 @@
 import React, { useEffect, useMemo, useState } from "react";
 import axios from "axios";
 import ModalWrapper from "./ModalWrapper";
+import { getApiUrl } from "../utils/api";
 
-const API_BASE = "/api";
+const API_BASE = getApiUrl("/api");
 
 const ENTRY_MODES = [
   { key: "journal", label: "Journal" },
@@ -203,12 +204,36 @@ export default function CashEntryForm({
 }) {
   const [showAdjustmentPanel, setShowAdjustmentPanel] = useState(false);
   const [adjustmentTab, setAdjustmentTab] = useState("pending");
+  const [pendingVoucherRows, setPendingVoucherRows] = useState([]);
   const [allVoucherRows, setAllVoucherRows] = useState([]);
   const [allVoucherLoading, setAllVoucherLoading] = useState(false);
   const journalNameOptions = [
     ...companies.map((c) => ({ value: `party:${getRecordId(c)}`, label: `Party: ${c.name}` })),
     ...employees.map((e) => ({ value: `employee:${getRecordId(e)}`, label: `Employee: ${e.name}` })),
   ];
+  const hasOptionValue = (rows, value) =>
+    !!value && rows.some((row) => String(getRecordId(row)) === String(value));
+  const currentCompanyFallback =
+    formData.company_id && !hasOptionValue(companies, formData.company_id)
+      ? {
+          value: String(formData.company_id),
+          label: formData.company_name || formData.company || `Party ${formData.company_id}`,
+        }
+      : null;
+  const currentWarehouseFallback =
+    formData.warehouse_id && !hasOptionValue(warehouses, formData.warehouse_id)
+      ? {
+          value: String(formData.warehouse_id),
+          label: formData.warehouse_name || `Warehouse ${formData.warehouse_id}`,
+        }
+      : null;
+  const currentEmployeeFallback =
+    formData.employee_id && !hasOptionValue(employees, formData.employee_id)
+      ? {
+          value: String(formData.employee_id),
+          label: formData.employee_name || `Employee ${formData.employee_id}`,
+        }
+      : null;
 
   const selectedMode = formData.transaction_mode || "receipt";
   const modeLabel = ENTRY_MODES.find((m) => m.key === selectedMode)?.label || "Receipt";
@@ -284,11 +309,12 @@ export default function CashEntryForm({
       };
     })
     .filter((row) => row.adjust_now > 0);
-  const totalOutstanding = (agingRows || []).reduce(
+  const effectivePendingRows = pendingVoucherRows.length ? pendingVoucherRows : agingRows;
+  const totalOutstanding = (effectivePendingRows || []).reduce(
     (sum, row) => sum + Number(row.pending_amount || 0),
     0
   );
-  const adjustmentPanelRows = adjustmentTab === "all" ? allVoucherRows : agingRows;
+  const adjustmentPanelRows = adjustmentTab === "all" ? allVoucherRows : effectivePendingRows;
   const displayRows = useMemo(
     () =>
       (adjustmentPanelRows || []).map((row) => {
@@ -303,9 +329,10 @@ export default function CashEntryForm({
     [adjustmentPanelRows, adjustments]
   );
 
-  const loadAllVoucherRows = async () => {
+  const loadVoucherRows = async (tab = "pending") => {
     if (!formData.company_id) {
-      setAllVoucherRows([]);
+      if (tab === "all") setAllVoucherRows([]);
+      else setPendingVoucherRows([]);
       return;
     }
     setAllVoucherLoading(true);
@@ -314,13 +341,15 @@ export default function CashEntryForm({
         params: {
           entry_type: formData.entry_type || undefined,
           source_entry_id: formData.id || undefined,
-          include_all: 1,
+          include_all: tab === "all" ? 1 : 0,
         },
       });
-      setAllVoucherRows(Array.isArray(res.data) ? res.data : []);
+      if (tab === "all") setAllVoucherRows(Array.isArray(res.data) ? res.data : []);
+      else setPendingVoucherRows(Array.isArray(res.data) ? res.data : []);
     } catch (err) {
-      console.error("All voucher load failed:", err);
-      setAllVoucherRows([]);
+      console.error("Voucher load failed:", err);
+      if (tab === "all") setAllVoucherRows([]);
+      else setPendingVoucherRows([]);
     } finally {
       setAllVoucherLoading(false);
     }
@@ -329,7 +358,7 @@ export default function CashEntryForm({
   const openAdjustmentPanel = async (tab = "pending") => {
     setAdjustmentTab(tab);
     setShowAdjustmentPanel(true);
-    if (tab === "all") await loadAllVoucherRows();
+    await loadVoucherRows(tab);
   };
 
   useEffect(() => {
@@ -344,9 +373,14 @@ export default function CashEntryForm({
         openAdjustmentPanel("pending");
       }
     };
-    window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
   });
+
+  useEffect(() => {
+    setPendingVoucherRows([]);
+    setAllVoucherRows([]);
+  }, [formData.company_id, formData.entry_type]);
 
   if (!isOpen) return null;
 
@@ -366,13 +400,14 @@ export default function CashEntryForm({
     if (!form) return;
     const fields = Array.from(form.querySelectorAll("input:not([type='hidden']):not([type='submit']):not([type='button']), select, textarea"))
       .filter((field) => !field.disabled && !field.readOnly && field.getClientRects().length > 0 && field.type !== "checkbox" && field.type !== "radio");
-    const next = fields[fields.indexOf(currentTarget) + direction];
+    const currentIndex = fields.indexOf(currentTarget);
+    const next = fields[currentIndex + direction];
     if (next) {
       next.focus();
       if (typeof next.select === "function" && next.tagName === "INPUT" && next.type !== "date") next.select();
-    } else if (direction > 0) {
-      form.querySelector("button[type='submit']")?.focus();
+      return;
     }
+    if (direction > 0) form.querySelector("button[type='submit']")?.focus();
   };
 
   const handleEntryKeyDown = (event) => {
@@ -409,6 +444,7 @@ export default function CashEntryForm({
           </div>
         </div>
 
+        <form onSubmit={onSubmit}>
         <form onSubmit={onSubmit} onKeyDown={handleEntryKeyDown} onKeyUp={handleEntryKeyUp}>
           <div style={topControlRowStyle}>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
@@ -443,6 +479,9 @@ export default function CashEntryForm({
                 }}
               >
                 <option value="">Select Employee</option>
+                {currentEmployeeFallback ? (
+                  <option value={currentEmployeeFallback.value}>{currentEmployeeFallback.label}</option>
+                ) : null}
                 {employees.map((emp) => (
                   <option key={getRecordId(emp)} value={getRecordId(emp)}>
                     {emp.name}
@@ -609,6 +648,9 @@ export default function CashEntryForm({
                         style={inputStyle}
                       >
                         <option value="">Select Company</option>
+                        {currentCompanyFallback ? (
+                          <option value={currentCompanyFallback.value}>{currentCompanyFallback.label}</option>
+                        ) : null}
                         {companies.map((c) => (
                           <option key={getRecordId(c)} value={getRecordId(c)}>
                             {c.name}
@@ -620,7 +662,6 @@ export default function CashEntryForm({
                           type="button"
                           onClick={() => openAdjustmentPanel("pending")}
                           style={{ ...tabButtonStyle(false), borderRadius: 4, padding: "4px 8px" }}
-                          disabled={!formData.company_id}
                         >
                           F2 Outstanding
                         </button>
@@ -628,7 +669,6 @@ export default function CashEntryForm({
                           type="button"
                           onClick={() => openAdjustmentPanel("pending")}
                           style={{ ...tabButtonStyle(false), borderRadius: 4, padding: "4px 8px" }}
-                          disabled={!formData.company_id}
                         >
                           F5 Adjustment
                         </button>
@@ -674,6 +714,9 @@ export default function CashEntryForm({
                     style={inputStyle}
                   >
                     <option value="">Select Warehouse</option>
+                    {currentWarehouseFallback ? (
+                      <option value={currentWarehouseFallback.value}>{currentWarehouseFallback.label}</option>
+                    ) : null}
                     {warehouses.map((w) => (
                       <option key={getRecordId(w)} value={getRecordId(w)}>
                         {w.name}
@@ -769,6 +812,62 @@ export default function CashEntryForm({
                     required
                   />
                 </div>
+
+                {!isJournal && selectedMode === "payment" && isExpense && formData.warehouse_id ? (
+                  <div style={{ marginTop: 8, padding: 10, border: "1px solid #bae6fd", borderRadius: 7, background: "#f0f9ff" }}>
+                    {!formData.employee_id ? (
+                      <label style={{ ...labelStyle, display: "flex", alignItems: "center", gap: 8, marginBottom: formData.allocate_warehouse_pl ? 9 : 0, cursor: "pointer", fontSize: 12, fontWeight: 700 }}>
+                        <input
+                          type="checkbox"
+                          id="allocate_warehouse_pl"
+                          name="allocate_warehouse_pl"
+                          checked={Boolean(formData.allocate_warehouse_pl)}
+                          onChange={(e) => {
+                            const checked = e.target.checked;
+                            setFieldValue("allocate_warehouse_pl", checked);
+                            setFieldValue("warehouse_expense_mode", checked ? (formData.warehouse_expense_mode === "fixed_warehouse" ? "fixed_warehouse" : "location_quantity") : "none");
+                          }}
+                          style={{ cursor: "pointer", width: 16, height: 16, margin: 0 }}
+                        />
+                        Include this expense in Warehouse Profit/Loss
+                      </label>
+                    ) : (
+                      <div style={{ marginBottom: 8, fontSize: 12, color: "#0c4a6e", fontWeight: 700 }}>
+                        Employee expense will be included in Warehouse Profit/Loss.
+                      </div>
+                    )}
+                    {(Boolean(formData.allocate_warehouse_pl) || Boolean(formData.employee_id)) ? (
+                      <div style={{ display: "grid", gap: 6, marginLeft: formData.employee_id ? 0 : 24 }}>
+                        <label style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 12, fontWeight: 600, color: "#0f172a", cursor: "pointer" }}>
+                          <input
+                            type="radio"
+                            name="warehouse_expense_mode"
+                            value="location_quantity"
+                            checked={String(formData.warehouse_expense_mode || "location_quantity") !== "fixed_warehouse"}
+                            onChange={() => {
+                              setFieldValue("warehouse_expense_mode", "location_quantity");
+                              setFieldValue("allocate_warehouse_pl", true);
+                            }}
+                          />
+                          Location-wise by monthly Direct Loading + Warehouse Loading quantity
+                        </label>
+                        <label style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 12, fontWeight: 600, color: "#0f172a", cursor: "pointer" }}>
+                          <input
+                            type="radio"
+                            name="warehouse_expense_mode"
+                            value="fixed_warehouse"
+                            checked={String(formData.warehouse_expense_mode || "") === "fixed_warehouse"}
+                            onChange={() => {
+                              setFieldValue("warehouse_expense_mode", "fixed_warehouse");
+                              setFieldValue("allocate_warehouse_pl", true);
+                            }}
+                          />
+                          Fixed to selected Warehouse (no Location-wise allocation)
+                        </label>
+                      </div>
+                    ) : null}
+                  </div>
+                ) : null}
 
                 {!isJournal && formData.employee_id ? (
                   <div style={{ marginTop: 8, display: "flex", alignItems: "center", gap: 8 }}>
@@ -1037,7 +1136,13 @@ export default function CashEntryForm({
                   </tr>
                 </thead>
                 <tbody>
-                  {allVoucherLoading ? (
+                  {!formData.company_id ? (
+                    <tr>
+                      <td colSpan={9} style={{ padding: 12, textAlign: "center", color: "#b45309", fontWeight: 700 }}>
+                        Please select Payor or Income party first.
+                      </td>
+                    </tr>
+                  ) : allVoucherLoading ? (
                     <tr>
                       <td colSpan={9} style={{ padding: 12, textAlign: "center", color: "#64748b" }}>Loading vouchers...</td>
                     </tr>
