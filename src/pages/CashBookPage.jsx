@@ -186,6 +186,7 @@ const MainCashBookPage = () => {
     narration: "",
     employee_id: "",
     allocate_warehouse_pl: false,
+    warehouse_expense_mode: "location_quantity",
     journal_debit_employee_id: "",
     journal_credit_employee_id: "",
     status: "posted",
@@ -451,6 +452,7 @@ const MainCashBookPage = () => {
         employee_id: detail.employee_id ? String(detail.employee_id) : "",
         employee_name: detail.employee_name || "",
         allocate_warehouse_pl: Boolean(detail.allocate_warehouse_pl),
+        warehouse_expense_mode: detail.warehouse_expense_mode || (detail.allocate_warehouse_pl ? "location_quantity" : "none"),
         journal_debit_employee_id: detail.journal_debit_employee_id ? String(detail.journal_debit_employee_id) : "",
         journal_credit_employee_id: detail.journal_credit_employee_id ? String(detail.journal_credit_employee_id) : "",
         status: detail.status || "posted",
@@ -485,6 +487,7 @@ const MainCashBookPage = () => {
         employee_id: detail.employee_id ? String(detail.employee_id) : "",
         employee_name: detail.employee_name || "",
         allocate_warehouse_pl: Boolean(detail.allocate_warehouse_pl),
+        warehouse_expense_mode: detail.warehouse_expense_mode || (detail.allocate_warehouse_pl ? "location_quantity" : "none"),
         status: detail.status || "posted",
       });
       setShowForm(true);

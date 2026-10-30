@@ -24,6 +24,7 @@ const emptyForm = () => ({
   narration: "",
   employee_id: "",
   allocate_warehouse_pl: false,
+  warehouse_expense_mode: "location_quantity",
   journal_transfer_kind: "",
   journal_debit_name: "",
   journal_credit_name: "",
