@@ -3748,18 +3748,46 @@ export default function WarehouseTradingPage() {
       const imported = Number(res.data?.imported || 0);
       const failed = Number(res.data?.failed || 0);
       const errors = Array.isArray(res.data?.errors) ? res.data.errors : [];
-      const errorText = errors.slice(0, 15).map((item) => `Row ${item.row}: ${item.error}`).join("\n");
-      setSaleImportReview(null);
-      alert(`Sale import complete.\nSaved: ${imported}\nFailed: ${failed}${errorText ? `\n\n${errorText}` : ""}`);
-      if (imported > 0) {
-        setActiveVoucherType("sale");
-        await loadVouchers();
-        if (activeTab === "reports") await loadReport();
-        fetchNextVoucherNo("sale");
+      const savedRowNumbers = new Set((Array.isArray(res.data?.rows) ? res.data.rows : []).map((item) => Number(item.row)));
+
+      if (imported === 0) {
+        setSaleImportReview((current) => current ? {
+          ...current,
+          saveErrors: errors.length ? errors : [{ row: "-", error: res.data?.message || "The server did not save any Sale Voucher." }],
+          saveMessage: res.data?.message || "No Sale Voucher was saved. Check the reasons below.",
+        } : current);
+        alert(`IMPORT FAILED — No Sale Voucher was saved.\nFailed: ${failed || errors.length}\nPlease check the row-wise errors shown in the import window.`);
+        return;
       }
+
+      if (failed > 0) {
+        // Remove only rows confirmed as saved so retrying cannot create duplicates.
+        setSaleImportReview((current) => current ? {
+          ...current,
+          preview: current.preview.filter((item) => !savedRowNumbers.has(Number(item.row))),
+          saveErrors: errors,
+          saveMessage: `${imported} bill(s) saved; ${failed} bill(s) failed. Correct the failed rows and retry only those rows.`,
+        } : current);
+        alert(`PARTIAL IMPORT\nSaved: ${imported}\nFailed: ${failed}\nFailed row reasons are displayed in the import window.`);
+      } else {
+        setSaleImportReview(null);
+        alert(`IMPORT SUCCESSFUL\nSaved: ${imported} Sale Voucher(s).`);
+      }
+
+      setActiveVoucherType("sale");
+      await loadVouchers();
+      if (activeTab === "reports") await loadReport();
+      fetchNextVoucherNo("sale");
     } catch (err) {
-      console.error(err);
-      alert(err?.response?.data?.error || "Sale import save failed");
+      console.error("Sale Excel import save failed:", err?.response?.data || err);
+      const responseData = err?.response?.data || {};
+      const errors = Array.isArray(responseData.errors) ? responseData.errors : [];
+      setSaleImportReview((current) => current ? {
+        ...current,
+        saveErrors: errors.length ? errors : [{ row: "-", error: responseData.error || responseData.message || err?.message || "Sale import save failed. Check the server response." }],
+        saveMessage: responseData.message || responseData.error || "No Sale Voucher was saved. Check the reasons below.",
+      } : current);
+      alert(`${responseData.message || responseData.error || "Sale import save failed."}\nNo success will be shown unless the server confirms saved vouchers. Please check the row-wise errors in the import window.`);
     } finally {
       setFinalizingSaleImport(false);
     }
