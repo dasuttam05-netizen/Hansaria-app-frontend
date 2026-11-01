@@ -5,6 +5,7 @@ import { FaFilePdf, FaWhatsapp } from "react-icons/fa";
 import PageBackCloseActions from "../components/PageBackCloseActions";
 import WarehouseTradingHeader from "./WarehouseTradingHeader";
 import WarehouseVoucherPanel from "./WarehouseVoucherPanel";
+import SaleExcelImportReviewModal from "./SaleExcelImportReviewModal";
 import WarehouseReportPanel from "./WarehouseReportPanel";
 import WarehouseReportTable from "./WarehouseReportTable";
 import WarehouseBillWisePanel from "./WarehouseBillWisePanel";
@@ -474,6 +475,8 @@ export default function WarehouseTradingPage() {
   const [stockDrilldownFromDate, setStockDrilldownFromDate] = useState("");
   const [stockDrilldownToDate, setStockDrilldownToDate] = useState("");
   const [importingSale, setImportingSale] = useState(false);
+  const [saleImportReview, setSaleImportReview] = useState(null);
+  const [finalizingSaleImport, setFinalizingSaleImport] = useState(false);
   const [importingPurchase, setImportingPurchase] = useState(false);
   const [importingPayment, setImportingPayment] = useState(false);
   const [importingReceipt, setImportingReceipt] = useState(false);
@@ -3673,26 +3676,92 @@ export default function WarehouseTradingPage() {
     uploadForm.append("file", file);
     setImportingSale(true);
     try {
-      const res = await API.post("/api/wh-vouchers/sale/import-xlsx", uploadForm, {
+      const res = await API.post("/api/wh-vouchers/sale/import-preview-xlsx", uploadForm, {
         headers: { "Content-Type": "multipart/form-data" },
+      });
+      const preview = Array.isArray(res.data?.preview) ? res.data.preview : [];
+      const errors = Array.isArray(res.data?.errors) ? res.data.errors : [];
+      setSaleImportReview({
+        total: Number(res.data?.total || preview.length + errors.length),
+        preview: preview.map((item) => ({ ...item, sale_type: "" })),
+        errors,
+        options: res.data?.options || {},
+      });
+    } catch (err) {
+      console.error(err);
+      alert(err?.response?.data?.error || "Sale Excel preview failed");
+    } finally {
+      setImportingSale(false);
+    }
+  };
+
+  const handleSaleImportTypeChange = (rowNo, saleType) => {
+    setSaleImportReview((current) => {
+      if (!current) return current;
+      return {
+        ...current,
+        preview: current.preview.map((item) =>
+          item.row === rowNo ? { ...item, sale_type: saleType } : item
+        ),
+      };
+    });
+  };
+
+  const handleSaleImportFieldChange = (rowNo, field, value) => {
+    setSaleImportReview((current) => {
+      if (!current) return current;
+      return {
+        ...current,
+        preview: current.preview.map((item) =>
+          item.row === rowNo
+            ? { ...item, data: { ...(item.data || {}), [field]: value } }
+            : item
+        ),
+      };
+    });
+  };
+
+  const handleConfirmSaleExcelImport = async () => {
+    const preview = Array.isArray(saleImportReview?.preview) ? saleImportReview.preview : [];
+    if (!preview.length) return;
+    if (preview.some((item) => !["warehouse", "direct"].includes(item.sale_type))) {
+      alert("Please select Sale Type for every valid bill before Final Save.");
+      return;
+    }
+    if (preview.some((item) => !item.data?.company_account_id || !item.data?.product_id)) {
+      alert("Please select the Company Account and Product for every bill before Final Save.");
+      return;
+    }
+    if (preview.some((item) => item.sale_type === "direct" && (!item.data?.farmer_id || !item.data?.consignee_id || !(Number(item.data?.direct_purchase_rate) > 0)))) {
+      alert("For Direct Loading, select Farmer and Consignee and enter Direct Purchase Rate for every such bill.");
+      return;
+    }
+
+    setFinalizingSaleImport(true);
+    try {
+      const res = await API.post("/api/wh-vouchers/sale/import-confirm", {
+        rows: preview.map((item) => ({
+          row: item.row,
+          data: { ...item.data, sale_type: item.sale_type },
+        })),
       });
       const imported = Number(res.data?.imported || 0);
       const failed = Number(res.data?.failed || 0);
       const errors = Array.isArray(res.data?.errors) ? res.data.errors : [];
-      const errorText = errors
-        .slice(0, 10)
-        .map((item) => `Row ${item.row}: ${item.error}`)
-        .join("\n");
-      alert(`Sale import complete.\nImported: ${imported}\nFailed: ${failed}${errorText ? `\n\n${errorText}` : ""}`);
-      setActiveVoucherType("sale");
-      await loadVouchers();
-      if (activeTab === "reports") await loadReport();
-      fetchNextVoucherNo("sale");
+      const errorText = errors.slice(0, 15).map((item) => `Row ${item.row}: ${item.error}`).join("\n");
+      setSaleImportReview(null);
+      alert(`Sale import complete.\nSaved: ${imported}\nFailed: ${failed}${errorText ? `\n\n${errorText}` : ""}`);
+      if (imported > 0) {
+        setActiveVoucherType("sale");
+        await loadVouchers();
+        if (activeTab === "reports") await loadReport();
+        fetchNextVoucherNo("sale");
+      }
     } catch (err) {
       console.error(err);
-      alert(err?.response?.data?.error || "Sale import failed");
+      alert(err?.response?.data?.error || "Sale import save failed");
     } finally {
-      setImportingSale(false);
+      setFinalizingSaleImport(false);
     }
   };
 
@@ -7983,6 +8052,19 @@ export default function WarehouseTradingPage() {
               </div>
             </form>
           </WarehouseVoucherPanel>
+
+          <SaleExcelImportReviewModal
+            review={saleImportReview}
+            products={products}
+            farmers={farmers}
+            consignees={consignees}
+            companyAccounts={companyAccounts}
+            saving={finalizingSaleImport}
+            onChangeSaleType={handleSaleImportTypeChange}
+            onChangeField={handleSaleImportFieldChange}
+            onConfirm={handleConfirmSaleExcelImport}
+            onClose={() => !finalizingSaleImport && setSaleImportReview(null)}
+          />
 
           <div style={card}>
             <div className={`mobile-collapsible-header ${showMobileVoucherHeader ? "" : "is-mobile-hidden"}`} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
