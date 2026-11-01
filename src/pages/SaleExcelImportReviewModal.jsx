@@ -100,7 +100,7 @@ function SaleExcelImportReviewModal({
         <header style={{ padding: "16px 20px", background: "#0f766e", color: "#fff", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
           <div>
             <h2 style={{ margin: 0, fontSize: 19 }}>Sale Excel Import — Review</h2>
-            <div style={{ fontSize: 12, marginTop: 4, opacity: .92 }}>প্রতিটি Bill-এর তথ্য যাচাই করুন, Sale Type নির্বাচন করুন, তারপর Final Save করুন।</div>
+            <div style={{ fontSize: 12, marginTop: 4, opacity: .92 }}>Review each bill, select a Sale Type, and then click Final Save.</div>
           </div>
           <button type="button" onClick={onClose} disabled={saving} style={{ border: 0, borderRadius: 7, padding: "7px 11px", background: "rgba(255,255,255,.18)", color: "#fff", cursor: saving ? "not-allowed" : "pointer" }}>Close ✕</button>
         </header>
@@ -116,7 +116,7 @@ function SaleExcelImportReviewModal({
           {rows.length > 0 && (
             <>
               <div style={{ margin: "0 0 9px", fontSize: 13, color: "#334155" }}>
-                Warehouse Name, Employee Name এবং Location Name Excel থেকে নেওয়া হয়েছে। Company Account/Product না মিললে এখানে বেছে নিন। Direct Loading হলে Farmer, Consignee ও Direct Purchase Rate দিন।
+                Warehouse Name, Employee Name, and Location Name are read from the Excel file. Select a Company Account or Product here if they could not be matched automatically. For Direct Loading, select a Farmer and Consignee and enter the Direct Purchase Rate.
               </div>
               <div style={{ border: "1px solid #dbe3ea", borderRadius: 8, overflow: "auto" }}>
                 <table style={{ width: "100%", minWidth: 2250, borderCollapse: "collapse" }}>
@@ -235,12 +235,12 @@ function SaleExcelImportReviewModal({
               </div>
               {mappingRowsMissingFields.length > 0 && (
                 <div style={{ marginTop: 8, color: "#92400e", background: "#fffbeb", border: "1px solid #fcd34d", borderRadius: 7, padding: "8px 10px", fontSize: 12 }}>
-                  Company Account বা Product নির্বাচন বাকি আছে: {mappingRowsMissingFields.map((row) => `#${row.row}`).join(", ")}।
+                  Company Account or Product selection is required for rows: {mappingRowsMissingFields.map((row) => `#${row.row}`).join(", ")}।
                 </div>
               )}
               {directRowsMissingFields.length > 0 && (
                 <div style={{ marginTop: 8, color: "#92400e", background: "#fffbeb", border: "1px solid #fcd34d", borderRadius: 7, padding: "8px 10px", fontSize: 12 }}>
-                  Direct Loading-এর Farmer, Consignee অথবা Direct Purchase Rate বাকি আছে: {directRowsMissingFields.map((row) => `#${row.row}`).join(", ")}।
+                  Farmer, Consignee, or Direct Purchase Rate is missing for Direct Loading rows: {directRowsMissingFields.map((row) => `#${row.row}`).join(", ")}।
                 </div>
               )}
             </>
@@ -281,7 +281,7 @@ function SaleExcelImportReviewModal({
 
         <footer style={{ padding: "12px 18px", borderTop: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
           <div style={{ color: "#64748b", fontSize: 12 }}>
-            {rows.length ? (allRowsReady ? "সব Valid Row-এর mapping, Sale Type এবং প্রয়োজনীয় তথ্য ঠিক আছে।" : "প্রতিটি Bill-এর Account, Product ও Sale Type ঠিক করুন। Direct Loading হলে Farmer, Consignee ও Purchase Rate দিন।") : "কোনও Valid Row নেই — Excel-এর Error ঠিক করে আবার Upload করুন।"}
+            {rows.length ? (allRowsReady ? "All valid rows have complete mappings, Sale Types, and required information." : "Complete the Account, Product, and Sale Type for each bill. For Direct Loading, also provide the Farmer, Consignee, and Purchase Rate.") : "No valid rows found. Correct the errors in the Excel file and upload it again."}
           </div>
           <div style={{ display: "flex", gap: 8 }}>
             <button type="button" onClick={onClose} disabled={saving} style={{ padding: "9px 14px", border: "1px solid #cbd5e1", borderRadius: 7, background: "#fff", color: "#334155", cursor: saving ? "not-allowed" : "pointer" }}>Cancel</button>
