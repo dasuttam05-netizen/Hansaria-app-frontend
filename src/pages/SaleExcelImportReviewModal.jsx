@@ -62,11 +62,12 @@ function SaleExcelImportReviewModal({
     )
   );
   const mappingRowsMissingFields = rows.filter((row) =>
-    !row.data?.company_account_id || !row.data?.product_id
+    !row.data?.company_account_id || !row.data?.product_id || !row.data?.location_id
   );
   const allRowsReady = rows.length > 0 && rows.every((row) =>
     Boolean(row.data?.company_account_id) &&
     Boolean(row.data?.product_id) &&
+    Boolean(row.data?.location_id) &&
     ["warehouse", "direct"].includes(row.sale_type) &&
     (row.sale_type !== "direct" || (
       Boolean(row.data?.farmer_id) &&
@@ -116,7 +117,7 @@ function SaleExcelImportReviewModal({
           {rows.length > 0 && (
             <>
               <div style={{ margin: "0 0 9px", fontSize: 13, color: "#334155" }}>
-                Warehouse Name, Employee Name, and Location Name are read from the Excel file. Select a Company Account or Product here if they could not be matched automatically. For Direct Loading, select a Farmer and Consignee and enter the Direct Purchase Rate.
+                Warehouse, Employee, Company Account, Product and Direct Loading details are matched from Excel where supplied. Employee-assigned Location is selected automatically when there is one; when there are several assigned Locations, choose from that Employee's Location dropdown.
               </div>
               <div style={{ border: "1px solid #dbe3ea", borderRadius: 8, overflow: "auto" }}>
                 <table style={{ width: "100%", minWidth: 2250, borderCollapse: "collapse" }}>
@@ -140,13 +141,30 @@ function SaleExcelImportReviewModal({
                       const chosenProduct = productOptions.find((item) => getId(item) === String(data.product_id || ""));
                       const chosenFarmer = farmerOptions.find((item) => getId(item) === String(data.farmer_id || ""));
                       const chosenConsignee = consigneeOptions.find((item) => getId(item) === String(data.consignee_id || ""));
+                      const assignedLocationOptions = Array.isArray(display.location_options) ? display.location_options : [];
                       return (
                         <tr key={row.row}>
                           <td style={cell}>{row.row}</td>
                           <td style={cell}>{display.date || "—"}<br /><span style={{ color: "#64748b" }}>{display.voucher_no || "Auto Voucher No"}</span></td>
                           <td style={cell}>{display.warehouse_name || "—"}</td>
                           <td style={cell}>{display.employee_name || "—"}</td>
-                          <td style={cell}>{display.location_name || "—"}</td>
+                          <td style={{ ...cell, minWidth: 170 }}>
+                            {assignedLocationOptions.length > 1 ? (
+                              <select
+                                aria-label={`Assigned Location for Excel row ${row.row}`}
+                                value={data.location_id || ""}
+                                onChange={(event) => handleField(row.row, "location_id", event.target.value)}
+                                style={{ ...selectStyle, borderColor: data.location_id ? "#0f766e" : "#f59e0b", background: data.location_id ? "#f0fdfa" : "#fffbeb" }}
+                              >
+                                <option value="">Select Assigned Location</option>
+                                {assignedLocationOptions.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                              </select>
+                            ) : (
+                              <span style={{ color: data.location_id ? "#0f172a" : "#b45309", fontWeight: data.location_id ? 500 : 700 }}>
+                                {display.location_name || "Select employee location"}
+                              </span>
+                            )}
+                          </td>
                           <td style={cell}>{display.buyer_name || "—"}</td>
                           <td style={{ ...cell, minWidth: 190 }}>
                             <select
@@ -235,7 +253,7 @@ function SaleExcelImportReviewModal({
               </div>
               {mappingRowsMissingFields.length > 0 && (
                 <div style={{ marginTop: 8, color: "#92400e", background: "#fffbeb", border: "1px solid #fcd34d", borderRadius: 7, padding: "8px 10px", fontSize: 12 }}>
-                  Company Account or Product selection is required for rows: {mappingRowsMissingFields.map((row) => `#${row.row}`).join(", ")}।
+                  Company Account, Product or assigned Location is required for rows: {mappingRowsMissingFields.map((row) => `#${row.row}`).join(", ")}।
                 </div>
               )}
               {directRowsMissingFields.length > 0 && (

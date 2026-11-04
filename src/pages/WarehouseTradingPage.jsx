@@ -3728,8 +3728,8 @@ export default function WarehouseTradingPage() {
       alert("Please select Sale Type for every valid bill before Final Save.");
       return;
     }
-    if (preview.some((item) => !item.data?.company_account_id || !item.data?.product_id)) {
-      alert("Please select the Company Account and Product for every bill before Final Save.");
+    if (preview.some((item) => !item.data?.company_account_id || !item.data?.product_id || !item.data?.location_id)) {
+      alert("Please ensure Company Account, Product and the Employee-assigned Location are selected for every bill before Final Save.");
       return;
     }
     if (preview.some((item) => item.sale_type === "direct" && (!item.data?.farmer_id || !item.data?.consignee_id || !(Number(item.data?.direct_purchase_rate) > 0)))) {
