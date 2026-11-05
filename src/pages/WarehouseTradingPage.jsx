@@ -3708,16 +3708,51 @@ export default function WarehouseTradingPage() {
     });
   };
 
+  const handleSaleImportEmployeeChange = (rowNo, employeeId) => {
+    setSaleImportReview((current) => {
+      if (!current) return current;
+      const employeeOptions = Array.isArray(current.options?.employees) ? current.options.employees : [];
+      const employee = employeeOptions.find((item) => String(item.id) === String(employeeId || ""));
+      const locationOptions = Array.isArray(employee?.location_options) ? employee.location_options : [];
+      const autoLocation = locationOptions.length === 1 ? locationOptions[0] : null;
+      return {
+        ...current,
+        preview: current.preview.map((item) => item.row === rowNo
+          ? {
+              ...item,
+              data: {
+                ...(item.data || {}),
+                employee_id: employee ? String(employee.id) : "",
+                location_id: autoLocation ? String(autoLocation.id) : "",
+              },
+              display: {
+                ...(item.display || {}),
+                employee_name: employee?.name || "",
+                location_name: autoLocation?.name || "",
+                location_options: locationOptions,
+              },
+            }
+          : item),
+      };
+    });
+  };
+
   const handleSaleImportFieldChange = (rowNo, field, value) => {
     setSaleImportReview((current) => {
       if (!current) return current;
       return {
         ...current,
-        preview: current.preview.map((item) =>
-          item.row === rowNo
-            ? { ...item, data: { ...(item.data || {}), [field]: value } }
-            : item
-        ),
+        preview: current.preview.map((item) => {
+          if (item.row !== rowNo) return item;
+          const nextData = { ...(item.data || {}), [field]: value };
+          const nextDisplay = { ...(item.display || {}) };
+          if (field === "location_id") {
+            const selected = (Array.isArray(nextDisplay.location_options) ? nextDisplay.location_options : [])
+              .find((option) => String(option.id) === String(value || ""));
+            nextDisplay.location_name = selected?.name || "";
+          }
+          return { ...item, data: nextData, display: nextDisplay };
+        }),
       };
     });
   };
@@ -3729,8 +3764,8 @@ export default function WarehouseTradingPage() {
       alert("Please select Sale Type for every valid bill before Final Save.");
       return;
     }
-    if (preview.some((item) => !item.data?.company_account_id || !item.data?.product_id || !item.data?.location_id)) {
-      alert("Please ensure Company Account, Product and the Employee-assigned Location are selected for every bill before Final Save.");
+    if (preview.some((item) => !item.data?.employee_id || !item.data?.company_account_id || !item.data?.product_id || !item.data?.location_id)) {
+      alert("Please select Employee and the Employee-assigned Location, Company Account and Product for every bill before Final Save.");
       return;
     }
     if (preview.some((item) => item.sale_type === "direct" && (!item.data?.farmer_id || !(Number(item.data?.direct_purchase_rate) > 0)))) {
@@ -8090,6 +8125,7 @@ export default function WarehouseTradingPage() {
             companyAccounts={companyAccounts}
             saving={finalizingSaleImport}
             onChangeSaleType={handleSaleImportTypeChange}
+            onChangeEmployee={handleSaleImportEmployeeChange}
             onChangeField={handleSaleImportFieldChange}
             onConfirm={handleConfirmSaleExcelImport}
             onClose={() => !finalizingSaleImport && setSaleImportReview(null)}
