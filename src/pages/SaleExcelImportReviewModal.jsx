@@ -37,7 +37,6 @@ function SaleExcelImportReviewModal({
   onChangeField,
   products = [],
   farmers = [],
-  consignees = [],
   companyAccounts = [],
   onConfirm,
   onClose,
@@ -51,13 +50,11 @@ function SaleExcelImportReviewModal({
     ? products
     : (Array.isArray(options.products) ? options.products : []);
   const farmerOptions = Array.isArray(farmers) ? farmers : [];
-  const consigneeOptions = Array.isArray(consignees) ? consignees : [];
   const companyAccountRows = Array.isArray(companyAccounts) ? companyAccounts : [];
 
   const directRowsMissingFields = rows.filter((row) =>
     row.sale_type === "direct" && (
       !row.data?.farmer_id ||
-      !row.data?.consignee_id ||
       !(Number(row.data?.direct_purchase_rate) > 0)
     )
   );
@@ -71,7 +68,6 @@ function SaleExcelImportReviewModal({
     ["warehouse", "direct"].includes(row.sale_type) &&
     (row.sale_type !== "direct" || (
       Boolean(row.data?.farmer_id) &&
-      Boolean(row.data?.consignee_id) &&
       Number(row.data?.direct_purchase_rate) > 0
     ))
   );
@@ -101,7 +97,7 @@ function SaleExcelImportReviewModal({
         <header style={{ padding: "16px 20px", background: "#0f766e", color: "#fff", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
           <div>
             <h2 style={{ margin: 0, fontSize: 19 }}>Sale Excel Import — Review</h2>
-            <div style={{ fontSize: 12, marginTop: 4, opacity: .92 }}>Review each bill, select a Sale Type, and then click Final Save.</div>
+            <div style={{ fontSize: 12, marginTop: 4, opacity: .92 }}>Sale Type is preselected from Excel. The original Tally Consignee is kept unchanged.</div>
           </div>
           <button type="button" onClick={onClose} disabled={saving} style={{ border: 0, borderRadius: 7, padding: "7px 11px", background: "rgba(255,255,255,.18)", color: "#fff", cursor: saving ? "not-allowed" : "pointer" }}>Close ✕</button>
         </header>
@@ -117,13 +113,13 @@ function SaleExcelImportReviewModal({
           {rows.length > 0 && (
             <>
               <div style={{ margin: "0 0 9px", fontSize: 13, color: "#334155" }}>
-                Warehouse, Employee, Company Account, Product and Direct Loading details are matched from Excel where supplied. Employee-assigned Location is selected automatically when there is one; when there are several assigned Locations, choose from that Employee's Location dropdown.
+                Sale Type is read from Excel and selected automatically. Warehouse rows need no Direct Farmer or Purchase Rate. Direct rows need only Farmer (Direct) and Direct Purchase Rate; the existing Tally Consignee is never replaced. Employee-assigned Location is selected automatically when there is one; if there are several, choose from that Employee's assigned Location dropdown.
               </div>
               <div style={{ border: "1px solid #dbe3ea", borderRadius: 8, overflow: "auto" }}>
                 <table style={{ width: "100%", minWidth: 2250, borderCollapse: "collapse" }}>
                   <thead>
                     <tr style={{ background: "#e8f3f1", color: "#164e48" }}>
-                      {["Excel Row", "Date / Voucher", "Warehouse", "Employee", "Location", "Buyer", "Company Account *", "Product *", "Farmer (Direct)", "Consignee (Direct)", "Qty", "Sale Amount", "Additional", "Direct Purchase Rate", "Sale Type *"].map((heading) => (
+                      {["Excel Row", "Date / Voucher", "Warehouse", "Employee", "Location", "Buyer", "Company Account *", "Product *", "Farmer (Direct)", "Consignee (Tally — unchanged)", "Qty", "Sale Amount", "Additional", "Direct Purchase Rate", "Sale Type *"].map((heading) => (
                         <th key={heading} style={{ ...cell, position: "sticky", top: 0, background: "#e8f3f1", zIndex: 1, fontWeight: 800 }}>{heading}</th>
                       ))}
                     </tr>
@@ -140,7 +136,6 @@ function SaleExcelImportReviewModal({
                         : linkedAccounts;
                       const chosenProduct = productOptions.find((item) => getId(item) === String(data.product_id || ""));
                       const chosenFarmer = farmerOptions.find((item) => getId(item) === String(data.farmer_id || ""));
-                      const chosenConsignee = consigneeOptions.find((item) => getId(item) === String(data.consignee_id || ""));
                       const assignedLocationOptions = Array.isArray(display.location_options) ? display.location_options : [];
                       return (
                         <tr key={row.row}>
@@ -203,19 +198,9 @@ function SaleExcelImportReviewModal({
                             ) : <span style={{ color: "#94a3b8" }}>—</span>}
                             {chosenFarmer && <span style={{ display: "block", color: "#64748b", fontSize: 10, marginTop: 3 }}>{chosenFarmer.name}</span>}
                           </td>
-                          <td style={{ ...cell, minWidth: 165 }}>
-                            {row.sale_type === "direct" ? (
-                              <select
-                                aria-label={`Consignee for Excel row ${row.row}`}
-                                value={data.consignee_id || ""}
-                                onChange={(event) => handleField(row.row, "consignee_id", event.target.value)}
-                                style={{ ...selectStyle, borderColor: data.consignee_id ? "#0f766e" : "#f59e0b" }}
-                              >
-                                <option value="">Select Consignee</option>
-                                {consigneeOptions.map((item) => <option key={getId(item)} value={getId(item)}>{item.name || "Unnamed Consignee"}</option>)}
-                              </select>
-                            ) : <span>{display.consignee_name || "—"}</span>}
-                            {chosenConsignee && <span style={{ display: "block", color: "#64748b", fontSize: 10, marginTop: 3 }}>{chosenConsignee.name}</span>}
+                          <td style={{ ...cell, minWidth: 190, whiteSpace: "normal" }}>
+                            <span style={{ color: "#334155" }}>{display.consignee_name || "—"}</span>
+                            <span style={{ display: "block", color: "#64748b", fontSize: 10, marginTop: 3 }}>From original Tally Consignee column</span>
                           </td>
                           <td style={{ ...cell, textAlign: "right" }}>{Number(display.quantity || 0).toLocaleString("en-IN", { maximumFractionDigits: 4 })}</td>
                           <td style={{ ...cell, textAlign: "right" }}>{Number(display.amount || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
@@ -241,8 +226,8 @@ function SaleExcelImportReviewModal({
                               style={{ ...selectStyle, borderColor: row.sale_type ? "#0f766e" : "#f59e0b", background: row.sale_type ? "#f0fdfa" : "#fffbeb" }}
                             >
                               <option value="">Select Sale Type</option>
-                              <option value="warehouse">Warehouse Loading</option>
-                              <option value="direct">Direct Loading</option>
+                              <option value="warehouse">Warehouse Sale</option>
+                              <option value="direct">Direct Farmer Loading Sale</option>
                             </select>
                           </td>
                         </tr>
@@ -258,7 +243,7 @@ function SaleExcelImportReviewModal({
               )}
               {directRowsMissingFields.length > 0 && (
                 <div style={{ marginTop: 8, color: "#92400e", background: "#fffbeb", border: "1px solid #fcd34d", borderRadius: 7, padding: "8px 10px", fontSize: 12 }}>
-                  Farmer, Consignee, or Direct Purchase Rate is missing for Direct Loading rows: {directRowsMissingFields.map((row) => `#${row.row}`).join(", ")}।
+                  Farmer (Direct) or Direct Purchase Rate is missing for Direct Loading rows: {directRowsMissingFields.map((row) => `#${row.row}`).join(", ")}।
                 </div>
               )}
             </>
@@ -299,7 +284,7 @@ function SaleExcelImportReviewModal({
 
         <footer style={{ padding: "12px 18px", borderTop: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
           <div style={{ color: "#64748b", fontSize: 12 }}>
-            {rows.length ? (allRowsReady ? "All valid rows have complete mappings, Sale Types, and required information." : "Complete the Account, Product, and Sale Type for each bill. For Direct Loading, also provide the Farmer, Consignee, and Purchase Rate.") : "No valid rows found. Correct the errors in the Excel file and upload it again."}
+            {rows.length ? (allRowsReady ? "All valid rows have complete mappings and required information. Sale Type was read from Excel." : "Complete the Account, Product, and Sale Type for each bill. For Direct Loading, provide only Farmer (Direct) and Direct Purchase Rate. The Tally Consignee remains unchanged.") : "No valid rows found. Correct the errors in the Excel file and upload it again."}
           </div>
           <div style={{ display: "flex", gap: 8 }}>
             <button type="button" onClick={onClose} disabled={saving} style={{ padding: "9px 14px", border: "1px solid #cbd5e1", borderRadius: 7, background: "#fff", color: "#334155", cursor: saving ? "not-allowed" : "pointer" }}>Cancel</button>
