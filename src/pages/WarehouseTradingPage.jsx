@@ -1592,6 +1592,34 @@ export default function WarehouseTradingPage() {
     };
   }, [activeTab, activeVoucherType, formData.sale_type, formData.warehouse_id, formData.product_id, editId]);
 
+  // Farmer Master is updated from a separate page. Keep the trading dropdowns
+  // fresh even when the other voucher masters are restored from sessionStorage.
+  const refreshFarmerMaster = async () => {
+    try {
+      const response = await API.get("/api/farmers");
+      const latestFarmers = Array.isArray(response.data) ? response.data : [];
+      setFarmers(latestFarmers);
+
+      // Keep cached voucher bundles in sync without making unrelated cached
+      // master data appear newer than it really is.
+      try {
+        for (let index = 0; index < sessionStorage.length; index += 1) {
+          const key = sessionStorage.key(index);
+          if (!key || !key.startsWith("warehouseTradingMasterData:v6:")) continue;
+          const cached = JSON.parse(sessionStorage.getItem(key) || "null");
+          if (!cached?.data) continue;
+          cached.data.farmers = latestFarmers;
+          sessionStorage.setItem(key, JSON.stringify(cached));
+        }
+      } catch {}
+
+      return latestFarmers;
+    } catch (error) {
+      console.error("Failed to refresh Farmer Master for Warehouse Trading:", error);
+      return null;
+    }
+  };
+
   const loadData = async ({ force = false } = {}) => {
     if (!force && masterDataLoadedRef.current) return;
     if (!force && masterLoadPromiseRef.current) return masterLoadPromiseRef.current;
@@ -1627,6 +1655,11 @@ export default function WarehouseTradingPage() {
             setProducts(Array.isArray(data.products) ? data.products : []);
             setEmployees(Array.isArray(data.employees) ? data.employees : []);
             setLocations(Array.isArray(data.locations) ? data.locations : []);
+            // The Farmer Master can change outside this page. Refresh just this
+            // list so both manual Sale Voucher and Excel Preview show new names.
+            if (requiredMasters.includes("farmers")) {
+              await refreshFarmerMaster();
+            }
             masterDataLoadedRef.current = true;
             return;
           }
@@ -1692,6 +1725,15 @@ export default function WarehouseTradingPage() {
       if (!force) masterLoadPromiseRef.current = null;
     }
   };
+
+  // If the user creates a Farmer in another browser tab and returns to Sale,
+  // refresh the dropdown list without requiring a full page reload.
+  useEffect(() => {
+    if (activeTab !== "vouchers" || activeVoucherType !== "sale") return undefined;
+    const refreshOnFocus = () => { refreshFarmerMaster(); };
+    window.addEventListener("focus", refreshOnFocus);
+    return () => window.removeEventListener("focus", refreshOnFocus);
+  }, [activeTab, activeVoucherType]);
 
   const loadWarehouseStockReport = async () => {
     const token = ++reportLoadTokenRef.current;
@@ -3676,6 +3718,10 @@ export default function WarehouseTradingPage() {
     uploadForm.append("file", file);
     setImportingSale(true);
     try {
+      const refreshedFarmers = await refreshFarmerMaster();
+      if (!Array.isArray(refreshedFarmers)) {
+        throw new Error("Could not refresh Farmer Master. Please retry the Sale Excel import.");
+      }
       const res = await API.post("/api/wh-vouchers/sale/import-preview-xlsx", uploadForm, {
         headers: { "Content-Type": "multipart/form-data" },
       });
