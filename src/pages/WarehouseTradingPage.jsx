@@ -3683,7 +3683,8 @@ export default function WarehouseTradingPage() {
       const errors = Array.isArray(res.data?.errors) ? res.data.errors : [];
       setSaleImportReview({
         total: Number(res.data?.total || preview.length + errors.length),
-        preview: preview.map((item) => ({ ...item, sale_type: "" })),
+        // Sale Type is parsed from the Excel column and preselected in Preview.
+        preview: preview.map((item) => ({ ...item, sale_type: item.sale_type || item.data?.sale_type || "" })),
         errors,
         options: res.data?.options || {},
       });
@@ -3732,8 +3733,8 @@ export default function WarehouseTradingPage() {
       alert("Please ensure Company Account, Product and the Employee-assigned Location are selected for every bill before Final Save.");
       return;
     }
-    if (preview.some((item) => item.sale_type === "direct" && (!item.data?.farmer_id || !item.data?.consignee_id || !(Number(item.data?.direct_purchase_rate) > 0)))) {
-      alert("For Direct Loading, select Farmer and Consignee and enter Direct Purchase Rate for every such bill.");
+    if (preview.some((item) => item.sale_type === "direct" && (!item.data?.farmer_id || !(Number(item.data?.direct_purchase_rate) > 0)))) {
+      alert("For Direct Loading, select Farmer (Direct) and enter Direct Purchase Rate for every such bill. The original Tally Consignee will remain unchanged.");
       return;
     }
 
