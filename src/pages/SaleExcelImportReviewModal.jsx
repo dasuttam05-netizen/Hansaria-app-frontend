@@ -131,12 +131,17 @@ function SaleExcelImportReviewModal({
                     {rows.map((row) => {
                       const display = row.display || {};
                       const data = row.data || {};
-                      const linkedAccounts = companyAccountRows
-                        .filter((item) => String(item.company_id || "") === String(data.buyer_id || ""))
-                        .map((item) => ({ id: getId(item), name: item.account_name || item.name || "" }));
-                      const accountOptions = (Array.isArray(display.account_options) && display.account_options.length)
+                      // Backend supplies all seller Company Accounts with GST details.
+                      // Do not restrict this list to accounts linked to the Buyer.
+                      const accountOptions = Array.isArray(display.account_options)
                         ? display.account_options
-                        : linkedAccounts;
+                        : companyAccountRows.map((item) => ({
+                            id: getId(item),
+                            name: item.account_name || item.name || "",
+                            gst_no: item.gst_no || item.gst || item.gstin || "",
+                            gst_valid: Boolean(item.gst_no || item.gst || item.gstin),
+                          }));
+                      const chosenAccount = accountOptions.find((item) => String(item.id) === String(data.company_account_id || ""));
                       const chosenProduct = productOptions.find((item) => getId(item) === String(data.product_id || ""));
                       const chosenFarmer = farmerOptions.find((item) => getId(item) === String(data.farmer_id || ""));
                       const assignedLocationOptions = Array.isArray(display.location_options) ? display.location_options : [];
@@ -182,8 +187,17 @@ function SaleExcelImportReviewModal({
                               style={{ ...selectStyle, borderColor: data.company_account_id ? "#0f766e" : "#f59e0b", background: data.company_account_id ? "#f0fdfa" : "#fffbeb" }}
                             >
                               <option value="">{accountOptions.length ? "Select Account" : "No linked Account"}</option>
-                              {accountOptions.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}
+                              {accountOptions.map((item) => (
+                                <option key={item.id} value={item.id}>
+                                  {item.name} — {item.gst_no ? `GSTIN: ${item.gst_no}` : "GST No NOT SET"}
+                                </option>
+                              ))}
                             </select>
+                            {data.company_account_id && (
+                              <span style={{ display: "block", marginTop: 4, fontSize: 10, color: chosenAccount?.gst_no ? "#047857" : "#b91c1c", fontWeight: 700 }}>
+                                Seller GSTIN: {chosenAccount?.gst_no || "NOT SET — update this account in Company Account Master"}
+                              </span>
+                            )}
                           </td>
                           <td style={{ ...cell, minWidth: 165 }}>
                             <select
