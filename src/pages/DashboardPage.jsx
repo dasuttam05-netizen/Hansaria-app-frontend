@@ -765,6 +765,20 @@ export default function DashboardPage() {
           ],
     },
     {
+      title: "Bank & Financial Reports",
+      permission: "cash.mainBook.view",
+      icon: <FaBalanceScale />,
+      submenu: [
+        { label: "Bank Statement Import", permission: "cash.mainBook.view", action: () => navigate("/bank-financial-reports?tab=import") },
+        { label: "Group Master", permission: "cash.mainBook.view", action: () => navigate("/bank-financial-reports?tab=groups") },
+        { label: "Sub-group Master", permission: "cash.mainBook.view", action: () => navigate("/bank-financial-reports?tab=subgroups") },
+        { label: "Particulars Mapping", permission: "cash.mainBook.view", action: () => navigate("/bank-financial-reports?tab=mapping") },
+        { label: "Group-wise Report", permission: "cash.mainBook.view", action: () => navigate("/bank-financial-reports?tab=groupwise") },
+        { label: "Profit & Loss", permission: "cash.mainBook.view", action: () => navigate("/bank-financial-reports?tab=profitloss") },
+        { label: "Balance Sheet", permission: "cash.mainBook.view", action: () => navigate("/bank-financial-reports?tab=balancesheet") },
+      ],
+    },
+    {
       title: "Names",
       permission: ["buyerNames.view", "buyerNames.create", "buyerNames.edit", "buyerNames.delete", "consigneeNames.view", "consigneeNames.create", "consigneeNames.edit", "consigneeNames.delete"],
       icon: <FaUserTag />,
