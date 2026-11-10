@@ -19,6 +19,26 @@ const sourceLabels = { bank_statement: "Bank Statement Particulars", warehouse_s
 const initialGroup = { name: "", source_type: "bank_statement", nature: "expense", report_placement: "profit_loss", sort_order: "0" };
 const initialSubGroup = { name: "", group_id: "", sort_order: "0" };
 
+// Common accounting group suggestions. Users can still type their own names.
+const groupNameSuggestions = [
+  "Current Assets", "Fixed Assets", "Current Liabilities", "Loans & Liabilities",
+  "Capital / Equity", "Direct Income", "Indirect Income", "Direct Expenses",
+  "Indirect Expenses", "Other / Excluded",
+];
+const subgroupNameSuggestions = {
+  "Current Assets": ["Sundry Debtors", "Cash in Hand", "Bank Accounts", "Supplier Advances", "Loans & Advances", "Stock / Inventory", "GST Input / Receivable"],
+  "Fixed Assets": ["Plant & Machinery", "Furniture & Fixtures", "Vehicles", "Computers & Equipment", "Office Equipment"],
+  "Current Liabilities": ["Sundry Creditors", "Outstanding Expenses", "Customer Advances", "GST Payable", "Statutory Liabilities"],
+  "Loans & Liabilities": ["Bank Loans", "Vehicle Loans", "Business Loans", "Other Loans"],
+  "Capital / Equity": ["Owner Capital", "Drawings", "Retained Earnings"],
+  "Direct Income": ["Sales Income", "Service Income", "Other Direct Income"],
+  "Indirect Income": ["Bank Interest", "Discount Received", "Other Income"],
+  "Direct Expenses": ["Transport Expenses", "Freight & Loading", "Labour Charges", "Job Work Charges", "Factory Expenses", "Power & Fuel"],
+  "Indirect Expenses": ["Salary Expenses", "Office Rent", "Electricity Expenses", "Bank Charges", "Office Expenses", "Repair & Maintenance"],
+  "Other / Excluded": ["Suspense Account", "Personal / Excluded", "Temporary Adjustment"],
+};
+const displayOrderOptions = Array.from({ length: 21 }, (_, index) => String(index));
+
 const tabs = [
   ["import", "Bank Statement Import"],
   ["groups", "Group Master"],
@@ -240,12 +260,14 @@ export default function BankFinancialReportsPage() {
         <section style={{ display: "grid", gridTemplateColumns: "minmax(280px,.7fr) minmax(320px,1.3fr)", gap: 14 }}>
           <form onSubmit={createGroup} style={panel}>
             <h2 style={{ margin: "0 0 12px", fontSize: 18 }}>Create Group</h2>
-            <label style={label}>Group Name</label><input required value={groupForm.name} onChange={(e) => setGroupForm((p) => ({ ...p, name: e.target.value }))} style={input} placeholder="e.g. Sundry Debtors" />
+            <label style={label}>Group Name</label>
+            <input required list="bank-financial-group-name-options" value={groupForm.name} onChange={(e) => setGroupForm((p) => ({ ...p, name: e.target.value }))} style={input} placeholder="Select a suggested Group or type a new name" />
+            <datalist id="bank-financial-group-name-options">{groupNameSuggestions.map((name) => <option key={name} value={name} />)}</datalist>
             <label style={{ ...label, marginTop: 10 }}>Group Source</label><select value={groupForm.source_type || "bank_statement"} onChange={(e) => { const source = e.target.value; setGroupForm((p) => ({ ...p, source_type: source, nature: source === "warehouse_sale" ? "income" : source === "warehouse_purchase" ? "expense" : p.nature, report_placement: source === "bank_statement" ? p.report_placement : "profit_loss" })); }} style={input}>{Object.entries(sourceLabels).map(([key,value]) => <option key={key} value={key}>{value}</option>)}</select>
             <label style={{ ...label, marginTop: 10 }}>Account Nature</label><select disabled={groupForm.source_type !== "bank_statement"} value={groupForm.nature} onChange={(e) => setGroupForm((p) => ({ ...p, nature: e.target.value }))} style={{ ...input, background: groupForm.source_type !== "bank_statement" ? "#f1f5f9" : "#fff" }}>{Object.entries(natureLabels).map(([key,value]) => <option key={key} value={key}>{value}</option>)}</select>
             <label style={{ ...label, marginTop: 10 }}>Where should this Group appear?</label><select disabled={groupForm.source_type !== "bank_statement"} value={groupForm.report_placement} onChange={(e) => setGroupForm((p) => ({ ...p, report_placement: e.target.value }))} style={{ ...input, background: groupForm.source_type !== "bank_statement" ? "#f1f5f9" : "#fff" }}>{Object.entries(placementLabels).map(([key,value]) => <option key={key} value={key}>{value}</option>)}</select>
             {groupForm.source_type !== "bank_statement" && <p style={{ color: "#475569", fontSize: 11, margin: "8px 0 0" }}>This source is connected to existing Warehouse vouchers automatically. Account Nature and Profit & Loss placement are fixed for this source.</p>}
-            <label style={{ ...label, marginTop: 10 }}>Display Order</label><input type="number" value={groupForm.sort_order} onChange={(e) => setGroupForm((p) => ({ ...p, sort_order: e.target.value }))} style={input} />
+            <label style={{ ...label, marginTop: 10 }}>Display Order</label><select value={groupForm.sort_order} onChange={(e) => setGroupForm((p) => ({ ...p, sort_order: e.target.value }))} style={input}>{displayOrderOptions.map((order) => <option key={order} value={order}>{order === "0" ? "0 · Default" : order}</option>)}</select>
             <button type="submit" disabled={saving} style={{ ...primary, marginTop: 13 }}>{saving ? "Saving..." : "Save Group"}</button>
           </form>
           <div style={panel}>
@@ -262,9 +284,11 @@ export default function BankFinancialReportsPage() {
         <section style={{ display: "grid", gridTemplateColumns: "minmax(280px,.7fr) minmax(320px,1.3fr)", gap: 14 }}>
           <form onSubmit={createSubGroup} style={panel}>
             <h2 style={{ margin: "0 0 12px", fontSize: 18 }}>Create Sub-group</h2>
-            <label style={label}>Sub-group Name</label><input required value={subGroupForm.name} onChange={(e) => setSubGroupForm((p) => ({ ...p, name: e.target.value }))} style={input} placeholder="e.g. Assam Customers" />
-            <label style={{ ...label, marginTop: 10 }}>Under Group</label><select required value={subGroupForm.group_id} onChange={(e) => setSubGroupForm((p) => ({ ...p, group_id: e.target.value }))} style={input}><option value="">Select Group</option>{groups.filter((g) => !g.source_type || g.source_type === "bank_statement").map((g) => <option key={g._id} value={g._id}>{g.name}</option>)}</select>
-            <label style={{ ...label, marginTop: 10 }}>Display Order</label><input type="number" value={subGroupForm.sort_order} onChange={(e) => setSubGroupForm((p) => ({ ...p, sort_order: e.target.value }))} style={input} />
+            <label style={label}>Sub-group Name</label>
+            <input required list="bank-financial-subgroup-name-options" value={subGroupForm.name} onChange={(e) => setSubGroupForm((p) => ({ ...p, name: e.target.value }))} style={input} placeholder="Choose a suggested Sub-group or type a new name" />
+            <datalist id="bank-financial-subgroup-name-options">{(subgroupNameSuggestions[groups.find((g) => String(g._id) === String(subGroupForm.group_id))?.name] || []).map((name) => <option key={name} value={name} />)}</datalist>
+            <label style={{ ...label, marginTop: 10 }}>Under Group</label><select required value={subGroupForm.group_id} onChange={(e) => setSubGroupForm((p) => ({ ...p, group_id: e.target.value, name: "" }))} style={input}><option value="">Select Group</option>{groups.filter((g) => !g.source_type || g.source_type === "bank_statement").map((g) => <option key={g._id} value={g._id}>{g.name}</option>)}</select>
+            <label style={{ ...label, marginTop: 10 }}>Display Order</label><select value={subGroupForm.sort_order} onChange={(e) => setSubGroupForm((p) => ({ ...p, sort_order: e.target.value }))} style={input}>{displayOrderOptions.map((order) => <option key={order} value={order}>{order === "0" ? "0 · Default" : order}</option>)}</select>
             <button type="submit" disabled={saving || !groups.some((g) => !g.source_type || g.source_type === "bank_statement")} style={{ ...primary, marginTop: 13 }}>{saving ? "Saving..." : "Save Sub-group"}</button>
           </form>
           <div style={panel}>
