@@ -13,6 +13,7 @@ const th = { position: "sticky", top: 0, zIndex: 1, background: "#17365d", color
 const td = { padding: "9px", borderBottom: "1px solid #e8edf3", fontSize: 12, color: "#334155", verticalAlign: "middle" };
 const money = (value) => `₹${Number(value || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const dateLabel = (value) => value ? new Date(value).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric", timeZone: "Asia/Kolkata" }) : "-";
+const dateInputValue = (value) => value ? new Date(value).toISOString().slice(0, 10) : "";
 const natureLabels = { asset: "Asset", liability: "Liability", equity: "Capital / Equity", income: "Income", expense: "Expense", other: "Other / Excluded" };
 const placementLabels = { balance_sheet: "Balance Sheet", profit_loss: "Profit & Loss", exclude: "Exclude from Statements" };
 const sourceLabels = { bank_statement: "Bank Statement Particulars", warehouse_sale: "Warehouse Sale Vouchers", warehouse_purchase: "Warehouse Purchase Vouchers" };
@@ -41,6 +42,7 @@ const displayOrderOptions = Array.from({ length: 21 }, (_, index) => String(inde
 
 const tabs = [
   ["import", "Bank Statement Import"],
+  ["importhistory", "Import History"],
   ["groups", "Group Master"],
   ["subgroups", "Sub-group Master"],
   ["mapping", "Particulars Mapping"],
@@ -67,8 +69,13 @@ export default function BankFinancialReportsPage() {
   const [file, setFile] = useState(null);
   const [importResult, setImportResult] = useState(null);
   const [mappingSearch, setMappingSearch] = useState("");
-  const [filters, setFilters] = useState({ from_date: "", to_date: "", bank_name: "", voucher_type: "" });
-  const [appliedFilters, setAppliedFilters] = useState({ from_date: "", to_date: "", bank_name: "", voucher_type: "" });
+  const [imports, setImports] = useState([]);
+  const [editingGroupId, setEditingGroupId] = useState("");
+  const [editingSubGroupId, setEditingSubGroupId] = useState("");
+  const [editingTransaction, setEditingTransaction] = useState(null);
+  const [transactionEditForm, setTransactionEditForm] = useState(null);
+  const [filters, setFilters] = useState({ from_date: "", to_date: "", bank_name: "", voucher_type: "", import_batch_id: "" });
+  const [appliedFilters, setAppliedFilters] = useState({ from_date: "", to_date: "", bank_name: "", voucher_type: "", import_batch_id: "" });
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -82,16 +89,18 @@ export default function BankFinancialReportsPage() {
   const params = useMemo(() => Object.fromEntries(Object.entries(appliedFilters).filter(([, value]) => value !== "")), [appliedFilters]);
 
   const loadMasters = useCallback(async () => {
-    const [groupRes, subRes, mappingRes, summaryRes] = await Promise.all([
+    const [groupRes, subRes, mappingRes, summaryRes, importRes] = await Promise.all([
       axios.get(`${API_BASE}/groups`),
       axios.get(`${API_BASE}/subgroups`),
       axios.get(`${API_BASE}/ledger-mappings`),
       axios.get(`${API_BASE}/summary`),
+      axios.get(`${API_BASE}/import-batches`),
     ]);
     setGroups(Array.isArray(groupRes.data) ? groupRes.data : []);
     setSubgroups(Array.isArray(subRes.data) ? subRes.data : []);
     setMappings(Array.isArray(mappingRes.data) ? mappingRes.data : []);
     setSummary(summaryRes.data || {});
+    setImports(Array.isArray(importRes.data) ? importRes.data : []);
   }, []);
 
   const loadCurrentReport = useCallback(async (selectedTab = tab, filterParams = params) => {
@@ -99,13 +108,16 @@ export default function BankFinancialReportsPage() {
       const res = await axios.get(`${API_BASE}/transactions`, { params: { ...filterParams, limit: 1000 } });
       setTransactions(Array.isArray(res.data) ? res.data : []);
     } else if (selectedTab === "groupwise") {
-      const res = await axios.get(`${API_BASE}/reports/groupwise`, { params: filterParams });
+      const reportFilters = { ...filterParams }; delete reportFilters.import_batch_id;
+      const res = await axios.get(`${API_BASE}/reports/groupwise`, { params: reportFilters });
       setGroupReport(Array.isArray(res.data) ? res.data : []);
     } else if (selectedTab === "profitloss") {
-      const res = await axios.get(`${API_BASE}/reports/profit-loss`, { params: filterParams });
+      const reportFilters = { ...filterParams }; delete reportFilters.import_batch_id;
+      const res = await axios.get(`${API_BASE}/reports/profit-loss`, { params: reportFilters });
       setProfitLoss(res.data || { income: 0, expense: 0, net_profit: 0, rows: [] });
     } else if (selectedTab === "balancesheet") {
-      const res = await axios.get(`${API_BASE}/reports/balance-sheet`, { params: filterParams });
+      const reportFilters = { ...filterParams }; delete reportFilters.import_batch_id;
+      const res = await axios.get(`${API_BASE}/reports/balance-sheet`, { params: reportFilters });
       setBalanceSheet(res.data || { total_assets: 0, total_liabilities: 0, total_equity: 0, liabilities_plus_equity: 0, difference: 0, rows: [] });
     }
   }, [tab, params]);
@@ -131,8 +143,10 @@ export default function BankFinancialReportsPage() {
   const createGroup = async (event) => {
     event.preventDefault(); setSaving(true); setError(""); setNotice("");
     try {
-      await axios.post(`${API_BASE}/groups`, { ...groupForm, sort_order: Number(groupForm.sort_order || 0) });
-      setGroupForm(initialGroup); await loadMasters(); setNotice("Group Master saved successfully.");
+      const payload = { ...groupForm, sort_order: Number(groupForm.sort_order || 0) };
+      if (editingGroupId) await axios.put(`${API_BASE}/groups/${editingGroupId}`, payload);
+      else await axios.post(`${API_BASE}/groups`, payload);
+      setGroupForm(initialGroup); setEditingGroupId(""); await loadMasters(); setNotice(editingGroupId ? "Group Master updated successfully." : "Group Master saved successfully.");
     } catch (err) { setError(err.response?.data?.error || err.message); }
     finally { setSaving(false); }
   };
@@ -140,8 +154,10 @@ export default function BankFinancialReportsPage() {
   const createSubGroup = async (event) => {
     event.preventDefault(); setSaving(true); setError(""); setNotice("");
     try {
-      await axios.post(`${API_BASE}/subgroups`, { ...subGroupForm, sort_order: Number(subGroupForm.sort_order || 0) });
-      setSubGroupForm(initialSubGroup); await loadMasters(); setNotice("Sub-group Master saved successfully.");
+      const payload = { ...subGroupForm, sort_order: Number(subGroupForm.sort_order || 0) };
+      if (editingSubGroupId) await axios.put(`${API_BASE}/subgroups/${editingSubGroupId}`, payload);
+      else await axios.post(`${API_BASE}/subgroups`, payload);
+      setSubGroupForm(initialSubGroup); setEditingSubGroupId(""); await loadMasters(); setNotice(editingSubGroupId ? "Sub-group Master updated successfully." : "Sub-group Master saved successfully.");
     } catch (err) { setError(err.response?.data?.error || err.message); }
     finally { setSaving(false); }
   };
@@ -156,8 +172,48 @@ export default function BankFinancialReportsPage() {
       setImportResult(response.data || null);
       setFile(null);
       await loadMasters();
-      setNotice("Bank Statement imported. Please map the Particulars before using P&L and Balance Sheet.");
+      setNotice(`Bank Statement imported. ${response.data?.auto_mapped_rows || 0} transaction rows used previously saved Group / Sub-group mappings. Only new or unmapped Particulars need mapping.`);
     } catch (err) { setError(err.response?.data?.error || err.message || "Bank Statement import failed."); }
+    finally { setSaving(false); }
+  };
+
+  const startEditGroup = (row) => {
+    setEditingGroupId(String(row._id || row.id));
+    setGroupForm({ name: row.name || "", source_type: row.source_type || "bank_statement", nature: row.nature || "expense", report_placement: row.report_placement || "profit_loss", sort_order: String(row.sort_order ?? 0) });
+    selectTab("groups");
+  };
+
+  const startEditSubGroup = (row) => {
+    setEditingSubGroupId(String(row._id || row.id));
+    setSubGroupForm({ name: row.name || "", group_id: String(row.group_id || ""), sort_order: String(row.sort_order ?? 0) });
+    selectTab("subgroups");
+  };
+
+  const cancelGroupEdit = () => { setEditingGroupId(""); setGroupForm(initialGroup); };
+  const cancelSubGroupEdit = () => { setEditingSubGroupId(""); setSubGroupForm(initialSubGroup); };
+
+  const openTransactionEdit = (row) => {
+    setEditingTransaction(row);
+    setTransactionEditForm({
+      bank_date: dateInputValue(row.bank_date), bank_name: row.bank_name || "", bank_remarks: row.bank_remarks || "",
+      bank_time: row.bank_time || "", instrument_type: row.instrument_type || "", instrument_no: row.instrument_no || "", transaction_id: row.transaction_id || "",
+      bank_debit: String(row.bank_debit ?? 0), bank_credit: String(row.bank_credit ?? 0), bank_balance: String(row.bank_balance ?? 0),
+      bank_status: row.bank_status || "", tally_date: dateInputValue(row.tally_date), particulars_name: row.particulars_name || "",
+      voucher_type: row.voucher_type || "", voucher_number: row.voucher_number || "",
+      receipt_amount: String(row.receipt_amount ?? 0), payment_amount: String(row.payment_amount ?? 0),
+    });
+  };
+
+  const saveTransactionEdit = async (event) => {
+    event.preventDefault();
+    if (!editingTransaction || !transactionEditForm) return;
+    setSaving(true); setError(""); setNotice("");
+    try {
+      await axios.put(`${API_BASE}/transactions/${editingTransaction._id || editingTransaction.id}`, transactionEditForm);
+      setEditingTransaction(null); setTransactionEditForm(null);
+      await loadMasters(); await loadCurrentReport("statement", params);
+      setNotice("Bank Statement row updated successfully. Saved Particulars mapping remains unchanged.");
+    } catch (err) { setError(err.response?.data?.error || err.message || "Could not update Bank Statement row."); }
     finally { setSaving(false); }
   };
 
@@ -239,6 +295,7 @@ export default function BankFinancialReportsPage() {
               <div style={{ display: "grid", gridTemplateColumns: "repeat(2,minmax(0,1fr))", gap: 8, marginTop: 10, fontSize: 12 }}>
                 <span>Total Rows: <b>{importResult.total_rows}</b></span><span>Imported: <b>{importResult.imported_rows}</b></span>
                 <span>Duplicates: <b>{importResult.duplicate_rows}</b></span><span>Invalid: <b>{importResult.invalid_rows}</b></span>
+                <span>Auto-mapped rows: <b>{importResult.auto_mapped_rows || 0}</b></span><span>Need Mapping: <b>{importResult.unmapped_rows || 0}</b></span>
                 <span>Receipts: <b>{fmt(importResult.total_receipts)}</b></span><span>Payments: <b>{fmt(importResult.total_payments)}</b></span>
               </div>
               {importResult.invalid_details?.length > 0 && <div style={{ marginTop: 9, color: "#b91c1c" }}>{importResult.invalid_details.map((item) => <div key={item.row}>Row {item.row}: {item.reason}</div>)}</div>}
@@ -256,10 +313,23 @@ export default function BankFinancialReportsPage() {
         </section>
       )}
 
+      {tab === "importhistory" && (
+        <section style={panel}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 10, marginBottom: 12 }}>
+            <div><h2 style={{ margin: 0, fontSize: 18 }}>Imported Bank Statements</h2><p style={{ margin: "5px 0 0", fontSize: 12, color: "#64748b" }}>Open a previous import and edit its individual statement rows. Saved Group / Sub-group mappings remain in place.</p></div>
+            <button type="button" onClick={() => refreshAll("importhistory")} style={secondary}>Refresh History</button>
+          </div>
+          <div style={{ overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse", minWidth: 850 }}><thead><tr>{["File Name","Date From","Date To","Rows","Receipts","Payments","Imported By","Action"].map((x) => <th key={x} style={th}>{x}</th>)}</tr></thead><tbody>
+            {imports.map((row) => <tr key={row.batch_id || row.file_name}><td style={td}><b>{row.file_name}</b></td><td style={td}>{dateLabel(row.date_from)}</td><td style={td}>{dateLabel(row.date_to)}</td><td style={td}>{row.total_rows}</td><td style={{ ...td, textAlign: "right" }}>{fmt(row.total_receipts)}</td><td style={{ ...td, textAlign: "right" }}>{fmt(row.total_payments)}</td><td style={td}>{row.imported_by || "-"}</td><td style={td}><button type="button" style={primary} onClick={() => { const next = { ...appliedFilters, from_date: "", to_date: "", bank_name: "", voucher_type: "", import_batch_id: row.batch_id || "" }; setFilters(next); setAppliedFilters(next); selectTab("statement"); }}>Open / Edit Statement</button></td></tr>)}
+            {!imports.length && <tr><td style={td} colSpan={8}>No imported statements found yet.</td></tr>}
+          </tbody></table></div>
+        </section>
+      )}
+
       {tab === "groups" && (
         <section style={{ display: "grid", gridTemplateColumns: "minmax(280px,.7fr) minmax(320px,1.3fr)", gap: 14 }}>
           <form onSubmit={createGroup} style={panel}>
-            <h2 style={{ margin: "0 0 12px", fontSize: 18 }}>Create Group</h2>
+            <h2 style={{ margin: "0 0 12px", fontSize: 18 }}>{editingGroupId ? "Edit Group" : "Create Group"}</h2>
             <label style={label}>Group Name</label>
             <input required list="bank-financial-group-name-options" value={groupForm.name} onChange={(e) => setGroupForm((p) => ({ ...p, name: e.target.value }))} style={input} placeholder="Select a suggested Group or type a new name" />
             <datalist id="bank-financial-group-name-options">{groupNameSuggestions.map((name) => <option key={name} value={name} />)}</datalist>
@@ -268,13 +338,13 @@ export default function BankFinancialReportsPage() {
             <label style={{ ...label, marginTop: 10 }}>Where should this Group appear?</label><select disabled={groupForm.source_type !== "bank_statement"} value={groupForm.report_placement} onChange={(e) => setGroupForm((p) => ({ ...p, report_placement: e.target.value }))} style={{ ...input, background: groupForm.source_type !== "bank_statement" ? "#f1f5f9" : "#fff" }}>{Object.entries(placementLabels).map(([key,value]) => <option key={key} value={key}>{value}</option>)}</select>
             {groupForm.source_type !== "bank_statement" && <p style={{ color: "#475569", fontSize: 11, margin: "8px 0 0" }}>This source is connected to existing Warehouse vouchers automatically. Account Nature and Profit & Loss placement are fixed for this source.</p>}
             <label style={{ ...label, marginTop: 10 }}>Display Order</label><select value={groupForm.sort_order} onChange={(e) => setGroupForm((p) => ({ ...p, sort_order: e.target.value }))} style={input}>{displayOrderOptions.map((order) => <option key={order} value={order}>{order === "0" ? "0 · Default" : order}</option>)}</select>
-            <button type="submit" disabled={saving} style={{ ...primary, marginTop: 13 }}>{saving ? "Saving..." : "Save Group"}</button>
+            <div style={{ display: "flex", gap: 8, marginTop: 13 }}><button type="submit" disabled={saving} style={primary}>{saving ? "Saving..." : editingGroupId ? "Update Group" : "Save Group"}</button>{editingGroupId && <button type="button" onClick={cancelGroupEdit} style={secondary}>Cancel Edit</button>}</div>
           </form>
           <div style={panel}>
             <h2 style={{ margin: "0 0 12px", fontSize: 18 }}>Group Master List</h2>
-            <div style={{ overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse" }}><thead><tr>{["Group Name","Source","Nature","Report Placement"].map((x) => <th key={x} style={th}>{x}</th>)}</tr></thead><tbody>
-              {groups.map((row) => <tr key={row._id}><td style={td}><b>{row.name}</b></td><td style={td}>{sourceLabels[row.source_type || "bank_statement"] || "Bank Statement Particulars"}</td><td style={td}>{natureLabels[row.nature] || row.nature}</td><td style={td}>{placementLabels[row.report_placement] || row.report_placement}</td></tr>)}
-              {!groups.length && <tr><td style={td} colSpan={4}>No Groups created yet.</td></tr>}
+            <div style={{ overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse" }}><thead><tr>{["Group Name","Source","Nature","Report Placement","Action"].map((x) => <th key={x} style={th}>{x}</th>)}</tr></thead><tbody>
+              {groups.map((row) => <tr key={row._id}><td style={td}><b>{row.name}</b></td><td style={td}>{sourceLabels[row.source_type || "bank_statement"] || "Bank Statement Particulars"}</td><td style={td}>{natureLabels[row.nature] || row.nature}</td><td style={td}>{placementLabels[row.report_placement] || row.report_placement}</td><td style={td}><button type="button" onClick={() => startEditGroup(row)} style={secondary}>Edit</button></td></tr>)}
+              {!groups.length && <tr><td style={td} colSpan={5}>No Groups created yet.</td></tr>}
             </tbody></table></div>
           </div>
         </section>
@@ -283,19 +353,19 @@ export default function BankFinancialReportsPage() {
       {tab === "subgroups" && (
         <section style={{ display: "grid", gridTemplateColumns: "minmax(280px,.7fr) minmax(320px,1.3fr)", gap: 14 }}>
           <form onSubmit={createSubGroup} style={panel}>
-            <h2 style={{ margin: "0 0 12px", fontSize: 18 }}>Create Sub-group</h2>
+            <h2 style={{ margin: "0 0 12px", fontSize: 18 }}>{editingSubGroupId ? "Edit Sub-group" : "Create Sub-group"}</h2>
             <label style={label}>Sub-group Name</label>
             <input required list="bank-financial-subgroup-name-options" value={subGroupForm.name} onChange={(e) => setSubGroupForm((p) => ({ ...p, name: e.target.value }))} style={input} placeholder="Choose a suggested Sub-group or type a new name" />
             <datalist id="bank-financial-subgroup-name-options">{(subgroupNameSuggestions[groups.find((g) => String(g._id) === String(subGroupForm.group_id))?.name] || []).map((name) => <option key={name} value={name} />)}</datalist>
-            <label style={{ ...label, marginTop: 10 }}>Under Group</label><select required value={subGroupForm.group_id} onChange={(e) => setSubGroupForm((p) => ({ ...p, group_id: e.target.value, name: "" }))} style={input}><option value="">Select Group</option>{groups.filter((g) => !g.source_type || g.source_type === "bank_statement").map((g) => <option key={g._id} value={g._id}>{g.name}</option>)}</select>
+            <label style={{ ...label, marginTop: 10 }}>Under Group</label><select required value={subGroupForm.group_id} onChange={(e) => setSubGroupForm((p) => ({ ...p, group_id: e.target.value, name: editingSubGroupId ? p.name : "" }))} style={input}><option value="">Select Group</option>{groups.filter((g) => !g.source_type || g.source_type === "bank_statement").map((g) => <option key={g._id} value={g._id}>{g.name}</option>)}</select>
             <label style={{ ...label, marginTop: 10 }}>Display Order</label><select value={subGroupForm.sort_order} onChange={(e) => setSubGroupForm((p) => ({ ...p, sort_order: e.target.value }))} style={input}>{displayOrderOptions.map((order) => <option key={order} value={order}>{order === "0" ? "0 · Default" : order}</option>)}</select>
-            <button type="submit" disabled={saving || !groups.some((g) => !g.source_type || g.source_type === "bank_statement")} style={{ ...primary, marginTop: 13 }}>{saving ? "Saving..." : "Save Sub-group"}</button>
+            <div style={{ display: "flex", gap: 8, marginTop: 13 }}><button type="submit" disabled={saving || !groups.some((g) => !g.source_type || g.source_type === "bank_statement")} style={primary}>{saving ? "Saving..." : editingSubGroupId ? "Update Sub-group" : "Save Sub-group"}</button>{editingSubGroupId && <button type="button" onClick={cancelSubGroupEdit} style={secondary}>Cancel Edit</button>}</div>
           </form>
           <div style={panel}>
             <h2 style={{ margin: "0 0 12px", fontSize: 18 }}>Sub-group Master List</h2>
-            <div style={{ overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse" }}><thead><tr><th style={th}>Sub-group</th><th style={th}>Under Group</th></tr></thead><tbody>
-              {subgroups.map((row) => <tr key={row._id}><td style={td}><b>{row.name}</b></td><td style={td}>{row.group_name}</td></tr>)}
-              {!subgroups.length && <tr><td style={td} colSpan={2}>No Sub-groups created yet.</td></tr>}
+            <div style={{ overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse" }}><thead><tr><th style={th}>Sub-group</th><th style={th}>Under Group</th><th style={th}>Action</th></tr></thead><tbody>
+              {subgroups.map((row) => <tr key={row._id}><td style={td}><b>{row.name}</b></td><td style={td}>{row.group_name}</td><td style={td}><button type="button" onClick={() => startEditSubGroup(row)} style={secondary}>Edit</button></td></tr>)}
+              {!subgroups.length && <tr><td style={td} colSpan={3}>No Sub-groups created yet.</td></tr>}
             </tbody></table></div>
           </div>
         </section>
@@ -304,11 +374,11 @@ export default function BankFinancialReportsPage() {
       {tab === "mapping" && (
         <section style={panel}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "end", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
-            <div><h2 style={{ margin: 0, fontSize: 18 }}>Particulars → Group / Sub-group Mapping</h2><p style={{ margin: "5px 0 0", color: "#64748b", fontSize: 12 }}>Names are read automatically from Excel Column L. Select where each name belongs.</p></div>
+            <div><h2 style={{ margin: 0, fontSize: 18 }}>Particulars → Group / Sub-group Mapping</h2><p style={{ margin: "5px 0 0", color: "#64748b", fontSize: 12 }}>Names are read from Excel Column L. Once saved, a Particulars name stays mapped in this company and is automatically reused on every later import. Only new / unmapped names need attention.</p></div>
             <input value={mappingSearch} onChange={(e) => setMappingSearch(e.target.value)} placeholder="Search Particulars name..." style={{ ...input, maxWidth: 280 }} />
           </div>
           {!groups.length && <div style={{ padding: 12, background: "#fffbeb", color: "#92400e", borderRadius: 7, marginBottom: 10 }}>First create Groups in Group Master, then map Particulars here.</div>}
-          <div style={{ overflowX: "auto", maxHeight: "68vh" }}><table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1050 }}><thead><tr>{["Particulars / Ledger","Rows","Group","Sub-group","Opening Balance","Dr/Cr","Report Placement","Action"].map((x) => <th key={x} style={th}>{x}</th>)}</tr></thead><tbody>
+          <div style={{ overflowX: "auto", maxHeight: "68vh" }}><table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1050 }}><thead><tr>{["Particulars / Ledger","Rows","Group","Sub-group","Opening Balance","Dr/Cr","Report Placement","Mapping Status","Action"].map((x) => <th key={x} style={th}>{x}</th>)}</tr></thead><tbody>
             {filteredMappings.map((row) => {
               const allowedSubgroups = subgroups.filter((sub) => String(sub.group_id) === String(row.group_id));
               return <tr key={row.normalized_name} style={{ background: row.mapped ? "#fff" : "#fffdf5" }}>
@@ -319,29 +389,40 @@ export default function BankFinancialReportsPage() {
                 <td style={{ ...td, minWidth: 125 }}><input type="number" step="0.01" value={row.opening_balance ?? 0} onChange={(e) => updateMappingDraft(row.normalized_name, { opening_balance: e.target.value })} style={input} /></td>
                 <td style={{ ...td, minWidth: 85 }}><select value={row.opening_balance_type || "dr"} onChange={(e) => updateMappingDraft(row.normalized_name, { opening_balance_type: e.target.value })} style={input}><option value="dr">Dr</option><option value="cr">Cr</option></select></td>
                 <td style={td}>{placementLabels[row.report_placement] || (row.group_id ? "From Group" : "Not Mapped")}</td>
-                <td style={td}><button type="button" disabled={saving || !row.group_id} onClick={() => saveMapping(row)} style={{ ...primary, padding: "7px 10px", opacity: !row.group_id ? .5 : 1 }}>Save</button></td>
+                <td style={td}><span style={{ display: "inline-block", padding: "4px 8px", borderRadius: 12, fontSize: 11, fontWeight: 800, color: row.mapped ? "#166534" : "#92400e", background: row.mapped ? "#dcfce7" : "#fef3c7" }}>{row.mapped ? "Saved · Auto-mapped" : "Needs Mapping"}</span></td>
+                <td style={td}><button type="button" disabled={saving || !row.group_id} onClick={() => saveMapping(row)} style={{ ...primary, padding: "7px 10px", opacity: !row.group_id ? .5 : 1 }}>{row.mapped ? "Update Mapping" : "Save Mapping"}</button></td>
               </tr>;
             })}
-            {!filteredMappings.length && <tr><td style={td} colSpan={8}>No Particulars found. Import a bank statement first.</td></tr>}
+            {!filteredMappings.length && <tr><td style={td} colSpan={9}>No Particulars found. Import a bank statement first.</td></tr>}
           </tbody></table></div>
         </section>
       )}
 
-      {!["import", "groups", "subgroups", "mapping"].includes(tab) && (
+      {!["import", "importhistory", "groups", "subgroups", "mapping"].includes(tab) && (
         <>
           <section style={{ ...panel, marginBottom: 12, display: "flex", alignItems: "end", flexWrap: "wrap", gap: 9 }}>
             <div><label style={label}>From Date (Bank Date – A)</label><input type="date" value={filters.from_date} onChange={(e) => setFilters((p) => ({ ...p, from_date: e.target.value }))} style={input} /></div>
             <div><label style={label}>To Date</label><input type="date" value={filters.to_date} onChange={(e) => setFilters((p) => ({ ...p, to_date: e.target.value }))} style={input} /></div>
             <div><label style={label}>Bank Name</label><select value={filters.bank_name} onChange={(e) => setFilters((p) => ({ ...p, bank_name: e.target.value }))} style={input}><option value="">All Banks</option>{(summary.bank_names || []).map((name) => <option key={name} value={name}>{name}</option>)}</select></div>
             <div><label style={label}>Voucher Type</label><select value={filters.voucher_type} onChange={(e) => setFilters((p) => ({ ...p, voucher_type: e.target.value }))} style={input}><option value="">All Types</option><option>Payment</option><option>Receipt</option><option>Contra</option></select></div>
+            {filters.import_batch_id && <div><label style={label}>Import Batch</label><input readOnly value={imports.find((item) => item.batch_id === filters.import_batch_id)?.file_name || "Selected Import"} style={{ ...input, background: "#f1f5f9" }} /></div>}
             <button type="button" onClick={applyFilters} disabled={loading} style={primary}>Apply Filter</button>
+            <button type="button" onClick={() => { const cleared = { from_date: "", to_date: "", bank_name: "", voucher_type: "", import_batch_id: "" }; setFilters(cleared); setAppliedFilters(cleared); }} style={secondary}>Clear Filter</button>
           </section>
 
           {tab === "statement" && <section style={panel}>
             <h2 style={{ margin: "0 0 12px", fontSize: 18 }}>Bank Statement Transactions</h2>
-            <div style={{ overflow: "auto", maxHeight: "70vh" }}><table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1250 }}><thead><tr>{["Date (A)","Bank (D)","Particulars (L)","Voucher Type (M)","Voucher No. (N)","Receipt (O)","Payment (P)","Bank Balance (H)","Group Mapping","Status"].map((x) => <th key={x} style={th}>{x}</th>)}</tr></thead><tbody>
-              {transactions.map((row) => <tr key={row._id}><td style={td}>{dateLabel(row.bank_date)}</td><td style={td}>{row.bank_name}</td><td style={td}>{row.particulars_name}</td><td style={td}>{row.voucher_type}</td><td style={td}>{row.voucher_number}</td><td style={{ ...td, textAlign: "right" }}>{row.receipt_amount ? fmt(row.receipt_amount) : "-"}</td><td style={{ ...td, textAlign: "right" }}>{row.payment_amount ? fmt(row.payment_amount) : "-"}</td><td style={{ ...td, textAlign: "right" }}>{fmt(row.bank_balance)}</td><td style={td}>{row.mapping ? `${row.mapping.group_name}${row.mapping.subgroup_name ? ` / ${row.mapping.subgroup_name}` : ""}` : <span style={{ color: "#b45309", fontWeight: 800 }}>Unmapped</span>}</td><td style={td}>{row.bank_status || "-"}</td></tr>)}
-              {!transactions.length && <tr><td style={td} colSpan={10}>No bank transactions for the selected filter.</td></tr>}
+            {editingTransaction && transactionEditForm && <form onSubmit={saveTransactionEdit} style={{ border: "1px solid #99f6e4", background: "#f0fdfa", borderRadius: 9, padding: 12, marginBottom: 14 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 10 }}><b>Edit Imported Statement Row · {editingTransaction.voucher_number}</b><button type="button" onClick={() => { setEditingTransaction(null); setTransactionEditForm(null); }} style={secondary}>Close</button></div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(175px,1fr))", gap: 9 }}>
+                {[["bank_date","Date","date"],["bank_time","Time","text"],["bank_name","Bank Name","text"],["particulars_name","Particulars / Ledger Name","text"],["voucher_type","Voucher Type","text"],["voucher_number","Voucher Number","text"],["receipt_amount","Receipt Amount","number"],["payment_amount","Payment Amount","number"],["bank_debit","Statement Debit","number"],["bank_credit","Statement Credit","number"],["bank_balance","Bank Balance (H)","number"],["bank_remarks","Bank Remarks","text"],["instrument_type","Instrument Type","text"],["instrument_no","Instrument Number","text"],["transaction_id","Transaction ID","text"],["bank_status","Bank Status","text"],["tally_date","Tally Date","date"]].map(([key,title,type]) => <label key={key} style={{ ...label, margin: 0 }}>{title}<input type={type} value={transactionEditForm[key] ?? ""} onChange={(e) => setTransactionEditForm((p) => ({ ...p, [key]: e.target.value }))} style={{ ...input, marginTop: 4 }} /></label>)}
+              </div>
+              <div style={{ display: "flex", gap: 8, marginTop: 12 }}><button type="submit" disabled={saving} style={primary}>{saving ? "Saving..." : "Save Statement Changes"}</button><button type="button" onClick={() => { setEditingTransaction(null); setTransactionEditForm(null); }} style={secondary}>Cancel</button></div>
+              <p style={{ margin: "8px 0 0", fontSize: 11, color: "#475569" }}>If Particulars is renamed, the new name will require its own Group / Sub-group mapping. Existing saved mappings are not deleted.</p>
+            </form>}
+            <div style={{ overflow: "auto", maxHeight: "70vh" }}><table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1250 }}><thead><tr>{["Date (A)","Bank (D)","Particulars (L)","Voucher Type (M)","Voucher No. (N)","Receipt (O)","Payment (P)","Bank Balance (H)","Group Mapping","Status","Action"].map((x) => <th key={x} style={th}>{x}</th>)}</tr></thead><tbody>
+              {transactions.map((row) => <tr key={row._id}><td style={td}>{dateLabel(row.bank_date)}</td><td style={td}>{row.bank_name}</td><td style={td}>{row.particulars_name}</td><td style={td}>{row.voucher_type}</td><td style={td}>{row.voucher_number}</td><td style={{ ...td, textAlign: "right" }}>{row.receipt_amount ? fmt(row.receipt_amount) : "-"}</td><td style={{ ...td, textAlign: "right" }}>{row.payment_amount ? fmt(row.payment_amount) : "-"}</td><td style={{ ...td, textAlign: "right" }}>{fmt(row.bank_balance)}</td><td style={td}>{row.mapping ? `${row.mapping.group_name}${row.mapping.subgroup_name ? ` / ${row.mapping.subgroup_name}` : ""}` : <span style={{ color: "#b45309", fontWeight: 800 }}>Unmapped</span>}</td><td style={td}>{row.bank_status || "-"}</td><td style={td}><button type="button" onClick={() => openTransactionEdit(row)} style={secondary}>Edit</button></td></tr>)}
+              {!transactions.length && <tr><td style={td} colSpan={11}>No bank transactions for the selected filter.</td></tr>}
             </tbody></table></div>
           </section>}
 
