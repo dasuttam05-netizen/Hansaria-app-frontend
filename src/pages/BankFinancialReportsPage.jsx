@@ -19,7 +19,7 @@ const placementLabels = { balance_sheet: "Balance Sheet", profit_loss: "Profit &
 const sourceLabels = { bank_statement: "Bank Statement Particulars", warehouse_sale: "Warehouse Sale Vouchers", warehouse_purchase: "Warehouse Purchase Vouchers" };
 const initialGroup = { name: "", source_type: "bank_statement", nature: "expense", report_placement: "profit_loss", sort_order: "0" };
 const initialSubGroup = { name: "", group_id: "", sort_order: "0" };
-const initialQuickMapping = { particulars_name: "", group_id: "", subgroup_id: "", group_company: "", opening_balance: "0", opening_balance_type: "dr" };
+const initialQuickMapping = { particulars_name: "", ledger_name: "", group_id: "", subgroup_id: "", group_company: "", opening_balance: "0", opening_balance_type: "dr" };
 
 // TallyPrime's 15 predefined primary groups and 13 predefined sub-groups.
 // Selecting a primary group pre-fills its account nature and report placement.
@@ -353,7 +353,7 @@ export default function BankFinancialReportsPage() {
       setImportResult(response.data || null);
       setFile(null);
       await loadMasters();
-      setNotice(`Bank Statement imported. ${response.data?.auto_mapped_rows || 0} transaction rows used previously saved Group / Sub-group mappings. Only new or unmapped Particulars need mapping.`);
+      setNotice(`Bank Statement imported. Excel Ledger Name used on ${response.data?.excel_ledger_names || 0} rows and Group Company used on ${response.data?.excel_group_companies || 0} rows. ${response.data?.auto_mapped_rows || 0} rows also used saved Group / Sub-group mappings.`);
     } catch (err) { setError(err.response?.data?.error || err.message || "Bank Statement import failed."); }
     finally { setSaving(false); }
   };
@@ -414,6 +414,7 @@ export default function BankFinancialReportsPage() {
     try {
       await axios.post(`${API_BASE}/ledger-mappings`, {
         particulars_name: row.particulars_name,
+        ledger_name: row.ledger_name || row.particulars_name,
         group_id: row.group_id,
         subgroup_id: row.subgroup_id,
         group_company: row.group_company || "",
@@ -447,12 +448,13 @@ export default function BankFinancialReportsPage() {
     const match = mappings.find((row) => String(row.particulars_name || "").trim().toLowerCase() === String(name || "").trim().toLowerCase());
     setQuickMappingForm(match ? {
       particulars_name: match.particulars_name,
+      ledger_name: match.ledger_name || match.particulars_name,
       group_id: match.group_id || "",
       subgroup_id: match.subgroup_id || "",
       group_company: match.group_company || "",
       opening_balance: String(match.opening_balance ?? 0),
       opening_balance_type: match.opening_balance_type || "dr",
-    } : { ...initialQuickMapping, particulars_name: name });
+    } : { ...initialQuickMapping, particulars_name: name, ledger_name: name });
     setQuickGroupQuery(match ? (groups.find((group) => String(group._id) === String(match.group_id))?.name || "") : "");
     setQuickSubgroupQuery(match ? (subgroups.find((subgroup) => String(subgroup._id) === String(match.subgroup_id))?.name || "") : "");
   };
@@ -485,7 +487,7 @@ export default function BankFinancialReportsPage() {
 
   const filteredMappings = useMemo(() => {
     const q = mappingSearch.trim().toLowerCase();
-    return !q ? mappings : mappings.filter((row) => String(row.particulars_name || "").toLowerCase().includes(q));
+    return !q ? mappings : mappings.filter((row) => `${row.particulars_name || ""} ${row.ledger_name || ""}`.toLowerCase().includes(q));
   }, [mappings, mappingSearch]);
 
   const applyFilters = async () => {
@@ -532,7 +534,7 @@ export default function BankFinancialReportsPage() {
         <section style={{ display: "grid", gridTemplateColumns: "minmax(300px,1fr) minmax(280px,.8fr)", gap: 14 }}>
           <form onSubmit={uploadStatement} style={panel}>
             <h2 style={{ margin: "0 0 8px", fontSize: 18 }}>Upload Bank Statement</h2>
-            <p style={{ margin: "0 0 14px", color: "#64748b", fontSize: 12 }}>Upload the Tally-reconciled bank statement Excel. Existing A:P headers must remain unchanged.</p>
+            <p style={{ margin: "0 0 14px", color: "#64748b", fontSize: 12 }}>Upload the Tally-reconciled bank statement Excel. Keep the original A:P columns and headers unchanged. Add Q = Ledger Name and R = Group Company to define the report name and company for each transaction directly in Excel.</p>
             <label style={label}>Select Excel File (.xls / .xlsx)</label>
             <input type="file" accept=".xls,.xlsx,.csv" onChange={(e) => setFile(e.target.files?.[0] || null)} style={{ ...input, padding: 7 }} />
             {file && <div style={{ marginTop: 8, fontSize: 12, color: "#0f766e", fontWeight: 700 }}>{file.name}</div>}
@@ -543,6 +545,7 @@ export default function BankFinancialReportsPage() {
                 <span>Total Rows: <b>{importResult.total_rows}</b></span><span>Imported: <b>{importResult.imported_rows}</b></span>
                 <span>Duplicates: <b>{importResult.duplicate_rows}</b></span><span>Invalid: <b>{importResult.invalid_rows}</b></span>
                 <span>Auto-mapped rows: <b>{importResult.auto_mapped_rows || 0}</b></span><span>Need Mapping: <b>{importResult.unmapped_rows || 0}</b></span>
+                <span>Excel Ledger Names: <b>{importResult.excel_ledger_names || 0}</b></span><span>Excel Group Companies: <b>{importResult.excel_group_companies || 0}</b></span>
                 <span>Receipts: <b>{fmt(importResult.total_receipts)}</b></span><span>Payments: <b>{fmt(importResult.total_payments)}</b></span>
               </div>
               {importResult.invalid_details?.length > 0 && <div style={{ marginTop: 9, color: "#b91c1c" }}>{importResult.invalid_details.map((item) => <div key={item.row}>Row {item.row}: {item.reason}</div>)}</div>}
@@ -551,10 +554,10 @@ export default function BankFinancialReportsPage() {
           <div style={panel}>
             <h2 style={{ margin: "0 0 8px", fontSize: 18 }}>Excel Column Rules</h2>
             <div style={{ display: "grid", gridTemplateColumns: "55px 1fr", gap: 8, fontSize: 12 }}>
-              {[["A", "Transaction Date"], ["D", "Bank Name"], ["L", "Particulars / Ledger Name"], ["M", "Payment / Receipt / Contra"], ["N", "Voucher Number"], ["O", "Receipt Amount"], ["P", "Payment Amount"]].map(([col, desc]) => <React.Fragment key={col}><b style={{ padding: 7, borderRadius: 5, background: "#e2e8f0", textAlign: "center" }}>{col}</b><span style={{ padding: 7 }}>{desc}</span></React.Fragment>)}
+              {[["A", "Transaction Date"], ["D", "Bank Name"], ["L", "Original Particulars (keep unchanged)"], ["M", "Payment / Receipt / Contra"], ["N", "Voucher Number"], ["O", "Receipt Amount"], ["P", "Payment Amount"], ["Q", "Ledger Name (your report name)"], ["R", "Group Company (report split)" ]].map(([col, desc]) => <React.Fragment key={col}><b style={{ padding: 7, borderRadius: 5, background: col === "Q" || col === "R" ? "#ccfbf1" : "#e2e8f0", textAlign: "center" }}>{col}</b><span style={{ padding: 7 }}>{desc}</span></React.Fragment>)}
             </div>
             <div style={{ marginTop: 14, padding: 12, background: "#fffbeb", border: "1px solid #fde68a", borderRadius: 8, color: "#92400e", fontSize: 12, lineHeight: 1.55 }}>
-              <b>Important accounting rule</b><br />Receipt against an existing Sale is Debtor Settlement, not a second Sales entry. Payment against an existing Purchase is Creditor Settlement, not a second Purchase entry. Contra entries are not P&L income or expense.
+              <b>Excel naming rule</b><br />Keep Column L (Particulars) unchanged. Add Column Q with header <b>Ledger Name</b> and type the report name you want, for example RAM - HFPL. Add Column R with header <b>Group Company</b> and enter HFPL Group Company, Retails Group Company or your own company label. These Q/R values apply to that transaction only; if blank, the saved Particulars Mapping is used.<br /><br /><b>Important accounting rule</b><br />Receipt against an existing Sale is Debtor Settlement, not a second Sales entry. Payment against an existing Purchase is Creditor Settlement, not a second Purchase entry. Contra entries are not P&L income or expense.
             </div>
           </div>
         </section>
@@ -641,7 +644,7 @@ export default function BankFinancialReportsPage() {
       {tab === "mapping" && (
         <section style={panel}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "end", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
-            <div><h2 style={{ margin: 0, fontSize: 18 }}>Particulars → Group / Sub-group Mapping</h2><p style={{ margin: "5px 0 0", color: "#64748b", fontSize: 12 }}>Names are read from Excel Column L. Once saved, a Particulars name stays mapped in this company and is automatically reused on every later import. Only new / unmapped names need attention.</p></div>
+            <div><h2 style={{ margin: 0, fontSize: 18 }}>Bank Particulars → Ledger Name / Group Mapping</h2><p style={{ margin: "5px 0 0", color: "#64748b", fontSize: 12 }}>Original name from Excel Column L stays preserved for bank reconciliation. Set your own Ledger Name here; the mapped Ledger Name is displayed in Bank Statement and reports and reused on future imports.</p></div>
             <input value={mappingSearch} onChange={(e) => setMappingSearch(e.target.value)} placeholder="Search Particulars name..." style={{ ...input, maxWidth: 280 }} />
           </div>
           {!groups.length && <div style={{ padding: 12, background: "#fffbeb", color: "#92400e", borderRadius: 7, marginBottom: 10 }}>First create Groups in Group Master, then map Particulars here.</div>}
@@ -650,21 +653,36 @@ export default function BankFinancialReportsPage() {
               <div><b style={{ color: "#115e59" }}>Tally-style Quick Ledger Mapping</b><div style={{ color: "#475569", fontSize: 11, marginTop: 3 }}>Type names to see matching suggestions. Press Enter to select a suggestion and move straight to the next field; continue with Enter through Group, Sub-group, Group Company and Balance. A saved Group Company is used to split reports.</div></div>
               <button type="submit" disabled={saving} style={primary}>{saving ? "Saving..." : "Save Ledger Mapping"}</button>
             </div>
-            <div style={{ display: "grid", gridTemplateColumns: "minmax(180px,1.5fr) repeat(5,minmax(130px,1fr))", gap: 8, marginTop: 11, alignItems: "end" }}>
-              <label style={{ ...label, margin: 0 }}>Particulars / Ledger
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(165px,1fr))", gap: 8, marginTop: 11, alignItems: "end" }}>
+              <label style={{ ...label, margin: 0 }}>Original Bank Particulars (L)
                 <TallyAutocompleteField
                   order="0"
                   options={quickLedgerOptions}
                   value={quickMappingForm.particulars_name}
                   placeholder="Type ledger name..."
                   allowCustom
-                  onInput={(value) => setQuickMappingForm((p) => ({ ...p, particulars_name: value }))}
+                  onInput={(value) => setQuickMappingForm((p) => ({
+                    ...p,
+                    particulars_name: value,
+                    ledger_name: !p.ledger_name || p.ledger_name === p.particulars_name ? value : p.ledger_name,
+                  }))}
                   onSelect={(option) => chooseQuickLedger(option.value)}
+                />
+              </label>
+              <label style={{ ...label, margin: 0 }}>Ledger Name (will show in Bank Statement / Reports)
+                <TallyAutocompleteField
+                  order="1"
+                  options={mappings.map((row) => ({ label: row.ledger_name || row.particulars_name, value: row.ledger_name || row.particulars_name }))}
+                  value={quickMappingForm.ledger_name}
+                  placeholder="Type new Ledger Name..."
+                  allowCustom
+                  onInput={(value) => setQuickMappingForm((p) => ({ ...p, ledger_name: value }))}
+                  onSelect={(option) => setQuickMappingForm((p) => ({ ...p, ledger_name: option.value }))}
                 />
               </label>
               <label style={{ ...label, margin: 0 }}>Group
                 <TallyAutocompleteField
-                  order="1"
+                  order="2"
                   options={bankGroupOptions}
                   value={quickGroupQuery}
                   placeholder="Type group name..."
@@ -674,7 +692,7 @@ export default function BankFinancialReportsPage() {
               </label>
               <label style={{ ...label, margin: 0 }}>Sub-group
                 <TallyAutocompleteField
-                  order="2"
+                  order="3"
                   options={quickSubgroupOptions}
                   value={quickSubgroupQuery}
                   placeholder={quickMappingForm.group_id ? "Type sub-group..." : "Select Group first"}
@@ -686,7 +704,7 @@ export default function BankFinancialReportsPage() {
               </label>
               <label style={{ ...label, margin: 0 }}>Group Company
                 <TallyAutocompleteField
-                  order="3"
+                  order="4"
                   options={companyGroupOptions.map((name) => ({ label: name, value: name }))}
                   value={quickMappingForm.group_company}
                   placeholder="Type Group Company..."
@@ -695,16 +713,17 @@ export default function BankFinancialReportsPage() {
                   onSelect={(option) => setQuickMappingForm((p) => ({ ...p, group_company: option.value }))}
                 />
               </label>
-              <label style={{ ...label, margin: 0 }}>Opening Balance<input data-tally-order="4" type="number" step="0.01" value={quickMappingForm.opening_balance} onKeyDown={moveQuickLedgerFocus} onChange={(e) => setQuickMappingForm((p) => ({ ...p, opening_balance: e.target.value }))} style={{ ...input, marginTop: 4 }} /></label>
-              <label style={{ ...label, margin: 0 }}>Dr / Cr<select data-tally-order="5" value={quickMappingForm.opening_balance_type} onKeyDown={moveQuickLedgerFocus} onChange={(e) => setQuickMappingForm((p) => ({ ...p, opening_balance_type: e.target.value }))} style={{ ...input, marginTop: 4 }}><option value="dr">Dr</option><option value="cr">Cr</option></select></label>
+              <label style={{ ...label, margin: 0 }}>Opening Balance<input data-tally-order="5" type="number" step="0.01" value={quickMappingForm.opening_balance} onKeyDown={moveQuickLedgerFocus} onChange={(e) => setQuickMappingForm((p) => ({ ...p, opening_balance: e.target.value }))} style={{ ...input, marginTop: 4 }} /></label>
+              <label style={{ ...label, margin: 0 }}>Dr / Cr<select data-tally-order="6" value={quickMappingForm.opening_balance_type} onKeyDown={moveQuickLedgerFocus} onChange={(e) => setQuickMappingForm((p) => ({ ...p, opening_balance_type: e.target.value }))} style={{ ...input, marginTop: 4 }}><option value="dr">Dr</option><option value="cr">Cr</option></select></label>
             </div>
             <datalist id="bank-financial-group-company-options">{companyGroupOptions.map((name) => <option key={name} value={name} />)}</datalist>
           </form>
-          <div style={{ overflowX: "auto", maxHeight: "68vh" }}><table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1250 }}><thead><tr>{["Particulars / Ledger","Rows","Group","Sub-group","Group Company","Opening Balance","Dr/Cr","Report Placement","Mapping Status","Action"].map((x) => <th key={x} style={th}>{x}</th>)}</tr></thead><tbody>
+          <div style={{ overflowX: "auto", maxHeight: "68vh" }}><table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1250 }}><thead><tr>{["Original Bank Particulars (L)","Ledger Name (Report Name)","Rows","Group","Sub-group","Group Company","Opening Balance","Dr/Cr","Report Placement","Mapping Status","Action"].map((x) => <th key={x} style={th}>{x}</th>)}</tr></thead><tbody>
             {filteredMappings.map((row) => {
               const allowedSubgroups = subgroups.filter((sub) => String(sub.group_id) === String(row.group_id));
               return <tr key={row.normalized_name} style={{ background: row.mapped ? "#fff" : "#fffdf5" }}>
-                <td style={{ ...td, fontWeight: 800, minWidth: 210 }}>{row.particulars_name}</td>
+                <td style={{ ...td, fontWeight: 800, minWidth: 190 }}>{row.particulars_name}</td>
+                <td style={{ ...td, minWidth: 190 }}><input value={row.ledger_name || row.particulars_name} onChange={(e) => updateMappingDraft(row.normalized_name, { ledger_name: e.target.value })} placeholder="Type Ledger Name" style={input} /></td>
                 <td style={td}>{row.transaction_count}</td>
                 <td style={{ ...td, minWidth: 165 }}><select data-ledger-cell="0" onKeyDown={handleMappingGridKeyDown} value={row.group_id || ""} onChange={(e) => { const g = groups.find((item) => String(item._id) === e.target.value); updateMappingDraft(row.normalized_name, { group_id: e.target.value, subgroup_id: "", nature: g?.nature || "", report_placement: g?.report_placement || "" }); }} style={input}><option value="">Select Group</option>{groups.filter((g) => !g.source_type || g.source_type === "bank_statement").map((g) => <option key={g._id} value={g._id}>{g.name}</option>)}</select></td>
                 <td style={{ ...td, minWidth: 165 }}><select data-ledger-cell="1" onKeyDown={handleMappingGridKeyDown} value={row.subgroup_id || ""} disabled={!row.group_id} onChange={(e) => updateMappingDraft(row.normalized_name, { subgroup_id: e.target.value })} style={input}><option value="">No Sub-group</option>{allowedSubgroups.map((sub) => <option key={sub._id} value={sub._id}>{sub.name}</option>)}</select></td>
@@ -716,7 +735,7 @@ export default function BankFinancialReportsPage() {
                 <td style={td}><button type="button" disabled={saving || !row.group_id} onClick={() => saveMapping(row)} style={{ ...primary, padding: "7px 10px", opacity: !row.group_id ? .5 : 1 }}>{row.mapped ? "Update Mapping" : "Save Mapping"}</button></td>
               </tr>;
             })}
-            {!filteredMappings.length && <tr><td style={td} colSpan={10}>No Particulars found. Import a bank statement first, or use Quick Ledger Mapping to create one.</td></tr>}
+            {!filteredMappings.length && <tr><td style={td} colSpan={11}>No Particulars found. Import a bank statement first, or use Quick Ledger Mapping to create one.</td></tr>}
           </tbody></table></div>
         </section>
       )}
@@ -739,31 +758,31 @@ export default function BankFinancialReportsPage() {
             {editingTransaction && transactionEditForm && <form onSubmit={saveTransactionEdit} style={{ border: "1px solid #99f6e4", background: "#f0fdfa", borderRadius: 9, padding: 12, marginBottom: 14 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 8, marginBottom: 10 }}><b>Edit Imported Statement Row · {editingTransaction.voucher_number}</b><button type="button" onClick={() => { setEditingTransaction(null); setTransactionEditForm(null); }} style={secondary}>Close</button></div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(175px,1fr))", gap: 9 }}>
-                {[["bank_date","Date","date"],["bank_time","Time","text"],["bank_name","Bank Name","text"],["particulars_name","Particulars / Ledger Name","text"],["voucher_type","Voucher Type","text"],["voucher_number","Voucher Number","text"],["receipt_amount","Receipt Amount","number"],["payment_amount","Payment Amount","number"],["bank_debit","Statement Debit","number"],["bank_credit","Statement Credit","number"],["bank_balance","Bank Balance (H)","number"],["bank_remarks","Bank Remarks","text"],["instrument_type","Instrument Type","text"],["instrument_no","Instrument Number","text"],["transaction_id","Transaction ID","text"],["bank_status","Bank Status","text"],["tally_date","Tally Date","date"]].map(([key,title,type]) => <label key={key} style={{ ...label, margin: 0 }}>{title}<input type={type} value={transactionEditForm[key] ?? ""} onChange={(e) => setTransactionEditForm((p) => ({ ...p, [key]: e.target.value }))} style={{ ...input, marginTop: 4 }} /></label>)}
+                {[["bank_date","Date","date"],["bank_time","Time","text"],["bank_name","Bank Name","text"],["particulars_name","Original Bank Particulars (L)","text"],["voucher_type","Voucher Type","text"],["voucher_number","Voucher Number","text"],["receipt_amount","Receipt Amount","number"],["payment_amount","Payment Amount","number"],["bank_debit","Statement Debit","number"],["bank_credit","Statement Credit","number"],["bank_balance","Bank Balance (H)","number"],["bank_remarks","Bank Remarks","text"],["instrument_type","Instrument Type","text"],["instrument_no","Instrument Number","text"],["transaction_id","Transaction ID","text"],["bank_status","Bank Status","text"],["tally_date","Tally Date","date"]].map(([key,title,type]) => <label key={key} style={{ ...label, margin: 0 }}>{title}<input type={type} value={transactionEditForm[key] ?? ""} onChange={(e) => setTransactionEditForm((p) => ({ ...p, [key]: e.target.value }))} style={{ ...input, marginTop: 4 }} /></label>)}
               </div>
               <div style={{ display: "flex", gap: 8, marginTop: 12 }}><button type="submit" disabled={saving} style={primary}>{saving ? "Saving..." : "Save Statement Changes"}</button><button type="button" onClick={() => { setEditingTransaction(null); setTransactionEditForm(null); }} style={secondary}>Cancel</button></div>
-              <p style={{ margin: "8px 0 0", fontSize: 11, color: "#475569" }}>If Particulars is renamed, the new name will require its own Group / Sub-group mapping. Existing saved mappings are not deleted.</p>
+              <p style={{ margin: "8px 0 0", fontSize: 11, color: "#475569" }}>The original Bank Statement Particulars is kept for reconciliation. Change the report Ledger Name in Particulars Mapping; it will not overwrite the source Excel value.</p>
             </form>}
-            <div style={{ overflow: "auto", maxHeight: "70vh" }}><table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1250 }}><thead><tr>{["Date (A)","Bank (D)","Particulars (L)","Group Company","Voucher Type (M)","Voucher No. (N)","Receipt (O)","Payment (P)","Bank Balance (H)","Group Mapping","Status","Action"].map((x) => <th key={x} style={th}>{x}</th>)}</tr></thead><tbody>
-              {transactions.map((row) => <tr key={row._id}><td style={td}>{dateLabel(row.bank_date)}</td><td style={td}>{row.bank_name}</td><td style={td}>{row.particulars_name}</td><td style={td}>{row.mapping?.group_company || "Unassigned"}</td><td style={td}>{row.voucher_type}</td><td style={td}>{row.voucher_number}</td><td style={{ ...td, textAlign: "right" }}>{row.receipt_amount ? fmt(row.receipt_amount) : "-"}</td><td style={{ ...td, textAlign: "right" }}>{row.payment_amount ? fmt(row.payment_amount) : "-"}</td><td style={{ ...td, textAlign: "right" }}>{fmt(row.bank_balance)}</td><td style={td}>{row.mapping ? `${row.mapping.group_name}${row.mapping.subgroup_name ? ` / ${row.mapping.subgroup_name}` : ""}` : <span style={{ color: "#b45309", fontWeight: 800 }}>Unmapped</span>}</td><td style={td}>{row.bank_status || "-"}</td><td style={td}><button type="button" onClick={() => openTransactionEdit(row)} style={secondary}>Edit</button></td></tr>)}
+            <div style={{ overflow: "auto", maxHeight: "70vh" }}><table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1250 }}><thead><tr>{["Date (A)","Bank (D)","Ledger Name (mapped from L)","Group Company","Voucher Type (M)","Voucher No. (N)","Receipt (O)","Payment (P)","Bank Balance (H)","Group Mapping","Status","Action"].map((x) => <th key={x} style={th}>{x}</th>)}</tr></thead><tbody>
+              {transactions.map((row) => <tr key={row._id}><td style={td}>{dateLabel(row.bank_date)}</td><td style={td}>{row.bank_name}</td><td style={td}><b>{row.ledger_name || row.particulars_name}</b>{row.ledger_name && String(row.ledger_name).trim().toLowerCase() !== String(row.particulars_name || "").trim().toLowerCase() && <div style={{ color: "#64748b", fontSize: 10, marginTop: 3 }}>Original: {row.particulars_name}</div>}</td><td style={td}>{row.mapping?.group_company || "Unassigned"}</td><td style={td}>{row.voucher_type}</td><td style={td}>{row.voucher_number}</td><td style={{ ...td, textAlign: "right" }}>{row.receipt_amount ? fmt(row.receipt_amount) : "-"}</td><td style={{ ...td, textAlign: "right" }}>{row.payment_amount ? fmt(row.payment_amount) : "-"}</td><td style={{ ...td, textAlign: "right" }}>{fmt(row.bank_balance)}</td><td style={td}>{row.mapping ? `${row.mapping.group_name}${row.mapping.subgroup_name ? ` / ${row.mapping.subgroup_name}` : ""}` : <span style={{ color: "#b45309", fontWeight: 800 }}>Unmapped</span>}</td><td style={td}>{row.bank_status || "-"}</td><td style={td}><button type="button" onClick={() => openTransactionEdit(row)} style={secondary}>Edit</button></td></tr>)}
               {!transactions.length && <tr><td style={td} colSpan={12}>No bank transactions for the selected filter.</td></tr>}
             </tbody></table></div>
           </section>}
 
           {tab === "groupwise" && <section style={panel}>
             <h2 style={{ margin: "0 0 12px", fontSize: 18 }}>Group-wise / Sub-group-wise Report</h2>
-            <div style={{ overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse" }}><thead><tr>{["Group","Sub-group","Group Company","Nature","Report Placement","Transactions","Receipts","Payments","Net Movement"].map((x) => <th key={x} style={th}>{x}</th>)}</tr></thead><tbody>
-              {groupReport.map((row, i) => <tr key={`${row.group_id}-${row.subgroup_id}-${i}`}><td style={td}><b>{row.group_name}</b></td><td style={td}>{row.subgroup_name}</td><td style={td}>{row.group_company || "Unassigned"}</td><td style={td}>{natureLabels[row.nature] || row.nature || "-"}</td><td style={td}>{placementLabels[row.report_placement] || "Not mapped"}</td><td style={td}>{row.transactions}</td><td style={{ ...td, textAlign: "right" }}>{fmt(row.receipts)}</td><td style={{ ...td, textAlign: "right" }}>{fmt(row.payments)}</td><td style={{ ...td, textAlign: "right", fontWeight: 800 }}>{fmt(row.net_movement)}</td></tr>)}
-              {!groupReport.length && <tr><td style={td} colSpan={9}>No transactions found.</td></tr>}
+            <div style={{ overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse" }}><thead><tr>{["Group","Sub-group","Ledger Names","Group Company","Nature","Report Placement","Transactions","Receipts","Payments","Net Movement"].map((x) => <th key={x} style={th}>{x}</th>)}</tr></thead><tbody>
+              {groupReport.map((row, i) => <tr key={`${row.group_id}-${row.subgroup_id}-${i}`}><td style={td}><b>{row.group_name}</b></td><td style={td}>{row.subgroup_name}</td><td style={td}>{(row.ledger_names || []).join(", ") || "-"}</td><td style={td}>{row.group_company || "Unassigned"}</td><td style={td}>{natureLabels[row.nature] || row.nature || "-"}</td><td style={td}>{placementLabels[row.report_placement] || "Not mapped"}</td><td style={td}>{row.transactions}</td><td style={{ ...td, textAlign: "right" }}>{fmt(row.receipts)}</td><td style={{ ...td, textAlign: "right" }}>{fmt(row.payments)}</td><td style={{ ...td, textAlign: "right", fontWeight: 800 }}>{fmt(row.net_movement)}</td></tr>)}
+              {!groupReport.length && <tr><td style={td} colSpan={10}>No transactions found.</td></tr>}
             </tbody></table></div>
           </section>}
 
           {tab === "groupcompany" && <section style={panel}>
             <h2 style={{ margin: "0 0 12px", fontSize: 18 }}>Group Company-wise Report</h2>
             <p style={{ margin: "0 0 12px", color: "#64748b", fontSize: 12 }}>Every Particulars / Ledger is assigned to one Group Company in Particulars Mapping. This report splits Receipt, Payment, P&L Income and Expense by that tag.</p>
-            <div style={{ overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse", minWidth: 950 }}><thead><tr>{["Group Company","Ledgers","Transactions","Receipts","Payments","P&L Income","P&L Expenses","Net Profit / (Loss)"].map((x) => <th key={x} style={th}>{x}</th>)}</tr></thead><tbody>
-              {groupCompanyReport.map((row) => <tr key={row.group_company}><td style={td}><b>{row.group_company}</b></td><td style={td}>{row.ledgers}</td><td style={td}>{row.transactions}</td><td style={{ ...td, textAlign: "right" }}>{fmt(row.receipts)}</td><td style={{ ...td, textAlign: "right" }}>{fmt(row.payments)}</td><td style={{ ...td, textAlign: "right" }}>{fmt(row.income)}</td><td style={{ ...td, textAlign: "right" }}>{fmt(row.expenses)}</td><td style={{ ...td, textAlign: "right", fontWeight: 800 }}>{fmt(row.net_profit)}</td></tr>)}
-              {!groupCompanyReport.length && <tr><td style={td} colSpan={8}>No transactions found. Assign a Group Company to Particulars / Ledger mappings first.</td></tr>}
+            <div style={{ overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse", minWidth: 950 }}><thead><tr>{["Group Company","Ledger Names","Ledgers","Transactions","Receipts","Payments","P&L Income","P&L Expenses","Net Profit / (Loss)"].map((x) => <th key={x} style={th}>{x}</th>)}</tr></thead><tbody>
+              {groupCompanyReport.map((row) => <tr key={row.group_company}><td style={td}><b>{row.group_company}</b></td><td style={td}>{(row.ledger_names || []).join(", ") || "-"}</td><td style={td}>{row.ledgers}</td><td style={td}>{row.transactions}</td><td style={{ ...td, textAlign: "right" }}>{fmt(row.receipts)}</td><td style={{ ...td, textAlign: "right" }}>{fmt(row.payments)}</td><td style={{ ...td, textAlign: "right" }}>{fmt(row.income)}</td><td style={{ ...td, textAlign: "right" }}>{fmt(row.expenses)}</td><td style={{ ...td, textAlign: "right", fontWeight: 800 }}>{fmt(row.net_profit)}</td></tr>)}
+              {!groupCompanyReport.length && <tr><td style={td} colSpan={9}>No transactions found. Assign a Group Company to Particulars / Ledger mappings first.</td></tr>}
             </tbody></table></div>
             <p style={{ color: "#92400e", background: "#fffbeb", border: "1px solid #fde68a", padding: 10, borderRadius: 7, fontSize: 12 }}>Unassigned rows appear separately until you assign their Group Company. Contra entries remain excluded from P&L calculations.</p>
           </section>}
@@ -775,9 +794,9 @@ export default function BankFinancialReportsPage() {
               {card("Expenses", fmt(profitLoss.expense), "Mapped P&L Expense groups")}
               {card("Net Profit / (Loss)", fmt(profitLoss.net_profit), profitLoss.net_profit >= 0 ? "Net Profit" : "Net Loss")}
             </div>
-            <div style={{ overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse" }}><thead><tr>{["Group","Sub-group","Group Company","Nature","Amount"].map((x) => <th key={x} style={th}>{x}</th>)}</tr></thead><tbody>
-              {(profitLoss.rows || []).map((row,i) => <tr key={`${row.group_name}-${row.subgroup_name}-${i}`}><td style={td}><b>{row.group_name}</b></td><td style={td}>{row.subgroup_name || "-"}</td><td style={td}>{row.group_company || "Unassigned"}</td><td style={td}>{natureLabels[row.nature]}</td><td style={{ ...td, textAlign: "right" }}>{fmt(row.amount)}</td></tr>)}
-              {!(profitLoss.rows || []).length && <tr><td style={td} colSpan={5}>No P&L ledger mappings in the selected period. Map direct income / expense ledgers in Particulars Mapping.</td></tr>}
+            <div style={{ overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse" }}><thead><tr>{["Group","Sub-group","Ledger Name","Group Company","Nature","Amount"].map((x) => <th key={x} style={th}>{x}</th>)}</tr></thead><tbody>
+              {(profitLoss.rows || []).map((row,i) => <tr key={`${row.group_name}-${row.subgroup_name}-${i}`}><td style={td}><b>{row.group_name}</b></td><td style={td}>{row.subgroup_name || "-"}</td><td style={td}>{row.ledger_name || "-"}</td><td style={td}>{row.group_company || "Unassigned"}</td><td style={td}>{natureLabels[row.nature]}</td><td style={{ ...td, textAlign: "right" }}>{fmt(row.amount)}</td></tr>)}
+              {!(profitLoss.rows || []).length && <tr><td style={td} colSpan={6}>No P&L ledger mappings in the selected period. Map direct income / expense ledgers in Particulars Mapping.</td></tr>}
             </tbody></table></div>
             <p style={{ color: "#92400e", background: "#fffbeb", border: "1px solid #fde68a", padding: 10, borderRadius: 7, fontSize: 12 }}>Contra vouchers are excluded from P&L. Customer receipts and supplier payments mapped to Balance Sheet remain settlements, not new income or expense. Warehouse Sale / Purchase totals are included when you create the matching Source Groups in Group Master. Purchase values are shown as trading purchases; opening/closing stock, production cost and cost-of-goods-sold adjustments are not yet calculated, so treat Net Profit as provisional until those stock adjustments are entered.</p>
           </section>}
@@ -790,9 +809,9 @@ export default function BankFinancialReportsPage() {
               {card("Capital / Equity", fmt(balanceSheet.total_equity), "Credit-normal balance")}
               {card("Difference", fmt(balanceSheet.difference), "Assets − Liabilities − Equity")}
             </div>
-            <div style={{ overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse", minWidth: 700 }}><thead><tr>{["Group","Sub-group","Group Company","Nature","Closing Balance"].map((x) => <th key={x} style={th}>{x}</th>)}</tr></thead><tbody>
-              {(balanceSheet.rows || []).map((row,i) => <tr key={`${row.group_name}-${row.subgroup_name}-${i}`}><td style={td}><b>{row.group_name}</b></td><td style={td}>{row.subgroup_name || "-"}</td><td style={td}>{row.group_company || "Unassigned"}</td><td style={td}>{natureLabels[row.nature]}</td><td style={{ ...td, textAlign: "right" }}>{fmt(row.balance)}</td></tr>)}
-              {!(balanceSheet.rows || []).length && <tr><td style={td} colSpan={5}>No Balance Sheet ledger mappings. Map Assets, Liabilities and Capital groups first.</td></tr>}
+            <div style={{ overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse", minWidth: 700 }}><thead><tr>{["Group","Sub-group","Ledger Names / Details","Group Company","Nature","Closing Balance"].map((x) => <th key={x} style={th}>{x}</th>)}</tr></thead><tbody>
+              {(balanceSheet.rows || []).map((row,i) => <tr key={`${row.group_name}-${row.subgroup_name}-${i}`}><td style={td}><b>{row.group_name}</b></td><td style={td}>{row.subgroup_name || "-"}</td><td style={td}>{row.ledgers?.length ? <details><summary style={{ cursor: "pointer", color: "#0f766e", fontWeight: 700 }}>{row.ledgers.length} Ledger(s)</summary><div style={{ minWidth: 240, paddingTop: 6 }}>{row.ledgers.map((ledger, ledgerIndex) => <div key={`${ledger.particulars_name}-${ledgerIndex}`} style={{ display: "flex", justifyContent: "space-between", gap: 12, padding: "4px 0", borderBottom: "1px solid #e2e8f0" }}><span>{ledger.particulars_name}</span><b>{fmt(ledger.normal_balance)}</b></div>)}</div></details> : "-"}</td><td style={td}>{row.group_company || "Unassigned"}</td><td style={td}>{natureLabels[row.nature]}</td><td style={{ ...td, textAlign: "right" }}>{fmt(row.balance)}</td></tr>)}
+              {!(balanceSheet.rows || []).length && <tr><td style={td} colSpan={6}>No Balance Sheet ledger mappings. Map Assets, Liabilities and Capital groups first.</td></tr>}
             </tbody></table></div>
             <p style={{ color: "#92400e", background: "#fffbeb", border: "1px solid #fde68a", padding: 10, borderRadius: 7, fontSize: 12 }}>Bank balances are taken from the latest Bank Statement Column H up to the selected To Date. When a specific Group Company filter is selected, Bank balances are not attributed to that Group Company because Column D identifies the bank account, not the L-column ledger. Enter opening balances in Particulars Mapping. A complete Balance Sheet also needs non-bank assets, liabilities, stock, debtors, creditors, tax balances and other journal/account entries.</p>
           </section>}
