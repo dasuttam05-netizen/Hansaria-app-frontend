@@ -20,23 +20,49 @@ const sourceLabels = { bank_statement: "Bank Statement Particulars", warehouse_s
 const initialGroup = { name: "", source_type: "bank_statement", nature: "expense", report_placement: "profit_loss", sort_order: "0" };
 const initialSubGroup = { name: "", group_id: "", sort_order: "0" };
 
-// Common accounting group suggestions. Users can still type their own names.
-const groupNameSuggestions = [
-  "Current Assets", "Fixed Assets", "Current Liabilities", "Loans & Liabilities",
-  "Capital / Equity", "Direct Income", "Indirect Income", "Direct Expenses",
-  "Indirect Expenses", "Other / Excluded",
+// TallyPrime's 15 predefined primary groups and 13 predefined sub-groups.
+// Selecting a primary group pre-fills its account nature and report placement.
+const TALLY_PRIMARY_GROUPS = [
+  { name: "Branch / Divisions", nature: "other", report_placement: "balance_sheet" },
+  { name: "Capital Account", nature: "equity", report_placement: "balance_sheet" },
+  { name: "Current Assets", nature: "asset", report_placement: "balance_sheet" },
+  { name: "Current Liabilities", nature: "liability", report_placement: "balance_sheet" },
+  { name: "Direct Expenses", nature: "expense", report_placement: "profit_loss" },
+  { name: "Direct Incomes", nature: "income", report_placement: "profit_loss" },
+  { name: "Fixed Assets", nature: "asset", report_placement: "balance_sheet" },
+  { name: "Indirect Expenses", nature: "expense", report_placement: "profit_loss" },
+  { name: "Indirect Incomes", nature: "income", report_placement: "profit_loss" },
+  { name: "Investments", nature: "asset", report_placement: "balance_sheet" },
+  { name: "Loans (Liability)", nature: "liability", report_placement: "balance_sheet" },
+  { name: "Misc. Expenses (ASSET)", nature: "asset", report_placement: "balance_sheet" },
+  { name: "Purchase Accounts", nature: "expense", report_placement: "profit_loss" },
+  { name: "Sales Accounts", nature: "income", report_placement: "profit_loss" },
+  { name: "Suspense A/c", nature: "other", report_placement: "balance_sheet" },
 ];
-const subgroupNameSuggestions = {
-  "Current Assets": ["Sundry Debtors", "Cash in Hand", "Bank Accounts", "Supplier Advances", "Loans & Advances", "Stock / Inventory", "GST Input / Receivable"],
+const TALLY_SUBGROUPS_BY_PARENT = {
+  "Capital Account": ["Reserves & Surplus"],
+  "Current Assets": ["Bank Accounts", "Cash-in-hand", "Deposits (Asset)", "Loans & Advances (Asset)", "Stock-in-hand", "Sundry Debtors"],
+  "Current Liabilities": ["Duties & Taxes", "Provisions", "Sundry Creditors"],
+  "Loans (Liability)": ["Bank OD A/c", "Secured Loans", "Unsecured Loans"],
+};
+// Common user-created sub-groups are suggestions only; they are not Tally's
+// 13 predefined sub-groups. Users may also enter any custom sub-group name.
+const CUSTOM_SUBGROUP_SUGGESTIONS = {
+  "Current Assets": ["Staff Advances", "Supplier Advances", "Inter-company Receivable", "Security Deposits", "GST Input / Receivable"],
   "Fixed Assets": ["Plant & Machinery", "Furniture & Fixtures", "Vehicles", "Computers & Equipment", "Office Equipment"],
-  "Current Liabilities": ["Sundry Creditors", "Outstanding Expenses", "Customer Advances", "GST Payable", "Statutory Liabilities"],
-  "Loans & Liabilities": ["Bank Loans", "Vehicle Loans", "Business Loans", "Other Loans"],
-  "Capital / Equity": ["Owner Capital", "Drawings", "Retained Earnings"],
-  "Direct Income": ["Sales Income", "Service Income", "Other Direct Income"],
-  "Indirect Income": ["Bank Interest", "Discount Received", "Other Income"],
+  "Current Liabilities": ["Outstanding Expenses", "Customer Advances", "GST Payable", "Statutory Liabilities"],
+  "Loans (Liability)": ["Vehicle Loans", "Business Loans", "Loan from Sister Company"],
+  "Capital Account": ["Owner Capital", "Drawings", "Retained Earnings"],
+  "Direct Incomes": ["Sales Income", "Service Income", "Other Direct Income"],
+  "Indirect Incomes": ["Bank Interest", "Discount Received", "Other Income"],
   "Direct Expenses": ["Transport Expenses", "Freight & Loading", "Labour Charges", "Job Work Charges", "Factory Expenses", "Power & Fuel"],
   "Indirect Expenses": ["Salary Expenses", "Office Rent", "Electricity Expenses", "Bank Charges", "Office Expenses", "Repair & Maintenance"],
-  "Other / Excluded": ["Suspense Account", "Personal / Excluded", "Temporary Adjustment"],
+  "Purchase Accounts": ["Raw Material Purchase", "Packing Material Purchase", "Other Purchases"],
+  "Sales Accounts": ["Product Sales", "Other Sales"],
+  "Suspense A/c": ["Temporary Adjustment", "Unidentified Bank Entries"],
+  "Branch / Divisions": ["Inter-branch Balance"],
+  "Investments": ["Investment in Sister Company", "Fixed Deposits"],
+  "Misc. Expenses (ASSET)": ["Preliminary Expenses", "Deferred Expenses"],
 };
 const displayOrderOptions = Array.from({ length: 21 }, (_, index) => String(index));
 
@@ -66,6 +92,8 @@ export default function BankFinancialReportsPage() {
   const [balanceSheet, setBalanceSheet] = useState({ total_assets: 0, total_liabilities: 0, total_equity: 0, liabilities_plus_equity: 0, difference: 0, rows: [] });
   const [groupForm, setGroupForm] = useState(initialGroup);
   const [subGroupForm, setSubGroupForm] = useState(initialSubGroup);
+  const [customGroupName, setCustomGroupName] = useState("");
+  const [customSubGroupName, setCustomSubGroupName] = useState("");
   const [file, setFile] = useState(null);
   const [importResult, setImportResult] = useState(null);
   const [mappingSearch, setMappingSearch] = useState("");
@@ -143,10 +171,12 @@ export default function BankFinancialReportsPage() {
   const createGroup = async (event) => {
     event.preventDefault(); setSaving(true); setError(""); setNotice("");
     try {
-      const payload = { ...groupForm, sort_order: Number(groupForm.sort_order || 0) };
+      const resolvedGroupName = groupForm.name === "__custom__" ? customGroupName.trim() : groupForm.name.trim();
+      if (!resolvedGroupName) throw new Error("Please select a Tally Group or enter a custom Group Name.");
+      const payload = { ...groupForm, name: resolvedGroupName, sort_order: Number(groupForm.sort_order || 0) };
       if (editingGroupId) await axios.put(`${API_BASE}/groups/${editingGroupId}`, payload);
       else await axios.post(`${API_BASE}/groups`, payload);
-      setGroupForm(initialGroup); setEditingGroupId(""); await loadMasters(); setNotice(editingGroupId ? "Group Master updated successfully." : "Group Master saved successfully.");
+      setGroupForm(initialGroup); setCustomGroupName(""); setEditingGroupId(""); await loadMasters(); setNotice(editingGroupId ? "Group Master updated successfully." : "Group Master saved successfully.");
     } catch (err) { setError(err.response?.data?.error || err.message); }
     finally { setSaving(false); }
   };
@@ -154,10 +184,12 @@ export default function BankFinancialReportsPage() {
   const createSubGroup = async (event) => {
     event.preventDefault(); setSaving(true); setError(""); setNotice("");
     try {
-      const payload = { ...subGroupForm, sort_order: Number(subGroupForm.sort_order || 0) };
+      const resolvedSubGroupName = subGroupForm.name === "__custom__" ? customSubGroupName.trim() : subGroupForm.name.trim();
+      if (!resolvedSubGroupName) throw new Error("Please select a Tally Sub-group or enter a custom Sub-group Name.");
+      const payload = { ...subGroupForm, name: resolvedSubGroupName, sort_order: Number(subGroupForm.sort_order || 0) };
       if (editingSubGroupId) await axios.put(`${API_BASE}/subgroups/${editingSubGroupId}`, payload);
       else await axios.post(`${API_BASE}/subgroups`, payload);
-      setSubGroupForm(initialSubGroup); setEditingSubGroupId(""); await loadMasters(); setNotice(editingSubGroupId ? "Sub-group Master updated successfully." : "Sub-group Master saved successfully.");
+      setSubGroupForm(initialSubGroup); setCustomSubGroupName(""); setEditingSubGroupId(""); await loadMasters(); setNotice(editingSubGroupId ? "Sub-group Master updated successfully." : "Sub-group Master saved successfully.");
     } catch (err) { setError(err.response?.data?.error || err.message); }
     finally { setSaving(false); }
   };
@@ -178,19 +210,26 @@ export default function BankFinancialReportsPage() {
   };
 
   const startEditGroup = (row) => {
+    const isTallyPrimary = TALLY_PRIMARY_GROUPS.some((item) => item.name === row.name);
     setEditingGroupId(String(row._id || row.id));
-    setGroupForm({ name: row.name || "", source_type: row.source_type || "bank_statement", nature: row.nature || "expense", report_placement: row.report_placement || "profit_loss", sort_order: String(row.sort_order ?? 0) });
+    setCustomGroupName(isTallyPrimary ? "" : (row.name || ""));
+    setGroupForm({ name: isTallyPrimary ? row.name : "__custom__", source_type: row.source_type || "bank_statement", nature: row.nature || "expense", report_placement: row.report_placement || "profit_loss", sort_order: String(row.sort_order ?? 0) });
     selectTab("groups");
   };
 
   const startEditSubGroup = (row) => {
+    const parent = groups.find((g) => String(g._id || g.id) === String(row.group_id || ""));
+    const defaults = [...(TALLY_SUBGROUPS_BY_PARENT[parent?.name] || []), ...(CUSTOM_SUBGROUP_SUGGESTIONS[parent?.name] || [])];
+    const existing = subgroups.filter((item) => String(item.group_id) === String(row.group_id)).map((item) => item.name);
+    const isSuggested = [...defaults, ...existing].includes(row.name);
     setEditingSubGroupId(String(row._id || row.id));
-    setSubGroupForm({ name: row.name || "", group_id: String(row.group_id || ""), sort_order: String(row.sort_order ?? 0) });
+    setCustomSubGroupName(isSuggested ? "" : (row.name || ""));
+    setSubGroupForm({ name: isSuggested ? row.name : "__custom__", group_id: String(row.group_id || ""), sort_order: String(row.sort_order ?? 0) });
     selectTab("subgroups");
   };
 
-  const cancelGroupEdit = () => { setEditingGroupId(""); setGroupForm(initialGroup); };
-  const cancelSubGroupEdit = () => { setEditingSubGroupId(""); setSubGroupForm(initialSubGroup); };
+  const cancelGroupEdit = () => { setEditingGroupId(""); setGroupForm(initialGroup); setCustomGroupName(""); };
+  const cancelSubGroupEdit = () => { setEditingSubGroupId(""); setSubGroupForm(initialSubGroup); setCustomSubGroupName(""); };
 
   const openTransactionEdit = (row) => {
     setEditingTransaction(row);
@@ -330,9 +369,19 @@ export default function BankFinancialReportsPage() {
         <section style={{ display: "grid", gridTemplateColumns: "minmax(280px,.7fr) minmax(320px,1.3fr)", gap: 14 }}>
           <form onSubmit={createGroup} style={panel}>
             <h2 style={{ margin: "0 0 12px", fontSize: 18 }}>{editingGroupId ? "Edit Group" : "Create Group"}</h2>
-            <label style={label}>Group Name</label>
-            <input required list="bank-financial-group-name-options" value={groupForm.name} onChange={(e) => setGroupForm((p) => ({ ...p, name: e.target.value }))} style={input} placeholder="Select a suggested Group or type a new name" />
-            <datalist id="bank-financial-group-name-options">{groupNameSuggestions.map((name) => <option key={name} value={name} />)}</datalist>
+            <label style={label}>Group Name (Tally Primary Groups)</label>
+            <select required value={groupForm.name} onChange={(e) => {
+              const selectedName = e.target.value;
+              const standard = TALLY_PRIMARY_GROUPS.find((item) => item.name === selectedName);
+              setGroupForm((p) => ({ ...p, name: selectedName, ...(standard && p.source_type === "bank_statement" ? { nature: standard.nature, report_placement: standard.report_placement } : {}) }));
+              if (selectedName !== "__custom__") setCustomGroupName("");
+            }} style={input}>
+              <option value="">Select Tally Primary Group</option>
+              {TALLY_PRIMARY_GROUPS.map((item) => <option key={item.name} value={item.name}>{item.name}</option>)}
+              <option value="__custom__">+ Create a custom Group</option>
+            </select>
+            {groupForm.name === "__custom__" && <input required value={customGroupName} onChange={(e) => setCustomGroupName(e.target.value)} style={{ ...input, marginTop: 8 }} placeholder="Enter custom Group Name" />}
+            <p style={{ color: "#64748b", fontSize: 11, margin: "6px 0 10px" }}>TallyPrime standard chart: 15 Primary Groups and 13 predefined Sub-groups. Choose a standard group here, then choose its Sub-group in the next tab. Custom groups are also supported.</p>
             <label style={{ ...label, marginTop: 10 }}>Group Source</label><select value={groupForm.source_type || "bank_statement"} onChange={(e) => { const source = e.target.value; setGroupForm((p) => ({ ...p, source_type: source, nature: source === "warehouse_sale" ? "income" : source === "warehouse_purchase" ? "expense" : p.nature, report_placement: source === "bank_statement" ? p.report_placement : "profit_loss" })); }} style={input}>{Object.entries(sourceLabels).map(([key,value]) => <option key={key} value={key}>{value}</option>)}</select>
             <label style={{ ...label, marginTop: 10 }}>Account Nature</label><select disabled={groupForm.source_type !== "bank_statement"} value={groupForm.nature} onChange={(e) => setGroupForm((p) => ({ ...p, nature: e.target.value }))} style={{ ...input, background: groupForm.source_type !== "bank_statement" ? "#f1f5f9" : "#fff" }}>{Object.entries(natureLabels).map(([key,value]) => <option key={key} value={key}>{value}</option>)}</select>
             <label style={{ ...label, marginTop: 10 }}>Where should this Group appear?</label><select disabled={groupForm.source_type !== "bank_statement"} value={groupForm.report_placement} onChange={(e) => setGroupForm((p) => ({ ...p, report_placement: e.target.value }))} style={{ ...input, background: groupForm.source_type !== "bank_statement" ? "#f1f5f9" : "#fff" }}>{Object.entries(placementLabels).map(([key,value]) => <option key={key} value={key}>{value}</option>)}</select>
@@ -354,10 +403,20 @@ export default function BankFinancialReportsPage() {
         <section style={{ display: "grid", gridTemplateColumns: "minmax(280px,.7fr) minmax(320px,1.3fr)", gap: 14 }}>
           <form onSubmit={createSubGroup} style={panel}>
             <h2 style={{ margin: "0 0 12px", fontSize: 18 }}>{editingSubGroupId ? "Edit Sub-group" : "Create Sub-group"}</h2>
-            <label style={label}>Sub-group Name</label>
-            <input required list="bank-financial-subgroup-name-options" value={subGroupForm.name} onChange={(e) => setSubGroupForm((p) => ({ ...p, name: e.target.value }))} style={input} placeholder="Choose a suggested Sub-group or type a new name" />
-            <datalist id="bank-financial-subgroup-name-options">{(subgroupNameSuggestions[groups.find((g) => String(g._id) === String(subGroupForm.group_id))?.name] || []).map((name) => <option key={name} value={name} />)}</datalist>
-            <label style={{ ...label, marginTop: 10 }}>Under Group</label><select required value={subGroupForm.group_id} onChange={(e) => setSubGroupForm((p) => ({ ...p, group_id: e.target.value, name: editingSubGroupId ? p.name : "" }))} style={input}><option value="">Select Group</option>{groups.filter((g) => !g.source_type || g.source_type === "bank_statement").map((g) => <option key={g._id} value={g._id}>{g.name}</option>)}</select>
+            <label style={label}>Sub-group Name (Tally Predefined + Custom)</label>
+            <select required value={subGroupForm.name} onChange={(e) => { setSubGroupForm((p) => ({ ...p, name: e.target.value })); if (e.target.value !== "__custom__") setCustomSubGroupName(""); }} style={input}>
+              <option value="">Select Sub-group</option>
+              {(() => {
+                const parentName = groups.find((g) => String(g._id || g.id) === String(subGroupForm.group_id))?.name;
+                const currentEditingName = subgroups.find((item) => String(item._id || item.id) === String(editingSubGroupId))?.name;
+                const alreadyUsed = new Set(subgroups.filter((item) => String(item.group_id) === String(subGroupForm.group_id) && String(item._id || item.id) !== String(editingSubGroupId)).map((item) => item.name));
+                const options = [...new Set([...(TALLY_SUBGROUPS_BY_PARENT[parentName] || []), ...(CUSTOM_SUBGROUP_SUGGESTIONS[parentName] || []), ...(currentEditingName ? [currentEditingName] : [])])].filter((name) => !alreadyUsed.has(name));
+                return options.map((name) => <option key={name} value={name}>{name}{TALLY_SUBGROUPS_BY_PARENT[parentName]?.includes(name) ? " (Tally)" : ""}</option>);
+              })()}
+              <option value="__custom__">+ Create a custom Sub-group</option>
+            </select>
+            {subGroupForm.name === "__custom__" && <input required value={customSubGroupName} onChange={(e) => setCustomSubGroupName(e.target.value)} style={{ ...input, marginTop: 8 }} placeholder="Enter custom Sub-group Name" />}
+            <label style={{ ...label, marginTop: 10 }}>Under Group</label><select required value={subGroupForm.group_id} onChange={(e) => { setSubGroupForm((p) => ({ ...p, group_id: e.target.value, name: "" })); setCustomSubGroupName(""); }} style={input}><option value="">Select Tally Primary Group</option>{groups.filter((g) => !g.source_type || g.source_type === "bank_statement").map((g) => <option key={g._id} value={g._id}>{g.name}</option>)}</select>
             <label style={{ ...label, marginTop: 10 }}>Display Order</label><select value={subGroupForm.sort_order} onChange={(e) => setSubGroupForm((p) => ({ ...p, sort_order: e.target.value }))} style={input}>{displayOrderOptions.map((order) => <option key={order} value={order}>{order === "0" ? "0 · Default" : order}</option>)}</select>
             <div style={{ display: "flex", gap: 8, marginTop: 13 }}><button type="submit" disabled={saving || !groups.some((g) => !g.source_type || g.source_type === "bank_statement")} style={primary}>{saving ? "Saving..." : editingSubGroupId ? "Update Sub-group" : "Save Sub-group"}</button>{editingSubGroupId && <button type="button" onClick={cancelSubGroupEdit} style={secondary}>Cancel Edit</button>}</div>
           </form>
