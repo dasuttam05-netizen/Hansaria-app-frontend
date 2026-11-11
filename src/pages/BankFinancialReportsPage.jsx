@@ -471,6 +471,36 @@ export default function BankFinancialReportsPage() {
     else form.requestSubmit();
   };
 
+  // Keep Enter-based keyboard navigation working in the Particulars Mapping grid.
+  // This handler was referenced by the grid inputs but was missing, causing the
+  // entire React page to crash during render.
+  const handleMappingGridKeyDown = (event) => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    const current = event.currentTarget;
+    const row = current.closest("tr");
+    const tableBody = row?.parentElement;
+    if (!row || !tableBody) return;
+    const cells = [...row.querySelectorAll("[data-ledger-cell]")]
+      .filter((field) => !field.disabled);
+    const currentIndex = cells.indexOf(current);
+    const nextInRow = currentIndex >= 0 ? cells[currentIndex + 1] : null;
+    if (nextInRow) {
+      nextInRow.focus();
+      return;
+    }
+    let nextRow = row.nextElementSibling;
+    while (nextRow) {
+      const nextCell = [...nextRow.querySelectorAll("[data-ledger-cell]")]
+        .find((field) => !field.disabled);
+      if (nextCell) {
+        nextCell.focus();
+        return;
+      }
+      nextRow = nextRow.nextElementSibling;
+    }
+  };
+
   const saveQuickLedgerMapping = async (event) => {
     event.preventDefault(); setSaving(true); setError(""); setNotice("");
     try {
