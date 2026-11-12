@@ -285,6 +285,10 @@ export default function BankFinancialReportsPage() {
   }, [searchParams]);
 
   const params = useMemo(() => Object.fromEntries(Object.entries(appliedFilters).filter(([, value]) => value !== "")), [appliedFilters]);
+  const bankBalanceDetailTotals = useMemo(() => (bankBalanceReport.details || []).reduce((totals, row) => ({
+    receipts: totals.receipts + Number(row.receipt_amount || 0),
+    payments: totals.payments + Number(row.payment_amount || 0),
+  }), { receipts: 0, payments: 0 }), [bankBalanceReport.details]);
 
   const loadMasters = useCallback(async () => {
     const [groupRes, subRes, mappingRes, summaryRes, importRes, bankOpeningRes] = await Promise.all([
@@ -324,9 +328,8 @@ export default function BankFinancialReportsPage() {
       const res = await axios.get(`${API_BASE}/reports/balance-sheet`, { params: reportFilters });
       setBalanceSheet(res.data || { total_assets: 0, total_liabilities: 0, total_equity: 0, liabilities_plus_equity: 0, difference: 0, rows: [] });
     } else if (selectedTab === "bankbalance") {
-      const reportFilters = { ...filterParams }; delete reportFilters.import_batch_id; delete reportFilters.group_company; delete reportFilters.group_id; delete reportFilters.subgroup_id; delete reportFilters.voucher_type;
-      const res = await axios.get(`${API_BASE}/reports/bank-balance`, { params: reportFilters });
-      setBankBalanceReport(res.data || { totals: {}, rows: [], opening_balance_missing_banks: [] });
+      const res = await axios.get(`${API_BASE}/reports/bank-balance`, { params: filterParams });
+      setBankBalanceReport(res.data || { totals: {}, rows: [], details: [], opening_balance_missing_banks: [] });
     }
   }, [tab, params]);
 
@@ -1023,7 +1026,7 @@ export default function BankFinancialReportsPage() {
             <div><label style={label}>To Date</label><input type="date" value={filters.to_date} onChange={(e) => setFilters((p) => ({ ...p, to_date: e.target.value }))} style={input} /></div>
             <div><label style={label}>Bank Name</label><select value={filters.bank_name} onChange={(e) => setFilters((p) => ({ ...p, bank_name: e.target.value }))} style={input}><option value="">All Banks</option>{[...new Set([...(summary.bank_names || []), ...bankOpeningBalances.map((row) => row.bank_name)])].sort((a, b) => a.localeCompare(b)).map((name) => <option key={name} value={name}>{name}</option>)}</select></div>
             <div><label style={label}>Voucher Type</label><select value={filters.voucher_type} onChange={(e) => setFilters((p) => ({ ...p, voucher_type: e.target.value }))} style={input}><option value="">All Types</option><option>Payment</option><option>Receipt</option><option>Contra</option></select></div>
-            {!["statement", "bankbalance"].includes(tab) && <>
+            {!["statement"].includes(tab) && <>
               <div><label style={label}>Group Company</label><select value={filters.group_company} onChange={(e) => setFilters((p) => ({ ...p, group_company: e.target.value }))} style={input}><option value="">All Group Companies</option><option value="__unassigned__">Unassigned</option>{companyGroupOptions.map((name) => <option key={name} value={name}>{name}</option>)}</select></div>
               <div><label style={label}>Group</label><select value={filters.group_id} onChange={(e) => setFilters((p) => ({ ...p, group_id: e.target.value, subgroup_id: "" }))} style={input}><option value="">All Groups</option>{groups.filter((g) => !g.source_type || g.source_type === "bank_statement").map((g) => <option key={g._id} value={g._id}>{g.name}</option>)}</select></div>
               <div><label style={label}>Sub-group</label><select value={filters.subgroup_id} onChange={(e) => setFilters((p) => ({ ...p, subgroup_id: e.target.value }))} style={input}><option value="">All Sub-groups</option>{subgroups.filter((g) => !filters.group_id || String(g.group_id) === String(filters.group_id)).map((g) => <option key={g._id} value={g._id}>{g.name}</option>)}</select></div>
@@ -1148,7 +1151,7 @@ export default function BankFinancialReportsPage() {
               </tbody></table></div>
             </section>
             <section className="bank-financial-print-area" style={panel}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}><div><h2 style={{ margin: "0 0 5px", fontSize: 18 }}>Multi-Bank / Single-Bank Balance Report</h2><p style={{ margin: 0, color: "#64748b", fontSize: 12 }}>All Banks combines every bank; choosing one bank shows its separate balance.</p></div>{reportPrintButton() }</div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}><div><h2 style={{ margin: "0 0 5px", fontSize: 18 }}>Multi-Bank / Single-Bank Balance Report</h2><p style={{ margin: 0, color: "#64748b", fontSize: 12 }}>All Banks combines every bank; choosing one bank shows its separate balance.</p><p style={{ margin: "4px 0 0", color: "#334155", fontSize: 11 }}>Applied: {appliedFilters.bank_name || "All Banks"} · {appliedFilters.from_date || "First available date"} to {appliedFilters.to_date || "Latest date"} · {appliedFilters.period_type === "daily" ? "Day-wise" : appliedFilters.period_type === "monthly" ? "Monthly" : "Selected Date Range"}{appliedFilters.group_company ? ` · Group Company: ${appliedFilters.group_company === "__unassigned__" ? "Unassigned" : appliedFilters.group_company}` : ""}{appliedFilters.group_id ? ` · Group: ${groups.find((item) => String(item._id) === String(appliedFilters.group_id))?.name || "Selected"}` : ""}{appliedFilters.subgroup_id ? ` · Sub-group: ${subgroups.find((item) => String(item._id) === String(appliedFilters.subgroup_id))?.name || "Selected"}` : ""}</p></div>{reportPrintButton() }</div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 10, margin: "12px 0" }}>
                 {card("Opening Balance", fmt(bankBalanceReport.totals?.opening_balance), "At selected From Date")}
                 {card("Total Receipts", fmt(bankBalanceReport.totals?.receipts), "Selected period")}
@@ -1160,6 +1163,49 @@ export default function BankFinancialReportsPage() {
                 {(bankBalanceReport.rows || []).map((row, index) => <tr key={`${row.bank_name}-${row.period}-${index}`}><td style={td}>{row.period}</td><td style={td}><b>{row.bank_name}</b></td><td style={{ ...td, textAlign: "right" }}>{fmt(row.opening_balance)}</td><td style={{ ...td, textAlign: "right" }}>{fmt(row.receipts)}</td><td style={{ ...td, textAlign: "right" }}>{fmt(row.payments)}</td><td style={{ ...td, textAlign: "right", fontWeight: 800 }}>{fmt(row.closing_balance)}</td><td style={td}>{row.transactions}</td><td style={td}>{row.opening_balance_source || (row.opening_balance_set ? "Manual" : "Missing")}</td></tr>)}
                 {!bankBalanceReport.rows?.length && <tr><td style={td} colSpan={8}>No bank transactions found for the selected bank and date range.</td></tr>}
               </tbody></table></div>
+              <div style={{ marginTop: 20, paddingTop: 14, borderTop: "2px solid #cbd5e1" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "end", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
+                  <div>
+                    <h3 style={{ margin: "0 0 4px", fontSize: 16, color: "#17365d" }}>Detailed Transaction / Ledger Breakdown</h3>
+                    <p style={{ margin: 0, color: "#64748b", fontSize: 11 }}>Every imported bank transaction with its Ledger, Group, Sub-group and Group Company. Split allocations appear as separate ledger lines; bank balance and running balance are shown once per original transaction.</p>
+                  </div>
+                  <div style={{ fontSize: 12, color: "#475569", fontWeight: 700 }}>{(bankBalanceReport.details || []).length} Detail Row(s)</div>
+                </div>
+                <div style={{ overflowX: "auto" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 2050 }}>
+                    <thead><tr>{["Bank Date","Time","Bank Name","Original Bank Particulars","Ledger Name","Voucher Type","Voucher Number","Group Company","Group","Sub-group","Receipt (Ledger)","Payment (Ledger)","Statement Debit","Statement Credit","Bank Balance (H)","Running Balance","Bank Remarks","Instrument Type","Instrument Number","Transaction ID","Bank Status","Tally Date"].map((title) => <th key={title} style={{ ...th, position: "static" }}>{title}</th>)}</tr></thead>
+                    <tbody>
+                      {(bankBalanceReport.details || []).map((row) => <tr key={row.id}>
+                        <td style={td}>{dateLabel(row.bank_date)}</td>
+                        <td style={td}>{row.bank_time || "-"}</td>
+                        <td style={td}><b>{row.bank_name}</b></td>
+                        <td style={{ ...td, minWidth: 180 }}>{row.original_particulars || "-"}</td>
+                        <td style={{ ...td, minWidth: 170 }}><b>{row.ledger_name || "Unmapped Ledger"}</b>{row.split && <div style={{ color: "#0f766e", fontSize: 10 }}>Split allocation</div>}</td>
+                        <td style={td}>{row.voucher_type || "-"}</td>
+                        <td style={td}>{row.voucher_number || "-"}</td>
+                        <td style={td}>{row.group_company || "Unassigned"}</td>
+                        <td style={td}>{row.group_name || "Unmapped"}</td>
+                        <td style={td}>{row.subgroup_name || "-"}</td>
+                        <td style={{ ...td, textAlign: "right" }}>{row.receipt_amount ? fmt(row.receipt_amount) : "-"}</td>
+                        <td style={{ ...td, textAlign: "right" }}>{row.payment_amount ? fmt(row.payment_amount) : "-"}</td>
+                        <td style={{ ...td, textAlign: "right" }}>{row.statement_debit === null || row.statement_debit === undefined ? "-" : fmt(row.statement_debit)}</td>
+                        <td style={{ ...td, textAlign: "right" }}>{row.statement_credit === null || row.statement_credit === undefined ? "-" : fmt(row.statement_credit)}</td>
+                        <td style={{ ...td, textAlign: "right" }}>{row.bank_balance === null || row.bank_balance === undefined ? "-" : fmt(row.bank_balance)}</td>
+                        <td style={{ ...td, textAlign: "right", fontWeight: row.running_balance !== null && row.running_balance !== undefined ? 800 : 400 }}>{row.running_balance === null || row.running_balance === undefined ? "-" : fmt(row.running_balance)}</td>
+                        <td style={{ ...td, minWidth: 150 }}>{row.bank_remarks || "-"}</td>
+                        <td style={td}>{row.instrument_type || "-"}</td>
+                        <td style={td}>{row.instrument_no || "-"}</td>
+                        <td style={td}>{row.transaction_reference || "-"}</td>
+                        <td style={td}>{row.bank_status || "-"}</td>
+                        <td style={td}>{dateLabel(row.tally_date)}</td>
+                      </tr>)}
+                      {!(bankBalanceReport.details || []).length && <tr><td style={td} colSpan={22}>No transaction details match the selected date, Bank, Voucher Type, Group Company, Group and Sub-group filters.</td></tr>}
+                    </tbody>
+                    <tfoot><tr style={{ background: "#eff6ff", fontWeight: 800 }}><td style={td} colSpan={10}>DETAIL TOTALS (visible ledger allocations)</td><td style={{ ...td, textAlign: "right" }}>{fmt(bankBalanceDetailTotals.receipts)}</td><td style={{ ...td, textAlign: "right" }}>{fmt(bankBalanceDetailTotals.payments)}</td><td style={td} colSpan={10}>Bank opening / closing balance is shown in the summary above.</td></tr></tfoot>
+                  </table>
+                </div>
+                <p className="bank-financial-no-print" style={{ margin: "8px 0 0", color: "#64748b", fontSize: 11 }}>Note: Group Company / Group / Sub-group / Voucher Type / Import Batch filters narrow this detail table only. Opening Balance, Receipts, Payments and Closing Balance above always represent the complete selected Bank movement, so ledger filters cannot distort the actual bank balance.</p>
+              </div>
             </section>
           </>}
         </>
