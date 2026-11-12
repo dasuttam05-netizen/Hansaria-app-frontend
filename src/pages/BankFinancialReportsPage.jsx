@@ -389,7 +389,45 @@ export default function BankFinancialReportsPage() {
       bank_status: row.bank_status || "", tally_date: dateInputValue(row.tally_date), particulars_name: row.particulars_name || "",
       voucher_type: row.voucher_type || "", voucher_number: row.voucher_number || "",
       receipt_amount: String(row.receipt_amount ?? 0), payment_amount: String(row.payment_amount ?? 0),
+      allocations: (Array.isArray(row.split_allocations) ? row.split_allocations : []).map((item) => ({
+        ledger_name: item.ledger_name || "", group_id: item.group_id || "", subgroup_id: item.subgroup_id || "",
+        group_company: item.group_company || "", amount: String(item.amount ?? 0), side: item.side || (Number(row.payment_amount) > 0 ? "payment" : "receipt"),
+      })),
     });
+  };
+
+  const updateTransactionAllocation = (index, changes) => {
+    setTransactionEditForm((previous) => ({
+      ...previous,
+      allocations: (previous.allocations || []).map((item, itemIndex) => itemIndex === index ? { ...item, ...changes } : item),
+    }));
+  };
+
+  const addTransactionAllocation = () => {
+    setTransactionEditForm((previous) => {
+      const allocations = previous.allocations || [];
+      const total = allocations.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+      const bankAmount = Number(previous.payment_amount || previous.receipt_amount || 0);
+      const remaining = Math.max(0, bankAmount - total);
+      return {
+        ...previous,
+        allocations: [...allocations, {
+          ledger_name: editingTransaction?.ledger_name || editingTransaction?.particulars_name || "",
+          group_id: editingTransaction?.mapping?.group_id || "",
+          subgroup_id: editingTransaction?.mapping?.subgroup_id || "",
+          group_company: editingTransaction?.mapping?.group_company || "",
+          amount: String(Number(remaining.toFixed(2))),
+          side: Number(previous.payment_amount) > 0 ? "payment" : "receipt",
+        }],
+      };
+    });
+  };
+
+  const removeTransactionAllocation = (index) => {
+    setTransactionEditForm((previous) => ({
+      ...previous,
+      allocations: (previous.allocations || []).filter((_, itemIndex) => itemIndex !== index),
+    }));
   };
 
   const saveTransactionEdit = async (event) => {
@@ -397,6 +435,17 @@ export default function BankFinancialReportsPage() {
     if (!editingTransaction || !transactionEditForm) return;
     setSaving(true); setError(""); setNotice("");
     try {
+      const allocations = transactionEditForm.allocations || [];
+      if (allocations.length) {
+        const bankAmount = Number(transactionEditForm.payment_amount || transactionEditForm.receipt_amount || 0);
+        const allocatedTotal = allocations.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+        if (allocations.some((item) => !String(item.ledger_name || "").trim() || !item.group_id || Number(item.amount || 0) <= 0)) {
+          throw new Error("Every split row needs a Ledger Name, Group and an amount greater than zero.");
+        }
+        if (Math.abs(allocatedTotal - bankAmount) > 0.01) {
+          throw new Error(`Split total ${money(allocatedTotal)} must equal the Bank Statement amount ${money(bankAmount)}.`);
+        }
+      }
       await axios.put(`${API_BASE}/transactions/${editingTransaction._id || editingTransaction.id}`, transactionEditForm);
       setEditingTransaction(null); setTransactionEditForm(null);
       await loadMasters(); await loadCurrentReport("statement", params);
@@ -790,11 +839,42 @@ export default function BankFinancialReportsPage() {
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(175px,1fr))", gap: 9 }}>
                 {[["bank_date","Date","date"],["bank_time","Time","text"],["bank_name","Bank Name","text"],["particulars_name","Original Bank Particulars (L)","text"],["voucher_type","Voucher Type","text"],["voucher_number","Voucher Number","text"],["receipt_amount","Receipt Amount","number"],["payment_amount","Payment Amount","number"],["bank_debit","Statement Debit","number"],["bank_credit","Statement Credit","number"],["bank_balance","Bank Balance (H)","number"],["bank_remarks","Bank Remarks","text"],["instrument_type","Instrument Type","text"],["instrument_no","Instrument Number","text"],["transaction_id","Transaction ID","text"],["bank_status","Bank Status","text"],["tally_date","Tally Date","date"]].map(([key,title,type]) => <label key={key} style={{ ...label, margin: 0 }}>{title}<input type={type} value={transactionEditForm[key] ?? ""} onChange={(e) => setTransactionEditForm((p) => ({ ...p, [key]: e.target.value }))} style={{ ...input, marginTop: 4 }} /></label>)}
               </div>
+              <div style={{ marginTop: 14, padding: 12, border: "1px solid #cbd5e1", borderRadius: 8, background: "#fff" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+                  <div><b style={{ fontSize: 13, color: "#0f172a" }}>Split Ledger / Expense Allocation</b><div style={{ color: "#64748b", fontSize: 11, marginTop: 3 }}>One bank transaction can be divided between multiple accounting ledgers. Bank Statement amount and bank balance remain unchanged.</div></div>
+                  <button type="button" onClick={addTransactionAllocation} style={secondary}>+ Add Split Row</button>
+                </div>
+                {(() => {
+                  const allocations = transactionEditForm.allocations || [];
+                  const bankAmount = Number(transactionEditForm.payment_amount || transactionEditForm.receipt_amount || 0);
+                  const allocatedTotal = allocations.reduce((sum, item) => sum + Number(item.amount || 0), 0);
+                  const remaining = bankAmount - allocatedTotal;
+                  return <>
+                    <div style={{ display: "flex", gap: 16, flexWrap: "wrap", margin: "10px 0", fontSize: 12 }}>
+                      <span>Statement {Number(transactionEditForm.payment_amount) > 0 ? "Payment" : "Receipt"}: <b>{money(bankAmount)}</b></span>
+                      <span>Allocated: <b>{money(allocatedTotal)}</b></span>
+                      <span style={{ color: Math.abs(remaining) <= 0.01 ? "#047857" : "#b45309" }}>Remaining: <b>{money(remaining)}</b></span>
+                    </div>
+                    {allocations.length > 0 && <div style={{ overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse", minWidth: 850 }}><thead><tr>{["Ledger Name","Group","Sub-group","Group Company","Amount","Action"].map((title) => <th key={title} style={{ ...th, position: "static" }}>{title}</th>)}</tr></thead><tbody>
+                      {allocations.map((allocation, index) => <tr key={`allocation-${index}`}>
+                        <td style={td}><input value={allocation.ledger_name || ""} onChange={(event) => updateTransactionAllocation(index, { ledger_name: event.target.value })} placeholder="e.g. Salary Expenses" style={input} /></td>
+                        <td style={{ ...td, minWidth: 160 }}><select value={allocation.group_id || ""} onChange={(event) => updateTransactionAllocation(index, { group_id: event.target.value, subgroup_id: "" })} style={input}><option value="">Select Group</option>{groups.filter((item) => !item.source_type || item.source_type === "bank_statement").map((item) => <option key={item._id} value={item._id}>{item.name}</option>)}</select></td>
+                        <td style={{ ...td, minWidth: 160 }}><select value={allocation.subgroup_id || ""} disabled={!allocation.group_id} onChange={(event) => updateTransactionAllocation(index, { subgroup_id: event.target.value })} style={input}><option value="">No Sub-group</option>{subgroups.filter((item) => String(item.group_id) === String(allocation.group_id)).map((item) => <option key={item._id} value={item._id}>{item.name}</option>)}</select></td>
+                        <td style={{ ...td, minWidth: 170 }}><input value={allocation.group_company || ""} onChange={(event) => updateTransactionAllocation(index, { group_company: event.target.value })} list="bank-financial-group-company-options" placeholder="Group Company" style={input} /></td>
+                        <td style={{ ...td, minWidth: 125 }}><input type="number" min="0.01" step="0.01" value={allocation.amount ?? ""} onChange={(event) => updateTransactionAllocation(index, { amount: event.target.value })} style={{ ...input, textAlign: "right" }} /></td>
+                        <td style={td}><button type="button" onClick={() => removeTransactionAllocation(index)} style={{ ...secondary, color: "#b91c1c", padding: "7px 9px" }}>Remove</button></td>
+                      </tr>)}
+                    </tbody></table></div>}
+                    {!allocations.length && <div style={{ padding: 12, background: "#f8fafc", borderRadius: 7, color: "#64748b", fontSize: 12 }}>No split allocation has been added. Click “Add Split Row” to classify this bank entry.</div>}
+                  </>;
+                })()}
+                <datalist id="bank-financial-group-company-options">{companyGroupOptions.map((name) => <option key={name} value={name} />)}</datalist>
+              </div>
               <div style={{ display: "flex", gap: 8, marginTop: 12 }}><button type="submit" disabled={saving} style={primary}>{saving ? "Saving..." : "Save Statement Changes"}</button><button type="button" onClick={() => { setEditingTransaction(null); setTransactionEditForm(null); }} style={secondary}>Cancel</button></div>
-              <p style={{ margin: "8px 0 0", fontSize: 11, color: "#475569" }}>The original Bank Statement Particulars is kept for reconciliation. Change the report Ledger Name in Particulars Mapping; it will not overwrite the source Excel value.</p>
+              <p style={{ margin: "8px 0 0", fontSize: 11, color: "#475569" }}>The original Bank Statement Particulars is kept for reconciliation. Split allocations affect ledger reports only; the Bank Statement entry and bank balance stay as one transaction.</p>
             </form>}
             <div style={{ overflow: "auto", maxHeight: "70vh" }}><table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1250 }}><thead><tr>{["Date (A)","Bank (D)","Ledger Name (mapped from L)","Group Company","Voucher Type (M)","Voucher No. (N)","Receipt (O)","Payment (P)","Bank Balance (H)","Group Mapping","Status","Action"].map((x) => <th key={x} style={th}>{x}</th>)}</tr></thead><tbody>
-              {transactions.map((row) => <tr key={row._id}><td style={td}>{dateLabel(row.bank_date)}</td><td style={td}>{row.bank_name}</td><td style={td}><b>{row.ledger_name || row.particulars_name}</b>{row.ledger_name && String(row.ledger_name).trim().toLowerCase() !== String(row.particulars_name || "").trim().toLowerCase() && <div style={{ color: "#64748b", fontSize: 10, marginTop: 3 }}>Original: {row.particulars_name}</div>}</td><td style={td}>{row.mapping?.group_company || "Unassigned"}</td><td style={td}>{row.voucher_type}</td><td style={td}>{row.voucher_number}</td><td style={{ ...td, textAlign: "right" }}>{row.receipt_amount ? fmt(row.receipt_amount) : "-"}</td><td style={{ ...td, textAlign: "right" }}>{row.payment_amount ? fmt(row.payment_amount) : "-"}</td><td style={{ ...td, textAlign: "right" }}>{fmt(row.bank_balance)}</td><td style={td}>{row.mapping ? `${row.mapping.group_name}${row.mapping.subgroup_name ? ` / ${row.mapping.subgroup_name}` : ""}` : <span style={{ color: "#b45309", fontWeight: 800 }}>Unmapped</span>}</td><td style={td}>{row.bank_status || "-"}</td><td style={td}><button type="button" onClick={() => openTransactionEdit(row)} style={secondary}>Edit</button></td></tr>)}
+              {transactions.map((row) => <tr key={row._id}><td style={td}>{dateLabel(row.bank_date)}</td><td style={td}>{row.bank_name}</td><td style={td}><b>{row.ledger_name || row.particulars_name}</b>{row.ledger_name && String(row.ledger_name).trim().toLowerCase() !== String(row.particulars_name || "").trim().toLowerCase() && <div style={{ color: "#64748b", fontSize: 10, marginTop: 3 }}>Original: {row.particulars_name}</div>}{(row.split_allocations || []).length > 0 && <div style={{ color: "#0f766e", fontSize: 10, marginTop: 4 }}>{row.allocations.map((item) => `${item.ledger_name}: ${money(item.amount)}`).join(" · ")}</div>}</td><td style={td}>{(row.split_allocations || []).length > 0 ? [...new Set(row.allocations.map((item) => item.group_company || "Unassigned"))].join(", ") : row.mapping?.group_company || "Unassigned"}</td><td style={td}>{row.voucher_type}</td><td style={td}>{row.voucher_number}</td><td style={{ ...td, textAlign: "right" }}>{row.receipt_amount ? fmt(row.receipt_amount) : "-"}</td><td style={{ ...td, textAlign: "right" }}>{row.payment_amount ? fmt(row.payment_amount) : "-"}</td><td style={{ ...td, textAlign: "right" }}>{fmt(row.bank_balance)}</td><td style={td}>{(row.split_allocations || []).length > 0 ? <span style={{ color: "#0f766e", fontWeight: 700 }}>Split ({row.allocations.length} ledgers)</span> : row.mapping ? `${row.mapping.group_name}${row.mapping.subgroup_name ? ` / ${row.mapping.subgroup_name}` : ""}` : <span style={{ color: "#b45309", fontWeight: 800 }}>Unmapped</span>}</td><td style={td}>{row.bank_status || "-"}</td><td style={td}><button type="button" onClick={() => openTransactionEdit(row)} style={secondary}>Edit</button></td></tr>)}
               {!transactions.length && <tr><td style={td} colSpan={12}>No bank transactions for the selected filter.</td></tr>}
             </tbody></table></div>
           </section>}
