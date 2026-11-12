@@ -266,6 +266,8 @@ export default function BankFinancialReportsPage() {
   const [importResult, setImportResult] = useState(null);
   const [mappingSearch, setMappingSearch] = useState("");
   const [imports, setImports] = useState([]);
+  const [bulkBankNames, setBulkBankNames] = useState({});
+  const [bulkBankUpdatingBatch, setBulkBankUpdatingBatch] = useState("");
   const [editingGroupId, setEditingGroupId] = useState("");
   const [editingSubGroupId, setEditingSubGroupId] = useState("");
   const [editingTransaction, setEditingTransaction] = useState(null);
@@ -344,6 +346,30 @@ export default function BankFinancialReportsPage() {
     setTab(key);
     setSearchParams({ tab: key });
     setError(""); setNotice("");
+  };
+
+  const updateImportedBatchBankName = async (batch) => {
+    const batchId = String(batch?.batch_id || "").trim();
+    const bankName = String(bulkBankNames[batchId] ?? (batch?.bank_names?.length === 1 ? batch.bank_names[0] : "") ?? "").trim();
+    if (!batchId) { setError("This import record has no batch ID, so it cannot be bulk updated."); return; }
+    if (!bankName) { setError("Please enter or select the Bank Name to apply to this imported statement."); return; }
+    const rowCount = Number(batch.total_rows || 0);
+    const approved = window.confirm(`Update Bank Name to "${bankName}" for all ${rowCount} rows in "${batch.file_name}"?\n\nDates, amounts, ledger mappings, split allocations and bank balances will remain unchanged.`);
+    if (!approved) return;
+
+    setBulkBankUpdatingBatch(batchId); setError(""); setNotice("");
+    try {
+      const response = await axios.patch(`${API_BASE}/import-batches/${encodeURIComponent(batchId)}/bank-name`, { bank_name: bankName });
+      await loadMasters();
+      if (tab === "statement" && appliedFilters.import_batch_id === batchId) {
+        await loadCurrentReport("statement", params);
+      }
+      setNotice(response.data?.message || `Bank Name updated for ${rowCount} rows.`);
+    } catch (err) {
+      setError(err.response?.data?.error || err.message || "Could not bulk update Bank Name.");
+    } finally {
+      setBulkBankUpdatingBatch("");
+    }
   };
 
   const createGroup = async (event) => {
@@ -774,10 +800,11 @@ export default function BankFinancialReportsPage() {
             <div><h2 style={{ margin: 0, fontSize: 18 }}>Imported Bank Statements</h2><p style={{ margin: "5px 0 0", fontSize: 12, color: "#64748b" }}>Open a previous import and edit its individual statement rows. Saved Group / Sub-group mappings remain in place.</p></div>
             <button type="button" onClick={() => refreshAll("importhistory")} style={secondary}>Refresh History</button>
           </div>
-          <div style={{ overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse", minWidth: 850 }}><thead><tr>{["File Name","Date From","Date To","Rows","Receipts","Payments","Imported By","Action"].map((x) => <th key={x} style={th}>{x}</th>)}</tr></thead><tbody>
-            {imports.map((row) => <tr key={row.batch_id || row.file_name}><td style={td}><b>{row.file_name}</b></td><td style={td}>{dateLabel(row.date_from)}</td><td style={td}>{dateLabel(row.date_to)}</td><td style={td}>{row.total_rows}</td><td style={{ ...td, textAlign: "right" }}>{fmt(row.total_receipts)}</td><td style={{ ...td, textAlign: "right" }}>{fmt(row.total_payments)}</td><td style={td}>{row.imported_by || "-"}</td><td style={td}><button type="button" style={primary} onClick={() => { const next = { ...appliedFilters, from_date: "", to_date: "", bank_name: "", voucher_type: "", import_batch_id: row.batch_id || "" }; setFilters(next); setAppliedFilters(next); selectTab("statement"); }}>Open / Edit Statement</button></td></tr>)}
-            {!imports.length && <tr><td style={td} colSpan={8}>No imported statements found yet.</td></tr>}
-          </tbody></table></div>
+          <div style={{ overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1120 }}><thead><tr>{["File Name","Date From","Date To","Rows","Receipts","Payments","Imported By","Current Bank Name","Apply Bank Name to All Rows","Action"].map((x) => <th key={x} style={th}>{x}</th>)}</tr></thead><tbody>
+            {imports.map((row) => <tr key={row.batch_id || row.file_name}><td style={td}><b>{row.file_name}</b></td><td style={td}>{dateLabel(row.date_from)}</td><td style={td}>{dateLabel(row.date_to)}</td><td style={td}>{row.total_rows}</td><td style={{ ...td, textAlign: "right" }}>{fmt(row.total_receipts)}</td><td style={{ ...td, textAlign: "right" }}>{fmt(row.total_payments)}</td><td style={td}>{row.imported_by || "-"}</td><td style={td}>{(row.bank_names || []).join(", ") || <span style={{ color: "#b45309", fontWeight: 700 }}>Missing</span>}</td><td style={{ ...td, minWidth: 230 }}><input list="bank-bulk-name-options" value={bulkBankNames[row.batch_id] ?? ((row.bank_names || []).length === 1 ? row.bank_names[0] : "")} onChange={(event) => setBulkBankNames((previous) => ({ ...previous, [row.batch_id]: event.target.value }))} placeholder="Enter / select Bank Name" style={{ ...input, marginBottom: 6 }} /><button type="button" disabled={bulkBankUpdatingBatch === row.batch_id || !row.batch_id} style={{ ...primary, opacity: bulkBankUpdatingBatch === row.batch_id || !row.batch_id ? .6 : 1 }} onClick={() => updateImportedBatchBankName(row)}>{bulkBankUpdatingBatch === row.batch_id ? "Updating..." : `Update All ${row.total_rows || 0} Rows`}</button></td><td style={td}><button type="button" style={secondary} onClick={() => { const next = { ...appliedFilters, from_date: "", to_date: "", bank_name: "", voucher_type: "", import_batch_id: row.batch_id || "" }; setFilters(next); setAppliedFilters(next); selectTab("statement"); }}>Open / Edit Statement</button></td></tr>)}
+            {!imports.length && <tr><td style={td} colSpan={10}>No imported statements found yet.</td></tr>}
+          </tbody></table><datalist id="bank-bulk-name-options">{(summary.bank_names || []).map((name) => <option key={name} value={name} />)}</datalist></div>
+          <p style={{ margin: "10px 0 0", color: "#64748b", fontSize: 12 }}>Bulk Bank Name update applies to every transaction in the selected imported file. It does not re-import rows or change dates, amounts, ledger mapping, split allocations or bank balance.</p>
         </section>
       )}
 
