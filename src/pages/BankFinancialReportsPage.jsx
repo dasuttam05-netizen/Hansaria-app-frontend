@@ -403,6 +403,23 @@ export default function BankFinancialReportsPage() {
     }));
   };
 
+  // When a split Ledger Name matches a saved Particulars / Ledger mapping,
+  // reuse its Group, Sub-group and Group Company automatically.
+  const applySavedMappingToAllocation = (index, ledgerName) => {
+    const normalized = String(ledgerName || "").trim().toLowerCase();
+    const match = normalized
+      ? mappings.find((row) => String(row.ledger_name || "").trim().toLowerCase() === normalized)
+        || mappings.find((row) => String(row.particulars_name || "").trim().toLowerCase() === normalized)
+      : null;
+
+    updateTransactionAllocation(index, {
+      ledger_name: ledgerName,
+      group_id: match?.group_id || "",
+      subgroup_id: match?.subgroup_id || "",
+      group_company: match?.group_company || "",
+    });
+  };
+
   const addTransactionAllocation = () => {
     setTransactionEditForm((previous) => {
       const allocations = previous.allocations || [];
@@ -484,6 +501,12 @@ export default function BankFinancialReportsPage() {
     label: row.particulars_name,
     value: row.particulars_name,
   })), [mappings]);
+
+  const splitLedgerOptions = useMemo(() => {
+    const names = mappings.flatMap((row) => [row.ledger_name, row.particulars_name]);
+    return [...new Set(names.map((name) => String(name || "").trim()).filter(Boolean))]
+      .sort((a, b) => a.localeCompare(b));
+  }, [mappings]);
 
   const bankGroupOptions = useMemo(() => groups
     .filter((group) => !group.source_type || group.source_type === "bank_statement")
@@ -841,7 +864,7 @@ export default function BankFinancialReportsPage() {
               </div>
               <div style={{ marginTop: 14, padding: 12, border: "1px solid #cbd5e1", borderRadius: 8, background: "#fff" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                  <div><b style={{ fontSize: 13, color: "#0f172a" }}>Split Ledger / Expense Allocation</b><div style={{ color: "#64748b", fontSize: 11, marginTop: 3 }}>One bank transaction can be divided between multiple accounting ledgers. Bank Statement amount and bank balance remain unchanged.</div></div>
+                  <div><b style={{ fontSize: 13, color: "#0f172a" }}>Split Ledger / Expense Allocation</b><div style={{ color: "#64748b", fontSize: 11, marginTop: 3 }}>Type or select a saved Ledger Name: its Group, Sub-group and Group Company will fill automatically. New names can be mapped manually. Bank Statement amount and bank balance remain unchanged.</div></div>
                   <button type="button" onClick={addTransactionAllocation} style={secondary}>+ Add Split Row</button>
                 </div>
                 {(() => {
@@ -857,7 +880,7 @@ export default function BankFinancialReportsPage() {
                     </div>
                     {allocations.length > 0 && <div style={{ overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse", minWidth: 850 }}><thead><tr>{["Ledger Name","Group","Sub-group","Group Company","Amount","Action"].map((title) => <th key={title} style={{ ...th, position: "static" }}>{title}</th>)}</tr></thead><tbody>
                       {allocations.map((allocation, index) => <tr key={`allocation-${index}`}>
-                        <td style={td}><input value={allocation.ledger_name || ""} onChange={(event) => updateTransactionAllocation(index, { ledger_name: event.target.value })} placeholder="e.g. Salary Expenses" style={input} /></td>
+                        <td style={td}><input value={allocation.ledger_name || ""} onChange={(event) => applySavedMappingToAllocation(index, event.target.value)} list="bank-financial-split-ledger-options" placeholder="Type / select saved Ledger Name" style={input} /></td>
                         <td style={{ ...td, minWidth: 160 }}><select value={allocation.group_id || ""} onChange={(event) => updateTransactionAllocation(index, { group_id: event.target.value, subgroup_id: "" })} style={input}><option value="">Select Group</option>{groups.filter((item) => !item.source_type || item.source_type === "bank_statement").map((item) => <option key={item._id} value={item._id}>{item.name}</option>)}</select></td>
                         <td style={{ ...td, minWidth: 160 }}><select value={allocation.subgroup_id || ""} disabled={!allocation.group_id} onChange={(event) => updateTransactionAllocation(index, { subgroup_id: event.target.value })} style={input}><option value="">No Sub-group</option>{subgroups.filter((item) => String(item.group_id) === String(allocation.group_id)).map((item) => <option key={item._id} value={item._id}>{item.name}</option>)}</select></td>
                         <td style={{ ...td, minWidth: 170 }}><input value={allocation.group_company || ""} onChange={(event) => updateTransactionAllocation(index, { group_company: event.target.value })} list="bank-financial-group-company-options" placeholder="Group Company" style={input} /></td>
@@ -869,6 +892,7 @@ export default function BankFinancialReportsPage() {
                   </>;
                 })()}
                 <datalist id="bank-financial-group-company-options">{companyGroupOptions.map((name) => <option key={name} value={name} />)}</datalist>
+                <datalist id="bank-financial-split-ledger-options">{splitLedgerOptions.map((name) => <option key={name} value={name} />)}</datalist>
               </div>
               <div style={{ display: "flex", gap: 8, marginTop: 12 }}><button type="submit" disabled={saving} style={primary}>{saving ? "Saving..." : "Save Statement Changes"}</button><button type="button" onClick={() => { setEditingTransaction(null); setTransactionEditForm(null); }} style={secondary}>Cancel</button></div>
               <p style={{ margin: "8px 0 0", fontSize: 11, color: "#475569" }}>The original Bank Statement Particulars is kept for reconciliation. Split allocations affect ledger reports only; the Bank Statement entry and bank balance stay as one transaction.</p>
