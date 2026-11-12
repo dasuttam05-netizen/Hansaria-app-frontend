@@ -12,6 +12,21 @@ const secondary = { border: "1px solid #cbd5e1", borderRadius: 7, padding: "9px 
 const th = { position: "sticky", top: 0, zIndex: 1, background: "#17365d", color: "#fff", padding: "10px 9px", textAlign: "left", fontSize: 12, whiteSpace: "nowrap" };
 const td = { padding: "9px", borderBottom: "1px solid #e8edf3", fontSize: 12, color: "#334155", verticalAlign: "middle" };
 const money = (value) => `₹${Number(value || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+// Use the voucher Receipt / Payment amount when present. Some bank exports only
+// populate Statement Credit / Debit, so fall back to those columns for split entry.
+const transactionEntrySide = (row = {}) => {
+  if (Number(row.receipt_amount || 0) > 0) return "receipt";
+  if (Number(row.payment_amount || 0) > 0) return "payment";
+  if (Number(row.bank_credit || 0) > 0) return "receipt";
+  if (Number(row.bank_debit || 0) > 0) return "payment";
+  return "receipt";
+};
+const transactionEntryAmount = (row = {}) => {
+  const side = transactionEntrySide(row);
+  const explicitAmount = side === "receipt" ? Number(row.receipt_amount || 0) : Number(row.payment_amount || 0);
+  if (explicitAmount > 0) return explicitAmount;
+  return side === "receipt" ? Number(row.bank_credit || 0) : Number(row.bank_debit || 0);
+};
 const dateLabel = (value) => value ? new Date(value).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric", timeZone: "Asia/Kolkata" }) : "-";
 const dateInputValue = (value) => value ? new Date(value).toISOString().slice(0, 10) : "";
 const natureLabels = { asset: "Asset", liability: "Liability", equity: "Capital / Equity", income: "Income", expense: "Expense", other: "Other / Excluded" };
@@ -391,7 +406,7 @@ export default function BankFinancialReportsPage() {
       receipt_amount: String(row.receipt_amount ?? 0), payment_amount: String(row.payment_amount ?? 0),
       allocations: (Array.isArray(row.split_allocations) ? row.split_allocations : []).map((item) => ({
         ledger_name: item.ledger_name || "", group_id: item.group_id || "", subgroup_id: item.subgroup_id || "",
-        group_company: item.group_company || "", amount: String(item.amount ?? 0), side: item.side || (Number(row.payment_amount) > 0 ? "payment" : "receipt"),
+        group_company: item.group_company || "", amount: String(item.amount ?? 0), side: item.side || transactionEntrySide(row),
       })),
     });
   };
@@ -424,7 +439,7 @@ export default function BankFinancialReportsPage() {
     setTransactionEditForm((previous) => {
       const allocations = previous.allocations || [];
       const total = allocations.reduce((sum, item) => sum + Number(item.amount || 0), 0);
-      const bankAmount = Number(previous.payment_amount || previous.receipt_amount || 0);
+      const bankAmount = transactionEntryAmount(previous);
       const remaining = Math.max(0, bankAmount - total);
       return {
         ...previous,
@@ -434,7 +449,7 @@ export default function BankFinancialReportsPage() {
           subgroup_id: editingTransaction?.mapping?.subgroup_id || "",
           group_company: editingTransaction?.mapping?.group_company || "",
           amount: String(Number(remaining.toFixed(2))),
-          side: Number(previous.payment_amount) > 0 ? "payment" : "receipt",
+          side: transactionEntrySide(previous),
         }],
       };
     });
@@ -454,7 +469,7 @@ export default function BankFinancialReportsPage() {
     try {
       const allocations = transactionEditForm.allocations || [];
       if (allocations.length) {
-        const bankAmount = Number(transactionEditForm.payment_amount || transactionEditForm.receipt_amount || 0);
+        const bankAmount = transactionEntryAmount(transactionEditForm);
         const allocatedTotal = allocations.reduce((sum, item) => sum + Number(item.amount || 0), 0);
         if (allocations.some((item) => !String(item.ledger_name || "").trim() || !item.group_id || Number(item.amount || 0) <= 0)) {
           throw new Error("Every split row needs a Ledger Name, Group and an amount greater than zero.");
@@ -864,17 +879,17 @@ export default function BankFinancialReportsPage() {
               </div>
               <div style={{ marginTop: 14, padding: 12, border: "1px solid #cbd5e1", borderRadius: 8, background: "#fff" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-                  <div><b style={{ fontSize: 13, color: "#0f172a" }}>Split Ledger / Expense Allocation</b><div style={{ color: "#64748b", fontSize: 11, marginTop: 3 }}>Type or select a saved Ledger Name: its Group, Sub-group and Group Company will fill automatically. New names can be mapped manually. Bank Statement amount and bank balance remain unchanged.</div></div>
+                  <div><b style={{ fontSize: 13, color: "#0f172a" }}>Split Ledger / Receipt & Payment Allocation</b><div style={{ color: "#64748b", fontSize: 11, marginTop: 3 }}>Split a Receipt into income / other ledgers or a Payment into expense / other ledgers. Type or select a saved Ledger Name to auto-fill its Group, Sub-group and Group Company. Bank Statement amount and bank balance remain unchanged.</div></div>
                   <button type="button" onClick={addTransactionAllocation} style={secondary}>+ Add Split Row</button>
                 </div>
                 {(() => {
                   const allocations = transactionEditForm.allocations || [];
-                  const bankAmount = Number(transactionEditForm.payment_amount || transactionEditForm.receipt_amount || 0);
+                  const bankAmount = transactionEntryAmount(transactionEditForm);
                   const allocatedTotal = allocations.reduce((sum, item) => sum + Number(item.amount || 0), 0);
                   const remaining = bankAmount - allocatedTotal;
                   return <>
                     <div style={{ display: "flex", gap: 16, flexWrap: "wrap", margin: "10px 0", fontSize: 12 }}>
-                      <span>Statement {Number(transactionEditForm.payment_amount) > 0 ? "Payment" : "Receipt"}: <b>{money(bankAmount)}</b></span>
+                      <span>Statement {transactionEntrySide(transactionEditForm) === "payment" ? "Payment" : "Receipt"}: <b>{money(bankAmount)}</b></span>
                       <span>Allocated: <b>{money(allocatedTotal)}</b></span>
                       <span style={{ color: Math.abs(remaining) <= 0.01 ? "#047857" : "#b45309" }}>Remaining: <b>{money(remaining)}</b></span>
                     </div>
