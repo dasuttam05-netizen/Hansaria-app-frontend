@@ -250,6 +250,10 @@ export default function BankFinancialReportsPage() {
   const [quickMappingForm, setQuickMappingForm] = useState(initialQuickMapping);
   const [quickGroupQuery, setQuickGroupQuery] = useState("");
   const [quickSubgroupQuery, setQuickSubgroupQuery] = useState("");
+  // Manual ledger masters are independent of imported bank statement rows.
+  const [manualLedgerForm, setManualLedgerForm] = useState({ ledger_name: "", group_id: "", subgroup_id: "", group_company: "", opening_balance: "0", opening_balance_type: "dr" });
+  const [manualGroupQuery, setManualGroupQuery] = useState("");
+  const [manualSubgroupQuery, setManualSubgroupQuery] = useState("");
   const [groupForm, setGroupForm] = useState(initialGroup);
   const [subGroupForm, setSubGroupForm] = useState(initialSubGroup);
   const [customGroupName, setCustomGroupName] = useState("");
@@ -531,6 +535,10 @@ export default function BankFinancialReportsPage() {
     .filter((subgroup) => String(subgroup.group_id) === String(quickMappingForm.group_id))
     .map((subgroup) => ({ label: subgroup.name, value: subgroup._id })), [subgroups, quickMappingForm.group_id]);
 
+  const manualSubgroupOptions = useMemo(() => subgroups
+    .filter((subgroup) => String(subgroup.group_id) === String(manualLedgerForm.group_id))
+    .map((subgroup) => ({ label: subgroup.name, value: subgroup._id })), [subgroups, manualLedgerForm.group_id]);
+
   const chooseQuickLedger = (name) => {
     const match = mappings.find((row) => String(row.particulars_name || "").trim().toLowerCase() === String(name || "").trim().toLowerCase());
     setQuickMappingForm(match ? {
@@ -599,6 +607,43 @@ export default function BankFinancialReportsPage() {
       await loadMasters();
       setNotice(`Ledger mapping saved: ${payload.particulars_name}. Future bank statement imports will reuse this mapping automatically.`);
     } catch (err) { setError(err.response?.data?.error || err.message || "Could not save ledger mapping."); }
+    finally { setSaving(false); }
+  };
+
+  const moveManualLedgerFocus = (event) => {
+    if (event.key !== "Enter") return;
+    event.preventDefault();
+    const form = event.currentTarget.closest('[data-tally-form="manual-ledger"]');
+    if (!form) return;
+    const fields = [...form.querySelectorAll('[data-tally-order]')].filter((field) => !field.disabled);
+    const index = fields.indexOf(event.currentTarget);
+    if (index >= 0 && index < fields.length - 1) fields[index + 1].focus();
+    else form.requestSubmit();
+  };
+
+  const saveManualLedger = async (event) => {
+    event.preventDefault(); setSaving(true); setError(""); setNotice("");
+    try {
+      const ledgerName = String(manualLedgerForm.ledger_name || "").trim();
+      if (!ledgerName) throw new Error("Please enter a Ledger Name.");
+      if (!manualLedgerForm.group_id) throw new Error("Please select a Tally Group.");
+      const alreadyExists = mappings.some((row) => String(row.particulars_name || "").trim().toLowerCase() === ledgerName.toLowerCase());
+      if (alreadyExists) throw new Error("This Ledger / Particulars name already exists. Please update its existing mapping in the table instead of creating a duplicate.");
+      const payload = {
+        particulars_name: ledgerName,
+        ledger_name: ledgerName,
+        group_id: manualLedgerForm.group_id,
+        subgroup_id: manualLedgerForm.subgroup_id || "",
+        group_company: String(manualLedgerForm.group_company || "").trim(),
+        opening_balance: Number(manualLedgerForm.opening_balance || 0),
+        opening_balance_type: manualLedgerForm.opening_balance_type || "dr",
+      };
+      await axios.post(`${API_BASE}/ledger-mappings`, payload);
+      setManualLedgerForm({ ledger_name: "", group_id: "", subgroup_id: "", group_company: "", opening_balance: "0", opening_balance_type: "dr" });
+      setManualGroupQuery(""); setManualSubgroupQuery("");
+      await loadMasters();
+      setNotice(`Manual Ledger created: ${ledgerName}. It is saved without a Bank Statement import. A future statement Particulars with the same name can reuse this mapping.`);
+    } catch (err) { setError(err.response?.data?.error || err.message || "Could not create manual ledger."); }
     finally { setSaving(false); }
   };
 
@@ -765,9 +810,53 @@ export default function BankFinancialReportsPage() {
             <input value={mappingSearch} onChange={(e) => setMappingSearch(e.target.value)} placeholder="Search Particulars name..." style={{ ...input, maxWidth: 280 }} />
           </div>
           {!groups.length && <div style={{ padding: 12, background: "#fffbeb", color: "#92400e", borderRadius: 7, marginBottom: 10 }}>First create Groups in Group Master, then map Particulars here.</div>}
+          <form data-tally-form="manual-ledger" onSubmit={saveManualLedger} style={{ border: "1px solid #bfdbfe", background: "#eff6ff", borderRadius: 10, padding: 12, marginBottom: 14 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+              <div><b style={{ color: "#1d4ed8" }}>＋ Create Manual Ledger (No Bank Statement Required)</b><div style={{ color: "#475569", fontSize: 11, marginTop: 3 }}>Create and save a Ledger Name, Group, Sub-group and Group Company directly. You do not need to import or select any Bank Statement. This manual ledger will also be available in Split Receipt / Payment and other Ledger Name suggestions.</div></div>
+              <button type="submit" disabled={saving || !groups.length} style={{ ...primary, background: "#1d4ed8", opacity: !groups.length ? .55 : 1 }}>{saving ? "Saving..." : "Create Manual Ledger"}</button>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(165px,1fr))", gap: 8, marginTop: 11, alignItems: "end" }}>
+              <label style={{ ...label, margin: 0 }}>Ledger Name
+                <TallyAutocompleteField
+                  formName="manual-ledger" order="0" options={splitLedgerOptions}
+                  value={manualLedgerForm.ledger_name}
+                  placeholder="Type a new Ledger Name..." allowCustom
+                  onInput={(value) => setManualLedgerForm((p) => ({ ...p, ledger_name: value }))}
+                  onSelect={(option) => setManualLedgerForm((p) => ({ ...p, ledger_name: option.value }))}
+                />
+              </label>
+              <label style={{ ...label, margin: 0 }}>Group
+                <TallyAutocompleteField
+                  formName="manual-ledger" order="1" options={bankGroupOptions}
+                  value={manualGroupQuery} placeholder="Type / select Group..."
+                  onInput={(value) => { setManualGroupQuery(value); setManualLedgerForm((p) => ({ ...p, group_id: "", subgroup_id: "" })); setManualSubgroupQuery(""); }}
+                  onSelect={(option) => { setManualGroupQuery(option.label); setManualSubgroupQuery(""); setManualLedgerForm((p) => ({ ...p, group_id: option.value, subgroup_id: "" })); }}
+                />
+              </label>
+              <label style={{ ...label, margin: 0 }}>Sub-group
+                <TallyAutocompleteField
+                  formName="manual-ledger" order="2" options={manualSubgroupOptions}
+                  value={manualSubgroupQuery} placeholder={manualLedgerForm.group_id ? "Type / select Sub-group..." : "Select Group first"}
+                  disabled={!manualLedgerForm.group_id} allowEmpty
+                  onInput={(value) => { setManualSubgroupQuery(value); setManualLedgerForm((p) => ({ ...p, subgroup_id: "" })); }}
+                  onSelect={(option) => { setManualSubgroupQuery(option.label); setManualLedgerForm((p) => ({ ...p, subgroup_id: option.value || "" })); }}
+                />
+              </label>
+              <label style={{ ...label, margin: 0 }}>Group Company
+                <TallyAutocompleteField
+                  formName="manual-ledger" order="3" options={companyGroupOptions.map((name) => ({ label: name, value: name }))}
+                  value={manualLedgerForm.group_company} placeholder="Type / select Group Company..." allowCustom
+                  onInput={(value) => setManualLedgerForm((p) => ({ ...p, group_company: value }))}
+                  onSelect={(option) => setManualLedgerForm((p) => ({ ...p, group_company: option.value }))}
+                />
+              </label>
+              <label style={{ ...label, margin: 0 }}>Opening Balance<input data-tally-order="4" type="number" step="0.01" value={manualLedgerForm.opening_balance} onKeyDown={moveManualLedgerFocus} onChange={(e) => setManualLedgerForm((p) => ({ ...p, opening_balance: e.target.value }))} style={{ ...input, marginTop: 4 }} /></label>
+              <label style={{ ...label, margin: 0 }}>Dr / Cr<select data-tally-order="5" value={manualLedgerForm.opening_balance_type} onKeyDown={moveManualLedgerFocus} onChange={(e) => setManualLedgerForm((p) => ({ ...p, opening_balance_type: e.target.value }))} style={{ ...input, marginTop: 4 }}><option value="dr">Dr</option><option value="cr">Cr</option></select></label>
+            </div>
+          </form>
           <form data-tally-form="quick-ledger" onSubmit={saveQuickLedgerMapping} style={{ border: "1px solid #99f6e4", background: "#f0fdfa", borderRadius: 10, padding: 12, marginBottom: 14 }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
-              <div><b style={{ color: "#115e59" }}>Tally-style Quick Ledger Mapping</b><div style={{ color: "#475569", fontSize: 11, marginTop: 3 }}>Type names to see matching suggestions. Press Enter to select a suggestion and move straight to the next field; continue with Enter through Group, Sub-group, Group Company and Balance. A saved Group Company is used to split reports.</div></div>
+              <div><b style={{ color: "#115e59" }}>Map Bank Statement Particulars to a Ledger</b><div style={{ color: "#475569", fontSize: 11, marginTop: 3 }}>Use this section when the original Bank Statement Particulars name is different from your report Ledger Name. Type names to see matching suggestions. Press Enter to select a suggestion and move straight to the next field; continue with Enter through Group, Sub-group, Group Company and Balance. A saved Group Company is used to split reports.</div></div>
               <button type="submit" disabled={saving} style={primary}>{saving ? "Saving..." : "Save Ledger Mapping"}</button>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(165px,1fr))", gap: 8, marginTop: 11, alignItems: "end" }}>
