@@ -15,7 +15,7 @@ const td = { padding: "9px", borderBottom: "1px solid #e8edf3", fontSize: 12, co
 // restrained navy/teal visual hierarchy without changing report calculations.
 const reportTableWrap = { overflowX: "auto", border: "1px solid #d7e2ee", borderRadius: 13, background: "#fff", boxShadow: "0 8px 22px rgba(15, 35, 65, .055)" };
 const reportTable = { width: "100%", borderCollapse: "separate", borderSpacing: 0, tableLayout: "fixed" };
-const reportHeadCell = { ...th, position: "static", padding: "13px 12px", background: "linear-gradient(115deg, #17365d 0%, #145b69 100%)", fontSize: 10, fontWeight: 800, letterSpacing: ".045em", textTransform: "uppercase", borderBottom: "1px solid #0f5260" };
+const reportHeadCell = { ...th, position: "static", padding: "13px 12px", background: "#17365d", color: "#fff", fontSize: 10, fontWeight: 800, letterSpacing: ".035em", textTransform: "uppercase", whiteSpace: "nowrap", verticalAlign: "middle", height: 44, lineHeight: 1.2, borderBottom: "1px solid #102b49" };
 const reportBodyCell = { ...td, padding: "12px 12px", fontSize: 12, lineHeight: 1.45, overflowWrap: "anywhere" };
 const reportAmountCell = { ...reportBodyCell, textAlign: "right", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums", fontFeatureSettings: '"tnum"' };
 const reportTotalCell = { ...reportAmountCell, background: "#eaf3f8", color: "#123553", fontWeight: 900, borderTop: "2px solid #9db6c8", borderBottom: 0 };
@@ -1229,9 +1229,9 @@ export default function BankFinancialReportsPage() {
                 {card("Closing Balance", fmt(bankBalanceReport.totals?.closing_balance), "Opening + Receipts − Payments")}
               </div>
               {bankBalanceReport.opening_balance_missing_banks?.length > 0 && <p className="bank-financial-no-print" style={{ color: "#92400e", background: "#fffbeb", border: "1px solid #fde68a", padding: 10, borderRadius: 7, fontSize: 12 }}>Opening Balance not entered for: {bankBalanceReport.opening_balance_missing_banks.join(", ")}. Enter the opening balance above for accurate day-wise and monthly balances.</p>}
-              <div style={reportTableWrap}><table style={{ ...reportTable, minWidth: 1040 }}>
-                <colgroup><col style={{ width: "11%" }} /><col style={{ width: "14%" }} /><col style={{ width: "14%" }} /><col style={{ width: "12%" }} /><col style={{ width: "12%" }} /><col style={{ width: "14%" }} /><col style={{ width: "8%" }} /><col style={{ width: "15%" }} /></colgroup>
-                <thead><tr>{["Period","Bank Name","Opening Balance","Receipts","Payments","Closing Balance","Transactions","Opening Source"].map((x) => <th key={x} style={reportHeadCell}>{x}</th>)}</tr></thead><tbody>
+              <div style={reportTableWrap}><table style={{ ...reportTable, minWidth: 1360 }}>
+                <colgroup><col style={{ width: "10%" }} /><col style={{ width: "14%" }} /><col style={{ width: "14%" }} /><col style={{ width: "12%" }} /><col style={{ width: "12%" }} /><col style={{ width: "14%" }} /><col style={{ width: "8%" }} /><col style={{ width: "16%" }} /></colgroup>
+                <thead><tr>{["Period","Bank Name","Opening Balance","Receipts","Payments","Closing Balance","Transactions","Opening Source"].map((x) => <th key={x} style={{ ...reportHeadCell, textAlign: ["Opening Balance", "Receipts", "Payments", "Closing Balance"].includes(x) ? "right" : x === "Transactions" ? "center" : "left" }}>{x}</th>)}</tr></thead><tbody>
                 {(bankBalanceReport.rows || []).map((row, index) => <tr key={`${row.bank_name}-${row.period}-${index}`} style={{ background: index % 2 ? "#f7fafc" : "#fff" }}>
                   <td style={reportBodyCell}>{row.period}</td><td style={reportBodyCell}><b style={{ color: "#17365d" }}>{row.bank_name}</b></td>
                   <td style={reportAmountCell}>{fmt(row.opening_balance)}</td><td style={{ ...reportAmountCell, color: "#087f5b", fontWeight: 700 }}>{fmt(row.receipts)}</td>
@@ -1257,13 +1257,13 @@ export default function BankFinancialReportsPage() {
 
                 {bankBalanceViewMode === "summary" ? (
                   <div style={reportTableWrap}>
-                    <table style={{ ...reportTable, minWidth: 1180 }}>
+                    <table style={{ ...reportTable, minWidth: 1450 }}>
                       <colgroup>
-                        <col style={{ width: "8%" }} /><col style={{ width: "12%" }} /><col style={{ width: "12%" }} />
-                        <col style={{ width: "13%" }} /><col style={{ width: "16%" }} /><col style={{ width: "11%" }} />
-                        <col style={{ width: "11%" }} /><col style={{ width: "10%" }} /><col style={{ width: "7%" }} />
+                        <col style={{ width: "9%" }} /><col style={{ width: "12%" }} /><col style={{ width: "12%" }} />
+                        <col style={{ width: "12%" }} /><col style={{ width: "14%" }} /><col style={{ width: "11%" }} />
+                        <col style={{ width: "11%" }} /><col style={{ width: "11%" }} /><col style={{ width: "8%" }} />
                       </colgroup>
-                      <thead><tr>{["Period","Bank Name","Group Company","Group","Sub-group","Total Receipt","Total Payment","Total Amount","Transactions"].map((title) => <th key={title} style={reportHeadCell}>{title}</th>)}</tr></thead>
+                      <thead><tr>{["Period","Bank Name","Group Company","Group","Sub-group","Total Receipt","Total Payment","Net Amount (Receipt − Payment)","Transactions"].map((title) => <th key={title} style={{ ...reportHeadCell, textAlign: ["Total Receipt", "Total Payment", "Net Amount (Receipt − Payment)"].includes(title) ? "right" : title === "Transactions" ? "center" : "left", fontSize: title.startsWith("Net Amount") ? 9 : 10 }}>{title}</th>)}</tr></thead>
                       <tbody>
                         {(bankBalanceReport.summary_rows || []).map((summaryRow, rowIndex) => (
                           <tr key={summaryRow.summary_key} style={{ background: rowIndex % 2 ? "#f7fafc" : "#fff" }}>
@@ -1277,7 +1277,7 @@ export default function BankFinancialReportsPage() {
                             </td>
                             <td style={{ ...reportAmountCell, color: Number(summaryRow.receipts || 0) ? "#087f5b" : "#94a3b8", fontWeight: Number(summaryRow.receipts || 0) ? 800 : 500 }}>{Number(summaryRow.receipts || 0) ? fmt(summaryRow.receipts) : "—"}</td>
                             <td style={{ ...reportAmountCell, color: Number(summaryRow.payments || 0) ? "#b45309" : "#94a3b8", fontWeight: Number(summaryRow.payments || 0) ? 800 : 500 }}>{Number(summaryRow.payments || 0) ? fmt(summaryRow.payments) : "—"}</td>
-                            <td style={{ ...reportAmountCell, color: "#123f63", fontWeight: 900, background: rowIndex % 2 ? "#f0f6fa" : "#f5f9fc" }}>{fmt(summaryRow.total_amount)}</td>
+                            <td style={{ ...reportAmountCell, color: (Number(summaryRow.receipts || 0) - Number(summaryRow.payments || 0)) >= 0 ? "#087f5b" : "#b42318", fontWeight: 900, background: rowIndex % 2 ? "#f0f6fa" : "#f5f9fc" }}>{fmt(Number(summaryRow.receipts || 0) - Number(summaryRow.payments || 0))}</td>
                             <td style={{ ...reportBodyCell, textAlign: "center", fontWeight: 900, color: "#334155" }}>{summaryRow.transactions}</td>
                           </tr>
                         ))}
@@ -1287,7 +1287,7 @@ export default function BankFinancialReportsPage() {
                         <td style={{ ...reportTotalCell, textAlign: "left" }} colSpan={5}>SUB-GROUP TOTALS</td>
                         <td style={{ ...reportTotalCell, color: "#087f5b" }}>{fmt((bankBalanceReport.summary_rows || []).reduce((sum, row) => sum + Number(row.receipts || 0), 0))}</td>
                         <td style={{ ...reportTotalCell, color: "#b45309" }}>{fmt((bankBalanceReport.summary_rows || []).reduce((sum, row) => sum + Number(row.payments || 0), 0))}</td>
-                        <td style={{ ...reportTotalCell, color: "#123f63" }}>{fmt((bankBalanceReport.summary_rows || []).reduce((sum, row) => sum + Number(row.total_amount || 0), 0))}</td>
+                        <td style={{ ...reportTotalCell, color: "#17365d" }}>{fmt((bankBalanceReport.summary_rows || []).reduce((sum, row) => sum + Number(row.receipts || 0), 0) - (bankBalanceReport.summary_rows || []).reduce((sum, row) => sum + Number(row.payments || 0), 0))}</td>
                         <td style={{ ...reportTotalCell, textAlign: "center" }}>—</td>
                       </tr></tfoot>
                     </table>
@@ -1301,7 +1301,7 @@ export default function BankFinancialReportsPage() {
                 return <div className="bank-financial-no-print" role="dialog" aria-modal="true" aria-label="Sub-group transaction details" onClick={() => setSelectedSubgroupSummary(null)} style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(15,23,42,.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 18 }}>
                   <div onClick={(event) => event.stopPropagation()} style={{ width: "min(1500px, 98vw)", maxHeight: "90vh", overflow: "auto", background: "linear-gradient(180deg, #ffffff 0%, #f8fbfe 100%)", border: "1px solid #d5e1ec", borderRadius: 18, padding: 20, boxShadow: "0 24px 70px rgba(4, 25, 48, .32)" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", gap: 12, marginBottom: 12 }}>
-                      <div><h3 style={{ margin: 0, fontSize: 18, color: "#17365d" }}>{selectedSubgroupSummary.subgroup_name || "No Sub-group"} · Full Details</h3><p style={{ margin: "5px 0 0", color: "#64748b", fontSize: 12 }}>{selectedSubgroupSummary.period} · {selectedSubgroupSummary.group_company || "Unassigned"} · {selectedSubgroupSummary.group_name || "Unmapped"}</p><div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginTop: 8, fontSize: 12 }}><b>Receipt: {fmt(selectedSubgroupSummary.receipts)}</b><b>Payment: {fmt(selectedSubgroupSummary.payments)}</b><b>Total: {fmt(selectedSubgroupSummary.total_amount)}</b><b>Transactions: {selectedSubgroupSummary.transactions}</b></div></div>
+                      <div><h3 style={{ margin: 0, fontSize: 18, color: "#17365d" }}>{selectedSubgroupSummary.subgroup_name || "No Sub-group"} · Full Details</h3><p style={{ margin: "5px 0 0", color: "#64748b", fontSize: 12 }}>{selectedSubgroupSummary.period} · {selectedSubgroupSummary.group_company || "Unassigned"} · {selectedSubgroupSummary.group_name || "Unmapped"}</p><div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginTop: 8, fontSize: 12 }}><b>Receipt: {fmt(selectedSubgroupSummary.receipts)}</b><b>Payment: {fmt(selectedSubgroupSummary.payments)}</b><b>Net Amount: {fmt(Number(selectedSubgroupSummary.receipts || 0) - Number(selectedSubgroupSummary.payments || 0))}</b><b>Transactions: {selectedSubgroupSummary.transactions}</b></div></div>
                       <button type="button" onClick={() => setSelectedSubgroupSummary(null)} style={{ ...secondary, borderColor: "#c7d7e4", borderRadius: 9, padding: "9px 16px", color: "#17365d" }}>Close</button>
                     </div>
                     <div style={{ color: "#64748b", fontSize: 11, marginBottom: 8 }}>Ledgers: {(selectedSubgroupSummary.ledger_names || []).join(", ") || "-"} · Banks: {(selectedSubgroupSummary.bank_names || []).join(", ") || "-"}</div>
