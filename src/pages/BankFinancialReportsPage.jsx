@@ -1030,7 +1030,7 @@ export default function BankFinancialReportsPage() {
               ].map(([title, value, color]) => <div key={title} style={{ padding: 12, border: "1px solid #dbe5ee", borderRadius: 10, background: "#f8fbfd" }}><div style={{ color: "#64748b", fontSize: 11, fontWeight: 700 }}>{title}</div><div style={{ marginTop: 4, color, fontSize: 23, fontWeight: 900, fontVariantNumeric: "tabular-nums" }}>{Number(value).toLocaleString("en-IN")}</div></div>)}
             </div>
             <div style={{ marginTop: 12, padding: 11, borderRadius: 9, background: "#fffbeb", border: "1px solid #fde68a", color: "#854d0e", fontSize: 12, lineHeight: 1.55 }}>
-              <b>Safe matching rule:</b> Auto Match only links a unique one-to-one pair with the same UTR / Transaction ID, or an exact same-day amount match when neither row contains a reference number. Other possible matches are shown below for your confirmation. Amount and date alone are never used when there are duplicate candidates.
+              <b>Contra matching rule:</b> Auto Match links only a unique one-to-one pair where both Voucher Types are Contra and Amount, Transaction ID and Instrument Number match. Bank Remarks may differ and are shown for reference only. Date is not a required matching field; ambiguous pairs remain for your review.
             </div>
           </div>
 
@@ -1071,7 +1071,7 @@ export default function BankFinancialReportsPage() {
                   <div style={{ display: "flex", minWidth: 150, flexDirection: "column", justifyContent: "center", alignItems: "stretch", gap: 7 }}>
                     <span style={{ textAlign: "center", padding: "5px 7px", borderRadius: 20, fontSize: 10, fontWeight: 800, color: candidate.auto_safe ? "#065f46" : candidate.strict_valid ? "#92400e" : "#991b1b", background: candidate.auto_safe ? "#ccfbf1" : candidate.strict_valid ? "#fef3c7" : "#fee2e2" }}>{candidate.auto_safe ? "Strict Unique Match" : candidate.strict_valid ? (candidate.ambiguous ? "Multiple Candidates" : "Review Required") : "Field Mismatch"}</span>
                     <span style={{ textAlign: "center", fontSize: 10, color: "#64748b" }}>{candidate.match_reason}</span>
-                    <button type="button" style={{ ...primary, background: candidate.strict_valid ? "#17365d" : "#94a3b8", padding: "8px 10px", fontSize: 11, cursor: candidate.strict_valid ? "pointer" : "not-allowed" }} disabled={Boolean(contraActionKey) || !candidate.strict_valid} title={candidate.strict_valid ? "All strict Contra fields match" : "Voucher Type, Amount, Transaction ID, Bank Remarks and Instrument Number must all match"} onClick={() => confirmContraMatch(candidate)}>{contraActionKey === key ? "Saving..." : candidate.strict_valid ? "Confirm Contra" : "Cannot Match"}</button>
+                    <button type="button" style={{ ...primary, background: candidate.strict_valid ? "#17365d" : "#94a3b8", padding: "8px 10px", fontSize: 11, cursor: candidate.strict_valid ? "pointer" : "not-allowed" }} disabled={Boolean(contraActionKey) || !candidate.strict_valid} title={candidate.strict_valid ? "Voucher Type, Amount, Transaction ID and Instrument Number match" : "Voucher Type Contra, Amount, Transaction ID and Instrument Number must all match"} onClick={() => confirmContraMatch(candidate)}>{contraActionKey === key ? "Saving..." : candidate.strict_valid ? "Confirm Contra" : "Cannot Match"}</button>
                   </div>
                 </div>;
               })}
