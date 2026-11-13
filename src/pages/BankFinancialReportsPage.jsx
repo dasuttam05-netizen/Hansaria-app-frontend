@@ -289,6 +289,15 @@ export default function BankFinancialReportsPage() {
     receipts: totals.receipts + Number(row.receipt_amount || 0),
     payments: totals.payments + Number(row.payment_amount || 0),
   }), { receipts: 0, payments: 0 }), [bankBalanceReport.details]);
+  const bankBalanceDetailsBySummary = useMemo(() => {
+    const grouped = {};
+    (bankBalanceReport.details || []).forEach((row) => {
+      const key = String(row.summary_key || "");
+      if (!grouped[key]) grouped[key] = [];
+      grouped[key].push(row);
+    });
+    return grouped;
+  }, [bankBalanceReport.details]);
 
   const loadMasters = useCallback(async () => {
     const [groupRes, subRes, mappingRes, summaryRes, importRes, bankOpeningRes] = await Promise.all([
@@ -1166,45 +1175,85 @@ export default function BankFinancialReportsPage() {
               <div style={{ marginTop: 20, paddingTop: 14, borderTop: "2px solid #cbd5e1" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "end", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
                   <div>
-                    <h3 style={{ margin: "0 0 4px", fontSize: 16, color: "#17365d" }}>Detailed Transaction / Ledger Breakdown</h3>
-                    <p style={{ margin: 0, color: "#64748b", fontSize: 11 }}>Every imported bank transaction with its Ledger, Group, Sub-group and Group Company. Split allocations appear as separate ledger lines; bank balance and running balance are shown once per original transaction.</p>
+                    <h3 style={{ margin: "0 0 4px", fontSize: 16, color: "#17365d" }}>
+                      {appliedFilters.period_type === "daily" ? "Sub-ledger-wise Day-wise Summary" : appliedFilters.period_type === "monthly" ? "Sub-ledger-wise Monthly Summary" : "Sub-ledger-wise Summary"}
+                    </h3>
+                    <p style={{ margin: 0, color: "#64748b", fontSize: 11 }}>Summary is grouped by Period, Bank, Group Company, Group, Sub-group and Ledger. Click View Details on any row to open its full transactions.</p>
                   </div>
-                  <div style={{ fontSize: 12, color: "#475569", fontWeight: 700 }}>{(bankBalanceReport.details || []).length} Detail Row(s)</div>
+                  <div style={{ fontSize: 12, color: "#475569", fontWeight: 700 }}>{(bankBalanceReport.summary_rows || []).length} Summary Row(s) · {(bankBalanceReport.details || []).length} Detail Row(s)</div>
                 </div>
                 <div style={{ overflowX: "auto" }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 2050 }}>
-                    <thead><tr>{["Bank Date","Time","Bank Name","Original Bank Particulars","Ledger Name","Voucher Type","Voucher Number","Group Company","Group","Sub-group","Receipt (Ledger)","Payment (Ledger)","Statement Debit","Statement Credit","Bank Balance (H)","Running Balance","Bank Remarks","Instrument Type","Instrument Number","Transaction ID","Bank Status","Tally Date"].map((title) => <th key={title} style={{ ...th, position: "static" }}>{title}</th>)}</tr></thead>
+                  <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1250 }}>
+                    <thead><tr>{["Period","Bank Name","Ledger / Sub-ledger","Group Company","Group","Sub-group","Total Receipt","Total Payment","Transactions","Details"].map((title) => <th key={title} style={{ ...th, position: "static" }}>{title}</th>)}</tr></thead>
                     <tbody>
-                      {(bankBalanceReport.details || []).map((row) => <tr key={row.id}>
-                        <td style={td}>{dateLabel(row.bank_date)}</td>
-                        <td style={td}>{row.bank_time || "-"}</td>
-                        <td style={td}><b>{row.bank_name}</b></td>
-                        <td style={{ ...td, minWidth: 180 }}>{row.original_particulars || "-"}</td>
-                        <td style={{ ...td, minWidth: 170 }}><b>{row.ledger_name || "Unmapped Ledger"}</b>{row.split && <div style={{ color: "#0f766e", fontSize: 10 }}>Split allocation</div>}</td>
-                        <td style={td}>{row.voucher_type || "-"}</td>
-                        <td style={td}>{row.voucher_number || "-"}</td>
-                        <td style={td}>{row.group_company || "Unassigned"}</td>
-                        <td style={td}>{row.group_name || "Unmapped"}</td>
-                        <td style={td}>{row.subgroup_name || "-"}</td>
-                        <td style={{ ...td, textAlign: "right" }}>{row.receipt_amount ? fmt(row.receipt_amount) : "-"}</td>
-                        <td style={{ ...td, textAlign: "right" }}>{row.payment_amount ? fmt(row.payment_amount) : "-"}</td>
-                        <td style={{ ...td, textAlign: "right" }}>{row.statement_debit === null || row.statement_debit === undefined ? "-" : fmt(row.statement_debit)}</td>
-                        <td style={{ ...td, textAlign: "right" }}>{row.statement_credit === null || row.statement_credit === undefined ? "-" : fmt(row.statement_credit)}</td>
-                        <td style={{ ...td, textAlign: "right" }}>{row.bank_balance === null || row.bank_balance === undefined ? "-" : fmt(row.bank_balance)}</td>
-                        <td style={{ ...td, textAlign: "right", fontWeight: row.running_balance !== null && row.running_balance !== undefined ? 800 : 400 }}>{row.running_balance === null || row.running_balance === undefined ? "-" : fmt(row.running_balance)}</td>
-                        <td style={{ ...td, minWidth: 150 }}>{row.bank_remarks || "-"}</td>
-                        <td style={td}>{row.instrument_type || "-"}</td>
-                        <td style={td}>{row.instrument_no || "-"}</td>
-                        <td style={td}>{row.transaction_reference || "-"}</td>
-                        <td style={td}>{row.bank_status || "-"}</td>
-                        <td style={td}>{dateLabel(row.tally_date)}</td>
-                      </tr>)}
-                      {!(bankBalanceReport.details || []).length && <tr><td style={td} colSpan={22}>No transaction details match the selected date, Bank, Voucher Type, Group Company, Group and Sub-group filters.</td></tr>}
+                      {(bankBalanceReport.summary_rows || []).map((summaryRow) => {
+                        const matchingDetails = bankBalanceDetailsBySummary[summaryRow.summary_key] || [];
+                        return (
+                          <tr key={summaryRow.summary_key}>
+                            <td style={td}>{summaryRow.period}</td>
+                            <td style={td}><b>{summaryRow.bank_name || "-"}</b></td>
+                            <td style={td}><b>{summaryRow.ledger_name || "Unmapped Ledger"}</b></td>
+                            <td style={td}>{summaryRow.group_company || "Unassigned"}</td>
+                            <td style={td}>{summaryRow.group_name || "Unmapped"}</td>
+                            <td style={td}>{summaryRow.subgroup_name || "-"}</td>
+                            <td style={{ ...td, textAlign: "right" }}>{summaryRow.receipts ? fmt(summaryRow.receipts) : "-"}</td>
+                            <td style={{ ...td, textAlign: "right" }}>{summaryRow.payments ? fmt(summaryRow.payments) : "-"}</td>
+                            <td style={{ ...td, textAlign: "center" }}>{summaryRow.transactions}</td>
+                            <td style={td}>
+                              <details>
+                                <summary style={{ cursor: "pointer", color: "#0f766e", fontWeight: 800, whiteSpace: "nowrap" }}>View Details ({matchingDetails.length})</summary>
+                                <div style={{ marginTop: 8, padding: 8, background: "#f8fafc", border: "1px solid #dbe3ec", borderRadius: 8, minWidth: 1050 }}>
+                                  <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                                    <thead><tr>{["Bank Date","Time","Original Bank Particulars","Voucher Type","Voucher Number","Receipt","Payment","Statement Debit","Statement Credit","Bank Balance (H)","Running Balance","More Details"].map((title) => <th key={title} style={{ ...th, position: "static", fontSize: 10, padding: 7 }}>{title}</th>)}</tr></thead>
+                                    <tbody>
+                                      {matchingDetails.map((detail) => (
+                                        <tr key={detail.id}>
+                                          <td style={td}>{dateLabel(detail.bank_date)}</td>
+                                          <td style={{ ...td, whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>{detail.bank_time || "-"}</td>
+                                          <td style={{ ...td, minWidth: 170 }}>{detail.original_particulars || "-"}</td>
+                                          <td style={td}>{detail.voucher_type || "-"}</td>
+                                          <td style={td}>{detail.voucher_number || "-"}</td>
+                                          <td style={{ ...td, textAlign: "right" }}>{detail.receipt_amount ? fmt(detail.receipt_amount) : "-"}</td>
+                                          <td style={{ ...td, textAlign: "right" }}>{detail.payment_amount ? fmt(detail.payment_amount) : "-"}</td>
+                                          <td style={{ ...td, textAlign: "right" }}>{detail.statement_debit ? fmt(detail.statement_debit) : "-"}</td>
+                                          <td style={{ ...td, textAlign: "right" }}>{detail.statement_credit ? fmt(detail.statement_credit) : "-"}</td>
+                                          <td style={{ ...td, textAlign: "right", whiteSpace: "nowrap" }}>{detail.bank_balance === null || detail.bank_balance === undefined ? "-" : fmt(detail.bank_balance)}</td>
+                                          <td style={{ ...td, textAlign: "right", fontWeight: 800, whiteSpace: "nowrap" }}>{detail.running_balance === null || detail.running_balance === undefined ? "-" : fmt(detail.running_balance)}</td>
+                                          <td style={td}>
+                                            <details>
+                                              <summary style={{ cursor: "pointer", color: "#0f766e", fontWeight: 700, whiteSpace: "nowrap" }}>Show</summary>
+                                              <div style={{ minWidth: 220, padding: 8, background: "#fff", border: "1px solid #cbd5e1", borderRadius: 6, lineHeight: 1.7 }}>
+                                                <div><b>Bank Name:</b> {detail.bank_name || "-"}</div>
+                                                <div><b>Ledger:</b> {detail.ledger_name || "-"}</div>
+                                                <div><b>Group Company:</b> {detail.group_company || "Unassigned"}</div>
+                                                <div><b>Group:</b> {detail.group_name || "Unmapped"}</div>
+                                                <div><b>Sub-group:</b> {detail.subgroup_name || "-"}</div>
+                                                <div><b>Bank Remarks:</b> {detail.bank_remarks || "-"}</div>
+                                                <div><b>Instrument Type:</b> {detail.instrument_type || "-"}</div>
+                                                <div><b>Instrument Number:</b> {detail.instrument_no || "-"}</div>
+                                                <div><b>Transaction ID:</b> {detail.transaction_reference || "-"}</div>
+                                                <div><b>Bank Status:</b> {detail.bank_status || "-"}</div>
+                                                <div><b>Tally Date:</b> {dateLabel(detail.tally_date)}</div>
+                                              </div>
+                                            </details>
+                                          </td>
+                                        </tr>
+                                      ))}
+                                      {!matchingDetails.length && <tr><td style={td} colSpan={12}>No transaction details found for this summary.</td></tr>}
+                                    </tbody>
+                                  </table>
+                                </div>
+                              </details>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                      {!(bankBalanceReport.summary_rows || []).length && <tr><td style={td} colSpan={10}>No sub-ledger summary matches the selected date, Bank, Group Company, Group and Sub-group filters.</td></tr>}
                     </tbody>
-                    <tfoot><tr style={{ background: "#eff6ff", fontWeight: 800 }}><td style={td} colSpan={10}>DETAIL TOTALS (visible ledger allocations)</td><td style={{ ...td, textAlign: "right" }}>{fmt(bankBalanceDetailTotals.receipts)}</td><td style={{ ...td, textAlign: "right" }}>{fmt(bankBalanceDetailTotals.payments)}</td><td style={td} colSpan={10}>Bank opening / closing balance is shown in the summary above.</td></tr></tfoot>
+                    <tfoot><tr style={{ background: "#eff6ff", fontWeight: 800 }}><td style={td} colSpan={6}>DETAIL TOTALS (visible ledger allocations)</td><td style={{ ...td, textAlign: "right" }}>{fmt(bankBalanceDetailTotals.receipts)}</td><td style={{ ...td, textAlign: "right" }}>{fmt(bankBalanceDetailTotals.payments)}</td><td style={td} colSpan={2}>Bank opening / closing balance is shown above.</td></tr></tfoot>
                   </table>
                 </div>
-                <p className="bank-financial-no-print" style={{ margin: "8px 0 0", color: "#64748b", fontSize: 11 }}>Note: Group Company / Group / Sub-group / Voucher Type / Import Batch filters narrow this detail table only. Opening Balance, Receipts, Payments and Closing Balance above always represent the complete selected Bank movement, so ledger filters cannot distort the actual bank balance.</p>
+                <p className="bank-financial-no-print" style={{ margin: "8px 0 0", color: "#64748b", fontSize: 11 }}>Bank Remarks and Tally Date stay hidden until you click Show. Transaction rows are ordered by Bank Date and time from earliest to latest (for example, 10:00 AM before 1:12 PM). Running Balance uses the imported Bank Balance (H) as a reconciliation point when available, otherwise it calculates Opening + Receipt − Payment. Split lines are shown under their own Ledger but do not multiply Bank movements.</p>
               </div>
             </section>
           </>}
