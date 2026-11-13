@@ -1013,6 +1013,29 @@ export default function BankFinancialReportsPage() {
                 <span>Excel Ledger Names: <b>{importResult.excel_ledger_names || 0}</b></span><span>Excel Group Companies: <b>{importResult.excel_group_companies || 0}</b></span>
                 <span>Receipts: <b>{fmt(importResult.total_receipts)}</b></span><span>Payments: <b>{fmt(importResult.total_payments)}</b></span>
               </div>
+              {importResult.duplicate_details?.length > 0 && <div style={{ marginTop: 14, padding: 11, border: "1px solid #fcd34d", borderRadius: 8, background: "#fffbeb" }}>
+                <div style={{ color: "#92400e", fontWeight: 800, fontSize: 12 }}>Duplicate Rows — Review Details ({importResult.duplicate_rows})</div>
+                <div style={{ margin: "5px 0 9px", color: "#78350f", fontSize: 11, lineHeight: 1.5 }}>Rows listed here were not inserted as new transactions. Exact transactions already in Hansaria are shown with their earlier import file. Identical repeated rows inside this Excel are also identified separately.</div>
+                <div style={{ overflowX: "auto", maxHeight: 330, border: "1px solid #f3d28a", borderRadius: 6, background: "#fff" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 930 }}>
+                    <thead><tr>{["Excel Row", "Date", "Bank", "Particulars", "Voucher", "Voucher No.", "Transaction ID", "Instrument No.", "Receipt", "Payment", "Reason / Existing File"].map((head) => <th key={head} style={{ position: "sticky", top: 0, background: "#854d0e", color: "#fff", padding: "7px 8px", textAlign: "left", whiteSpace: "nowrap", fontSize: 10 }}>{head}</th>)}</tr></thead>
+                    <tbody>{importResult.duplicate_details.map((item, index) => <tr key={`${item.excel_row || index}-${item.transaction_id || "duplicate"}`}>
+                      <td style={{ ...td, whiteSpace: "nowrap" }}>{item.excel_row || "-"}</td>
+                      <td style={{ ...td, whiteSpace: "nowrap" }}>{dateLabel(item.bank_date)}</td>
+                      <td style={td}>{item.bank_name || "-"}</td>
+                      <td style={{ ...td, minWidth: 180 }}>{item.particulars_name || "-"}</td>
+                      <td style={{ ...td, whiteSpace: "nowrap" }}>{item.voucher_type || "-"}</td>
+                      <td style={{ ...td, whiteSpace: "nowrap" }}>{item.voucher_number || "-"}</td>
+                      <td style={{ ...td, whiteSpace: "nowrap" }}>{item.transaction_id || "-"}</td>
+                      <td style={{ ...td, whiteSpace: "nowrap" }}>{item.instrument_no || "-"}</td>
+                      <td style={{ ...td, textAlign: "right", whiteSpace: "nowrap" }}>{money(item.receipt_amount)}</td>
+                      <td style={{ ...td, textAlign: "right", whiteSpace: "nowrap" }}>{money(item.payment_amount)}</td>
+                      <td style={{ ...td, minWidth: 220 }}><div>{item.reason || "Already exists"}</div>{item.existing_file_name && <div style={{ marginTop: 3, color: "#64748b", fontSize: 10 }}>Earlier file: {item.existing_file_name}</div>}</td>
+                    </tr>)}</tbody>
+                  </table>
+                </div>
+                {importResult.duplicate_details_truncated && <div style={{ marginTop: 7, color: "#92400e", fontSize: 11 }}>Only the first 200 duplicate rows are shown.</div>}
+              </div>}
               {importResult.invalid_details?.length > 0 && <div style={{ marginTop: 9, color: "#b91c1c" }}>{importResult.invalid_details.map((item) => <div key={item.row}>Row {item.row}: {item.reason}</div>)}</div>}
             </div>}
           </form>
