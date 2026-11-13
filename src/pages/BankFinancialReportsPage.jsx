@@ -11,6 +11,14 @@ const primary = { border: 0, borderRadius: 7, padding: "9px 14px", color: "#fff"
 const secondary = { border: "1px solid #cbd5e1", borderRadius: 7, padding: "9px 14px", color: "#334155", background: "#fff", fontWeight: 700, cursor: "pointer" };
 const th = { position: "sticky", top: 0, zIndex: 1, background: "#17365d", color: "#fff", padding: "10px 9px", textAlign: "left", fontSize: 12, whiteSpace: "nowrap" };
 const td = { padding: "9px", borderBottom: "1px solid #e8edf3", fontSize: 12, color: "#334155", verticalAlign: "middle" };
+// Dedicated report styles: consistent column alignment, readable numbers and a
+// restrained navy/teal visual hierarchy without changing report calculations.
+const reportTableWrap = { overflowX: "auto", border: "1px solid #d7e2ee", borderRadius: 13, background: "#fff", boxShadow: "0 8px 22px rgba(15, 35, 65, .055)" };
+const reportTable = { width: "100%", borderCollapse: "separate", borderSpacing: 0, tableLayout: "fixed" };
+const reportHeadCell = { ...th, position: "static", padding: "13px 12px", background: "linear-gradient(115deg, #17365d 0%, #145b69 100%)", fontSize: 10, fontWeight: 800, letterSpacing: ".045em", textTransform: "uppercase", borderBottom: "1px solid #0f5260" };
+const reportBodyCell = { ...td, padding: "12px 12px", fontSize: 12, lineHeight: 1.45, overflowWrap: "anywhere" };
+const reportAmountCell = { ...reportBodyCell, textAlign: "right", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums", fontFeatureSettings: '"tnum"' };
+const reportTotalCell = { ...reportAmountCell, background: "#eaf3f8", color: "#123553", fontWeight: 900, borderTop: "2px solid #9db6c8", borderBottom: 0 };
 const money = (value) => `₹${Number(value || 0).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 // Use the voucher Receipt / Payment amount when present. Some bank exports only
 // populate Statement Credit / Debit, so fall back to those columns for split entry.
@@ -743,9 +751,9 @@ export default function BankFinancialReportsPage() {
   const fmt = money;
   const reportPrintButton = () => <button type="button" className="bank-financial-no-print" onClick={() => window.print()} style={secondary}>Print / Save as PDF</button>;
   const renderBankBalanceDetailsTable = (detailRows) => (
-    <div style={{ overflowX: "auto" }}>
-      <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1550 }}>
-        <thead><tr>{["Bank Date","Time","Bank Name","Ledger Name","Original Bank Particulars","Voucher Type","Voucher Number","Group Company","Group","Sub-group","Receipt","Payment","Statement Debit","Statement Credit","Bank Balance (H)","Running Balance","More Details"].map((title) => <th key={title} style={{ ...th, position: "static", fontSize: 10, padding: 7 }}>{title}</th>)}</tr></thead>
+    <div style={reportTableWrap}>
+      <table style={{ ...reportTable, minWidth: 1720, tableLayout: "auto" }}>
+        <thead><tr>{["Bank Date","Time","Bank Name","Ledger Name","Original Bank Particulars","Voucher Type","Voucher Number","Group Company","Group","Sub-group","Receipt","Payment","Statement Debit","Statement Credit","Bank Balance (H)","Running Balance","More Details"].map((title) => <th key={title} style={{ ...reportHeadCell, fontSize: 9, padding: "11px 8px" }}>{title}</th>)}</tr></thead>
         <tbody>
           {(detailRows || []).map((detail) => {
             const showMore = Boolean(expandedBankDetailRows[detail.id]);
@@ -1212,8 +1220,8 @@ export default function BankFinancialReportsPage() {
                 {!bankOpeningBalances.length && <tr><td style={td} colSpan={6}>No Bank Opening Balance entered yet.</td></tr>}
               </tbody></table></div>
             </section>
-            <section className="bank-financial-print-area" style={panel}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}><div><h2 style={{ margin: "0 0 5px", fontSize: 18 }}>Multi-Bank / Single-Bank Balance Report</h2><p style={{ margin: 0, color: "#64748b", fontSize: 12 }}>All Banks combines every bank; choosing one bank shows its separate balance.</p><p style={{ margin: "4px 0 0", color: "#334155", fontSize: 11 }}>Applied: {appliedFilters.bank_name || "All Banks"} · {appliedFilters.from_date || "First available date"} to {appliedFilters.to_date || "Latest date"} · {appliedFilters.period_type === "daily" ? "Day-wise" : appliedFilters.period_type === "monthly" ? "Monthly" : "Selected Date Range"}{appliedFilters.group_company ? ` · Group Company: ${appliedFilters.group_company === "__unassigned__" ? "Unassigned" : appliedFilters.group_company}` : ""}{appliedFilters.group_id ? ` · Group: ${groups.find((item) => String(item._id) === String(appliedFilters.group_id))?.name || "Selected"}` : ""}{appliedFilters.subgroup_id ? ` · Sub-group: ${subgroups.find((item) => String(item._id) === String(appliedFilters.subgroup_id))?.name || "Selected"}` : ""}</p></div>{reportPrintButton() }</div>
+            <section className="bank-financial-print-area" style={{ ...panel, padding: 20, borderRadius: 16, borderColor: "#cfdae7", background: "linear-gradient(180deg, #ffffff 0%, #f8fbfe 100%)", boxShadow: "0 12px 30px rgba(15, 35, 65, .07)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}><div><h2 style={{ margin: "0 0 5px", fontSize: 20, letterSpacing: "-.02em", color: "#153453" }}>Multi-Bank / Single-Bank Balance Report</h2><p style={{ margin: 0, color: "#64748b", fontSize: 12 }}>All Banks combines every bank; choosing one bank shows its separate balance.</p><p style={{ margin: "4px 0 0", color: "#334155", fontSize: 11 }}>Applied: {appliedFilters.bank_name || "All Banks"} · {appliedFilters.from_date || "First available date"} to {appliedFilters.to_date || "Latest date"} · {appliedFilters.period_type === "daily" ? "Day-wise" : appliedFilters.period_type === "monthly" ? "Monthly" : "Selected Date Range"}{appliedFilters.group_company ? ` · Group Company: ${appliedFilters.group_company === "__unassigned__" ? "Unassigned" : appliedFilters.group_company}` : ""}{appliedFilters.group_id ? ` · Group: ${groups.find((item) => String(item._id) === String(appliedFilters.group_id))?.name || "Selected"}` : ""}{appliedFilters.subgroup_id ? ` · Sub-group: ${subgroups.find((item) => String(item._id) === String(appliedFilters.subgroup_id))?.name || "Selected"}` : ""}</p></div>{reportPrintButton() }</div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 10, margin: "12px 0" }}>
                 {card("Opening Balance", fmt(bankBalanceReport.totals?.opening_balance), "At selected From Date")}
                 {card("Total Receipts", fmt(bankBalanceReport.totals?.receipts), "Selected period")}
@@ -1221,14 +1229,21 @@ export default function BankFinancialReportsPage() {
                 {card("Closing Balance", fmt(bankBalanceReport.totals?.closing_balance), "Opening + Receipts − Payments")}
               </div>
               {bankBalanceReport.opening_balance_missing_banks?.length > 0 && <p className="bank-financial-no-print" style={{ color: "#92400e", background: "#fffbeb", border: "1px solid #fde68a", padding: 10, borderRadius: 7, fontSize: 12 }}>Opening Balance not entered for: {bankBalanceReport.opening_balance_missing_banks.join(", ")}. Enter the opening balance above for accurate day-wise and monthly balances.</p>}
-              <div style={{ overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse" }}><thead><tr>{["Period","Bank Name","Opening Balance","Receipts","Payments","Closing Balance","Transactions","Opening Source"].map((x) => <th key={x} style={th}>{x}</th>)}</tr></thead><tbody>
-                {(bankBalanceReport.rows || []).map((row, index) => <tr key={`${row.bank_name}-${row.period}-${index}`}><td style={td}>{row.period}</td><td style={td}><b>{row.bank_name}</b></td><td style={{ ...td, textAlign: "right" }}>{fmt(row.opening_balance)}</td><td style={{ ...td, textAlign: "right" }}>{fmt(row.receipts)}</td><td style={{ ...td, textAlign: "right" }}>{fmt(row.payments)}</td><td style={{ ...td, textAlign: "right", fontWeight: 800 }}>{fmt(row.closing_balance)}</td><td style={td}>{row.transactions}</td><td style={td}>{row.opening_balance_source || (row.opening_balance_set ? "Manual" : "Missing")}</td></tr>)}
-                {!bankBalanceReport.rows?.length && <tr><td style={td} colSpan={8}>No bank transactions found for the selected bank and date range.</td></tr>}
+              <div style={reportTableWrap}><table style={{ ...reportTable, minWidth: 1040 }}>
+                <colgroup><col style={{ width: "11%" }} /><col style={{ width: "14%" }} /><col style={{ width: "14%" }} /><col style={{ width: "12%" }} /><col style={{ width: "12%" }} /><col style={{ width: "14%" }} /><col style={{ width: "8%" }} /><col style={{ width: "15%" }} /></colgroup>
+                <thead><tr>{["Period","Bank Name","Opening Balance","Receipts","Payments","Closing Balance","Transactions","Opening Source"].map((x) => <th key={x} style={reportHeadCell}>{x}</th>)}</tr></thead><tbody>
+                {(bankBalanceReport.rows || []).map((row, index) => <tr key={`${row.bank_name}-${row.period}-${index}`} style={{ background: index % 2 ? "#f7fafc" : "#fff" }}>
+                  <td style={reportBodyCell}>{row.period}</td><td style={reportBodyCell}><b style={{ color: "#17365d" }}>{row.bank_name}</b></td>
+                  <td style={reportAmountCell}>{fmt(row.opening_balance)}</td><td style={{ ...reportAmountCell, color: "#087f5b", fontWeight: 700 }}>{fmt(row.receipts)}</td>
+                  <td style={{ ...reportAmountCell, color: "#b45309", fontWeight: 700 }}>{fmt(row.payments)}</td><td style={{ ...reportAmountCell, color: "#123f63", fontWeight: 900 }}>{fmt(row.closing_balance)}</td>
+                  <td style={{ ...reportBodyCell, textAlign: "center", fontWeight: 800 }}>{row.transactions}</td><td style={reportBodyCell}>{row.opening_balance_source || (row.opening_balance_set ? "Manual" : "Missing")}</td>
+                </tr>)}
+                {!bankBalanceReport.rows?.length && <tr><td style={reportBodyCell} colSpan={8}>No bank transactions found for the selected bank and date range.</td></tr>}
               </tbody></table></div>
-              <div style={{ marginTop: 20, paddingTop: 14, borderTop: "2px solid #cbd5e1" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "end", gap: 10, flexWrap: "wrap", marginBottom: 10 }}>
+              <div style={{ marginTop: 22, paddingTop: 18, borderTop: "1px solid #d8e3ed" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "end", gap: 10, flexWrap: "wrap", marginBottom: 13 }}>
                   <div>
-                    <h3 style={{ margin: "0 0 4px", fontSize: 16, color: "#17365d" }}>
+                    <h3 style={{ margin: "0 0 5px", fontSize: 17, color: "#17365d", letterSpacing: "-.01em" }}>
                       {bankBalanceViewMode === "full_details" ? "Full Transaction Details" : appliedFilters.period_type === "daily" ? "Sub-group-wise Day-wise Summary" : appliedFilters.period_type === "monthly" ? "Sub-group-wise Monthly Summary" : "Sub-group-wise Summary"}
                     </h3>
                     <p style={{ margin: 0, color: "#64748b", fontSize: 11 }}>
@@ -1237,30 +1252,44 @@ export default function BankFinancialReportsPage() {
                         : "Each Sub-group appears once per Period, Group Company and Group. Ledgers and selected Banks under that Sub-group are combined into one total. Click the Sub-group name to open its transaction details."}
                     </p>
                   </div>
-                  <div style={{ fontSize: 12, color: "#475569", fontWeight: 700 }}>{bankBalanceViewMode === "full_details" ? `${(bankBalanceReport.details || []).length} Detail Row(s)` : `${(bankBalanceReport.summary_rows || []).length} Sub-group Summary Row(s)`}</div>
+                  <div style={{ fontSize: 11, color: "#155e75", fontWeight: 900, background: "#e8f4f7", border: "1px solid #c8e3e8", borderRadius: 999, padding: "7px 12px", whiteSpace: "nowrap" }}>{bankBalanceViewMode === "full_details" ? `${(bankBalanceReport.details || []).length} DETAIL ROW(S)` : `${(bankBalanceReport.summary_rows || []).length} SUB-GROUP ROW(S)`}</div>
                 </div>
 
                 {bankBalanceViewMode === "summary" ? (
-                  <div style={{ overflowX: "auto" }}>
-                    <table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1050 }}>
-                      <thead><tr>{["Period","Bank Name","Group Company","Group","Sub-group","Total Receipt","Total Payment","Total Amount","Transactions"].map((title) => <th key={title} style={{ ...th, position: "static" }}>{title}</th>)}</tr></thead>
+                  <div style={reportTableWrap}>
+                    <table style={{ ...reportTable, minWidth: 1180 }}>
+                      <colgroup>
+                        <col style={{ width: "8%" }} /><col style={{ width: "12%" }} /><col style={{ width: "12%" }} />
+                        <col style={{ width: "13%" }} /><col style={{ width: "16%" }} /><col style={{ width: "11%" }} />
+                        <col style={{ width: "11%" }} /><col style={{ width: "10%" }} /><col style={{ width: "7%" }} />
+                      </colgroup>
+                      <thead><tr>{["Period","Bank Name","Group Company","Group","Sub-group","Total Receipt","Total Payment","Total Amount","Transactions"].map((title) => <th key={title} style={reportHeadCell}>{title}</th>)}</tr></thead>
                       <tbody>
-                        {(bankBalanceReport.summary_rows || []).map((summaryRow) => (
-                          <tr key={summaryRow.summary_key}>
-                            <td style={td}>{summaryRow.period}</td>
-                            <td style={td}><b>{summaryRow.bank_name || "-"}</b>{summaryRow.bank_names?.length > 1 && <div style={{ color: "#64748b", fontSize: 10, marginTop: 2 }}>{summaryRow.bank_names.join(", ")}</div>}</td>
-                            <td style={td}>{summaryRow.group_company || "Unassigned"}</td>
-                            <td style={td}>{summaryRow.group_name || "Unmapped"}</td>
-                            <td style={td}><button type="button" onClick={() => { setSelectedSubgroupSummary(summaryRow); setExpandedBankDetailRows({}); }} style={{ border: 0, padding: 0, background: "transparent", color: "#0f766e", fontWeight: 800, cursor: "pointer", textDecoration: "underline", textAlign: "left" }}>{summaryRow.subgroup_name || "No Sub-group"}</button>{summaryRow.ledger_names?.length > 0 && <div style={{ color: "#64748b", fontSize: 10, marginTop: 2 }}>{summaryRow.ledger_names.length} Ledger(s)</div>}</td>
-                            <td style={{ ...td, textAlign: "right" }}>{summaryRow.receipts ? fmt(summaryRow.receipts) : "-"}</td>
-                            <td style={{ ...td, textAlign: "right" }}>{summaryRow.payments ? fmt(summaryRow.payments) : "-"}</td>
-                            <td style={{ ...td, textAlign: "right", fontWeight: 900 }}>{fmt(summaryRow.total_amount)}</td>
-                            <td style={{ ...td, textAlign: "center" }}>{summaryRow.transactions}</td>
+                        {(bankBalanceReport.summary_rows || []).map((summaryRow, rowIndex) => (
+                          <tr key={summaryRow.summary_key} style={{ background: rowIndex % 2 ? "#f7fafc" : "#fff" }}>
+                            <td style={{ ...reportBodyCell, whiteSpace: "nowrap", color: "#536579", fontWeight: 700 }}>{summaryRow.period}</td>
+                            <td style={reportBodyCell}><b style={{ color: "#17365d" }}>{summaryRow.bank_name || "-"}</b>{summaryRow.bank_names?.length > 1 && <div style={{ color: "#64748b", fontSize: 10, marginTop: 3, lineHeight: 1.4 }}>{summaryRow.bank_names.join(", ")}</div>}</td>
+                            <td style={reportBodyCell}>{summaryRow.group_company || "Unassigned"}</td>
+                            <td style={reportBodyCell}>{summaryRow.group_name || "Unmapped"}</td>
+                            <td style={reportBodyCell}>
+                              <button type="button" onClick={() => { setSelectedSubgroupSummary(summaryRow); setExpandedBankDetailRows({}); }} style={{ border: 0, padding: 0, background: "transparent", color: "#087f8c", fontWeight: 900, cursor: "pointer", textAlign: "left", textDecoration: "none", borderBottom: "1px dashed #0f9aa7", lineHeight: 1.5 }}>{summaryRow.subgroup_name || "No Sub-group"}</button>
+                              <div style={{ color: "#718096", fontSize: 10, marginTop: 4 }}>{(summaryRow.ledger_names || []).length} Ledger(s) · Click for details</div>
+                            </td>
+                            <td style={{ ...reportAmountCell, color: Number(summaryRow.receipts || 0) ? "#087f5b" : "#94a3b8", fontWeight: Number(summaryRow.receipts || 0) ? 800 : 500 }}>{Number(summaryRow.receipts || 0) ? fmt(summaryRow.receipts) : "—"}</td>
+                            <td style={{ ...reportAmountCell, color: Number(summaryRow.payments || 0) ? "#b45309" : "#94a3b8", fontWeight: Number(summaryRow.payments || 0) ? 800 : 500 }}>{Number(summaryRow.payments || 0) ? fmt(summaryRow.payments) : "—"}</td>
+                            <td style={{ ...reportAmountCell, color: "#123f63", fontWeight: 900, background: rowIndex % 2 ? "#f0f6fa" : "#f5f9fc" }}>{fmt(summaryRow.total_amount)}</td>
+                            <td style={{ ...reportBodyCell, textAlign: "center", fontWeight: 900, color: "#334155" }}>{summaryRow.transactions}</td>
                           </tr>
                         ))}
-                        {!(bankBalanceReport.summary_rows || []).length && <tr><td style={td} colSpan={9}>No Sub-group summary matches the selected filters.</td></tr>}
+                        {!(bankBalanceReport.summary_rows || []).length && <tr><td style={reportBodyCell} colSpan={9}>No Sub-group summary matches the selected filters.</td></tr>}
                       </tbody>
-                      <tfoot><tr style={{ background: "#eff6ff", fontWeight: 800 }}><td style={td} colSpan={5}>SUB-GROUP TOTALS</td><td style={{ ...td, textAlign: "right" }}>{fmt((bankBalanceReport.summary_rows || []).reduce((sum, row) => sum + Number(row.receipts || 0), 0))}</td><td style={{ ...td, textAlign: "right" }}>{fmt((bankBalanceReport.summary_rows || []).reduce((sum, row) => sum + Number(row.payments || 0), 0))}</td><td style={{ ...td, textAlign: "right" }}>{fmt((bankBalanceReport.summary_rows || []).reduce((sum, row) => sum + Number(row.total_amount || 0), 0))}</td><td style={td}>-</td></tr></tfoot>
+                      <tfoot><tr>
+                        <td style={{ ...reportTotalCell, textAlign: "left" }} colSpan={5}>SUB-GROUP TOTALS</td>
+                        <td style={{ ...reportTotalCell, color: "#087f5b" }}>{fmt((bankBalanceReport.summary_rows || []).reduce((sum, row) => sum + Number(row.receipts || 0), 0))}</td>
+                        <td style={{ ...reportTotalCell, color: "#b45309" }}>{fmt((bankBalanceReport.summary_rows || []).reduce((sum, row) => sum + Number(row.payments || 0), 0))}</td>
+                        <td style={{ ...reportTotalCell, color: "#123f63" }}>{fmt((bankBalanceReport.summary_rows || []).reduce((sum, row) => sum + Number(row.total_amount || 0), 0))}</td>
+                        <td style={{ ...reportTotalCell, textAlign: "center" }}>—</td>
+                      </tr></tfoot>
                     </table>
                   </div>
                 ) : renderBankBalanceDetailsTable(bankBalanceReport.details || [])}
@@ -1270,10 +1299,10 @@ export default function BankFinancialReportsPage() {
               {selectedSubgroupSummary && bankBalanceViewMode === "summary" && (() => {
                 const popupDetails = bankBalanceDetailsBySummary[selectedSubgroupSummary.summary_key] || [];
                 return <div className="bank-financial-no-print" role="dialog" aria-modal="true" aria-label="Sub-group transaction details" onClick={() => setSelectedSubgroupSummary(null)} style={{ position: "fixed", inset: 0, zIndex: 1000, background: "rgba(15,23,42,.55)", display: "flex", alignItems: "center", justifyContent: "center", padding: 18 }}>
-                  <div onClick={(event) => event.stopPropagation()} style={{ width: "min(1500px, 98vw)", maxHeight: "90vh", overflow: "auto", background: "#fff", borderRadius: 12, padding: 18, boxShadow: "0 20px 60px rgba(0,0,0,.25)" }}>
+                  <div onClick={(event) => event.stopPropagation()} style={{ width: "min(1500px, 98vw)", maxHeight: "90vh", overflow: "auto", background: "linear-gradient(180deg, #ffffff 0%, #f8fbfe 100%)", border: "1px solid #d5e1ec", borderRadius: 18, padding: 20, boxShadow: "0 24px 70px rgba(4, 25, 48, .32)" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "start", gap: 12, marginBottom: 12 }}>
                       <div><h3 style={{ margin: 0, fontSize: 18, color: "#17365d" }}>{selectedSubgroupSummary.subgroup_name || "No Sub-group"} · Full Details</h3><p style={{ margin: "5px 0 0", color: "#64748b", fontSize: 12 }}>{selectedSubgroupSummary.period} · {selectedSubgroupSummary.group_company || "Unassigned"} · {selectedSubgroupSummary.group_name || "Unmapped"}</p><div style={{ display: "flex", gap: 14, flexWrap: "wrap", marginTop: 8, fontSize: 12 }}><b>Receipt: {fmt(selectedSubgroupSummary.receipts)}</b><b>Payment: {fmt(selectedSubgroupSummary.payments)}</b><b>Total: {fmt(selectedSubgroupSummary.total_amount)}</b><b>Transactions: {selectedSubgroupSummary.transactions}</b></div></div>
-                      <button type="button" onClick={() => setSelectedSubgroupSummary(null)} style={secondary}>Close</button>
+                      <button type="button" onClick={() => setSelectedSubgroupSummary(null)} style={{ ...secondary, borderColor: "#c7d7e4", borderRadius: 9, padding: "9px 16px", color: "#17365d" }}>Close</button>
                     </div>
                     <div style={{ color: "#64748b", fontSize: 11, marginBottom: 8 }}>Ledgers: {(selectedSubgroupSummary.ledger_names || []).join(", ") || "-"} · Banks: {(selectedSubgroupSummary.bank_names || []).join(", ") || "-"}</div>
                     {renderBankBalanceDetailsTable(popupDetails)}
