@@ -93,6 +93,7 @@ const displayOrderOptions = Array.from({ length: 21 }, (_, index) => String(inde
 const tabs = [
   ["import", "Bank Statement Import"],
   ["importhistory", "Import History"],
+  ["contra", "Contra Auto Matching"],
   ["groups", "Group Master"],
   ["subgroups", "Sub-group Master"],
   ["mapping", "Particulars Mapping"],
@@ -279,6 +280,9 @@ export default function BankFinancialReportsPage() {
   const [importResult, setImportResult] = useState(null);
   const [mappingSearch, setMappingSearch] = useState("");
   const [imports, setImports] = useState([]);
+  const [contraData, setContraData] = useState({ suggestions: [], matches: [], unmatched_transactions: 0, safe_auto_match_count: 0, review_required_count: 0 });
+  const [contraLoading, setContraLoading] = useState(false);
+  const [contraActionKey, setContraActionKey] = useState("");
   const [bulkBankNames, setBulkBankNames] = useState({});
   const [bulkBankUpdatingBatch, setBulkBankUpdatingBatch] = useState("");
   const [editingGroupId, setEditingGroupId] = useState("");
@@ -388,6 +392,16 @@ export default function BankFinancialReportsPage() {
     setBankOpeningBalances(Array.isArray(bankOpeningRes.data) ? bankOpeningRes.data : []);
   }, []);
 
+  const loadContraData = useCallback(async () => {
+    setContraLoading(true);
+    try {
+      const response = await axios.get(`${API_BASE}/contra-matches`);
+      setContraData(response.data || { suggestions: [], matches: [], unmatched_transactions: 0, safe_auto_match_count: 0, review_required_count: 0 });
+    } finally {
+      setContraLoading(false);
+    }
+  }, []);
+
   const loadCurrentReport = useCallback(async (selectedTab = tab, filterParams = params) => {
     if (selectedTab === "statement") {
       const res = await axios.get(`${API_BASE}/transactions`, { params: { ...filterParams, limit: 1000 } });
@@ -411,8 +425,10 @@ export default function BankFinancialReportsPage() {
     } else if (selectedTab === "bankbalance") {
       const res = await axios.get(`${API_BASE}/reports/bank-balance`, { params: filterParams });
       setBankBalanceReport(res.data || { totals: {}, rows: [], details: [], opening_balance_missing_banks: [] });
+    } else if (selectedTab === "contra") {
+      await loadContraData();
     }
-  }, [tab, params]);
+  }, [tab, params, loadContraData]);
 
   const refreshAll = useCallback(async (selectedTab = tab) => {
     setLoading(true); setError("");
@@ -456,6 +472,52 @@ export default function BankFinancialReportsPage() {
     }
   };
 
+  const runContraAutoMatch = async () => {
+    setContraActionKey("auto"); setError(""); setNotice("");
+    try {
+      const response = await axios.post(`${API_BASE}/contra-matches/auto-match`, {});
+      setNotice(response.data?.message || "Contra Auto Matching completed.");
+      await loadContraData();
+    } catch (err) {
+      setError(err.response?.data?.error || err.message || "Could not run Contra Auto Matching.");
+    } finally { setContraActionKey(""); }
+  };
+
+  const confirmContraMatch = async (candidate) => {
+    const payment = candidate.payment || {};
+    const receipt = candidate.receipt || {};
+    const approved = window.confirm(
+      `Confirm one Contra Transfer?\n\nPayment: ${payment.bank_name} · ${dateLabel(payment.bank_date)} · ${money(payment.amount)}\nReceipt: ${receipt.bank_name} · ${dateLabel(receipt.bank_date)} · ${money(receipt.amount)}\n\nThe two original Bank Statement rows and their balances will remain unchanged and linked under one Transfer ID.`
+    );
+    if (!approved) return;
+    const key = `${candidate.payment_transaction_id}|${candidate.receipt_transaction_id}`;
+    setContraActionKey(key); setError(""); setNotice("");
+    try {
+      const response = await axios.post(`${API_BASE}/contra-matches`, {
+        payment_transaction_id: candidate.payment_transaction_id,
+        receipt_transaction_id: candidate.receipt_transaction_id,
+      });
+      setNotice(response.data?.message || "Contra Transfer linked successfully.");
+      await loadContraData();
+    } catch (err) {
+      setError(err.response?.data?.error || err.message || "Could not confirm this Contra Match.");
+    } finally { setContraActionKey(""); }
+  };
+
+  const removeContraMatch = async (match) => {
+    const approved = window.confirm(`Unlink Contra Transfer ${match.transfer_id}?\n\nThe original Bank Statement rows, amounts and balances will not be deleted.`);
+    if (!approved) return;
+    const key = `remove-${match.id || match._id}`;
+    setContraActionKey(key); setError(""); setNotice("");
+    try {
+      const response = await axios.delete(`${API_BASE}/contra-matches/${encodeURIComponent(match.id || match._id)}`);
+      setNotice(response.data?.message || "Contra Transfer unlinked.");
+      await loadContraData();
+    } catch (err) {
+      setError(err.response?.data?.error || err.message || "Could not unlink Contra Transfer.");
+    } finally { setContraActionKey(""); }
+  };
+
   const createGroup = async (event) => {
     event.preventDefault(); setSaving(true); setError(""); setNotice("");
     try {
@@ -492,7 +554,9 @@ export default function BankFinancialReportsPage() {
       setImportResult(response.data || null);
       setFile(null);
       await loadMasters();
-      setNotice(`Bank Statement imported. Excel Ledger Name used on ${response.data?.excel_ledger_names || 0} rows and Group Company used on ${response.data?.excel_group_companies || 0} rows. ${response.data?.auto_mapped_rows || 0} rows also used saved Group / Sub-group mappings.`);
+      const matchedContraCount = Number(response.data?.contra_auto_matched_count || 0);
+      const contraReviewCount = Number(response.data?.contra_review_required_count || 0);
+      setNotice(`Bank Statement imported. Excel Ledger Name used on ${response.data?.excel_ledger_names || 0} rows and Group Company used on ${response.data?.excel_group_companies || 0} rows. ${response.data?.auto_mapped_rows || 0} rows also used saved Group / Sub-group mappings.${matchedContraCount ? ` ${matchedContraCount} inter-bank Contra Transfer(s) were automatically matched.` : ""}${contraReviewCount ? ` ${contraReviewCount} possible Contra pair(s) need your review in Contra Auto Matching.` : ""}`);
     } catch (err) { setError(err.response?.data?.error || err.message || "Bank Statement import failed."); }
     finally { setSaving(false); }
   };
@@ -942,6 +1006,82 @@ export default function BankFinancialReportsPage() {
         </section>
       )}
 
+      {tab === "contra" && (
+        <section style={{ display: "grid", gap: 14 }}>
+          <div style={{ ...panel, borderTop: "4px solid #0f766e" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 12 }}>
+              <div>
+                <h2 style={{ margin: 0, color: "#17365d", fontSize: 20 }}>Contra Auto Matching</h2>
+                <p style={{ margin: "6px 0 0", color: "#64748b", fontSize: 12, maxWidth: 850, lineHeight: 1.55 }}>
+                  Match a Payment from one Bank with the corresponding Receipt in another Bank. The two imported statement rows remain in place for their individual bank balances; one Contra Transfer ID links them so the transfer is not treated as Income or Expense.
+                </p>
+              </div>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+                <button type="button" style={secondary} disabled={contraLoading || Boolean(contraActionKey)} onClick={loadContraData}>{contraLoading ? "Refreshing..." : "Refresh Matches"}</button>
+                <button type="button" style={{ ...primary, background: "#0f766e", opacity: contraActionKey || contraLoading ? .65 : 1 }} disabled={Boolean(contraActionKey) || contraLoading} onClick={runContraAutoMatch}>{contraActionKey === "auto" ? "Matching..." : `Auto Match Unique (${contraData.safe_auto_match_count || 0})`}</button>
+              </div>
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(160px,1fr))", gap: 9, marginTop: 15 }}>
+              {[
+                ["Unmatched Rows", contraData.unmatched_transactions || 0, "#17365d"],
+                ["Safe Auto Matches", contraData.safe_auto_match_count || 0, "#087f5b"],
+                ["Need Your Review", contraData.review_required_count || 0, "#b45309"],
+                ["Matched Transfers", (contraData.matches || []).length, "#0f766e"],
+              ].map(([title, value, color]) => <div key={title} style={{ padding: 12, border: "1px solid #dbe5ee", borderRadius: 10, background: "#f8fbfd" }}><div style={{ color: "#64748b", fontSize: 11, fontWeight: 700 }}>{title}</div><div style={{ marginTop: 4, color, fontSize: 23, fontWeight: 900, fontVariantNumeric: "tabular-nums" }}>{Number(value).toLocaleString("en-IN")}</div></div>)}
+            </div>
+            <div style={{ marginTop: 12, padding: 11, borderRadius: 9, background: "#fffbeb", border: "1px solid #fde68a", color: "#854d0e", fontSize: 12, lineHeight: 1.55 }}>
+              <b>Safe matching rule:</b> Auto Match only links a unique one-to-one pair with the same UTR / Transaction ID, or an exact same-day amount match when neither row contains a reference number. Other possible matches are shown below for your confirmation. Amount and date alone are never used when there are duplicate candidates.
+            </div>
+          </div>
+
+          <div style={panel}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 11 }}>
+              <div><h3 style={{ margin: 0, color: "#17365d", fontSize: 17 }}>Possible Bank Transfer Matches</h3><p style={{ margin: "4px 0 0", color: "#64748b", fontSize: 11 }}>Payment in one Bank → Receipt in another Bank. Confirm only when both rows represent the same transfer.</p></div>
+              <span style={{ padding: "5px 9px", borderRadius: 20, background: "#fff7ed", color: "#9a3412", fontSize: 11, fontWeight: 800 }}>{(contraData.suggestions || []).length} suggestions</span>
+            </div>
+            {(contraData.suggestions || []).length ? <div style={{ display: "grid", gap: 10 }}>
+              {contraData.suggestions.map((candidate) => {
+                const payment = candidate.payment || {};
+                const receipt = candidate.receipt || {};
+                const key = `${candidate.payment_transaction_id}|${candidate.receipt_transaction_id}`;
+                return <div key={key} style={{ display: "grid", gridTemplateColumns: "minmax(0,1fr) 42px minmax(0,1fr) auto", alignItems: "stretch", gap: 10, padding: 12, border: "1px solid #dbe5ee", borderRadius: 11, background: candidate.auto_safe ? "#f0fdf9" : "#fff" }}>
+                  <div style={{ minWidth: 0, padding: 10, border: "1px solid #fed7aa", background: "#fffaf5", borderRadius: 8 }}>
+                    <div style={{ color: "#9a3412", fontWeight: 900, fontSize: 11 }}>PAYMENT · MONEY OUT</div>
+                    <div style={{ marginTop: 4, color: "#17365d", fontWeight: 900 }}>{payment.bank_name || "Unknown Bank"}</div>
+                    <div style={{ marginTop: 3, color: "#64748b", fontSize: 11 }}>{dateLabel(payment.bank_date)} {payment.bank_time || ""}</div>
+                    <div style={{ marginTop: 7, color: "#9a3412", fontSize: 17, fontWeight: 900 }}>{money(payment.amount)}</div>
+                    <div style={{ marginTop: 4, color: "#475569", fontSize: 11, overflowWrap: "anywhere" }}>{payment.ledger_name || payment.particulars_name || "-"}</div>
+                    <div style={{ marginTop: 4, color: "#64748b", fontSize: 10 }}>UTR: {payment.transaction_id || payment.instrument_no || "Not available"}</div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", justifyContent: "center", color: "#0f766e", fontSize: 22, fontWeight: 900 }}>⇄</div>
+                  <div style={{ minWidth: 0, padding: 10, border: "1px solid #99f6e4", background: "#f0fdfa", borderRadius: 8 }}>
+                    <div style={{ color: "#0f766e", fontWeight: 900, fontSize: 11 }}>RECEIPT · MONEY IN</div>
+                    <div style={{ marginTop: 4, color: "#17365d", fontWeight: 900 }}>{receipt.bank_name || "Unknown Bank"}</div>
+                    <div style={{ marginTop: 3, color: "#64748b", fontSize: 11 }}>{dateLabel(receipt.bank_date)} {receipt.bank_time || ""}{receipt.group_company ? ` · ${receipt.group_company}` : ""}</div>
+                    <div style={{ marginTop: 7, color: "#087f5b", fontSize: 17, fontWeight: 900 }}>{money(receipt.amount)}</div>
+                    <div style={{ marginTop: 4, color: "#475569", fontSize: 11, overflowWrap: "anywhere" }}>{receipt.ledger_name || receipt.particulars_name || "-"}</div>
+                    <div style={{ marginTop: 4, color: "#64748b", fontSize: 10 }}>UTR: {receipt.transaction_id || receipt.instrument_no || "Not available"}</div>
+                  </div>
+                  <div style={{ display: "flex", minWidth: 150, flexDirection: "column", justifyContent: "center", alignItems: "stretch", gap: 7 }}>
+                    <span style={{ textAlign: "center", padding: "5px 7px", borderRadius: 20, fontSize: 10, fontWeight: 800, color: candidate.auto_safe ? "#065f46" : "#92400e", background: candidate.auto_safe ? "#ccfbf1" : "#fef3c7" }}>{candidate.auto_safe ? "Unique Match" : candidate.ambiguous ? "Multiple Candidates" : "Review Required"}</span>
+                    <span style={{ textAlign: "center", fontSize: 10, color: "#64748b" }}>{candidate.match_reason}</span>
+                    <button type="button" style={{ ...primary, background: "#17365d", padding: "8px 10px", fontSize: 11 }} disabled={Boolean(contraActionKey)} onClick={() => confirmContraMatch(candidate)}>{contraActionKey === key ? "Saving..." : "Confirm Contra"}</button>
+                  </div>
+                </div>;
+              })}
+            </div> : <div style={{ padding: 24, textAlign: "center", border: "1px dashed #cbd5e1", borderRadius: 10, color: "#64748b", fontSize: 13 }}>No possible unmatched Payment / Receipt pair found. Import the second Bank Statement and click Refresh Matches.</div>}
+          </div>
+
+          <div style={panel}>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 10, alignItems: "center", flexWrap: "wrap", marginBottom: 10 }}><div><h3 style={{ margin: 0, color: "#17365d", fontSize: 17 }}>Matched Contra Transfers</h3><p style={{ margin: "4px 0 0", color: "#64748b", fontSize: 11 }}>Each Transfer ID links one original Payment row and one original Receipt row. Unlinking never deletes the statement transactions.</p></div><b style={{ color: "#0f766e", fontSize: 12 }}>{(contraData.matches || []).length} matched</b></div>
+            <div style={{ overflowX: "auto" }}><table style={{ width: "100%", minWidth: 900, borderCollapse: "separate", borderSpacing: 0 }}><thead><tr>{["Transfer ID","Payment Bank","Receipt Bank","Transfer Date","Amount","Match Method","Action"].map((title) => <th key={title} style={th}>{title}</th>)}</tr></thead><tbody>
+              {(contraData.matches || []).map((match) => <tr key={match.id || match._id}><td style={td}><b style={{ color: "#17365d" }}>{match.transfer_id}</b></td><td style={td}>{match.payment_bank}</td><td style={td}>{match.receipt_bank}</td><td style={td}>{dateLabel(match.payment_date)}{match.receipt_date && dateLabel(match.receipt_date) !== dateLabel(match.payment_date) ? <div style={{ color: "#64748b", fontSize: 10 }}>Receipt: {dateLabel(match.receipt_date)}</div> : null}</td><td style={{ ...td, textAlign: "right", fontWeight: 900, fontVariantNumeric: "tabular-nums" }}>{money(match.amount)}</td><td style={td}>{match.match_method === "utr" ? "UTR / Transaction ID" : match.match_method === "amount_date" ? "Unique Amount + Date" : "Manual Confirmation"}</td><td style={td}><button type="button" disabled={Boolean(contraActionKey)} style={{ ...secondary, color: "#b42318", borderColor: "#fecaca" }} onClick={() => removeContraMatch(match)}>{contraActionKey === `remove-${match.id || match._id}` ? "Unlinking..." : "Unlink"}</button></td></tr>)}
+              {!(contraData.matches || []).length && <tr><td style={td} colSpan={7}>No Contra Transfers matched yet.</td></tr>}
+            </tbody></table></div>
+          </div>
+        </section>
+      )}
+
       {tab === "groups" && (
         <section style={{ display: "grid", gridTemplateColumns: "minmax(280px,.7fr) minmax(320px,1.3fr)", gap: 14 }}>
           <form onSubmit={createGroup} style={panel}>
@@ -1215,7 +1355,7 @@ export default function BankFinancialReportsPage() {
               <p style={{ margin: "8px 0 0", fontSize: 11, color: "#475569" }}>The original Bank Statement Particulars is kept for reconciliation. Split allocations affect ledger reports only; the Bank Statement entry and bank balance stay as one transaction.</p>
             </form>}
             <div style={{ overflow: "auto", maxHeight: "70vh" }}><table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1250 }}><thead><tr>{["Date (A)","Bank (D)","Ledger Name (mapped from L)","Group Company","Voucher Type (M)","Voucher No. (N)","Receipt (O)","Payment (P)","Bank Balance (H)","Group Mapping","Status","Action"].map((x) => <th key={x} style={th}>{x}</th>)}</tr></thead><tbody>
-              {transactions.map((row) => <tr key={row._id}><td style={td}>{dateLabel(row.bank_date)}</td><td style={td}>{row.bank_name}</td><td style={td}><b>{row.ledger_name || row.particulars_name}</b>{row.ledger_name && String(row.ledger_name).trim().toLowerCase() !== String(row.particulars_name || "").trim().toLowerCase() && <div style={{ color: "#64748b", fontSize: 10, marginTop: 3 }}>Original: {row.particulars_name}</div>}{(row.split_allocations || []).length > 0 && <div style={{ color: "#0f766e", fontSize: 10, marginTop: 4 }}>{row.allocations.map((item) => `${item.ledger_name}: ${money(item.amount)}`).join(" · ")}</div>}</td><td style={td}>{(row.split_allocations || []).length > 0 ? [...new Set(row.allocations.map((item) => item.group_company || "Unassigned"))].join(", ") : row.mapping?.group_company || "Unassigned"}</td><td style={td}>{row.voucher_type}</td><td style={td}>{row.voucher_number}</td><td style={{ ...td, textAlign: "right" }}>{row.receipt_amount ? fmt(row.receipt_amount) : "-"}</td><td style={{ ...td, textAlign: "right" }}>{row.payment_amount ? fmt(row.payment_amount) : "-"}</td><td style={{ ...td, textAlign: "right" }}>{fmt(row.bank_balance)}</td><td style={td}>{(row.split_allocations || []).length > 0 ? <span style={{ color: "#0f766e", fontWeight: 700 }}>Split ({row.allocations.length} ledgers)</span> : row.mapping ? `${row.mapping.group_name}${row.mapping.subgroup_name ? ` / ${row.mapping.subgroup_name}` : ""}` : <span style={{ color: "#b45309", fontWeight: 800 }}>Unmapped</span>}</td><td style={td}>{row.bank_status || "-"}</td><td style={td}><button type="button" onClick={() => openTransactionEdit(row)} style={secondary}>Edit</button></td></tr>)}
+              {transactions.map((row) => <tr key={row._id}><td style={td}>{dateLabel(row.bank_date)}</td><td style={td}>{row.bank_name}</td><td style={td}><b>{row.ledger_name || row.particulars_name}</b>{row.ledger_name && String(row.ledger_name).trim().toLowerCase() !== String(row.particulars_name || "").trim().toLowerCase() && <div style={{ color: "#64748b", fontSize: 10, marginTop: 3 }}>Original: {row.particulars_name}</div>}{(row.split_allocations || []).length > 0 && <div style={{ color: "#0f766e", fontSize: 10, marginTop: 4 }}>{row.allocations.map((item) => `${item.ledger_name}: ${money(item.amount)}`).join(" · ")}</div>}</td><td style={td}>{(row.split_allocations || []).length > 0 ? [...new Set(row.allocations.map((item) => item.group_company || "Unassigned"))].join(", ") : row.mapping?.group_company || "Unassigned"}</td><td style={td}>{row.voucher_type}{row.contra_match_status === "matched" && <div style={{ marginTop: 4 }}><span title={`Linked to ${row.contra_counter_bank || "the other Bank"}`} style={{ display: "inline-block", padding: "3px 7px", borderRadius: 12, background: "#ccfbf1", color: "#065f46", fontSize: 9, fontWeight: 900 }}>CONTRA MATCHED</span><div style={{ color: "#64748b", fontSize: 10, marginTop: 2 }}>Transfer ID: {String(row.contra_match_id || "").slice(-8)}</div></div>}</td><td style={td}>{row.voucher_number}</td><td style={{ ...td, textAlign: "right" }}>{row.receipt_amount ? fmt(row.receipt_amount) : "-"}</td><td style={{ ...td, textAlign: "right" }}>{row.payment_amount ? fmt(row.payment_amount) : "-"}</td><td style={{ ...td, textAlign: "right" }}>{fmt(row.bank_balance)}</td><td style={td}>{(row.split_allocations || []).length > 0 ? <span style={{ color: "#0f766e", fontWeight: 700 }}>Split ({row.allocations.length} ledgers)</span> : row.mapping ? `${row.mapping.group_name}${row.mapping.subgroup_name ? ` / ${row.mapping.subgroup_name}` : ""}` : <span style={{ color: "#b45309", fontWeight: 800 }}>Unmapped</span>}</td><td style={td}>{row.bank_status || "-"}</td><td style={td}><button type="button" onClick={() => openTransactionEdit(row)} style={secondary}>Edit</button></td></tr>)}
               {!transactions.length && <tr><td style={td} colSpan={12}>No bank transactions for the selected filter.</td></tr>}
             </tbody></table></div>
           </section>}
