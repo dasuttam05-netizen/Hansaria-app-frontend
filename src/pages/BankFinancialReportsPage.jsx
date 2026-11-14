@@ -282,6 +282,7 @@ export default function BankFinancialReportsPage() {
   const [mappingStatusFilter, setMappingStatusFilter] = useState("all");
   const [selectedMappingNames, setSelectedMappingNames] = useState([]);
   const [bulkSubgroupId, setBulkSubgroupId] = useState("");
+  const [bulkGroupCompany, setBulkGroupCompany] = useState("");
   const [imports, setImports] = useState([]);
   const [contraData, setContraData] = useState({ suggestions: [], matches: [], unmatched_transactions: 0, safe_auto_match_count: 0, review_required_count: 0 });
   const [contraLoading, setContraLoading] = useState(false);
@@ -760,7 +761,7 @@ export default function BankFinancialReportsPage() {
             ledger_name: row.ledger_name || row.particulars_name,
             group_id: String(parentGroup._id || parentGroup.id),
             subgroup_id: String(subgroup._id || subgroup.id),
-            group_company: row.group_company || "",
+            group_company: bulkGroupCompany.trim() || row.group_company || "",
             opening_balance: row.opening_balance ?? 0,
             opening_balance_type: row.opening_balance_type || "dr",
           });
@@ -774,7 +775,7 @@ export default function BankFinancialReportsPage() {
       if (failedRows.length) {
         setError(`Saved ${savedKeys.length} of ${selectedRows.length}. Failed: ${failedRows.map((row) => `${row.name} (${row.error})`).join("; ")}`);
       } else {
-        setNotice(`Bulk Mapping saved for ${savedKeys.length} Particulars under ${parentGroup.name} / ${subgroup.name}.`);
+        setNotice(`Bulk Mapping saved for ${savedKeys.length} Particulars under ${parentGroup.name} / ${subgroup.name}${bulkGroupCompany.trim() ? ` · Group Company: ${bulkGroupCompany.trim()}` : ""}.`);
       }
     } catch (err) {
       setError(err.response?.data?.error || err.message || "Bulk Mapping could not be completed.");
@@ -1435,6 +1436,16 @@ export default function BankFinancialReportsPage() {
             <div style={{ minWidth: 170, color: "#475569", fontSize: 12, paddingBottom: 8 }}>
               Group: <b style={{ color: "#0f172a" }}>{selectedBulkGroup?.name || "Auto from Sub-group"}</b>
             </div>
+            <label style={{ ...label, margin: 0, minWidth: 230, flex: "1 1 230px" }}>Apply Group Company to Selected Particulars
+              <input
+                value={bulkGroupCompany}
+                onChange={(e) => setBulkGroupCompany(e.target.value)}
+                list="bank-financial-group-company-options"
+                placeholder="Type / select Group Company..."
+                style={{ ...input, marginTop: 4 }}
+              />
+              <span style={{ display: "block", color: "#64748b", fontSize: 10, fontWeight: 500, marginTop: 3 }}>Optional. Leave blank to keep each row's existing Group Company.</span>
+            </label>
             <button type="button" onClick={bulkSaveSelectedMappings} disabled={saving || !selectedMappingNames.length || !bulkSubgroupId} style={{ ...primary, opacity: saving || !selectedMappingNames.length || !bulkSubgroupId ? .55 : 1 }}>
               {saving ? "Saving..." : `Apply to ${selectedMappingNames.length || "Selected"} Rows`}
             </button>
