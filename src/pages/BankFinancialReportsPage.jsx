@@ -279,6 +279,9 @@ export default function BankFinancialReportsPage() {
   const [file, setFile] = useState(null);
   const [importResult, setImportResult] = useState(null);
   const [mappingSearch, setMappingSearch] = useState("");
+  const [mappingStatusFilter, setMappingStatusFilter] = useState("all");
+  const [selectedMappingNames, setSelectedMappingNames] = useState([]);
+  const [bulkSubgroupId, setBulkSubgroupId] = useState("");
   const [imports, setImports] = useState([]);
   const [contraData, setContraData] = useState({ suggestions: [], matches: [], unmatched_transactions: 0, safe_auto_match_count: 0, review_required_count: 0 });
   const [contraLoading, setContraLoading] = useState(false);
@@ -731,6 +734,55 @@ export default function BankFinancialReportsPage() {
     finally { setSaving(false); }
   };
 
+  const bulkSaveSelectedMappings = async () => {
+    const selectedKeys = new Set(selectedMappingNames);
+    const selectedRows = mappings.filter((row) => selectedKeys.has(row.normalized_name));
+    const subgroup = subgroups.find((row) => String(row._id || row.id) === String(bulkSubgroupId));
+    const parentGroup = subgroup && groups.find((row) => String(row._id || row.id) === String(subgroup.group_id));
+    if (!selectedRows.length) {
+      setError("Please select one or more Particulars rows first.");
+      return;
+    }
+    if (!subgroup || !parentGroup) {
+      setError("Please select a valid Sub-group. Its parent Group will be filled automatically.");
+      return;
+    }
+    setSaving(true); setError(""); setNotice("");
+    const savedKeys = [];
+    const failedRows = [];
+    try {
+      // Save sequentially through the existing mapping endpoint. This keeps the
+      // same validation/upsert behavior as a normal single-row mapping.
+      for (const row of selectedRows) {
+        try {
+          await axios.post(`${API_BASE}/ledger-mappings`, {
+            particulars_name: row.particulars_name,
+            ledger_name: row.ledger_name || row.particulars_name,
+            group_id: String(parentGroup._id || parentGroup.id),
+            subgroup_id: String(subgroup._id || subgroup.id),
+            group_company: row.group_company || "",
+            opening_balance: row.opening_balance ?? 0,
+            opening_balance_type: row.opening_balance_type || "dr",
+          });
+          savedKeys.push(row.normalized_name);
+        } catch (err) {
+          failedRows.push({ name: row.particulars_name, error: err.response?.data?.error || err.message || "Save failed" });
+        }
+      }
+      await loadMasters();
+      setSelectedMappingNames((previous) => previous.filter((key) => !savedKeys.includes(key)));
+      if (failedRows.length) {
+        setError(`Saved ${savedKeys.length} of ${selectedRows.length}. Failed: ${failedRows.map((row) => `${row.name} (${row.error})`).join("; ")}`);
+      } else {
+        setNotice(`Bulk Mapping saved for ${savedKeys.length} Particulars under ${parentGroup.name} / ${subgroup.name}.`);
+      }
+    } catch (err) {
+      setError(err.response?.data?.error || err.message || "Bulk Mapping could not be completed.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const companyGroupOptions = useMemo(() => {
     const values = ["Group Company", "HFPL Group Company", "Retails Group Company", ...mappings.map((row) => row.group_company || "")];
     return [...new Set(values.map((value) => String(value || "").trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b));
@@ -900,8 +952,33 @@ export default function BankFinancialReportsPage() {
 
   const filteredMappings = useMemo(() => {
     const q = mappingSearch.trim().toLowerCase();
-    return !q ? mappings : mappings.filter((row) => `${row.particulars_name || ""} ${row.ledger_name || ""}`.toLowerCase().includes(q));
-  }, [mappings, mappingSearch]);
+    return mappings.filter((row) => {
+      const searchMatch = !q || `${row.particulars_name || ""} ${row.ledger_name || ""}`.toLowerCase().includes(q);
+      const statusMatch = mappingStatusFilter === "unmapped"
+        ? !row.mapped
+        : mappingStatusFilter === "mapped"
+          ? Boolean(row.mapped)
+          : true;
+      return searchMatch && statusMatch;
+    });
+  }, [mappings, mappingSearch, mappingStatusFilter]);
+  const allFilteredMappingsSelected = filteredMappings.length > 0
+    && filteredMappings.every((row) => selectedMappingNames.includes(row.normalized_name));
+  const selectedBulkSubgroup = subgroups.find((row) => String(row._id || row.id) === String(bulkSubgroupId));
+  const selectedBulkGroup = selectedBulkSubgroup
+    ? groups.find((row) => String(row._id || row.id) === String(selectedBulkSubgroup.group_id))
+    : null;
+  const toggleAllFilteredMappings = () => {
+    const visibleKeys = filteredMappings.map((row) => row.normalized_name);
+    setSelectedMappingNames((previous) => allFilteredMappingsSelected
+      ? previous.filter((key) => !visibleKeys.includes(key))
+      : [...new Set([...previous, ...visibleKeys])]);
+  };
+  const toggleMappingSelection = (normalizedName) => {
+    setSelectedMappingNames((previous) => previous.includes(normalizedName)
+      ? previous.filter((key) => key !== normalizedName)
+      : [...previous, normalizedName]);
+  };
 
   const applyFilters = async () => {
     setSelectedSubgroupSummary(null);
@@ -1216,7 +1293,16 @@ export default function BankFinancialReportsPage() {
         <section style={panel}>
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "end", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
             <div><h2 style={{ margin: 0, fontSize: 18 }}>Bank Particulars → Ledger Name / Group Mapping</h2><p style={{ margin: "5px 0 0", color: "#64748b", fontSize: 12 }}>Original name from Excel Column L stays preserved for bank reconciliation. Set your own Ledger Name here; the mapped Ledger Name is displayed in Bank Statement and reports and reused on future imports.</p></div>
-            <input value={mappingSearch} onChange={(e) => setMappingSearch(e.target.value)} placeholder="Search Particulars name..." style={{ ...input, maxWidth: 280 }} />
+            <div style={{ display: "flex", alignItems: "end", gap: 8, flexWrap: "wrap" }}>
+              <label style={{ ...label, margin: 0, minWidth: 155 }}>Mapping Status
+                <select value={mappingStatusFilter} onChange={(e) => { setMappingStatusFilter(e.target.value); setSelectedMappingNames([]); }} style={{ ...input, marginTop: 4 }}>
+                  <option value="all">All Particulars ({mappings.length})</option>
+                  <option value="unmapped">Unmapped Only ({mappings.filter((row) => !row.mapped).length})</option>
+                  <option value="mapped">Mapped Only ({mappings.filter((row) => row.mapped).length})</option>
+                </select>
+              </label>
+              <input value={mappingSearch} onChange={(e) => setMappingSearch(e.target.value)} placeholder="Search Particulars name..." style={{ ...input, maxWidth: 280 }} />
+            </div>
           </div>
           {!groups.length && <div style={{ padding: 12, background: "#fffbeb", color: "#92400e", borderRadius: 7, marginBottom: 10 }}>First create Groups in Group Master, then map Particulars here.</div>}
           <form data-tally-form="manual-ledger" onSubmit={saveManualLedger} style={{ border: "1px solid #bfdbfe", background: "#eff6ff", borderRadius: 10, padding: 12, marginBottom: 14 }}>
@@ -1333,10 +1419,35 @@ export default function BankFinancialReportsPage() {
             </div>
             <datalist id="bank-financial-group-company-options">{companyGroupOptions.map((name) => <option key={name} value={name} />)}</datalist>
           </form>
-          <div style={{ overflowX: "auto", maxHeight: "68vh" }}><table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1250 }}><thead><tr>{["Original Bank Particulars (L)","Ledger Name (Report Name)","Rows","Group","Sub-group","Group Company","Opening Balance","Dr/Cr","Report Placement","Mapping Status","Action"].map((x) => <th key={x} style={th}>{x}</th>)}</tr></thead><tbody>
+          <div style={{ border: "1px solid #cbd5e1", background: "#f8fafc", borderRadius: 9, padding: 11, marginBottom: 10, display: "flex", alignItems: "end", flexWrap: "wrap", gap: 9 }}>
+            <div style={{ minWidth: 160, color: "#334155", fontSize: 12, fontWeight: 800, paddingBottom: 8 }}>
+              Bulk Mapping · {selectedMappingNames.length} selected
+            </div>
+            <label style={{ ...label, margin: 0, minWidth: 260, flex: "1 1 260px" }}>Apply Sub-group to Selected Particulars
+              <select value={bulkSubgroupId} onChange={(e) => setBulkSubgroupId(e.target.value)} style={{ ...input, marginTop: 4 }}>
+                <option value="">Select Sub-group...</option>
+                {subgroups.filter((sub) => groups.some((group) => String(group._id || group.id) === String(sub.group_id) && (!group.source_type || group.source_type === "bank_statement"))).map((sub) => {
+                  const parent = groups.find((group) => String(group._id || group.id) === String(sub.group_id));
+                  return <option key={sub._id || sub.id} value={sub._id || sub.id}>{parent?.name || "Group"} / {sub.name}</option>;
+                })}
+              </select>
+            </label>
+            <div style={{ minWidth: 170, color: "#475569", fontSize: 12, paddingBottom: 8 }}>
+              Group: <b style={{ color: "#0f172a" }}>{selectedBulkGroup?.name || "Auto from Sub-group"}</b>
+            </div>
+            <button type="button" onClick={bulkSaveSelectedMappings} disabled={saving || !selectedMappingNames.length || !bulkSubgroupId} style={{ ...primary, opacity: saving || !selectedMappingNames.length || !bulkSubgroupId ? .55 : 1 }}>
+              {saving ? "Saving..." : `Apply to ${selectedMappingNames.length || "Selected"} Rows`}
+            </button>
+            <button type="button" onClick={() => setSelectedMappingNames([])} disabled={!selectedMappingNames.length || saving} style={secondary}>Clear Selection</button>
+          </div>
+          <div style={{ overflowX: "auto", maxHeight: "68vh" }}><table style={{ width: "100%", borderCollapse: "collapse", minWidth: 1300 }}><thead><tr>
+            <th style={{ ...th, width: 44, textAlign: "center" }}><input type="checkbox" aria-label="Select all visible Particulars" checked={allFilteredMappingsSelected} onChange={toggleAllFilteredMappings} /></th>
+            {["Original Bank Particulars (L)","Ledger Name (Report Name)","Rows","Group","Sub-group","Group Company","Opening Balance","Dr/Cr","Report Placement","Mapping Status","Action"].map((x) => <th key={x} style={th}>{x}</th>)}
+          </tr></thead><tbody>
             {filteredMappings.map((row) => {
               const allowedSubgroups = subgroups.filter((sub) => String(sub.group_id) === String(row.group_id));
-              return <tr key={row.normalized_name} style={{ background: row.mapped ? "#fff" : "#fffdf5" }}>
+              return <tr key={row.normalized_name} style={{ background: selectedMappingNames.includes(row.normalized_name) ? "#ecfeff" : row.mapped ? "#fff" : "#fffdf5" }}>
+                <td style={{ ...td, textAlign: "center" }}><input type="checkbox" aria-label={`Select ${row.particulars_name}`} checked={selectedMappingNames.includes(row.normalized_name)} onChange={() => toggleMappingSelection(row.normalized_name)} /></td>
                 <td style={{ ...td, fontWeight: 800, minWidth: 190 }}>{row.particulars_name}</td>
                 <td style={{ ...td, minWidth: 190 }}><input data-ledger-cell="0" onKeyDown={handleMappingGridKeyDown} value={row.ledger_name || row.particulars_name} onChange={(e) => updateMappingDraft(row.normalized_name, { ledger_name: e.target.value })} placeholder="Type Ledger Name" style={input} /></td>
                 <td style={td}>{row.transaction_count}</td>
@@ -1350,7 +1461,7 @@ export default function BankFinancialReportsPage() {
                 <td style={td}><button type="button" disabled={saving || !row.group_id} onClick={() => saveMapping(row)} style={{ ...primary, padding: "7px 10px", opacity: !row.group_id ? .5 : 1 }}>{row.mapped ? "Update Mapping" : "Save Mapping"}</button></td>
               </tr>;
             })}
-            {!filteredMappings.length && <tr><td style={td} colSpan={11}>No Particulars found. Import a bank statement first, or use Quick Ledger Mapping to create one.</td></tr>}
+            {!filteredMappings.length && <tr><td style={td} colSpan={12}>{mappingStatusFilter === "unmapped" ? "No unmapped Particulars found." : "No Particulars found. Import a bank statement first, or use Quick Ledger Mapping to create one."}</td></tr>}
           </tbody></table></div>
         </section>
       )}
