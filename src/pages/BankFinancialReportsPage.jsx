@@ -453,6 +453,29 @@ export default function BankFinancialReportsPage() {
     setError(""); setNotice("");
   };
 
+  // Open the existing bank-wise report from the Balance Sheet without changing
+  // any accounting calculations. Keep the selected date range, but clear other
+  // ledger filters so every imported bank is included in the bank summary.
+  const openBankWiseReport = (viewMode = "full_details") => {
+    const bankReportFilters = {
+      ...appliedFilters,
+      bank_name: "",
+      voucher_type: "",
+      import_batch_id: "",
+      group_company: "",
+      group_id: "",
+      subgroup_id: "",
+    };
+    setFilters(bankReportFilters);
+    setAppliedFilters(bankReportFilters);
+    setBankBalanceViewMode(viewMode);
+    setBankBalanceSummaryType("subgroup");
+    setSelectedSubgroupSummary(null);
+    setSelectedLedgerSummary(null);
+    setExpandedBankDetailRows({});
+    selectTab("bankbalance");
+  };
+
   const updateImportedBatchBankName = async (batch) => {
     const batchId = String(batch?.batch_id || "").trim();
     const bankName = String(bulkBankNames[batchId] ?? (batch?.bank_names?.length === 1 ? batch.bank_names[0] : "") ?? "").trim();
@@ -1047,7 +1070,27 @@ export default function BankFinancialReportsPage() {
 
   return (
     <main style={{ minHeight: "100vh", background: "#f1f5f9", padding: 16, fontFamily: "Segoe UI, Arial, sans-serif", color: "#0f172a" }}>
-      <style>{`@page{size:A4 landscape;margin:12mm}@media print{body *{visibility:hidden!important}.bank-financial-print-area,.bank-financial-print-area *{visibility:visible!important}.bank-financial-print-area{position:absolute!important;left:0!important;top:0!important;width:100%!important;max-height:none!important;overflow:visible!important;box-shadow:none!important;border:0!important;padding:0!important}.bank-financial-print-area div{max-height:none!important;overflow:visible!important}.bank-financial-no-print{display:none!important}table{width:100%!important;border-collapse:collapse!important}th,td{font-size:9px!important;padding:5px!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}details:not([open])>*:not(summary){display:block!important}}`}</style>
+      <style>{`@page{size:A4 landscape;margin:12mm}
+        @media print{
+          body *{visibility:hidden!important}
+          .bank-financial-print-area,.bank-financial-print-area *{visibility:visible!important}
+          .bank-financial-print-area{position:absolute!important;left:0!important;top:0!important;width:100%!important;max-height:none!important;overflow:visible!important;box-shadow:none!important;border:0!important;padding:0!important}
+          .bank-financial-print-area div{max-height:none!important;overflow:visible!important}
+          .bank-financial-no-print{display:none!important}
+          table{width:100%!important;border-collapse:collapse!important}
+          th,td{font-size:9px!important;padding:5px!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+          details:not([open])>*:not(summary){display:block!important}
+          .balance-sheet-table{width:100%!important;min-width:0!important;table-layout:fixed!important}
+          .balance-sheet-table th,.balance-sheet-table td{font-size:9px!important;line-height:1.25!important;padding:5px 6px!important;vertical-align:middle!important;overflow-wrap:anywhere!important}
+          .balance-sheet-table .balance-sheet-group,.balance-sheet-table .balance-sheet-subgroup,.balance-sheet-table .balance-sheet-company,.balance-sheet-table .balance-sheet-nature{font-size:9px!important;line-height:1.25!important;font-weight:500!important;}
+          .balance-sheet-table .balance-sheet-group b{font-size:9px!important;font-weight:700!important;}
+          .balance-sheet-table .balance-sheet-subgroup{font-weight:600!important;white-space:normal!important;text-align:left!important;}
+          .balance-sheet-table .balance-sheet-ledgers,.balance-sheet-table .balance-sheet-ledgers *{font-size:9px!important;line-height:1.25!important;}
+          .balance-sheet-table .balance-sheet-ledgers summary{font-weight:700!important;}
+          .balance-sheet-table .balance-sheet-ledger-row{display:flex!important;justify-content:space-between!important;align-items:flex-start!important;gap:10px!important;}
+          .balance-sheet-table .balance-sheet-ledger-amount{min-width:95px!important;text-align:right!important;white-space:nowrap!important;font-variant-numeric:tabular-nums!important;}
+          .balance-sheet-table .balance-sheet-closing{font-weight:800!important;text-align:right!important;white-space:nowrap!important;font-variant-numeric:tabular-nums!important;}
+        }`}</style>
       <header style={{ ...panel, borderTop: "4px solid #0f766e", display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 12 }}>
         <div>
           <h1 style={{ margin: 0, fontSize: 24, color: "#102a43" }}>Bank & Financial Reports</h1>
@@ -1580,17 +1623,50 @@ export default function BankFinancialReportsPage() {
           </section>}
 
           {tab === "balancesheet" && <section className="bank-financial-print-area" style={panel}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}><h2 style={{ margin: "0 0 12px", fontSize: 18 }}>Balance Sheet</h2>{reportPrintButton() }</div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              <h2 style={{ margin: "0 0 12px", fontSize: 18 }}>Balance Sheet</h2>
+              <div className="bank-financial-no-print" style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                <button type="button" onClick={() => openBankWiseReport("summary")} style={secondary}>Bank-wise Summary</button>
+                <button type="button" onClick={() => openBankWiseReport("full_details")} style={primary}>Bank-wise Detailed Report</button>
+                {reportPrintButton()}
+              </div>
+            </div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 14 }}>
               {card("Assets", fmt(balanceSheet.total_assets), "Debit-normal balance")}
               {card("Liabilities", fmt(balanceSheet.total_liabilities), "Credit-normal balance")}
               {card("Capital / Equity", fmt(balanceSheet.total_equity), "Credit-normal balance")}
               {card("Difference", fmt(balanceSheet.difference), "Assets − Liabilities − Equity")}
             </div>
-            <div style={{ overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse", minWidth: 700 }}><thead><tr>{["Group","Sub-group","Ledger Names / Details","Group Company","Nature","Closing Balance"].map((x) => <th key={x} style={th}>{x}</th>)}</tr></thead><tbody>
-              {(balanceSheet.rows || []).map((row,i) => <tr key={`${row.group_name}-${row.subgroup_name}-${i}`}><td style={td}><b>{row.group_name}</b></td><td style={td}>{row.subgroup_name || "-"}</td><td style={td}>{row.ledgers?.length ? <details><summary style={{ cursor: "pointer", color: "#0f766e", fontWeight: 700 }}>{row.ledgers.length} Ledger(s)</summary><div style={{ minWidth: 240, paddingTop: 6 }}>{row.ledgers.map((ledger, ledgerIndex) => <div key={`${ledger.particulars_name}-${ledgerIndex}`} style={{ display: "flex", justifyContent: "space-between", gap: 12, padding: "4px 0", borderBottom: "1px solid #e2e8f0" }}><span>{ledger.particulars_name}</span><b>{fmt(ledger.normal_balance)}</b></div>)}</div></details> : "-"}</td><td style={td}>{row.group_company || "Unassigned"}</td><td style={td}>{natureLabels[row.nature]}</td><td style={{ ...td, textAlign: "right" }}>{fmt(row.balance)}</td></tr>)}
-              {!(balanceSheet.rows || []).length && <tr><td style={td} colSpan={6}>No Balance Sheet ledger mappings. Map Assets, Liabilities and Capital groups first.</td></tr>}
-            </tbody></table></div>
+            <div style={{ overflowX: "auto" }}>
+              <table className="balance-sheet-table" style={{ width: "100%", borderCollapse: "collapse", minWidth: 850, tableLayout: "fixed" }}>
+                <colgroup>
+                  <col style={{ width: "15%" }} /><col style={{ width: "16%" }} /><col style={{ width: "27%" }} />
+                  <col style={{ width: "15%" }} /><col style={{ width: "11%" }} /><col style={{ width: "16%" }} />
+                </colgroup>
+                <thead><tr>{["Group","Sub-group","Ledger Names / Details","Group Company","Nature","Closing Balance"].map((x) => <th key={x} style={{ ...th, verticalAlign: "middle", lineHeight: 1.25 }}>{x}</th>)}</tr></thead>
+                <tbody>
+                  {(balanceSheet.rows || []).map((row,i) => <tr key={`${row.group_name}-${row.subgroup_name}-${i}`}>
+                    <td className="balance-sheet-group" style={{ ...td, verticalAlign: "middle", lineHeight: 1.35 }}><b>{row.group_name}</b></td>
+                    <td className="balance-sheet-subgroup" style={{ ...td, fontSize: 12, fontWeight: 600, lineHeight: 1.35, verticalAlign: "middle", textAlign: "left" }}>{row.subgroup_name || "-"}</td>
+                    <td className="balance-sheet-ledgers" style={{ ...td, verticalAlign: "top", lineHeight: 1.35 }}>
+                      {row.ledgers?.length ? <details>
+                        <summary style={{ cursor: "pointer", color: "#0f766e", fontWeight: 700, fontSize: 12, lineHeight: 1.35 }}>{row.ledgers.length} Ledger(s)</summary>
+                        <div style={{ minWidth: 0, paddingTop: 6 }}>
+                          {row.ledgers.map((ledger, ledgerIndex) => <div className="balance-sheet-ledger-row" key={`${ledger.particulars_name}-${ledgerIndex}`} style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, padding: "4px 0", borderBottom: "1px solid #e2e8f0", lineHeight: 1.35 }}>
+                            <span style={{ flex: 1, minWidth: 0, overflowWrap: "anywhere" }}>{ledger.particulars_name}</span>
+                            <b className="balance-sheet-ledger-amount" style={{ minWidth: 95, textAlign: "right", whiteSpace: "nowrap", fontVariantNumeric: "tabular-nums" }}>{fmt(ledger.normal_balance)}</b>
+                          </div>)}
+                        </div>
+                      </details> : "-"}
+                    </td>
+                    <td className="balance-sheet-company" style={{ ...td, verticalAlign: "middle" }}>{row.group_company || "Unassigned"}</td>
+                    <td className="balance-sheet-nature" style={{ ...td, verticalAlign: "middle" }}>{natureLabels[row.nature]}</td>
+                    <td className="balance-sheet-closing" style={{ ...td, textAlign: "right", verticalAlign: "middle", whiteSpace: "nowrap", fontWeight: 800, fontVariantNumeric: "tabular-nums" }}>{fmt(row.balance)}</td>
+                  </tr>)}
+                  {!(balanceSheet.rows || []).length && <tr><td style={td} colSpan={6}>No Balance Sheet ledger mappings. Map Assets, Liabilities and Capital groups first.</td></tr>}
+                </tbody>
+              </table>
+            </div>
             <p style={{ color: "#92400e", background: "#fffbeb", border: "1px solid #fde68a", padding: 10, borderRadius: 7, fontSize: 12 }}>Bank balances use manually saved Bank Opening Balances plus statement Receipt / Payment movements. Where an opening balance has not been entered, the report falls back to the latest imported Bank Balance column when available. A complete Balance Sheet also needs non-bank assets, liabilities, stock, debtors, creditors, tax balances and other journal/account entries.</p>
           </section>}
 
