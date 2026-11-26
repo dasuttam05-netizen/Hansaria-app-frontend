@@ -1013,11 +1013,12 @@ export default function BankFinancialReportsPage() {
   };
 
   const fmt = money;
-  const printBankBalanceReport = (mode) => {
-    // Select the exact view before opening the browser print dialog.
-    setBankBalancePrintMode(mode);
+  const printBankBalanceReport = () => {
+    // Bank Balance / Opening & Closing prints only the Sub-group-wise summary.
+    // Detailed transaction pages are intentionally excluded from this print option.
+    setBankBalancePrintMode("subgroup");
     setBankBalanceSummaryType("subgroup");
-    setBankBalanceViewMode(mode === "all-details" ? "full_details" : "summary");
+    setBankBalanceViewMode("summary");
     setSelectedSubgroupSummary(null);
     setSelectedLedgerSummary(null);
     setExpandedBankDetailRows({});
@@ -1716,8 +1717,7 @@ export default function BankFinancialReportsPage() {
             <section className={`bank-financial-print-area bank-balance-print-${bankBalancePrintMode}`} style={{ ...panel, padding: 20, borderRadius: 16, borderColor: "#cfdae7", background: "linear-gradient(180deg, #ffffff 0%, #f8fbfe 100%)", boxShadow: "0 12px 30px rgba(15, 35, 65, .07)" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}><div><h2 style={{ margin: "0 0 5px", fontSize: 20, letterSpacing: "-.02em", color: "#153453" }}>Multi-Bank / Single-Bank Balance Report</h2><p style={{ margin: 0, color: "#64748b", fontSize: 12 }}>All Banks combines every bank; choosing one bank shows its separate balance.</p><p style={{ margin: "4px 0 0", color: "#334155", fontSize: 11 }}>Applied: {appliedFilters.bank_name || "All Banks"} · {appliedFilters.from_date || "First available date"} to {appliedFilters.to_date || "Latest date"} · {appliedFilters.period_type === "daily" ? "Day-wise" : appliedFilters.period_type === "monthly" ? "Monthly" : "Selected Date Range"}{appliedFilters.group_company ? ` · Group Company: ${appliedFilters.group_company === "__unassigned__" ? "Unassigned" : appliedFilters.group_company}` : ""}{appliedFilters.group_id ? ` · Group: ${groups.find((item) => String(item._id) === String(appliedFilters.group_id))?.name || "Selected"}` : ""}{appliedFilters.subgroup_id ? ` · Sub-group: ${subgroups.find((item) => String(item._id) === String(appliedFilters.subgroup_id))?.name || "Selected"}` : ""}</p></div>
                 <div className="bank-financial-no-print" style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-                  <button type="button" onClick={() => printBankBalanceReport("subgroup")} style={{ ...primary, padding: "9px 12px", fontSize: 12 }}>Print Sub-group-wise</button>
-                  <button type="button" onClick={() => printBankBalanceReport("all-details")} style={{ ...secondary, padding: "9px 12px", fontSize: 12 }}>Print All Details-wise</button>
+                  <button type="button" onClick={printBankBalanceReport} style={{ ...primary, padding: "9px 12px", fontSize: 12 }}>Print Sub-group-wise</button>
                 </div>
               </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 10, margin: "12px 0" }}>
