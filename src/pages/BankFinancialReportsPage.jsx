@@ -262,6 +262,7 @@ export default function BankFinancialReportsPage() {
   const [bankBalanceReport, setBankBalanceReport] = useState({ totals: {}, rows: [], summary_rows: [], details: [], opening_balance_missing_banks: [] });
   const [bankBalanceViewMode, setBankBalanceViewMode] = useState("summary");
   const [bankBalanceSummaryType, setBankBalanceSummaryType] = useState("subgroup");
+  const [bankBalancePrintMode, setBankBalancePrintMode] = useState("subgroup");
   const [selectedSubgroupSummary, setSelectedSubgroupSummary] = useState(null);
   const [selectedLedgerSummary, setSelectedLedgerSummary] = useState(null);
   const [expandedBankDetailRows, setExpandedBankDetailRows] = useState({});
@@ -1012,9 +1013,19 @@ export default function BankFinancialReportsPage() {
   };
 
   const fmt = money;
+  const printBankBalanceReport = (mode) => {
+    // Select the exact view before opening the browser print dialog.
+    setBankBalancePrintMode(mode);
+    setBankBalanceSummaryType("subgroup");
+    setBankBalanceViewMode(mode === "all-details" ? "full_details" : "summary");
+    setSelectedSubgroupSummary(null);
+    setSelectedLedgerSummary(null);
+    setExpandedBankDetailRows({});
+    window.setTimeout(() => window.print(), 160);
+  };
   const reportPrintButton = () => <button type="button" className="bank-financial-no-print" onClick={() => window.print()} style={secondary}>Print / Save as PDF</button>;
   const renderBankBalanceDetailsTable = (detailRows) => (
-    <div style={reportTableWrap}>
+    <div className="bank-balance-details-content" style={reportTableWrap}>
       <table style={{ ...reportTable, minWidth: 1720, tableLayout: "auto" }}>
         <thead><tr>{["Bank Date","Time","Bank Name","Ledger Name","Original Bank Particulars","Voucher Type","Voucher Number","Group Company","Group","Sub-group","Receipt","Payment","Statement Debit","Statement Credit","Bank Balance (H)","Running Balance","More Details"].map((title) => <th key={title} style={{ ...reportHeadCell, fontSize: 9, padding: "11px 8px" }}>{title}</th>)}</tr></thead>
         <tbody>
@@ -1039,7 +1050,7 @@ export default function BankFinancialReportsPage() {
               <td style={{ ...td, textAlign: "right", fontWeight: 800, whiteSpace: "nowrap" }}>{detail.running_balance === null || detail.running_balance === undefined ? "-" : fmt(detail.running_balance)}</td>
               <td style={td}>
                 <button type="button" className="bank-financial-no-print" onClick={() => setExpandedBankDetailRows((previous) => ({ ...previous, [detail.id]: !previous[detail.id] }))} style={{ ...secondary, padding: "5px 9px" }}>{showMore ? "Hide" : "Show"}</button>
-                {showMore && <div style={{ minWidth: 230, marginTop: 6, padding: 8, background: "#fff", border: "1px solid #cbd5e1", borderRadius: 6, lineHeight: 1.7 }}>
+                <div className="bank-balance-detail-extra" style={{ display: showMore ? "block" : "none", minWidth: 230, marginTop: 6, padding: 8, background: "#fff", border: "1px solid #cbd5e1", borderRadius: 6, lineHeight: 1.7 }}>
                   <div><b>Bank Name:</b> {detail.bank_name || "-"}</div>
                   <div><b>Ledger:</b> {detail.ledger_name || "-"}</div>
                   <div><b>Group Company:</b> {detail.group_company || "Unassigned"}</div>
@@ -1051,7 +1062,7 @@ export default function BankFinancialReportsPage() {
                   <div><b>Transaction ID:</b> {detail.transaction_reference || "-"}</div>
                   <div><b>Bank Status:</b> {detail.bank_status || "-"}</div>
                   <div><b>Tally Date:</b> {dateLabel(detail.tally_date)}</div>
-                </div>}
+                </div>
               </td>
             </tr>;
           })}
@@ -1070,15 +1081,29 @@ export default function BankFinancialReportsPage() {
 
   return (
     <main style={{ minHeight: "100vh", background: "#f1f5f9", padding: 16, fontFamily: "Segoe UI, Arial, sans-serif", color: "#0f172a" }}>
-      <style>{`@page{size:A4 landscape;margin:12mm}
+      <style>{`@page{size:A4 landscape;margin:10mm}
+        @page bankBalanceDetailsPage{size:A3 landscape;margin:9mm}
         @media print{
           body *{visibility:hidden!important}
           .bank-financial-print-area,.bank-financial-print-area *{visibility:visible!important}
-          .bank-financial-print-area{position:absolute!important;left:0!important;top:0!important;width:100%!important;max-height:none!important;overflow:visible!important;box-shadow:none!important;border:0!important;padding:0!important}
+          .bank-financial-print-area{position:absolute!important;left:0!important;top:0!important;width:100%!important;max-height:none!important;overflow:visible!important;box-shadow:none!important;border:0!important;padding:0!important;background:#fff!important;page-break-inside:auto!important}
           .bank-financial-print-area div{max-height:none!important;overflow:visible!important}
           .bank-financial-no-print{display:none!important}
           table{width:100%!important;border-collapse:collapse!important}
-          th,td{font-size:9px!important;padding:5px!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+          th,td{font-size:9px!important;line-height:1.25!important;padding:5px 6px!important;vertical-align:middle!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}
+          .bank-balance-overview-content table{min-width:0!important;table-layout:fixed!important;font-size:9px!important}
+          .bank-balance-overview-content th,.bank-balance-overview-content td{white-space:normal!important;overflow-wrap:anywhere!important;}
+          .bank-balance-summary-content table{min-width:0!important;table-layout:fixed!important;}
+          .bank-balance-summary-content th,.bank-balance-summary-content td{font-size:9px!important;line-height:1.25!important;padding:6px 7px!important;white-space:normal!important;overflow-wrap:anywhere!important;}
+          .bank-balance-subgroup-label{font-size:9px!important;line-height:1.25!important;font-weight:600!important;color:#17365d!important;text-align:left!important;border:0!important;text-decoration:none!important;white-space:normal!important;}
+          .bank-balance-print-subgroup .bank-balance-details-content{display:none!important;}
+          .bank-balance-print-all-details .bank-balance-summary-content{display:none!important;}
+          .bank-balance-print-all-details{page:bankBalanceDetailsPage;}
+          .bank-balance-details-content table{min-width:0!important;width:100%!important;table-layout:fixed!important;font-size:7.5px!important;}
+          .bank-balance-details-content th,.bank-balance-details-content td{font-size:7.5px!important;line-height:1.15!important;padding:4px 3px!important;white-space:normal!important;overflow-wrap:anywhere!important;}
+          .bank-balance-details-content tr{break-inside:avoid!important;page-break-inside:avoid!important;}
+          .bank-balance-details-content .bank-balance-detail-extra{display:block!important;min-width:0!important;margin-top:3px!important;padding:3px 4px!important;border:0!important;border-top:1px dotted #aab8c5!important;border-radius:0!important;font-size:7px!important;line-height:1.15!important;}
+          .bank-balance-details-content .bank-balance-detail-extra *{font-size:7px!important;line-height:1.15!important;}
           details:not([open])>*:not(summary){display:block!important}
           .balance-sheet-table{width:100%!important;min-width:0!important;table-layout:fixed!important}
           .balance-sheet-table th,.balance-sheet-table td{font-size:9px!important;line-height:1.25!important;padding:5px 6px!important;vertical-align:middle!important;overflow-wrap:anywhere!important}
@@ -1688,8 +1713,13 @@ export default function BankFinancialReportsPage() {
                 {!bankOpeningBalances.length && <tr><td style={td} colSpan={6}>No Bank Opening Balance entered yet.</td></tr>}
               </tbody></table></div>
             </section>
-            <section className="bank-financial-print-area" style={{ ...panel, padding: 20, borderRadius: 16, borderColor: "#cfdae7", background: "linear-gradient(180deg, #ffffff 0%, #f8fbfe 100%)", boxShadow: "0 12px 30px rgba(15, 35, 65, .07)" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}><div><h2 style={{ margin: "0 0 5px", fontSize: 20, letterSpacing: "-.02em", color: "#153453" }}>Multi-Bank / Single-Bank Balance Report</h2><p style={{ margin: 0, color: "#64748b", fontSize: 12 }}>All Banks combines every bank; choosing one bank shows its separate balance.</p><p style={{ margin: "4px 0 0", color: "#334155", fontSize: 11 }}>Applied: {appliedFilters.bank_name || "All Banks"} · {appliedFilters.from_date || "First available date"} to {appliedFilters.to_date || "Latest date"} · {appliedFilters.period_type === "daily" ? "Day-wise" : appliedFilters.period_type === "monthly" ? "Monthly" : "Selected Date Range"}{appliedFilters.group_company ? ` · Group Company: ${appliedFilters.group_company === "__unassigned__" ? "Unassigned" : appliedFilters.group_company}` : ""}{appliedFilters.group_id ? ` · Group: ${groups.find((item) => String(item._id) === String(appliedFilters.group_id))?.name || "Selected"}` : ""}{appliedFilters.subgroup_id ? ` · Sub-group: ${subgroups.find((item) => String(item._id) === String(appliedFilters.subgroup_id))?.name || "Selected"}` : ""}</p></div>{reportPrintButton() }</div>
+            <section className={`bank-financial-print-area bank-balance-print-${bankBalancePrintMode}`} style={{ ...panel, padding: 20, borderRadius: 16, borderColor: "#cfdae7", background: "linear-gradient(180deg, #ffffff 0%, #f8fbfe 100%)", boxShadow: "0 12px 30px rgba(15, 35, 65, .07)" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}><div><h2 style={{ margin: "0 0 5px", fontSize: 20, letterSpacing: "-.02em", color: "#153453" }}>Multi-Bank / Single-Bank Balance Report</h2><p style={{ margin: 0, color: "#64748b", fontSize: 12 }}>All Banks combines every bank; choosing one bank shows its separate balance.</p><p style={{ margin: "4px 0 0", color: "#334155", fontSize: 11 }}>Applied: {appliedFilters.bank_name || "All Banks"} · {appliedFilters.from_date || "First available date"} to {appliedFilters.to_date || "Latest date"} · {appliedFilters.period_type === "daily" ? "Day-wise" : appliedFilters.period_type === "monthly" ? "Monthly" : "Selected Date Range"}{appliedFilters.group_company ? ` · Group Company: ${appliedFilters.group_company === "__unassigned__" ? "Unassigned" : appliedFilters.group_company}` : ""}{appliedFilters.group_id ? ` · Group: ${groups.find((item) => String(item._id) === String(appliedFilters.group_id))?.name || "Selected"}` : ""}{appliedFilters.subgroup_id ? ` · Sub-group: ${subgroups.find((item) => String(item._id) === String(appliedFilters.subgroup_id))?.name || "Selected"}` : ""}</p></div>
+                <div className="bank-financial-no-print" style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
+                  <button type="button" onClick={() => printBankBalanceReport("subgroup")} style={{ ...primary, padding: "9px 12px", fontSize: 12 }}>Print Sub-group-wise</button>
+                  <button type="button" onClick={() => printBankBalanceReport("all-details")} style={{ ...secondary, padding: "9px 12px", fontSize: 12 }}>Print All Details-wise</button>
+                </div>
+              </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 10, margin: "12px 0" }}>
                 {card("Opening Balance", fmt(bankBalanceReport.totals?.opening_balance), "At selected From Date")}
                 {card("Total Receipts", fmt(bankBalanceReport.totals?.receipts), "Selected period")}
@@ -1697,7 +1727,7 @@ export default function BankFinancialReportsPage() {
                 {card("Closing Balance", fmt(bankBalanceReport.totals?.closing_balance), "Opening + Receipts − Payments")}
               </div>
               {bankBalanceReport.opening_balance_missing_banks?.length > 0 && <p className="bank-financial-no-print" style={{ color: "#92400e", background: "#fffbeb", border: "1px solid #fde68a", padding: 10, borderRadius: 7, fontSize: 12 }}>Opening Balance not entered for: {bankBalanceReport.opening_balance_missing_banks.join(", ")}. Enter the opening balance above for accurate day-wise and monthly balances.</p>}
-              <div style={reportTableWrap}><table style={{ ...reportTable, minWidth: 1360 }}>
+              <div className="bank-balance-overview-content" style={reportTableWrap}><table style={{ ...reportTable, minWidth: 1360 }}>
                 <colgroup><col style={{ width: "10%" }} /><col style={{ width: "14%" }} /><col style={{ width: "14%" }} /><col style={{ width: "12%" }} /><col style={{ width: "12%" }} /><col style={{ width: "14%" }} /><col style={{ width: "8%" }} /><col style={{ width: "16%" }} /></colgroup>
                 <thead><tr>{["Period","Bank Name","Opening Balance","Receipts","Payments","Closing Balance","Transactions","Opening Source"].map((x) => <th key={x} style={{ ...reportHeadCell, textAlign: ["Opening Balance", "Receipts", "Payments", "Closing Balance"].includes(x) ? "right" : x === "Transactions" ? "center" : "left" }}>{x}</th>)}</tr></thead><tbody>
                 {(bankBalanceReport.rows || []).map((row, index) => <tr key={`${row.bank_name}-${row.period}-${index}`} style={{ background: index % 2 ? "#f7fafc" : "#fff" }}>
@@ -1726,7 +1756,7 @@ export default function BankFinancialReportsPage() {
                 </div>
 
                 {bankBalanceViewMode === "summary" ? bankBalanceSummaryType === "ledger" ? (
-                  <div style={reportTableWrap}>
+                  <div className="bank-balance-summary-content" style={reportTableWrap}>
                     <table style={{ ...reportTable, minWidth: 1560 }}>
                       <colgroup>
                         <col style={{ width: "9%" }} /><col style={{ width: "10%" }} /><col style={{ width: "12%" }} />
@@ -1763,7 +1793,7 @@ export default function BankFinancialReportsPage() {
                     </table>
                   </div>
                 ) : (
-                  <div style={reportTableWrap}>
+                  <div className="bank-balance-summary-content" style={reportTableWrap}>
                     <table style={{ ...reportTable, minWidth: 1450 }}>
                       <colgroup>
                         <col style={{ width: "9%" }} /><col style={{ width: "12%" }} /><col style={{ width: "12%" }} />
@@ -1779,7 +1809,7 @@ export default function BankFinancialReportsPage() {
                             <td style={reportBodyCell}>{summaryRow.group_company || "Unassigned"}</td>
                             <td style={reportBodyCell}>{summaryRow.group_name || "Unmapped"}</td>
                             <td style={reportBodyCell}>
-                              <button type="button" onClick={() => { setSelectedSubgroupSummary(summaryRow); setSelectedLedgerSummary(null); setExpandedBankDetailRows({}); }} style={{ border: 0, padding: 0, background: "transparent", color: "#087f8c", fontWeight: 900, cursor: "pointer", textAlign: "left", textDecoration: "none", borderBottom: "1px dashed #0f9aa7", lineHeight: 1.5 }}>{summaryRow.subgroup_name || "No Sub-group"}</button>
+                              <button type="button" className="bank-balance-subgroup-label" onClick={() => { setSelectedSubgroupSummary(summaryRow); setSelectedLedgerSummary(null); setExpandedBankDetailRows({}); }} style={{ border: 0, padding: 0, background: "transparent", color: "#17365d", fontSize: 12, fontWeight: 600, cursor: "pointer", textAlign: "left", textDecoration: "none", lineHeight: 1.35 }}>{summaryRow.subgroup_name || "No Sub-group"}</button>
                               <div style={{ color: "#718096", fontSize: 10, marginTop: 4 }}>{(summaryRow.ledger_names || []).length} Ledger(s) · Click for details</div>
                             </td>
                             <td style={{ ...reportAmountCell, color: Number(summaryRow.receipts || 0) ? "#087f5b" : "#94a3b8", fontWeight: Number(summaryRow.receipts || 0) ? 800 : 500 }}>{Number(summaryRow.receipts || 0) ? fmt(summaryRow.receipts) : "—"}</td>
