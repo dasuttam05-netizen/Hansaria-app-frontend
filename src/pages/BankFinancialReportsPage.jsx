@@ -1013,12 +1013,11 @@ export default function BankFinancialReportsPage() {
   };
 
   const fmt = money;
-  const printBankBalanceReport = () => {
-    // Bank Balance / Opening & Closing prints only the Sub-group-wise summary.
-    // Detailed transaction pages are intentionally excluded from this print option.
-    setBankBalancePrintMode("subgroup");
+  const printBankBalanceReport = (mode) => {
+    // Choose the requested print layout while keeping report calculations unchanged.
+    setBankBalancePrintMode(mode);
     setBankBalanceSummaryType("subgroup");
-    setBankBalanceViewMode("summary");
+    setBankBalanceViewMode(mode === "all-details" ? "full_details" : "summary");
     setSelectedSubgroupSummary(null);
     setSelectedLedgerSummary(null);
     setExpandedBankDetailRows({});
@@ -1028,7 +1027,7 @@ export default function BankFinancialReportsPage() {
   const renderBankBalanceDetailsTable = (detailRows) => (
     <div className="bank-balance-details-content" style={reportTableWrap}>
       <table style={{ ...reportTable, minWidth: 1720, tableLayout: "auto" }}>
-        <thead><tr>{["Bank Date","Time","Bank Name","Ledger Name","Original Bank Particulars","Voucher Type","Voucher Number","Group Company","Group","Sub-group","Receipt","Payment","Statement Debit","Statement Credit","Bank Balance (H)","Running Balance","More Details"].map((title) => <th key={title} style={{ ...reportHeadCell, fontSize: 9, padding: "11px 8px" }}>{title}</th>)}</tr></thead>
+        <thead><tr>{["Bank Date","Time","Bank Name","Ledger Name","Original Bank Particulars","Voucher Type","Voucher Number","Group Company","Group","Sub-group","Receipt","Payment","Statement Debit","Statement Credit","Bank Balance (H)","Running Balance","More Details"].map((title) => <th key={title} className={title === "More Details" ? "bank-balance-more-details-column" : undefined} style={{ ...reportHeadCell, fontSize: 9, padding: "11px 8px" }}>{title}</th>)}</tr></thead>
         <tbody>
           {(detailRows || []).map((detail) => {
             const showMore = Boolean(expandedBankDetailRows[detail.id]);
@@ -1049,7 +1048,7 @@ export default function BankFinancialReportsPage() {
               <td style={{ ...td, textAlign: "right" }}>{detail.statement_credit ? fmt(detail.statement_credit) : "-"}</td>
               <td style={{ ...td, textAlign: "right", whiteSpace: "nowrap" }}>{detail.bank_balance === null || detail.bank_balance === undefined ? "-" : fmt(detail.bank_balance)}</td>
               <td style={{ ...td, textAlign: "right", fontWeight: 800, whiteSpace: "nowrap" }}>{detail.running_balance === null || detail.running_balance === undefined ? "-" : fmt(detail.running_balance)}</td>
-              <td style={td}>
+              <td className="bank-balance-more-details-column" style={td}>
                 <button type="button" className="bank-financial-no-print" onClick={() => setExpandedBankDetailRows((previous) => ({ ...previous, [detail.id]: !previous[detail.id] }))} style={{ ...secondary, padding: "5px 9px" }}>{showMore ? "Hide" : "Show"}</button>
                 <div className="bank-balance-detail-extra" style={{ display: showMore ? "block" : "none", minWidth: 230, marginTop: 6, padding: 8, background: "#fff", border: "1px solid #cbd5e1", borderRadius: 6, lineHeight: 1.7 }}>
                   <div><b>Bank Name:</b> {detail.bank_name || "-"}</div>
@@ -1096,9 +1095,13 @@ export default function BankFinancialReportsPage() {
           .bank-balance-overview-content th,.bank-balance-overview-content td{white-space:normal!important;overflow-wrap:anywhere!important;}
           .bank-balance-summary-content table{min-width:0!important;table-layout:fixed!important;}
           .bank-balance-summary-content th,.bank-balance-summary-content td{font-size:9px!important;line-height:1.25!important;padding:6px 7px!important;white-space:normal!important;overflow-wrap:anywhere!important;}
+          /* Hide the Sub-group summary subtotal in printed pages; the overall ALL BANKS page total above remains visible. */
+          .bank-balance-summary-subgroup-table tfoot{display:none!important;}
           .bank-balance-subgroup-label{font-size:9px!important;line-height:1.25!important;font-weight:600!important;color:#17365d!important;text-align:left!important;border:0!important;text-decoration:none!important;white-space:normal!important;}
           .bank-balance-print-subgroup .bank-balance-details-content{display:none!important;}
           .bank-balance-print-all-details .bank-balance-summary-content{display:none!important;}
+          /* Keep Print All Details-wise, but omit the optional More Details column and expanded extras from the PDF. */
+          .bank-balance-print-all-details .bank-balance-more-details-column{display:none!important;}
           .bank-balance-print-all-details{page:bankBalanceDetailsPage;}
           .bank-balance-details-content table{min-width:0!important;width:100%!important;table-layout:fixed!important;font-size:7.5px!important;}
           .bank-balance-details-content th,.bank-balance-details-content td{font-size:7.5px!important;line-height:1.15!important;padding:4px 3px!important;white-space:normal!important;overflow-wrap:anywhere!important;}
@@ -1717,7 +1720,8 @@ export default function BankFinancialReportsPage() {
             <section className={`bank-financial-print-area bank-balance-print-${bankBalancePrintMode}`} style={{ ...panel, padding: 20, borderRadius: 16, borderColor: "#cfdae7", background: "linear-gradient(180deg, #ffffff 0%, #f8fbfe 100%)", boxShadow: "0 12px 30px rgba(15, 35, 65, .07)" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, flexWrap: "wrap" }}><div><h2 style={{ margin: "0 0 5px", fontSize: 20, letterSpacing: "-.02em", color: "#153453" }}>Multi-Bank / Single-Bank Balance Report</h2><p style={{ margin: 0, color: "#64748b", fontSize: 12 }}>All Banks combines every bank; choosing one bank shows its separate balance.</p><p style={{ margin: "4px 0 0", color: "#334155", fontSize: 11 }}>Applied: {appliedFilters.bank_name || "All Banks"} · {appliedFilters.from_date || "First available date"} to {appliedFilters.to_date || "Latest date"} · {appliedFilters.period_type === "daily" ? "Day-wise" : appliedFilters.period_type === "monthly" ? "Monthly" : "Selected Date Range"}{appliedFilters.group_company ? ` · Group Company: ${appliedFilters.group_company === "__unassigned__" ? "Unassigned" : appliedFilters.group_company}` : ""}{appliedFilters.group_id ? ` · Group: ${groups.find((item) => String(item._id) === String(appliedFilters.group_id))?.name || "Selected"}` : ""}{appliedFilters.subgroup_id ? ` · Sub-group: ${subgroups.find((item) => String(item._id) === String(appliedFilters.subgroup_id))?.name || "Selected"}` : ""}</p></div>
                 <div className="bank-financial-no-print" style={{ display: "flex", gap: 8, flexWrap: "wrap", alignItems: "center" }}>
-                  <button type="button" onClick={printBankBalanceReport} style={{ ...primary, padding: "9px 12px", fontSize: 12 }}>Print Sub-group-wise</button>
+                  <button type="button" onClick={() => printBankBalanceReport("subgroup")} style={{ ...primary, padding: "9px 12px", fontSize: 12 }}>Print Sub-group-wise</button>
+                  <button type="button" onClick={() => printBankBalanceReport("all-details")} style={{ ...secondary, padding: "9px 12px", fontSize: 12 }}>Print All Details-wise</button>
                 </div>
               </div>
               <div style={{ display: "flex", flexWrap: "wrap", gap: 10, margin: "12px 0" }}>
@@ -1794,7 +1798,7 @@ export default function BankFinancialReportsPage() {
                   </div>
                 ) : (
                   <div className="bank-balance-summary-content" style={reportTableWrap}>
-                    <table style={{ ...reportTable, minWidth: 1450 }}>
+                    <table className="bank-balance-summary-subgroup-table" style={{ ...reportTable, minWidth: 1450 }}>
                       <colgroup>
                         <col style={{ width: "9%" }} /><col style={{ width: "12%" }} /><col style={{ width: "12%" }} />
                         <col style={{ width: "12%" }} /><col style={{ width: "14%" }} /><col style={{ width: "11%" }} />
