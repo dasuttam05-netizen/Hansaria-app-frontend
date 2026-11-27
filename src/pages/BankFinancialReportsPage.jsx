@@ -1038,13 +1038,27 @@ export default function BankFinancialReportsPage() {
     setSelectedSubgroupSummary(null);
     setSelectedLedgerSummary(null);
     setExpandedBankDetailRows({});
-    window.setTimeout(() => window.print(), 160);
+    window.setTimeout(() => {
+      // Chrome uses document.title in its print header. Temporarily replace the
+      // application title so the PDF is labelled as this report, not "Warehouse App".
+      const previousTitle = document.title;
+      document.title = "Bank & Financial Reports";
+      const restoreTitle = () => {
+        document.title = previousTitle;
+        window.removeEventListener("afterprint", restoreTitle);
+      };
+      window.addEventListener("afterprint", restoreTitle, { once: true });
+      window.print();
+    }, 160);
   };
   const reportPrintButton = () => <button type="button" className="bank-financial-no-print" onClick={() => window.print()} style={secondary}>Print / Save as PDF</button>;
   const renderBankBalanceDetailsTable = (detailRows) => (
     <div className="bank-balance-details-content" style={reportTableWrap}>
       <table style={{ ...reportTable, minWidth: 1720, tableLayout: "auto" }}>
-        <thead><tr>{["Bank Date","Time","Bank Name","Ledger Name","Original Bank Particulars","Voucher Type","Voucher Number","Group Company","Group","Sub-group","Receipt","Payment","Statement Debit","Statement Credit","Bank Balance (H)","Running Balance","More Details"].map((title) => <th key={title} className={title === "More Details" ? "bank-balance-more-details-column" : undefined} style={{ ...reportHeadCell, fontSize: 9, padding: "11px 8px" }}>{title}</th>)}</tr></thead>
+        <thead><tr>{["Bank Date","Time","Bank Name","Ledger Name","Original Bank Particulars","Voucher Type","Voucher Number","Group Company","Group","Sub-group","Receipt","Payment","Statement Debit","Statement Credit","Bank Balance (H)","Running Balance","More Details"].map((title) => <th key={title} className={[
+          title === "More Details" ? "bank-balance-more-details-column" : "",
+          ["Statement Debit", "Statement Credit", "Bank Balance (H)"].includes(title) ? "bank-balance-pdf-excluded-column" : "",
+        ].filter(Boolean).join(" ") || undefined} style={{ ...reportHeadCell, fontSize: 9, padding: "11px 8px" }}>{title}</th>)}</tr></thead>
         <tbody>
           {(detailRows || []).map((detail) => {
             const showMore = Boolean(expandedBankDetailRows[detail.id]);
@@ -1061,9 +1075,9 @@ export default function BankFinancialReportsPage() {
               <td style={td}>{detail.subgroup_name || "-"}</td>
               <td style={{ ...td, textAlign: "right" }}>{detail.receipt_amount ? fmt(detail.receipt_amount) : "-"}</td>
               <td style={{ ...td, textAlign: "right" }}>{detail.payment_amount ? fmt(detail.payment_amount) : "-"}</td>
-              <td style={{ ...td, textAlign: "right" }}>{detail.statement_debit ? fmt(detail.statement_debit) : "-"}</td>
-              <td style={{ ...td, textAlign: "right" }}>{detail.statement_credit ? fmt(detail.statement_credit) : "-"}</td>
-              <td style={{ ...td, textAlign: "right", whiteSpace: "nowrap" }}>{detail.bank_balance === null || detail.bank_balance === undefined ? "-" : fmt(detail.bank_balance)}</td>
+              <td className="bank-balance-pdf-excluded-column" style={{ ...td, textAlign: "right" }}>{detail.statement_debit ? fmt(detail.statement_debit) : "-"}</td>
+              <td className="bank-balance-pdf-excluded-column" style={{ ...td, textAlign: "right" }}>{detail.statement_credit ? fmt(detail.statement_credit) : "-"}</td>
+              <td className="bank-balance-pdf-excluded-column" style={{ ...td, textAlign: "right", whiteSpace: "nowrap" }}>{detail.bank_balance === null || detail.bank_balance === undefined ? "-" : fmt(detail.bank_balance)}</td>
               <td style={{ ...td, textAlign: "right", fontWeight: 800, whiteSpace: "nowrap" }}>{detail.running_balance === null || detail.running_balance === undefined ? "-" : fmt(detail.running_balance)}</td>
               <td className="bank-balance-more-details-column" style={td}>
                 <button type="button" className="bank-financial-no-print" onClick={() => setExpandedBankDetailRows((previous) => ({ ...previous, [detail.id]: !previous[detail.id] }))} style={{ ...secondary, padding: "5px 9px" }}>{showMore ? "Hide" : "Show"}</button>
@@ -1089,9 +1103,9 @@ export default function BankFinancialReportsPage() {
           <td style={{ ...reportTotalCell, textAlign: "left" }} colSpan={10}>FILTERED REPORT TOTAL</td>
           <td style={{ ...reportTotalCell, color: "#087f5b" }}>{fmt(bankBalanceDetailTotals.receipts)}</td>
           <td style={{ ...reportTotalCell, color: "#b45309" }}>{fmt(bankBalanceDetailTotals.payments)}</td>
-          <td style={reportTotalCell}>{fmt(bankBalanceDetailTotals.statement_debit)}</td>
-          <td style={reportTotalCell}>{fmt(bankBalanceDetailTotals.statement_credit)}</td>
-          <td style={reportTotalCell}>—</td>
+          <td className="bank-balance-pdf-excluded-column" style={reportTotalCell}>{fmt(bankBalanceDetailTotals.statement_debit)}</td>
+          <td className="bank-balance-pdf-excluded-column" style={reportTotalCell}>{fmt(bankBalanceDetailTotals.statement_credit)}</td>
+          <td className="bank-balance-pdf-excluded-column" style={reportTotalCell}>—</td>
           <td style={reportTotalCell}>—</td>
           <td className="bank-balance-more-details-column" style={reportTotalCell}>—</td>
         </tr></tfoot>}
@@ -1128,6 +1142,11 @@ export default function BankFinancialReportsPage() {
           .bank-balance-print-all-details .bank-balance-summary-content{display:none!important;}
           /* Keep Print All Details-wise, but omit the optional More Details column and expanded extras from the PDF. */
           .bank-balance-print-all-details .bank-balance-more-details-column{display:none!important;}
+          /* These source-statement columns remain visible on screen, but are omitted from the PDF. */
+          .bank-balance-print-all-details .bank-balance-pdf-excluded-column{display:none!important;}
+          /* Render the details total once, after all transaction rows, on the final PDF page. */
+          .bank-balance-print-all-details .bank-balance-details-content tfoot{display:table-row-group!important;break-inside:avoid!important;page-break-inside:avoid!important;}
+          .bank-balance-print-all-details .bank-balance-details-content tfoot tr{break-inside:avoid!important;page-break-inside:avoid!important;}
           .bank-balance-print-all-details{page:bankBalanceDetailsPage;}
           .bank-balance-details-content table{min-width:0!important;width:100%!important;table-layout:fixed!important;font-size:7.5px!important;}
           .bank-balance-details-content th,.bank-balance-details-content td{font-size:7.5px!important;line-height:1.15!important;padding:4px 3px!important;white-space:normal!important;overflow-wrap:anywhere!important;}
