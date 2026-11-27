@@ -308,10 +308,27 @@ export default function BankFinancialReportsPage() {
   }, [searchParams]);
 
   const params = useMemo(() => Object.fromEntries(Object.entries(appliedFilters).filter(([, value]) => value !== "")), [appliedFilters]);
+  const groupReportTotals = useMemo(() => (groupReport || []).reduce((totals, row) => ({
+    transactions: totals.transactions + Number(row.transactions || 0),
+    receipts: totals.receipts + Number(row.receipts || 0),
+    payments: totals.payments + Number(row.payments || 0),
+    net_movement: totals.net_movement + Number(row.net_movement || 0),
+  }), { transactions: 0, receipts: 0, payments: 0, net_movement: 0 }), [groupReport]);
+  const groupCompanyReportTotals = useMemo(() => (groupCompanyReport || []).reduce((totals, row) => ({
+    ledgers: totals.ledgers + Number(row.ledgers || 0),
+    transactions: totals.transactions + Number(row.transactions || 0),
+    receipts: totals.receipts + Number(row.receipts || 0),
+    payments: totals.payments + Number(row.payments || 0),
+    income: totals.income + Number(row.income || 0),
+    expenses: totals.expenses + Number(row.expenses || 0),
+    net_profit: totals.net_profit + Number(row.net_profit || 0),
+  }), { ledgers: 0, transactions: 0, receipts: 0, payments: 0, income: 0, expenses: 0, net_profit: 0 }), [groupCompanyReport]);
   const bankBalanceDetailTotals = useMemo(() => (bankBalanceReport.details || []).reduce((totals, row) => ({
     receipts: totals.receipts + Number(row.receipt_amount || 0),
     payments: totals.payments + Number(row.payment_amount || 0),
-  }), { receipts: 0, payments: 0 }), [bankBalanceReport.details]);
+    statement_debit: totals.statement_debit + Number(row.statement_debit || 0),
+    statement_credit: totals.statement_credit + Number(row.statement_credit || 0),
+  }), { receipts: 0, payments: 0, statement_debit: 0, statement_credit: 0 }), [bankBalanceReport.details]);
   const bankBalanceDetailsBySummary = useMemo(() => {
     const grouped = {};
     (bankBalanceReport.details || []).forEach((row) => {
@@ -1068,6 +1085,16 @@ export default function BankFinancialReportsPage() {
           })}
           {!(detailRows || []).length && <tr><td style={td} colSpan={17}>No transaction details found for this report.</td></tr>}
         </tbody>
+        {(detailRows || []).length > 0 && <tfoot><tr>
+          <td style={{ ...reportTotalCell, textAlign: "left" }} colSpan={10}>FILTERED REPORT TOTAL</td>
+          <td style={{ ...reportTotalCell, color: "#087f5b" }}>{fmt(bankBalanceDetailTotals.receipts)}</td>
+          <td style={{ ...reportTotalCell, color: "#b45309" }}>{fmt(bankBalanceDetailTotals.payments)}</td>
+          <td style={reportTotalCell}>{fmt(bankBalanceDetailTotals.statement_debit)}</td>
+          <td style={reportTotalCell}>{fmt(bankBalanceDetailTotals.statement_credit)}</td>
+          <td style={reportTotalCell}>—</td>
+          <td style={reportTotalCell}>—</td>
+          <td className="bank-balance-more-details-column" style={reportTotalCell}>—</td>
+        </tr></tfoot>}
       </table>
     </div>
   );
@@ -1095,8 +1122,7 @@ export default function BankFinancialReportsPage() {
           .bank-balance-overview-content th,.bank-balance-overview-content td{white-space:normal!important;overflow-wrap:anywhere!important;}
           .bank-balance-summary-content table{min-width:0!important;table-layout:fixed!important;}
           .bank-balance-summary-content th,.bank-balance-summary-content td{font-size:9px!important;line-height:1.25!important;padding:6px 7px!important;white-space:normal!important;overflow-wrap:anywhere!important;}
-          /* Hide the Sub-group summary subtotal in printed pages; the overall ALL BANKS page total above remains visible. */
-          .bank-balance-summary-subgroup-table tfoot{display:none!important;}
+          /* Keep the filtered Sub-group page total visible in PDF / Print. */
           .bank-balance-subgroup-label{font-size:9px!important;line-height:1.25!important;font-weight:600!important;color:#17365d!important;text-align:left!important;border:0!important;text-decoration:none!important;white-space:normal!important;}
           .bank-balance-print-subgroup .bank-balance-details-content{display:none!important;}
           .bank-balance-print-all-details .bank-balance-summary-content{display:none!important;}
@@ -1624,7 +1650,15 @@ export default function BankFinancialReportsPage() {
             <div style={{ overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse" }}><thead><tr>{["Period","Group","Sub-group","Ledger Names","Group Company","Nature","Report Placement","Transactions","Receipts","Payments","Net Movement"].map((x) => <th key={x} style={th}>{x}</th>)}</tr></thead><tbody>
               {groupReport.map((row, i) => <tr key={`${row.group_id}-${row.subgroup_id}-${row.period_label}-${i}`}><td style={td}>{row.period_label || "Selected Period"}</td><td style={td}><b>{row.group_name}</b></td><td style={td}>{row.subgroup_name}</td><td style={td}>{(row.ledger_names || []).join(", ") || "-"}</td><td style={td}>{row.group_company || "Unassigned"}</td><td style={td}>{natureLabels[row.nature] || row.nature || "-"}</td><td style={td}>{placementLabels[row.report_placement] || "Not mapped"}</td><td style={td}>{row.transactions}</td><td style={{ ...td, textAlign: "right" }}>{fmt(row.receipts)}</td><td style={{ ...td, textAlign: "right" }}>{fmt(row.payments)}</td><td style={{ ...td, textAlign: "right", fontWeight: 800 }}>{fmt(row.net_movement)}</td></tr>)}
               {!groupReport.length && <tr><td style={td} colSpan={11}>No transactions found.</td></tr>}
-            </tbody></table></div>
+            </tbody>
+            {!!groupReport.length && <tfoot><tr>
+              <td style={reportTotalCell} colSpan={7}>FILTERED REPORT TOTAL</td>
+              <td style={{ ...reportTotalCell, textAlign: "center" }}>{groupReportTotals.transactions}</td>
+              <td style={reportTotalCell}>{fmt(groupReportTotals.receipts)}</td>
+              <td style={reportTotalCell}>{fmt(groupReportTotals.payments)}</td>
+              <td style={reportTotalCell}>{fmt(groupReportTotals.net_movement)}</td>
+            </tr></tfoot>}
+            </table></div>
           </section>}
 
           {tab === "groupcompany" && <section className="bank-financial-print-area" style={panel}>
@@ -1633,7 +1667,18 @@ export default function BankFinancialReportsPage() {
             <div style={{ overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse", minWidth: 950 }}><thead><tr>{["Period","Group Company","Ledger Names","Ledgers","Transactions","Receipts","Payments","P&L Income","P&L Expenses","Net Profit / (Loss)"].map((x) => <th key={x} style={th}>{x}</th>)}</tr></thead><tbody>
               {groupCompanyReport.map((row, index) => <tr key={`${row.group_company}-${row.period_label}-${index}`}><td style={td}>{row.period_label || "Selected Period"}</td><td style={td}><b>{row.group_company}</b></td><td style={td}>{(row.ledger_names || []).join(", ") || "-"}</td><td style={td}>{row.ledgers}</td><td style={td}>{row.transactions}</td><td style={{ ...td, textAlign: "right" }}>{fmt(row.receipts)}</td><td style={{ ...td, textAlign: "right" }}>{fmt(row.payments)}</td><td style={{ ...td, textAlign: "right" }}>{fmt(row.income)}</td><td style={{ ...td, textAlign: "right" }}>{fmt(row.expenses)}</td><td style={{ ...td, textAlign: "right", fontWeight: 800 }}>{fmt(row.net_profit)}</td></tr>)}
               {!groupCompanyReport.length && <tr><td style={td} colSpan={10}>No transactions found. Assign a Group Company to Particulars / Ledger mappings first.</td></tr>}
-            </tbody></table></div>
+            </tbody>
+            {!!groupCompanyReport.length && <tfoot><tr>
+              <td style={{ ...reportTotalCell, textAlign: "left" }} colSpan={3}>FILTERED REPORT TOTAL</td>
+              <td style={{ ...reportTotalCell, textAlign: "center" }}>{groupCompanyReportTotals.ledgers}</td>
+              <td style={{ ...reportTotalCell, textAlign: "center" }}>{groupCompanyReportTotals.transactions}</td>
+              <td style={reportTotalCell}>{fmt(groupCompanyReportTotals.receipts)}</td>
+              <td style={reportTotalCell}>{fmt(groupCompanyReportTotals.payments)}</td>
+              <td style={reportTotalCell}>{fmt(groupCompanyReportTotals.income)}</td>
+              <td style={reportTotalCell}>{fmt(groupCompanyReportTotals.expenses)}</td>
+              <td style={reportTotalCell}>{fmt(groupCompanyReportTotals.net_profit)}</td>
+            </tr></tfoot>}
+            </table></div>
             <p style={{ color: "#92400e", background: "#fffbeb", border: "1px solid #fde68a", padding: 10, borderRadius: 7, fontSize: 12 }}>Unassigned rows appear separately until you assign their Group Company. Contra entries remain excluded from P&L calculations.</p>
           </section>}
 
@@ -1647,7 +1692,12 @@ export default function BankFinancialReportsPage() {
             <div style={{ overflowX: "auto" }}><table style={{ width: "100%", borderCollapse: "collapse" }}><thead><tr>{["Period","Group","Sub-group","Ledger Name","Group Company","Nature","Amount"].map((x) => <th key={x} style={th}>{x}</th>)}</tr></thead><tbody>
               {(profitLoss.rows || []).map((row,i) => <tr key={`${row.period_label}-${row.group_name}-${row.subgroup_name}-${i}`}><td style={td}>{row.period_label || "Selected Period"}</td><td style={td}><b>{row.group_name}</b></td><td style={td}>{row.subgroup_name || "-"}</td><td style={td}>{row.ledger_name || "-"}</td><td style={td}>{row.group_company || "Unassigned"}</td><td style={td}>{natureLabels[row.nature]}</td><td style={{ ...td, textAlign: "right" }}>{fmt(row.amount)}</td></tr>)}
               {!(profitLoss.rows || []).length && <tr><td style={td} colSpan={7}>No P&L ledger mappings in the selected period. Map direct income / expense ledgers in Particulars Mapping.</td></tr>}
-            </tbody></table></div>
+            </tbody>
+            {!!(profitLoss.rows || []).length && <tfoot><tr>
+              <td style={{ ...reportTotalCell, textAlign: "left" }} colSpan={6}>FILTERED REPORT TOTAL · INCOME {fmt(profitLoss.income)} · EXPENSES {fmt(profitLoss.expense)} · NET PROFIT / (LOSS)</td>
+              <td style={reportTotalCell}>{fmt(profitLoss.net_profit)}</td>
+            </tr></tfoot>}
+            </table></div>
             <p style={{ color: "#92400e", background: "#fffbeb", border: "1px solid #fde68a", padding: 10, borderRadius: 7, fontSize: 12 }}>Contra vouchers are excluded from P&L. Customer receipts and supplier payments mapped to Balance Sheet remain settlements, not new income or expense. Warehouse Sale / Purchase totals are included when you create the matching Source Groups in Group Master. Purchase values are shown as trading purchases; opening/closing stock, production cost and cost-of-goods-sold adjustments are not yet calculated, so treat Net Profit as provisional until those stock adjustments are entered.</p>
           </section>}
 
@@ -1694,6 +1744,12 @@ export default function BankFinancialReportsPage() {
                   </tr>)}
                   {!(balanceSheet.rows || []).length && <tr><td style={td} colSpan={6}>No Balance Sheet ledger mappings. Map Assets, Liabilities and Capital groups first.</td></tr>}
                 </tbody>
+                {!!(balanceSheet.rows || []).length && <tfoot>
+                  <tr><td style={{ ...reportTotalCell, textAlign: "left" }} colSpan={5}>TOTAL ASSETS</td><td style={reportTotalCell}>{fmt(balanceSheet.total_assets)}</td></tr>
+                  <tr><td style={{ ...reportTotalCell, textAlign: "left" }} colSpan={5}>TOTAL LIABILITIES</td><td style={reportTotalCell}>{fmt(balanceSheet.total_liabilities)}</td></tr>
+                  <tr><td style={{ ...reportTotalCell, textAlign: "left" }} colSpan={5}>TOTAL CAPITAL / EQUITY</td><td style={reportTotalCell}>{fmt(balanceSheet.total_equity)}</td></tr>
+                  <tr><td style={{ ...reportTotalCell, textAlign: "left" }} colSpan={5}>DIFFERENCE (ASSETS − LIABILITIES − EQUITY)</td><td style={reportTotalCell}>{fmt(balanceSheet.difference)}</td></tr>
+                </tfoot>}
               </table>
             </div>
             <p style={{ color: "#92400e", background: "#fffbeb", border: "1px solid #fde68a", padding: 10, borderRadius: 7, fontSize: 12 }}>Bank balances use manually saved Bank Opening Balances plus statement Receipt / Payment movements. Where an opening balance has not been entered, the report falls back to the latest imported Bank Balance column when available. A complete Balance Sheet also needs non-bank assets, liabilities, stock, debtors, creditors, tax balances and other journal/account entries.</p>
@@ -1741,7 +1797,17 @@ export default function BankFinancialReportsPage() {
                   <td style={{ ...reportBodyCell, textAlign: "center", fontWeight: 800 }}>{row.transactions}</td><td style={reportBodyCell}>{row.opening_balance_source || (row.opening_balance_set ? "Manual" : "Missing")}</td>
                 </tr>)}
                 {!bankBalanceReport.rows?.length && <tr><td style={reportBodyCell} colSpan={8}>No bank transactions found for the selected bank and date range.</td></tr>}
-              </tbody></table></div>
+                </tbody>
+                {!!(bankBalanceReport.rows || []).length && <tfoot><tr>
+                  <td style={{ ...reportTotalCell, textAlign: "left" }} colSpan={2}>{appliedFilters.bank_name ? "BANK TOTAL" : "ALL BANKS TOTAL"}</td>
+                  <td style={reportTotalCell}>{fmt(bankBalanceReport.totals?.opening_balance)}</td>
+                  <td style={{ ...reportTotalCell, color: "#087f5b" }}>{fmt(bankBalanceReport.totals?.receipts)}</td>
+                  <td style={{ ...reportTotalCell, color: "#b45309" }}>{fmt(bankBalanceReport.totals?.payments)}</td>
+                  <td style={reportTotalCell}>{fmt(bankBalanceReport.totals?.closing_balance)}</td>
+                  <td style={{ ...reportTotalCell, textAlign: "center" }}>{Number(bankBalanceReport.totals?.transactions || 0)}</td>
+                  <td style={reportTotalCell}>Overall</td>
+                </tr></tfoot>}
+              </table></div>
               <div style={{ marginTop: 22, paddingTop: 18, borderTop: "1px solid #d8e3ed" }}>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "end", gap: 10, flexWrap: "wrap", marginBottom: 13 }}>
                   <div>
